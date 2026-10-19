@@ -102,6 +102,16 @@ describe("login", () => {
     expect(other.headers.get("location")).toBe("/");
   });
 
+  it("parallel attempts from one address: exactly 20 get to the password check, the rest are paused (review 32585)", async () => {
+    const ip = "203.0.113.21";
+    const answers = await Promise.all(
+      Array.from({ length: 25 }, (_, i) => loginRoute(form({ loginId: `parhuzamos-${i}`, password: "akarmi-akarmi" }, BASE, ip))),
+    );
+    const where = answers.map((r) => r.headers.get("location"));
+    expect(where.filter((l) => l === "/belepes?hiba=adat")).toHaveLength(20);
+    expect(where.filter((l) => l === "/belepes?hiba=sok")).toHaveLength(5);
+  });
+
   it("logout ends the session", async () => {
     const cookie = await loginAs("teszt.akvarista2");
     const out = await logoutRoute(new Request(`${BASE}/api/auth/logout`, { method: "POST", headers: { host: "napplo.test", origin: BASE, cookie } }));
