@@ -119,6 +119,7 @@ export async function listFeeds(at = new Date()) {
     id: t.id,
     code: t.code,
     name: t.name,
+    emoji: t.emoji,
     feeds: t.feeds.map((f) => ({
       id: f.id,
       name: pickValid(f.names, at)?.name ?? f.names.at(-1)?.name ?? "?",
@@ -128,4 +129,21 @@ export async function listFeeds(at = new Date()) {
       temporary: f.temporary,
     })),
   }));
+}
+
+/**
+ * EGY-03 (an idea): the other ("Egyéb") feed names used before, newest first, offered while typing; a
+ * suggestion only, any name may still be written.
+ */
+export async function knownOtherNames(limit = 30): Promise<string[]> {
+  const [fed, taken] = await Promise.all([
+    prisma.feedingItem.findMany({ where: { status: "VALID", otherName: { not: null } }, select: { otherName: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 200 }),
+    prisma.withdrawalItem.findMany({ where: { status: "VALID", otherName: { not: null } }, select: { otherName: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 200 }),
+  ]);
+  const seen = new Map<string, string>();
+  for (const r of [...fed, ...taken].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())) {
+    const key = r.otherName!.toLowerCase();
+    if (!seen.has(key)) seen.set(key, r.otherName!);
+  }
+  return [...seen.values()].slice(0, limit);
 }

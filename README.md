@@ -174,6 +174,11 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   by pool and animal, as a table and as Excel (EGY-13; NY-11 default); the eating Excel's day headers
   alternate by calendar week (EVE-08); a one-page daily water report, printable as PDF (VIZ-14, the
   idea; the official daily report's form, VIZ-13, waits for D-28).
+- Stage 4, conveniences: the other feed names used before are offered while typing (EGY-03); an icon
+  for each pool and feed type, set by an admin, shown next to the names, never exported (DAT-03); a
+  feeding plan per animal (its weekdays) and "Lista a terv szerint", which only adds the planned
+  animals of the day to the common list; the plan is not the fact, a fasting day still comes only
+  from the finalized list (JAV-08, V-15).
 - Trial import file for the customer (VIZ-24): `npx tsx scripts/zims-trial-file.ts --pool <name>
   --date <day> --measured-by "<name in their ZIMS>"`; the real name is an argument, never stored.
 

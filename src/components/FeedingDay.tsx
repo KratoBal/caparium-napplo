@@ -35,6 +35,7 @@ export function FeedingDay(props: {
   references?: Record<string, number>;
   recipients: Recipient[];
   feeds: FeedOpt[];
+  otherNames?: string[];
 }) {
   const { day, editable, animals, groups, items, totals, recipients, feeds } = props;
   const [active, setActive] = useState(recipients[0]?.key ?? "");
@@ -147,7 +148,7 @@ export function FeedingDay(props: {
               {Object.keys(draft).length > 0 && ` · most beírva ${fmt(draft)} · együtt ${fmt(together)}`}
             </p>
           )}
-          <ItemForm day={day} recipients={recipients} feeds={feeds} active={active} onActive={setActive} onDraft={onDraft} />
+          <ItemForm day={day} recipients={recipients} feeds={feeds} otherNames={props.otherNames} active={active} onActive={setActive} onDraft={onDraft} />
         </div>
       )}
     </>

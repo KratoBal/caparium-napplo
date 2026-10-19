@@ -4,7 +4,7 @@ import { CloseWithdrawalDay, InvalidateButton, WithdrawalForm, type FeedOpt } fr
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { listFeeds } from "@/lib/feeds";
+import { knownOtherNames, listFeeds } from "@/lib/feeds";
 import { dayStatus } from "@/lib/journal";
 import { moduleLevel } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
@@ -24,12 +24,13 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
   const day = sp.nap && isValidDay(sp.nap) && sp.nap <= today ? sp.nap : today;
   const to = sp.ig && isValidDay(sp.ig) ? sp.ig : today;
   const from = sp.tol && isValidDay(sp.tol) ? sp.tol : addDays(to, -6);
-  const [view, lock, types, units, exportLevel] = await Promise.all([
+  const [view, lock, types, units, exportLevel, otherNames] = await Promise.all([
     withdrawalDayView(day),
     dayStatus(null, day, "WITHDRAWAL"),
     listFeeds(),
     prisma.unit.findMany({ where: { active: true }, orderBy: { symbol: "asc" } }),
     moduleLevel(prisma, user.id, user.role, "EXPORT"),
+    knownOtherNames(),
   ]);
   let compare: Awaited<ReturnType<typeof takenVersusGiven>> = [];
   let compareError: string | null = null;
@@ -88,7 +89,7 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
             </tbody>
           </table>
         </div>
-        {editable && <WithdrawalForm day={day} useDay={addDays(day, 1)} feeds={feeds} />}
+        {editable && <WithdrawalForm day={day} useDay={addDays(day, 1)} feeds={feeds} otherNames={otherNames} />}
       </div>
 
       <div className="card">

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { AnimalActions, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
+import { PlanForm } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
+import { currentPlans } from "@/lib/feeding-plan";
+import { withIcon } from "@/lib/icons";
 import { animalEvents, listAnimals, listGroupsWithNames } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { pickValid } from "@/lib/master";
@@ -27,6 +30,7 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
   const poolOpts = pools.map((p) => ({ id: p.id, name: pickValid(p.names, now)?.displayName ?? p.code }));
   const selected = animals.find((a) => a.id === sp.allat);
   const events = selected ? await animalEvents(selected.id) : [];
+  const plans = await currentPlans();
   const canRecord = level === "RECORD" || level === "ADMIN";
   const isAdmin = user.role === "ADMIN";
   return (
@@ -45,7 +49,7 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
                   <td className="keep"><Link href={`/allatok?allat=${a.id}`}>{a.name}</Link></td>
                   <td>{a.species}</td>
                   <td>{SEX[a.sex]}</td>
-                  <td>{a.poolName ?? "–"}</td>
+                  <td>{a.poolName ? withIcon(a.poolEmoji, a.poolName) : "–"}</td>
                   <td>{a.groupName ?? "–"}</td>
                   <td>{a.arrived ?? "–"}</td>
                   <td className="keep">
@@ -81,6 +85,7 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
             </tbody>
           </table>
           {canRecord && selected.alive && <AnimalActions animalId={selected.id} pools={poolOpts} groups={groups} />}
+          {canRecord && selected.alive && <PlanForm animalId={selected.id} weekdays={plans[selected.id] ?? []} />}
         </div>
       )}
 

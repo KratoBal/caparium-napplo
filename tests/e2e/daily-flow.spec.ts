@@ -413,3 +413,19 @@ test("reports and the daily water report: the tables, the Excel, a printable pag
   await expect(page.getByTestId("report-day")).toContainText("Vízmérés");
   await expect(page.getByTestId("print")).toBeVisible();
 });
+
+test("conveniences: a feeding plan, the list from it, the feed type icons", async ({ page }) => {
+  // Teszt Három: the feeding test expects Teszt Négy OFF today's list, and the plan adds to it
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Állatok" }).click();
+  await page.getByTestId("animals-table").getByRole("link", { name: "Teszt Három" }).click();
+  const plan = page.getByTestId("plan-form");
+  for (const d of ["H", "K", "Sze", "Cs", "P", "Szo", "V"]) await plan.getByLabel(`Etetési nap: ${d}`).check();
+  await plan.getByRole("button", { name: "Terv mentése" }).click();
+  await expect(plan.getByRole("status")).toHaveText("Terv mentve.");
+  await page.getByRole("link", { name: "Takarmánynapló" }).click();
+  await page.getByRole("button", { name: "Lista a terv szerint" }).click();
+  await expect(page.getByLabel("Teszt Három a mai listán")).toBeChecked();
+  await page.getByRole("link", { name: "Takarmánylista" }).click();
+  await expect(page.getByRole("heading", { name: "🦐 Rákok" })).toBeVisible();
+});
