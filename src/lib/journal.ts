@@ -34,11 +34,12 @@ export async function runJournalJob(now = new Date()): Promise<JobResult> {
   // the common feeding day of today (NY-06 default: one list for the whole Cápárium)
   await prisma.$transaction((tx) => ensureFeedingDay(tx, today));
 
-  // every open water or feeding day before today, unless an admin has reopened it and not closed it
-  // again. The feeding day closes at the end of the business day (NY-05 default: 24:00, T-01/3).
+  // every open water, feeding or withdrawal day before today, unless an admin has reopened it and not
+  // closed it again. The feeding day closes at the end of the business day (NY-05 default: 24:00,
+  // T-01/3); a withdrawal day left open by the "Lezárás" button too (KIV-03).
   const due = await prisma.journalDay.findMany({
     where: {
-      kind: { in: ["WATER", "FEEDING"] },
+      kind: { in: ["WATER", "FEEDING", "WITHDRAWAL"] },
       state: "OPEN",
       businessDay: { lt: dayToDate(today) },
       reopenings: { none: { reclosedAt: null } },
@@ -75,7 +76,7 @@ export async function runJournalJob(now = new Date()): Promise<JobResult> {
 
 export const dayActionSchema = z.object({
   requestId: z.string().min(8).max(100),
-  kind: z.enum(["WATER", "FEEDING"]).default("WATER"),
+  kind: z.enum(["WATER", "FEEDING", "WITHDRAWAL"]).default("WATER"),
   groupId: z.uuid().nullable().optional(),
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   reason: z.string().trim().min(3, "Az indoklás legalább 3 karakter legyen.").max(500).optional(),
@@ -89,7 +90,7 @@ function dayWhere(input: DayActionInput) {
   return { kind, groupId: kind === "WATER" ? input.groupId! : null, businessDay: dayToDate(input.day) };
 }
 
-async function requireAdmin(actor: Actor, kind: "WATER" | "FEEDING" = "WATER") {
+async function requireAdmin(actor: Actor, kind: "WATER" | "FEEDING" | "WITHDRAWAL" = "WATER") {
   const level = await moduleLevel(prisma, actor.id, actor.role, kind);
   if (level !== "ADMIN") throw new AppError(403, "ADMIN_ONLY", "Napot újranyitni és lezárni csak adminisztrátor tud.");
 }
@@ -161,7 +162,7 @@ export async function recloseDay(actor: Actor, input: DayActionInput, now = new 
 }
 
 /** The lock of a day as the pages show it. */
-export async function dayStatus(groupId: string | null, day: string, kind: "WATER" | "FEEDING" = "WATER") {
+export async function dayStatus(groupId: string | null, day: string, kind: "WATER" | "FEEDING" | "WITHDRAWAL" = "WATER") {
   const j = await prisma.journalDay.findFirst({
     where: { kind, groupId, businessDay: dayToDate(day) },
     include: { reopenings: { where: { reclosedAt: null } } },

@@ -215,13 +215,14 @@ model Unit {
   isBase       Boolean   @default(false)
   active       Boolean   @default(true)
 
-  parameters        Parameter[]
-  referenceRanges   ReferenceRange[]
-  measurements      Measurement[]
-  zimsUnitNames     ZimsUnitName[]
-  feeds             Feed[]
-  coralDoses        CoralFeedDose[]
-  feedingQuantities FeedingQuantity[]
+  parameters           Parameter[]
+  referenceRanges      ReferenceRange[]
+  measurements         Measurement[]
+  zimsUnitNames        ZimsUnitName[]
+  feeds                Feed[]
+  coralDoses           CoralFeedDose[]
+  feedingQuantities    FeedingQuantity[]
+  withdrawalQuantities WithdrawalQuantity[]
 
   @@map("unit")
 }
@@ -456,8 +457,9 @@ model JournalDay {
   closeRanAt  DateTime?         @db.Timestamptz(3) // when it actually ran
   group       MeasurementGroup? @relation(fields: [groupId], references: [id])
 
-  reopenings JournalReopen[]
-  feedingDay FeedingDay?
+  reopenings    JournalReopen[]
+  feedingDay    FeedingDay?
+  withdrawalDay WithdrawalDay?
 
   @@index([businessDay])
   @@map("journal_day")
@@ -524,6 +526,7 @@ enum ExportKind {
   PDF_WATER
   EXCEL_FEEDING
   EXCEL_EATING
+  EXCEL_WITHDRAWAL
 }
 
 enum ExportPurpose {
@@ -785,11 +788,12 @@ model Feed {
   sortOrder         Int
   createdAt         DateTime    @default(now()) @db.Timestamptz(3)
 
-  type        FeedType        @relation(fields: [typeId], references: [id])
-  defaultUnit Unit            @relation(fields: [defaultUnitId], references: [id])
+  type        FeedType         @relation(fields: [typeId], references: [id])
+  defaultUnit Unit             @relation(fields: [defaultUnitId], references: [id])
   names       FeedName[]
   coralDoses  CoralFeedDose[]
   items       FeedingItem[]
+  withdrawals WithdrawalItem[]
 
   @@map("feed")
 }
@@ -957,4 +961,60 @@ model EatingStatus {
 
   @@index([feedingDayId])
   @@map("eating_status")
+}
+
+// ---------------------------------------------------------------------------
+// Area 12 (stage 3): feed withdrawal from the freezer (KIV-01..KIV-04, T-10, DN-17 "taken out")
+// ---------------------------------------------------------------------------
+
+// KIV-03: the day's input; its lock is the WITHDRAWAL journal day (the "Lezárás" button closes it)
+model WithdrawalDay {
+  id           String     @id @default(uuid()) @db.Uuid
+  businessDay  DateTime   @unique @db.Date
+  journalDayId String     @unique @db.Uuid
+  journalDay   JournalDay @relation(fields: [journalDayId], references: [id])
+
+  items WithdrawalItem[]
+
+  @@map("withdrawal_day")
+}
+
+// KIV-01: taken out on its day for a use day (default the next day, T-10); one valid item per
+// (day, feed, other name) (partial index, SQL); at most 5 different other names a day (KIV-04)
+model WithdrawalItem {
+  id                 String        @id @default(uuid()) @db.Uuid
+  withdrawalDayId    String        @db.Uuid
+  useDay             DateTime      @db.Date
+  feedId             String        @db.Uuid
+  otherName          String?
+  version            Int           @default(1)
+  requestId          String        @unique
+  status             RecordStatus  @default(VALID)
+  invalidationReason String?
+  createdById        String        @db.Uuid
+  createdAt          DateTime      @default(now()) @db.Timestamptz(3)
+  updatedById        String        @db.Uuid
+  updatedAt          DateTime      @default(now()) @db.Timestamptz(3)
+  withdrawalDay      WithdrawalDay @relation(fields: [withdrawalDayId], references: [id])
+  feed               Feed          @relation(fields: [feedId], references: [id])
+
+  quantities WithdrawalQuantity[]
+
+  @@index([withdrawalDayId])
+  @@index([useDay])
+  @@map("withdrawal_item")
+}
+
+// T-08: at most one quantity per dimension, as for the feeding items
+model WithdrawalQuantity {
+  id        String         @id @default(uuid()) @db.Uuid
+  itemId    String         @db.Uuid
+  quantity  Decimal        @db.Decimal(14, 4)
+  unitId    String         @db.Uuid
+  dimension Dimension
+  item      WithdrawalItem @relation(fields: [itemId], references: [id])
+  unit      Unit           @relation(fields: [unitId], references: [id])
+
+  @@unique([itemId, dimension])
+  @@map("withdrawal_quantity")
 }

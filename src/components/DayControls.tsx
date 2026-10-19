@@ -21,7 +21,7 @@ export function DayControls({
   isAdmin,
 }: {
   groupId?: string;
-  kind?: "WATER" | "FEEDING";
+  kind?: "WATER" | "FEEDING" | "WITHDRAWAL";
   day: string;
   status: Status;
   isAdmin: boolean;
@@ -65,7 +65,7 @@ export function DayControls({
           Nap újranyitása
         </button>
       )}
-      {isAdmin && (status.reopened || (kind === "FEEDING" && status.state === "OPEN")) && (
+      {isAdmin && (status.reopened || (kind !== "WATER" && status.state === "OPEN")) && (
         <button className="btn btn-soft" type="button" onClick={() => void act("close")}>
           Nap lezárása
         </button>
