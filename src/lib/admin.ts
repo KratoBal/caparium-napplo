@@ -13,6 +13,14 @@ import { moduleLevel, validAt } from "./master";
 import type { Actor } from "./measurements";
 
 const reason = z.string().trim().min(3, "Az indoklás legalább 3 karakter legyen.").max(500);
+
+/**
+ * A name that ends up in the ZIMS CSV or the Excel export must not start with a character a
+ * spreadsheet reads as a formula (=, +, -, @, tab, CR): opening the CSV in Excel would run it
+ * (review of #3). The ZIMS names must stay letter-exact, so they are refused, not prefixed.
+ */
+const exportSafe = (s: z.ZodString) =>
+  s.refine((v) => !/^[=+\-@\t\r]/.test(v), "A név nem kezdődhet =, +, -, @ jellel (táblázatkezelőben képletként futna).");
 const requestId = z.string().min(8).max(100);
 
 async function requireSettingsAdmin(actor: Actor) {
@@ -109,7 +117,7 @@ export async function setReference(actor: Actor, input: ReferenceInput, now = ne
 export const poolNameSchema = z.object({
   requestId,
   poolId: z.uuid(),
-  name: z.string().trim().min(2).max(60),
+  name: exportSafe(z.string().trim().min(2).max(60)),
   mode: z.enum(["change", "correction"]),
   reason: reason.optional(),
 });
@@ -156,7 +164,7 @@ export async function renamePool(actor: Actor, input: PoolNameInput, now = new D
 // ---------------------------------------------------------------------------
 
 const password = z.string().min(10, "A jelszó legalább 10 karakter legyen.").max(200);
-const monogram = z.string().trim().min(1).max(6);
+const monogram = exportSafe(z.string().trim().min(1).max(6));
 
 export const createUserSchema = z.object({
   requestId,
@@ -165,10 +173,10 @@ export const createUserSchema = z.object({
     .trim()
     .toLowerCase()
     .regex(/^[a-z0-9._-]{3,40}$/, "A felhasználónév 3–40 karakter: kisbetű, szám, pont, kötőjel."),
-  fullName: z.string().trim().min(2).max(100),
+  fullName: exportSafe(z.string().trim().min(2).max(100)),
   role: z.enum(["AQUARIST", "ADMIN"]),
   monogram,
-  zimsName: z.string().trim().min(2).max(100),
+  zimsName: exportSafe(z.string().trim().min(2).max(100)),
   password,
 });
 export type CreateUserInput = z.infer<typeof createUserSchema>;
@@ -178,7 +186,7 @@ export const updateUserSchema = z.object({
   role: z.enum(["AQUARIST", "ADMIN"]).optional(),
   active: z.boolean().optional(),
   monogram: monogram.optional(),
-  zimsName: z.string().trim().min(2).max(100).optional(),
+  zimsName: exportSafe(z.string().trim().min(2).max(100)).optional(),
   password: password.optional(),
   reason: reason.optional(),
 });
