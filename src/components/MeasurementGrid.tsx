@@ -1,6 +1,8 @@
 "use client";
 
-// The daily measurement grid (VIZ-03, VIZ-04, VIZ-08, VIZ-09, ÁLT-03, ÁLT-07, ÁLT-12, ÁLT-15, VIZ-02).
+// The measurement grid, daily and weekly (VIZ-03..VIZ-09, ÁLT-03, ÁLT-07, ÁLT-12, ÁLT-15, VIZ-02).
+// Weekly mode adds the dilution (1–100) and the diluent water (RO/SW) per cell: supplementary data,
+// nothing is recalculated from them (VIZ-06, DN-07).
 // Autosave on leaving a cell; a "Mérés mentése" button as confirmation. A failed network
 // request goes to a local queue with the same request id, so a retry never saves twice.
 
@@ -31,6 +33,10 @@ type QueueItem = {
 };
 
 type Conflict = { key: string; draft: string; server: { value: string; by?: string; time?: string } };
+
+type Meta = { dilution: number | null; diluentWater: "RO" | "SW" | null };
+
+const DILUTIONS = Array.from({ length: 100 }, (_, i) => i + 1);
 
 function requestId(): string {
   // crypto.randomUUID needs a secure context; getRandomValues does not (plain http on the tailnet)
@@ -73,9 +79,15 @@ export function MeasurementGrid({
   canWrite,
   isAdmin,
   people,
+  weekly = false,
+  basePath = "/vizmeres",
 }: {
   initial: Grid;
   groupCode: string;
+  /** weekly measurement: dilution and RO/SW per cell */
+  weekly?: boolean;
+  /** the page of this grid, for the round and day links */
+  basePath?: string;
   today: string;
   user: { id: string; role: string };
   /** the effective module level (R-17) allows recording */
@@ -88,6 +100,7 @@ export function MeasurementGrid({
   const [grid, setGrid] = useState<Grid>(initial);
   const [activePool, setActivePool] = useState<string>(initial.layout.pools[0]?.id ?? "");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [metaDrafts, setMetaDrafts] = useState<Record<string, Meta>>({});
   const [cellState, setCellState] = useState<Record<string, CellState>>({});
   const [responsibleId, setResponsibleId] = useState(user.id);
   const [trainee, setTrainee] = useState(false);
@@ -97,6 +110,15 @@ export function MeasurementGrid({
   const [banner, setBanner] = useState<{ kind: "ok" | "error" | "warn"; text: string } | null>(null);
   const [queueSize, setQueueSize] = useState(0);
   const flushing = useRef(false);
+  // The saves of one cell run one after another, each built from the latest state: a dilution
+  // and an RO/SW picked in quick succession must not race into two creations of the same cell.
+  const gridRef = useRef(grid);
+  gridRef.current = grid;
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
+  const metaRef = useRef(metaDrafts);
+  metaRef.current = metaDrafts;
+  const chains = useRef(new Map<string, Promise<void>>());
 
   const queueKey = `napplo-queue-v1-${user.id}`;
   const isPastDay = grid.day !== today;
@@ -133,7 +155,11 @@ export function MeasurementGrid({
     const res = await fetch(`/api/grid?groupId=${grid.group.id}&day=${grid.day}${seq ? `&round=${seq}` : ""}`, {
       cache: "no-store",
     });
-    if (res.ok) setGrid((await res.json()) as Grid);
+    if (res.ok) {
+      const g = (await res.json()) as Grid;
+      gridRef.current = g;
+      setGrid(g);
+    }
   }, [grid.group.id, grid.day, grid.selectedRound?.seq]);
 
   type SendOutcome = "ok" | "queued" | "failed";
@@ -227,15 +253,16 @@ export function MeasurementGrid({
   }, [flushQueue, readQueue]);
 
   const buildItem = useCallback(
-    (poolId: string, parameterId: string, value: string, overwrite?: { version: number }): QueueItem => {
+    (poolId: string, parameterId: string, value: string, overwrite?: { version: number }, meta?: Meta): QueueItem => {
       const key = `${poolId}:${parameterId}`;
-      const existing = grid.cells[key];
+      const existing = gridRef.current.cells[key];
       const common = {
         requestId: requestId(),
         clientTimestamp: new Date().toISOString(),
         value,
         responsibleUserId: responsibleId,
         traineePerformed: trainee,
+        ...(weekly && meta ? { dilution: meta.dilution, diluentWater: meta.diluentWater } : {}),
       };
       if (existing) {
         // an edit keeps the original measurement time unless the user changed the time field
@@ -260,39 +287,83 @@ export function MeasurementGrid({
         },
       };
     },
-    [grid, responsibleId, trainee, timeLocal, timeTouched],
+    [grid, responsibleId, trainee, timeLocal, timeTouched, weekly],
   );
 
-  const saveCell = useCallback(
-    async (poolId: string, parameterId: string) => {
+  const metaOf = useCallback(
+    (key: string): Meta => {
+      const c = grid.cells[key];
+      return metaDrafts[key] ?? { dilution: c?.dilution ?? null, diluentWater: c?.diluentWater ?? null };
+    },
+    [grid.cells, metaDrafts],
+  );
+
+  const doSave = useCallback(
+    async (poolId: string, parameterId: string, metaOverride?: Meta) => {
       const key = `${poolId}:${parameterId}`;
-      const text = drafts[key];
-      if (text === undefined) return;
-      const existing = grid.cells[key];
-      if (text.trim() === "" || (existing && text.trim().replace(",", ".") === existing.value)) {
+      const existing = gridRef.current.cells[key];
+      const draftText = draftsRef.current[key];
+      const text = draftText ?? (existing ? existing.value : undefined);
+      const meta = metaOverride ??
+        metaRef.current[key] ?? { dilution: existing?.dilution ?? null, diluentWater: existing?.diluentWater ?? null };
+      // only what was sent is cleared: a newer edit made while saving stays a draft
+      const clear = () => {
         setDrafts((d) => {
+          if (d[key] !== draftText) return d;
           const next = { ...d };
           delete next[key];
           return next;
         });
+        setMetaDrafts((d) => {
+          const m = d[key];
+          if (!m || m.dilution !== meta.dilution || m.diluentWater !== meta.diluentWater) return d;
+          const next = { ...d };
+          delete next[key];
+          return next;
+        });
+      };
+      if (text === undefined || text.trim() === "") {
+        if (draftText !== undefined) clear();
+        return; // a dilution without a value waits for the value
+      }
+      const valueChanged = !existing || text.trim().replace(",", ".") !== existing.value;
+      const metaChanged =
+        weekly && (!existing || meta.dilution !== existing.dilution || meta.diluentWater !== existing.diluentWater);
+      if (!valueChanged && !metaChanged) {
+        clear();
         return;
       }
-      const outcome = await send(buildItem(poolId, parameterId, text.trim()), false);
-      if (outcome === "ok") await refresh();
+      const outcome = await send(buildItem(poolId, parameterId, text.trim(), undefined, meta), false);
+      if (outcome === "ok") {
+        await refresh();
+        clear();
+      }
     },
-    [drafts, grid.cells, send, buildItem, refresh],
+    [send, buildItem, refresh, weekly],
+  );
+
+  const saveCell = useCallback(
+    (poolId: string, parameterId: string, metaOverride?: Meta): Promise<void> => {
+      const key = `${poolId}:${parameterId}`;
+      const next = (chains.current.get(key) ?? Promise.resolve())
+        .then(() => doSave(poolId, parameterId, metaOverride))
+        .catch(() => undefined);
+      chains.current.set(key, next);
+      return next;
+    },
+    [doSave],
   );
 
   const saveAll = useCallback(async () => {
     setBanner(null);
-    for (const key of Object.keys(drafts)) {
+    for (const key of new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)])) {
       const [poolId, parameterId] = key.split(":");
       await saveCell(poolId, parameterId);
     }
     await flushQueue();
     const left = readQueue().length;
     setBanner(left ? { kind: "warn", text: `${left} mentés várakozik a kapcsolatra.` } : { kind: "ok", text: "Minden érték mentve." });
-  }, [drafts, saveCell, flushQueue, readQueue]);
+  }, [drafts, metaDrafts, saveCell, flushQueue, readQueue]);
 
   const openNewRound = useCallback(async () => {
     const res = await fetch("/api/rounds", {
@@ -305,9 +376,9 @@ export function MeasurementGrid({
       setBanner({ kind: "error", text: body.error?.message ?? "Új mérési kör nem nyitható." });
       return;
     }
-    router.push(`/vizmeres?csoport=${groupCode}&nap=${grid.day}&kor=${body.round.seq}`);
+    router.push(`${basePath}?csoport=${groupCode}&nap=${grid.day}&kor=${body.round.seq}`);
     router.refresh();
-  }, [grid.group.id, grid.day, groupCode, router]);
+  }, [grid.group.id, grid.day, groupCode, router, basePath]);
 
   const keepDraft = useCallback(async () => {
     if (!conflict) return;
@@ -315,9 +386,9 @@ export function MeasurementGrid({
     const fresh = grid.cells[conflict.key];
     if (!fresh) return;
     setConflict(null);
-    const outcome = await send(buildItem(poolId, parameterId, conflict.draft, { version: fresh.version }), false);
+    const outcome = await send(buildItem(poolId, parameterId, conflict.draft, { version: fresh.version }, metaOf(conflict.key)), false);
     if (outcome === "ok") await refresh();
-  }, [conflict, grid.cells, send, buildItem, refresh]);
+  }, [conflict, grid.cells, send, buildItem, refresh, metaOf]);
 
   const loadFresh = useCallback(async () => {
     if (!conflict) return;
@@ -332,7 +403,7 @@ export function MeasurementGrid({
   }, [conflict, refresh]);
 
   const anyOut = useMemo(() => Object.values(grid.cells).some((c) => c.reference === "LOW" || c.reference === "HIGH"), [grid.cells]);
-  const unsaved = Object.keys(drafts).length;
+  const unsaved = new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)]).size;
 
   return (
     <>
@@ -342,7 +413,7 @@ export function MeasurementGrid({
             <a
               key={r.id}
               className={`tab${grid.selectedRound?.id === r.id ? " active" : ""}`}
-              href={`/vizmeres?csoport=${groupCode}&nap=${grid.day}&kor=${r.seq}`}
+              href={`${basePath}?csoport=${groupCode}&nap=${grid.day}&kor=${r.seq}`}
             >
               {r.seq}. mérés
             </a>
@@ -469,6 +540,18 @@ export function MeasurementGrid({
                               {shown || "–"}
                             </div>
                           )}
+                          {weekly && (
+                            <WeeklyMeta
+                              label={`${pool.name} ${param.name}`}
+                              testId={`${pool.name}-${param.name}`}
+                              meta={metaOf(key)}
+                              editable={active}
+                              onChange={(m) => {
+                                setMetaDrafts((d) => ({ ...d, [key]: m }));
+                                void saveCell(pool.id, param.id, m);
+                              }}
+                            />
+                          )}
                           <div className="cell-meta">
                             {st?.state === "saving" && <span>Mentés…</span>}
                             {st?.state === "queued" && <span className="wait">{st.message}</span>}
@@ -539,5 +622,53 @@ export function MeasurementGrid({
         )}
       </div>
     </>
+  );
+}
+
+function WeeklyMeta({
+  label,
+  testId,
+  meta,
+  editable,
+  onChange,
+}: {
+  label: string;
+  testId: string;
+  meta: Meta;
+  editable: boolean;
+  onChange: (m: Meta) => void;
+}) {
+  if (!editable) {
+    const parts = [meta.dilution ? `1:${meta.dilution}` : null, meta.diluentWater].filter(Boolean);
+    return <div className="cell-meta" data-testid={`meta-${testId}`}>{parts.length ? parts.join(" · ") : " "}</div>;
+  }
+  return (
+    <div className="meta-row">
+      <select
+        className="meta-select"
+        aria-label={`${label} hígítás`}
+        data-testid={`dilution-${testId}`}
+        value={meta.dilution ?? ""}
+        onChange={(e) => onChange({ ...meta, dilution: e.target.value ? Number(e.target.value) : null })}
+      >
+        <option value="">hígítás</option>
+        {DILUTIONS.map((d) => (
+          <option key={d} value={d}>
+            1:{d}
+          </option>
+        ))}
+      </select>
+      <select
+        className="meta-select"
+        aria-label={`${label} hígító víz`}
+        data-testid={`diluent-${testId}`}
+        value={meta.diluentWater ?? ""}
+        onChange={(e) => onChange({ ...meta, diluentWater: (e.target.value || null) as Meta["diluentWater"] })}
+      >
+        <option value="">RO/SW</option>
+        <option value="RO">RO</option>
+        <option value="SW">SW</option>
+      </select>
+    </div>
   );
 }

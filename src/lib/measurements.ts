@@ -139,6 +139,13 @@ function parseValue(raw: string): string {
   return v;
 }
 
+function checkDilution(d: number | null | undefined): void {
+  if (d === undefined || d === null) return;
+  if (!Number.isInteger(d) || d < 1 || d > 100) {
+    throw new AppError(422, "INVALID_DILUTION", "A hígítás 1 és 100 közötti egész szám legyen.");
+  }
+}
+
 function parseClientTs(s: string | undefined): Date | null {
   return s ? new Date(s) : null;
 }
@@ -178,19 +185,29 @@ async function lateWindow(tx: Tx, at: Date): Promise<LateWindow> {
  * but the client's (late) original time would allow it, the save becomes PENDING.
  */
 function decideWithLateRule(
-  check: (today: string) => Decision,
+  check: (today: string, at: Date) => Decision,
   serverNow: Date,
   clientTs: Date | null,
   window: LateWindow,
 ): { decision: Decision; pending: boolean } {
   const eff = effectiveNow(serverNow, clientTs, window.graceMinutes, window.maxLateHours);
-  const decision = check(businessDayOf(eff.now));
+  const decision = check(businessDayOf(eff.now), eff.now);
   if (decision.kind === "ALLOW") return { decision, pending: false };
   if (eff.late && eff.clientNow) {
-    const atClient = check(businessDayOf(eff.clientNow));
+    const atClient = check(businessDayOf(eff.clientNow), eff.clientNow);
     if (atClient.kind === "ALLOW") return { decision: atClient, pending: true };
   }
   return { decision, pending: false };
+}
+
+/**
+ * Was the day's lock closed at this instant? A save made before the close counts as made on an
+ * open day (K9): the automatic close at midnight must not refuse a save sent at 23:59.
+ */
+export function closedAt(journal: { state: string; closedAt: Date | null; closeRanAt: Date | null }, at: Date): boolean {
+  if (journal.state !== "CLOSED") return false;
+  const since = journal.closedAt ?? journal.closeRanAt;
+  return since === null || since <= at;
 }
 
 function enforce(decision: Decision, reason: string | undefined): void {
@@ -262,6 +279,7 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
     return { measurement: toView(prior), replayed: true };
   }
   const value = parseValue(input.value);
+  checkDilution(input.dilution);
   const clientTs = parseClientTs(input.clientTimestamp);
   let cell: { roundId: string } | null = null;
 
@@ -294,7 +312,7 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
       const journal = await ensureJournalDay(tx, "WATER", group.id, day);
       const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
       const { decision, pending } = decideWithLateRule(
-        (today) => canCreate(level, { day, today, closed: journal.state === "CLOSED" }),
+        (today, at) => canCreate(level, { day, today, closed: closedAt(journal, at) }),
         serverNow,
         clientTs,
         grace,
@@ -373,6 +391,7 @@ export async function updateMeasurement(
   }
   const clientTs = parseClientTs(input.clientTimestamp);
   const newValue = input.value !== undefined ? parseValue(input.value) : undefined;
+  checkDilution(input.dilution);
   let target: { roundId: string; poolId: string; parameterId: string } | null = null;
 
   try {
@@ -394,14 +413,14 @@ export async function updateMeasurement(
       const newJournal = newDay === oldDay ? oldJournal : await ensureJournalDay(tx, "WATER", cur.round.groupId, newDay);
       const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
       const { decision } = decideWithLateRule(
-        (today) =>
+        (today, at) =>
           canModify(level, {
             day: oldDay,
             today,
-            closed: oldJournal.state === "CLOSED",
+            closed: closedAt(oldJournal, at),
             isOwn: cur.createdById === actor.id,
             targetDay: newDay,
-            targetClosed: newJournal.state === "CLOSED",
+            targetClosed: closedAt(newJournal, at),
           }),
         serverNow,
         clientTs,
@@ -504,7 +523,7 @@ export async function invalidateMeasurement(
     const journal = await ensureJournalDay(tx, "WATER", cur.round.groupId, day);
     const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
     const { decision } = decideWithLateRule(
-      (today) => canModify(level, { day, today, closed: journal.state === "CLOSED", isOwn: cur.createdById === actor.id }),
+      (today, at) => canModify(level, { day, today, closed: closedAt(journal, at), isOwn: cur.createdById === actor.id }),
       serverNow,
       clientTs,
       grace,
@@ -551,7 +570,7 @@ export async function openNewRound(actor: Actor, input: NewRoundInput, serverNow
     const journal = await ensureJournalDay(tx, "WATER", group.id, input.day);
     const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
     const { decision } = decideWithLateRule(
-      (today) => canCreate(level, { day: input.day, today, closed: journal.state === "CLOSED" }),
+      (today, at) => canCreate(level, { day: input.day, today, closed: closedAt(journal, at) }),
       serverNow,
       clientTs,
       grace,

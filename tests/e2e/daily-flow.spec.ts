@@ -93,3 +93,134 @@ test("a second editor of the same cell gets a conflict, not a silent overwrite",
   await a.close();
   await b.close();
 });
+
+test("weekly measurement: value with dilution and RO/SW, kept after a reload, shown in the log", async ({ page }, info) => {
+  const pool = info.project.name === "tablet" ? "Korallos" : "Nagymedence";
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Heti vízmérés" }).first().click();
+  await expect(page.getByRole("heading", { name: "Heti vízmérések" })).toBeVisible();
+  await page.getByRole("button", { name: pool, exact: true }).click();
+
+  const kh = page.getByTestId(`cell-${pool}-KH`);
+  await kh.fill("8,4");
+  await page.getByTestId(`dilution-${pool}-KH`).selectOption("10");
+  await page.getByTestId(`diluent-${pool}-KH`).selectOption("RO");
+  await page.getByTestId("save-all").click();
+  await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
+
+  await page.reload();
+  await page.getByRole("button", { name: pool, exact: true }).click();
+  await expect(page.getByTestId(`cell-${pool}-KH`)).toHaveValue("8,4");
+  await expect(page.getByTestId(`dilution-${pool}-KH`)).toHaveValue("10");
+  await expect(page.getByTestId(`diluent-${pool}-KH`)).toHaveValue("RO");
+
+  await page.getByRole("link", { name: "Vízmérési napló" }).first().click();
+  const row = page.getByTestId("log-table").getByRole("row").filter({ hasText: pool }).filter({ hasText: "KH" }).first();
+  await expect(row).toContainText("8,4");
+  await expect(row).toContainText("1:10, RO");
+});
+
+function budapestDay(offsetDays: number): string {
+  const d = new Date(Date.now() + offsetDays * 86_400_000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest" }).format(d);
+}
+
+test("admin corrects and invalidates an earlier day's measurement with a reason; an aquarist gets no form", async ({ page, browser }, info) => {
+  const pool = info.project.name === "tablet" ? "Inkubátor" : "Ragadozós";
+  const yesterday = budapestDay(-1);
+  page.on("dialog", (d) => void (d.type() === "prompt" ? d.accept("papírról utólag bevitt mérés") : d.accept()));
+
+  await login(page, "teszt.admin");
+  await page.goto(`/vizmeres?csoport=NAPI_KIS&nap=${yesterday}`);
+  await expect(page.getByText("Korábbi nap: minden módosításhoz indoklás kell")).toBeVisible();
+  await page.getByRole("button", { name: pool, exact: true }).click();
+  const ph = page.getByTestId(`cell-${pool}-pH`);
+  await ph.fill("8,05");
+  await ph.press("Enter");
+  await expect(page.getByTestId(`cell-${pool}-pH`)).toHaveValue("8,05");
+  await page.waitForLoadState("networkidle");
+
+  await page.goto(`/naplo?tol=${yesterday}&ig=${yesterday}`);
+  const row = page.getByTestId("log-table").getByRole("row").filter({ hasText: pool }).filter({ hasText: "pH" }).first();
+  await row.getByRole("link").click();
+  await page.waitForURL(/\/naplo\/[0-9a-f-]{36}$/);
+  const historyUrl = page.url();
+  await expect(page.getByTestId("correction")).toContainText("Adminisztrátori művelet");
+  await page.getByLabel("Új érték").fill("8,07");
+  await page.getByLabel(/Indoklás/).fill("mérőműszer adatának helyesbítése");
+  await page.getByRole("button", { name: "Változtatás naplózása" }).click();
+  await expect(page.getByTestId("history-value")).toContainText("8,07");
+  const update = page.getByTestId("history-entry").filter({ hasText: "Módosítás" });
+  await expect(update).toContainText("8.05 → 8.07");
+  await expect(update).toContainText("mérőműszer adatának helyesbítése");
+
+  // an aquarist sees the history, but no correction form for someone else's earlier entry
+  const other = await browser.newPage();
+  await login(other, "teszt.akvarista1");
+  await other.goto(historyUrl);
+  await expect(other.getByTestId("correction-denied")).toBeVisible();
+  await expect(other.getByTestId("correction")).toHaveCount(0);
+  await other.close();
+
+  await page.getByLabel("Az érvénytelenítés oka").fill("rossz medencébe került");
+  await page.getByRole("button", { name: "Érvénytelenítés" }).click();
+  await expect(page.getByTestId("history-status")).toHaveText("érvénytelenített");
+  await expect(page.getByTestId("history-entry").filter({ hasText: "Érvénytelenítés" })).toContainText("rossz medencébe került");
+});
+
+test("the pending list is for admins; an aquarist is sent to the no-access page", async ({ page }) => {
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Függő mentések" }).click();
+  await expect(page.getByRole("heading", { name: "Késve érkezett mentések" })).toBeVisible();
+  await page.getByRole("button", { name: "Kilépés" }).click();
+  await login(page, "teszt.akvarista2");
+  await expect(page.getByRole("link", { name: "Függő mentések" })).toHaveCount(0);
+  await page.goto("/fuggo");
+  await expect(page.getByTestId("no-access")).toBeVisible();
+});
+
+test("the day's lock is shown on the grid", async ({ page }) => {
+  await login(page, "teszt.akvarista1");
+  await page.goto("/vizmeres");
+  await expect(page.getByTestId("day-status")).toContainText("Nyitott");
+});
+
+test("settings: an admin changes a reference range and creates a user who can log in", async ({ page }, info) => {
+  const tablet = info.project.name === "tablet";
+  const login1 = tablet ? "uj.akvarista.t" : "uj.akvarista.d";
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Beállítások" }).click();
+  await expect(page.getByRole("heading", { name: "Vízparaméterek és referenciaértékek" })).toBeVisible();
+
+  const row = page.getByTestId("ref-NO3");
+  await row.getByLabel("NO3 maximum").fill(tablet ? "5" : "4");
+  await row.getByRole("button", { name: "Mentés" }).click();
+  await expect(row.getByRole("status")).toHaveText("Mentve.");
+
+  // the new range applies to a new weekly measurement
+  const pool = tablet ? "Korallos" : "Nagymedence";
+  await page.goto("/heti");
+  await page.getByRole("button", { name: pool, exact: true }).click();
+  const no3 = page.getByTestId(`cell-${pool}-NO3`);
+  await no3.fill("6");
+  await no3.press("Enter");
+  await expect(page.getByTestId(`cell-${pool}-NO3`)).toHaveClass(/out/);
+
+  await page.goto("/beallitasok");
+  const nu = page.getByTestId("new-user");
+  await nu.getByLabel("Új felhasználónév").fill(login1);
+  await nu.getByLabel("Teljes név").fill("Új Akvarista");
+  await nu.getByLabel("Monogram").fill(tablet ? "UT" : "UD");
+  await nu.getByLabel("ZIMS-név").fill("New Aquarist");
+  await nu.getByLabel("Kezdő jelszó").fill("uj-akvarista-jelszo");
+  await nu.getByRole("button", { name: "Felhasználó létrehozása" }).click();
+  await expect(nu.getByRole("status")).toHaveText("Felhasználó létrehozva.");
+  await expect(page.getByTestId(`user-${login1}`)).toBeVisible();
+
+  await page.getByRole("button", { name: "Kilépés" }).click();
+  await page.getByLabel("Felhasználónév").fill(login1);
+  await page.getByLabel("Jelszó").fill("uj-akvarista-jelszo");
+  await page.getByRole("button", { name: "Bejelentkezés" }).click();
+  await expect(page.getByTestId("current-user")).toContainText("Új Akvarista");
+  await expect(page.getByRole("link", { name: "Beállítások" })).toHaveCount(0);
+});

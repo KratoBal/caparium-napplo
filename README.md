@@ -78,6 +78,14 @@ and Chromium (desktop 1440×900), and a docker compose start with a backup resto
 
 ## Status
 
-First working part: login → pool group → record a daily measurement → saved → log with history.
-Weekly measurement, admin correction UI, closing/reopening days, Excel and ZIMS CSV exports follow
-in the next parts.
+- Part 1: login → pool group → record a daily measurement → saved → log with history.
+- Part 2: weekly measurement (dilution 1–100 and RO/SW per cell, no recalculation), correction and
+  invalidation with reasons (Figma 21), the day lock (automatic close at local midnight, admin reopen
+  and close, a save made before midnight still counts within the grace period), pending late saves
+  approved or rejected by an admin, settings for admins: reference ranges and pool names as a
+  change or a correction (K3), users (create, role, deactivate, password, versioned monogram and
+  ZIMS name).
+- Part 3 (next): Excel and ZIMS CSV exports with submission states.
+
+The journal job runs once a minute inside the server (`src/instrumentation.ts`); `JOURNAL_JOB=off`
+switches it off for an extra replica.

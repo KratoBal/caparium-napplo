@@ -3,7 +3,7 @@ import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { moduleLevel, validAt } from "@/lib/master";
 import { requireUser } from "@/lib/session";
-import { businessDayOf, dayToDate } from "@/lib/time";
+import { businessDayOf, dateToDay, dayToDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +29,33 @@ export default async function OverviewPage() {
   // R-17: without access to the water module its numbers are not shown either
   const water = (await moduleLevel(prisma, user.id, user.role, "WATER")) !== "NONE";
   const { done, total } = water ? await dailyProgress(today) : { done: 0, total: 0 };
+  // a reopened day stays open until an admin closes it again: list it so it is not forgotten
+  const reopened =
+    water && (await moduleLevel(prisma, user.id, user.role, "WATER")) === "ADMIN"
+      ? await prisma.journalDay.findMany({
+          where: { kind: "WATER", state: "OPEN", reopenings: { some: { reclosedAt: null } } },
+          include: { group: true },
+          orderBy: { businessDay: "asc" },
+        })
+      : [];
   return (
     <Shell title="Mai áttekintés" active="overview" user={user}>
       <h2 style={{ fontSize: 40 }}>Jó munkát!</h2>
       <p className="hint" style={{ fontSize: 17 }}>A mai feladatok és a naplók állapota egy helyen.</p>
+      {reopened.length > 0 && (
+        <div className="banner banner-warn" style={{ marginTop: 20 }} data-testid="reopened-days">
+          Újranyitva hagyott napok:{" "}
+          {reopened.map((j, i) => (
+            <span key={j.id}>
+              {i > 0 && ", "}
+              <Link href={`/${j.group?.frequency === "WEEKLY" ? "heti" : "vizmeres"}?csoport=${j.group?.code}&nap=${dateToDay(j.businessDay)}`}>
+                {dateToDay(j.businessDay)} ({j.group?.name})
+              </Link>
+            </span>
+          ))}
+          . Ha a javítás kész, zárd le őket.
+        </div>
+      )}
       <div className="cards">
         {water && (
           <Link className="tile" href="/vizmeres" data-testid="tile-daily">
@@ -52,12 +75,14 @@ export default async function OverviewPage() {
             <p className="hint">Dátum és medence szerint</p>
           </Link>
         )}
-        <div className="tile muted">
-          <span className="tag">KH · Ca · Mg</span>
-          <h3>Heti vízmérés</h3>
-          <div className="big">Hamarosan</div>
-          <p className="hint">A következő fejlesztési részben</p>
-        </div>
+        {water && (
+          <Link className="tile" href="/heti" data-testid="tile-weekly">
+            <span className="tag">KH · Ca · Mg</span>
+            <h3>Heti vízmérés</h3>
+            <div className="big">Titrálás és Hanna-checker</div>
+            <p className="hint">Hígítás és RO/SW cellánként</p>
+          </Link>
+        )}
         <div className="tile muted">
           <span className="tag">Etetés</span>
           <h3>Takarmányozás</h3>

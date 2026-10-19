@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CorrectionForm } from "@/components/CorrectionForm";
 import { Shell } from "@/components/Shell";
+import { prisma } from "@/lib/db";
+import { canModify } from "@/lib/permissions";
 import { formatDecimalHu } from "@/lib/decimal";
 import { measurementHistory } from "@/lib/queries";
 import { requireModuleRead } from "@/lib/session";
+import { businessDayOf, dayToDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -32,13 +36,33 @@ function show(v: unknown): string {
 }
 
 export default async function MeasurementHistoryPage({ params }: { params: Promise<{ id: string }> }) {
-  const { user } = await requireModuleRead("WATER");
+  const { user, level } = await requireModuleRead("WATER");
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const h = await measurementHistory(id);
   if (!h) notFound();
   const m = h.measurement;
   const out = m.reference === "LOW" || m.reference === "HIGH";
+  // the same rule the server applies on save; here it only decides whether the form is shown
+  const journal = await prisma.journalDay.findFirst({
+    where: { kind: "WATER", groupId: m.groupId, businessDay: dayToDate(m.businessDay) },
+  });
+  const decision =
+    m.status === "VALID"
+      ? canModify(level, {
+          day: m.businessDay,
+          today: businessDayOf(new Date()),
+          closed: journal?.state === "CLOSED",
+          isOwn: m.createdById === user.id,
+        })
+      : null;
+  const people = decision?.kind === "ALLOW"
+    ? await prisma.user.findMany({
+        where: { active: true, role: { in: ["AQUARIST", "ADMIN"] } },
+        orderBy: { fullName: "asc" },
+        select: { id: true, fullName: true },
+      })
+    : [];
   return (
     <Shell title="Mérés előzménye" active="log" user={user}>
       <p>
@@ -65,6 +89,28 @@ export default async function MeasurementHistoryPage({ params }: { params: Promi
           {m.invalidationReason ? ` (ok: ${m.invalidationReason})` : ""}
         </p>
       </div>
+      {decision?.kind === "ALLOW" && (
+        <CorrectionForm
+          measurement={{
+            id: m.id,
+            version: m.version,
+            value: m.value,
+            measuredAtLocal: m.measuredAtLocal,
+            responsibleUserId: m.responsibleUserId,
+            traineePerformed: m.traineePerformed,
+            dilution: m.dilution,
+            diluentWater: m.diluentWater,
+            weekly: m.weekly,
+          }}
+          people={people}
+          reasonRequired={decision.reasonRequired}
+        />
+      )}
+      {decision?.kind === "DENY" && (
+        <p className="hint" data-testid="correction-denied">
+          {decision.message}
+        </p>
+      )}
       <div className="card">
         <h2>Módosítási előzmények</h2>
         <p className="hint">Minden rögzítés, javítás és érvénytelenítés: ki, mikor, mit, előtte és utána.</p>
