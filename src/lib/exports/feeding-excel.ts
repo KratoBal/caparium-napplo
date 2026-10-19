@@ -397,18 +397,24 @@ export async function buildWithdrawalWorkbook(f: FeedingExcelFilter): Promise<{ 
 /** EGY-13: the report as Excel: one sheet by day, one by recipient, per feed and base unit. */
 export async function buildReportWorkbook(f: { from: string; to: string; poolId: string | null; animalId: string | null }): Promise<{ buffer: Buffer; rows: number }> {
   const log = await feedingLog(f);
-  const r = breakdown(log.entries, log.days);
-  const units = [...new Set(r.columns.map((c) => c.unit))];
+  const r = breakdown(log.entries, log.days, log.filtered);
+  const units = [...new Set(r.columns.filter((c) => !c.group).map((c) => c.unit))];
+  const groupUnits = [...new Set(r.columns.filter((c) => c.group).map((c) => c.unit))];
   const wb = new ExcelJS.Workbook();
   wb.creator = "Cápárium nAPPló";
   wb.created = new Date();
   const sheet = (name: string, first: string, lines: ReportLine[]) => {
     const ws = wb.addWorksheet(name);
-    const header = ws.addRow([first, ...r.columns.map((c) => `${c.feed} (${c.unit})`), ...units.map((u) => `Összesen (${u})`)]);
+    const header = ws.addRow([
+      first,
+      ...r.columns.map((c) => `${c.feed} (${c.unit})`),
+      ...units.map((u) => `${groupUnits.length ? "Egyedi összesen" : "Összesen"} (${u})`),
+      ...groupUnits.map((u) => `Csoportos tételekben, a csoport teljes mennyisége (${u})`),
+    ]);
     header.font = { bold: true };
     header.eachCell((c) => fill(c, FILL.head));
     for (const l of [...lines, r.total]) {
-      ws.addRow([l.label, ...r.columns.map((c) => l.cells[c.key] ?? null), ...units.map((u) => l.totals[u] ?? null)]);
+      ws.addRow([l.label, ...r.columns.map((c) => l.cells[c.key] ?? null), ...units.map((u) => l.totals[u] ?? null), ...groupUnits.map((u) => l.groupTotals[u] ?? null)]);
     }
     ws.getRow(ws.rowCount).font = { bold: true };
     ws.columns.forEach((c, i) => (c.width = i === 0 ? 24 : 16));

@@ -45,7 +45,8 @@ export async function POST(req: Request) {
   const exportKind = kind === "etetes" || kind === "kimutatas" ? "EXCEL_FEEDING" : kind === "evesi" ? "EXCEL_EATING" : "EXCEL_WITHDRAWAL";
   await prisma.$transaction(async (tx) => {
     const run = await tx.exportRun.create({
-      data: { kind: exportKind, purpose: "PREVIEW", periodFrom: dayToDate(from), periodTo: dayToDate(to), filters: {}, createdById: user.id },
+      // the page's own kind too: a report and the feeding log share EXCEL_FEEDING (review note on #17)
+      data: { kind: exportKind, purpose: "PREVIEW", periodFrom: dayToDate(from), periodTo: dayToDate(to), filters: { kind }, createdById: user.id },
     });
     await writeAudit(tx, {
       userId: user.id,

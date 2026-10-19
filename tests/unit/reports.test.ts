@@ -27,6 +27,19 @@ describe("breakdown (EGY-13)", () => {
     ]);
     expect(r.total.totals).toEqual({ db: 6, g: 440 });
   });
+
+  it("filtered: a group item stands in its own column and its own total, never in the animal's (review of #17)", () => {
+    const r = breakdown(
+      [e("2026-11-02", "Teszt Egy", "Teszt hal", "g", 100), e("2026-11-02", "Teszt csoport (csoport)", "Teszt hal", "g", 300, true)],
+      ["2026-11-02"],
+      true,
+    );
+    expect(r.columns.map((c) => [c.feed, c.group])).toEqual([
+      ["Teszt hal", false],
+      ["Teszt hal [csoportos tétel]", true],
+    ]);
+    expect([r.byDay[0].totals, r.byDay[0].groupTotals]).toEqual([{ g: 100 }, { g: 300 }]);
+  });
 });
 
 describe("weekShade (EVE-08)", () => {

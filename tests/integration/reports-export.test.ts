@@ -48,10 +48,13 @@ describe("the report Excel (EGY-13)", () => {
     expect(labels).toEqual(["Teszt csoport (csoport)", "Teszt Egy", "Összesen"]);
   });
 
-  it("filtered by animal: its own and its group's items (R-8)", async () => {
+  it("filtered by animal: its group's item comes, but apart, never in the animal's own total (R-8, review of #17)", async () => {
     const wb = await load((await buildReportWorkbook({ from: "2026-11-02", to: "2026-11-02", poolId: null, animalId: a["Teszt Kettő"] })).buffer);
     const who = wb.getWorksheet("Kinek")!;
     expect(who.getRow(2).getCell(1).value).toBe("Teszt csoport (csoport)");
+    const day = wb.getWorksheet("Napokra bontva")!;
+    expect((day.getRow(1).values as unknown[]).slice(1)).toEqual(["Nap", "Teszt hal [csoportos tétel] (g)", "Csoportos tételekben, a csoport teljes mennyisége (g)"]);
+    expect((day.getRow(2).values as unknown[]).slice(1)).toEqual(["2026-11-02", 300, 300]);
   });
 });
 
