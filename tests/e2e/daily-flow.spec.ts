@@ -437,3 +437,24 @@ test("conveniences: a feeding plan, the list from it, the feed type icons", asyn
   await page.getByRole("link", { name: "Takarmánylista" }).click();
   await expect(page.getByRole("heading", { name: "🦐 Rákok" })).toBeVisible();
 });
+
+test("the helper: a quick question about the page, switched off and on", async ({ page }) => {
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Napi vízmérés" }).click();
+  // the overview has a helper too: wait for the new page, or the clicks below land on the old one
+  await expect(page).toHaveURL(/\/vizmeres/);
+  await expect(page.getByRole("heading", { name: "Napi vízmérések" })).toBeVisible();
+  const helper = page.getByTestId("helper");
+  // AST-03: with a stock alert (the dosing test leaves the salt below zero) it may already be open;
+  // wait until the component has read its stored state, or the click races the auto-open
+  await expect(helper).toHaveAttribute("data-ready", "1");
+  if ((await helper.getByTestId("helper-button").getAttribute("aria-expanded")) !== "true") await helper.getByTestId("helper-button").click();
+  await helper.getByRole("button", { name: "Mi van még hátra ma?" }).click();
+  await expect(helper.getByTestId("helper-answer")).not.toBeEmpty();
+  await helper.getByRole("button", { name: "Segítő kikapcsolása" }).click();
+  await expect(page.getByTestId("helper-on")).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId("helper-on")).toBeVisible();
+  await page.getByTestId("helper-on").click();
+  await expect(page.getByTestId("helper-button")).toBeVisible();
+});

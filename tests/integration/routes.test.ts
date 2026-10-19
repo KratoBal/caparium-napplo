@@ -2,12 +2,15 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
 import { POST as logoutRoute } from "@/app/api/auth/logout/route";
+import { GET as exportFileRoute } from "@/app/api/exports/files/[id]/route";
 import { GET as gridRoute } from "@/app/api/grid/route";
 import { POST as createRoute } from "@/app/api/measurements/route";
 import { PATCH as updateRoute } from "@/app/api/measurements/[id]/route";
 import { POST as roundRoute } from "@/app/api/rounds/route";
 import { hashPassword } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { prisma, SYSTEM_USER_ID } from "@/lib/db";
+import { monthlyPackage } from "@/lib/exports/zims";
+import { createMeasurement } from "@/lib/measurements";
 import { businessDayOf } from "@/lib/time";
 import { fixtures, rid } from "./fixtures";
 import { TEST_PASSWORD } from "./global-setup";
@@ -146,6 +149,30 @@ describe("module access (R-17, review of PR #1 point A)", () => {
     // a normal aquarist still reads it
     const ok = await gridRoute(new Request(`${BASE}/api/grid?groupId=${f.group("NAPI_NAGY")}&day=2026-06-01`, { headers: { cookie: await loginAs("teszt.akvarista2") } }));
     expect(ok.status).toBe(200);
+  });
+});
+
+describe("the monthly ZIMS package's files (VIZ-20, review of #19)", () => {
+  it("the System run's file downloads with the EXPORT right, whoever made the run; without it 403", async () => {
+    // November 2028: a month no other integration test uses (the database is shared across files)
+    await createMeasurement(f.aq1, { requestId: rid(), groupId: f.group("NAPI_NAGY"), poolId: f.pool("NAGY"), parameterId: f.param("PH"), value: "8,1", measuredAtLocal: "2028-11-15T09:00" }, new Date("2028-11-15T09:00:00+01:00"));
+    const p = await monthlyPackage(new Date("2028-12-10T12:00:00+01:00"));
+    expect(p.created).toBe(true);
+    const run = await prisma.exportRun.findUniqueOrThrow({ where: { id: p.runId! }, include: { files: true } });
+    expect(run.createdById).toBe(SYSTEM_USER_ID);
+    const file = run.files[0];
+    const get = (cookie: string) => exportFileRoute(new Request(`${BASE}/api/exports/files/${file.id}`, { headers: { cookie } }), { params: Promise.resolve({ id: file.id }) });
+
+    const ok = await get(await loginAs("teszt.akvarista2"));
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("content-disposition")).toContain(file.fileName);
+    expect(Buffer.from(await ok.arrayBuffer()).equals(Buffer.from(file.content!))).toBe(true);
+
+    const u = await prisma.user.create({
+      data: { loginId: `nincs-export-${Date.now()}`, fullName: "Nincs Export", role: "AQUARIST", passwordHash: await hashPassword(TEST_PASSWORD) },
+    });
+    await prisma.modulePermission.create({ data: { userId: u.id, module: "EXPORT", level: "NONE" } });
+    expect((await get(await loginAs(u.loginId))).status).toBe(403);
   });
 });
 

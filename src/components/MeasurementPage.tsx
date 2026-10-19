@@ -3,6 +3,8 @@ import { DayControls } from "@/components/DayControls";
 import { MeasurementGrid } from "@/components/MeasurementGrid";
 import { dayStatus } from "@/lib/journal";
 import { Shell } from "@/components/Shell";
+import { waterHelper } from "@/lib/helpers";
+import { moduleLevel } from "@/lib/master";
 import { prisma } from "@/lib/db";
 import { getGrid, listGroups } from "@/lib/queries";
 import { requireModuleRead } from "@/lib/session";
@@ -46,7 +48,7 @@ export async function MeasurementPage({
   });
 
   return (
-    <Shell title={title} active={active} user={user}>
+    <Shell title={title} active={active} user={user} helper={await waterHelper((await moduleLevel(prisma, user.id, user.role, "DOSING")) !== "NONE")}>
       <p className="hint" style={{ fontSize: 20, marginTop: 0 }}>
         {formatDayLong(day)} · {weekdayName(day)}
       </p>
