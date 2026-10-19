@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+next-env.d.ts
+.env
+.env.*
+!.env.example
+# customer source material never goes into the repository (see scripts/secret-scan.mjs)
+*.xlsx
+*.xls
+*.pdf
+*.zip

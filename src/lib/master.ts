@@ -1,0 +1,132 @@
+// Reads of time-versioned master data (adatmodell K3): everything is "valid at an instant".
+
+import type { AppModule, JournalKind, Prisma } from "@prisma/client";
+import { prisma, type Tx } from "./db";
+import { effectiveLevel, type Level, type Role } from "./permissions";
+import { dayToDate } from "./time";
+
+export function validAt(at: Date) {
+  return {
+    validFrom: { lte: at },
+    OR: [{ validTo: null }, { validTo: { gt: at } }],
+  } satisfies { validFrom: Prisma.DateTimeFilter; OR: unknown[] };
+}
+
+type Versioned = { validFrom: Date; validTo: Date | null };
+
+export function pickValid<T extends Versioned>(rows: T[], at: Date): T | undefined {
+  return rows.find((r) => r.validFrom <= at && (r.validTo === null || r.validTo > at));
+}
+
+export const SETTING_DEFAULTS = {
+  late_save_grace_minutes: "30",
+  business_day_time_zone: "Europe/Budapest",
+  show_reference_on_deviation: "true",
+} as const;
+
+export type SettingKey = keyof typeof SETTING_DEFAULTS;
+
+export async function getSetting(tx: Tx, key: SettingKey, at: Date = new Date()): Promise<string> {
+  const row = await tx.setting.findFirst({
+    where: { key, validFrom: { lte: at } },
+    orderBy: { validFrom: "desc" },
+  });
+  return row?.value ?? SETTING_DEFAULTS[key];
+}
+
+export async function moduleLevel(tx: Tx, userId: string, role: Role, module: AppModule): Promise<Level> {
+  const override = await tx.modulePermission.findUnique({ where: { userId_module: { userId, module } } });
+  return effectiveLevel(role, override?.level ?? null);
+}
+
+export type LayoutPool = { id: string; name: string };
+export type LayoutParameter = {
+  id: string;
+  name: string;
+  decimals: number;
+  unit: { id: string; symbol: string; dimension: string; factorToBase: string | null };
+  plausibleMin: string | null;
+  plausibleMax: string | null;
+};
+
+/** The rows (pools) and columns (parameters) of a measurement group at an instant. */
+export async function groupLayout(
+  tx: Tx,
+  groupId: string,
+  at: Date,
+): Promise<{ pools: LayoutPool[]; parameters: LayoutParameter[] }> {
+  const [memberships, params] = await Promise.all([
+    tx.groupMembership.findMany({
+      where: { groupId, ...validAt(at) },
+      orderBy: { sortOrder: "asc" },
+      include: { pool: { include: { names: true } } },
+    }),
+    tx.groupParameter.findMany({
+      where: { groupId, ...validAt(at) },
+      orderBy: { sortOrder: "asc" },
+      include: { parameter: { include: { names: true, unit: true } } },
+    }),
+  ]);
+  return {
+    pools: memberships.map((m) => ({ id: m.pool.id, name: pickValid(m.pool.names, at)?.displayName ?? m.pool.code })),
+    parameters: params.map((gp) => ({
+      id: gp.parameter.id,
+      name: pickValid(gp.parameter.names, at)?.displayName ?? gp.parameter.code,
+      decimals: gp.parameter.decimals,
+      unit: {
+        id: gp.parameter.unit.id,
+        symbol: gp.parameter.unit.symbol,
+        dimension: gp.parameter.unit.dimension,
+        factorToBase: gp.parameter.unit.factorToBase?.toString() ?? null,
+      },
+      plausibleMin: gp.parameter.plausibleMin?.toString() ?? null,
+      plausibleMax: gp.parameter.plausibleMax?.toString() ?? null,
+    })),
+  };
+}
+
+/** Finds the reference range of a parameter valid at the measurement instant (R-10). */
+export async function referenceAt(tx: Tx, parameterId: string, at: Date) {
+  return tx.referenceRange.findFirst({
+    where: { parameterId, ...validAt(at) },
+    include: { unit: true },
+  });
+}
+
+/**
+ * Returns the journal day (the day's lock), creating it if the scheduled run has not yet (R-15).
+ * Idempotent under concurrency: a lost creation race re-reads the winner.
+ */
+export async function ensureJournalDay(tx: Tx, kind: JournalKind, groupId: string | null, day: string) {
+  const businessDay = dayToDate(day);
+  const existing = await tx.journalDay.findFirst({ where: { kind, groupId, businessDay } });
+  if (existing) return existing;
+  // ON CONFLICT DO NOTHING keeps the surrounding transaction usable when another request wins the race.
+  await tx.$executeRaw`
+    INSERT INTO "journal_day" ("id", "kind", "groupId", "businessDay", "state")
+    VALUES (gen_random_uuid(), ${kind}::"JournalKind", ${groupId}::uuid, ${businessDay}::date, 'OPEN')
+    ON CONFLICT DO NOTHING`;
+  const row = await tx.journalDay.findFirst({ where: { kind, groupId, businessDay } });
+  if (!row) throw new Error("journal day could not be created");
+  return row;
+}
+
+/** Monogram valid at an instant for many users at once (R-13: the single source). */
+export async function monogramResolver(userIds: string[]) {
+  const ids = [...new Set(userIds)];
+  const rows = ids.length
+    ? await prisma.userMonogram.findMany({ where: { userId: { in: ids } }, orderBy: { validFrom: "asc" } })
+    : [];
+  const users = ids.length ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, fullName: true } }) : [];
+  const byUser = new Map<string, typeof rows>();
+  for (const r of rows) byUser.set(r.userId, [...(byUser.get(r.userId) ?? []), r]);
+  const names = new Map(users.map((u) => [u.id, u.fullName]));
+  return {
+    monogram(userId: string, at: Date): string {
+      return pickValid(byUser.get(userId) ?? [], at)?.monogram ?? names.get(userId) ?? "?";
+    },
+    name(userId: string): string {
+      return names.get(userId) ?? "?";
+    },
+  };
+}

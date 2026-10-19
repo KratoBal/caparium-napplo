@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+playwright-report
+test-results
+.env
+.env.*
+!.env.example
+*.xlsx
+*.xls
+*.pdf
+*.zip

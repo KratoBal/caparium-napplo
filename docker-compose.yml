@@ -1,0 +1,47 @@
+# Test environment: app + its own PostgreSQL. No shared database with any other system.
+# Required: POSTGRES_PASSWORD (and SEED_TEST_PASSWORD for the seed). Copy .env.example to .env.
+# The app listens on 127.0.0.1 by default; set APP_BIND to the tailnet address on the stage host.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: caparium
+      POSTGRES_USER: caparium
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U caparium -d caparium"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://caparium:${POSTGRES_PASSWORD}@db:5432/caparium
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # one-off: synthetic test users and master data. docker compose --profile tools run --rm seed
+  seed:
+    build:
+      context: .
+      target: build
+    profiles: ["tools"]
+    environment:
+      DATABASE_URL: postgresql://caparium:${POSTGRES_PASSWORD}@db:5432/caparium
+      SEED_TEST_PASSWORD: ${SEED_TEST_PASSWORD:?set SEED_TEST_PASSWORD}
+    command: ["npx", "tsx", "prisma/seed.ts"]
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  db-data:
