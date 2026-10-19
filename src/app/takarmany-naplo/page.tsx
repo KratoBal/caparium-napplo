@@ -12,6 +12,7 @@ import { addDays, businessDayOf, isValidDay } from "@/lib/time";
 export const dynamic = "force-dynamic";
 
 const num = (v: number) => String(Math.round(v * 10000) / 10000).replace(".", ",");
+const fmt = (t: Record<string, number>) => Object.entries(t).map(([u, v]) => `${num(v)} ${u}`).join(", ");
 
 // TAK-04 (Notes N7): the feeding log of a period, filtered by pool and animal, with the eating pattern
 // of the same animals; TAK-05: the same period as Excel, and the page itself as PDF.
@@ -81,7 +82,10 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
           <div className="card">
             <h2>Etetések ({log.rows.length})</h2>
             <p className="hint" data-testid="log-totals">
-              Összesen: {Object.entries(log.totals).map(([u, v]) => `${num(v)} ${u}`).join(", ") || "semmi"} (alapegységben; a darab és a tömeg külön)
+              {log.filtered && Object.keys(log.group).length > 0
+                ? `Egyedi tételek: ${fmt(log.own) || "semmi"}; csoportos tételekben (a csoport teljes mennyisége, felosztás nélkül): ${fmt(log.group)}`
+                : `Összesen: ${fmt(log.totals) || "semmi"}`}{" "}
+              (alapegységben; a darab és a tömeg külön)
             </p>
             <div className="table-scroll">
               <table className="log-table" data-testid="feeding-log">

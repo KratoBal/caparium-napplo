@@ -38,14 +38,15 @@ describe("the feeding log (TAK-04)", () => {
   it("all items of the period, totals in base units (1 kg is 1000 g)", async () => {
     const log = await feedingLog({ ...period, poolId: null, animalId: null });
     expect(log.rows.map((r) => r.recipient).sort()).toEqual(["Teszt Egy", "Teszt Négy", "Teszt csoport (csoport)"].sort());
-    expect(log.totals).toEqual({ g: 1400 });
+    expect([log.filtered, log.totals]).toEqual([false, { g: 1400 }]);
     expect(log.days).toEqual(["2026-06-01", "2026-06-02"]);
   });
 
   it("by animal: its own items and the group items it took part in", async () => {
     const egy = await feedingLog({ ...period, poolId: null, animalId: a["Teszt Egy"] });
     expect(egy.rows.map((r) => r.recipient).sort()).toEqual(["Teszt Egy", "Teszt csoport (csoport)"].sort());
-    expect(egy.totals).toEqual({ g: 1300 });
+    // the group's whole amount stays apart (R-8 invents no split), the animal's own is 1000 g
+    expect([egy.filtered, egy.own, egy.group]).toEqual([true, { g: 1000 }, { g: 300 }]);
     const negy = await feedingLog({ ...period, poolId: null, animalId: a["Teszt Négy"] });
     expect(negy.rows.map((r) => r.recipient)).toEqual(["Teszt Négy"]);
   });

@@ -45,7 +45,7 @@ export async function feedingLog(f: LogFilter) {
     }),
     prisma.eatingStatus.findMany({ where: { status: "VALID", feedingDay: { businessDay: range } }, include: { feedingDay: true } }),
     prisma.unit.findMany({ where: { isBase: true } }),
-    prisma.placement.findMany({ include: { pool: { include: { names: true } } } }),
+    prisma.placement.findMany({ include: { pool: { include: { names: true } } }, orderBy: { validFrom: "asc" } }),
   ]);
   const baseOf = new Map(baseUnits.map((u) => [u.dimension, u.symbol]));
 
@@ -57,7 +57,11 @@ export async function feedingLog(f: LogFilter) {
   };
 
   const rows: LogRow[] = [];
+  // R-8 invents no split of a group item: under a filter its whole amount is shown apart, so an
+  // animal's (or a pool's) total never reads as if it ate the group's food alone (review of #11)
   const totals: Record<string, number> = {};
+  const own: Record<string, number> = {};
+  const group: Record<string, number> = {};
   for (const it of items) {
     const day = dateToDay(it.feedingDay.businessDay);
     const at = dayBounds(day).start;
@@ -67,7 +71,10 @@ export async function feedingLog(f: LogFilter) {
     if (f.poolId && !pools.some((p) => p.id === f.poolId)) continue;
     for (const q of it.quantities) {
       const base = baseOf.get(q.unit.dimension) ?? q.unit.symbol;
-      totals[base] = (totals[base] ?? 0) + Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
+      const v = Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
+      totals[base] = (totals[base] ?? 0) + v;
+      const part = it.animalId ? own : group;
+      part[base] = (part[base] ?? 0) + v;
     }
     const feed = pickValid(it.feed.names, at)?.name ?? it.feed.names.at(-1)?.name ?? "?";
     rows.push({
@@ -104,5 +111,5 @@ export async function feedingLog(f: LogFilter) {
     })
     .sort((a, b) => a.name.localeCompare(b.name, "hu"));
 
-  return { days, rows, totals, pattern };
+  return { days, rows, totals, own, group, filtered: f.animalId !== null || f.poolId !== null, pattern };
 }
