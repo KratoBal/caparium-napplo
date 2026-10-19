@@ -4,6 +4,8 @@ import { FeedingDay } from "@/components/FeedingDay";
 import { ApplyPlan } from "@/components/FeedingForms";
 import type { FeedOpt, Recipient } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
+import { feedingHelper } from "@/lib/helpers";
+import { moduleLevel } from "@/lib/master";
 import { referencesOn } from "@/lib/calculator";
 import { prisma } from "@/lib/db";
 import { feedingDayView } from "@/lib/feeding";
@@ -58,7 +60,7 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
       })),
   );
   return (
-    <Shell title="Takarmánynapló" active="feeding" user={user}>
+    <Shell title="Takarmánynapló" active="feeding" user={user} helper={await feedingHelper((await moduleLevel(prisma, user.id, user.role, "DOSING")) !== "NONE")}>
       <div className="toolbar">
         <DayNav path="/etetes" day={day} today={today} />
         <span className="spacer" />

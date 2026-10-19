@@ -2,6 +2,9 @@ import { DayControls } from "@/components/DayControls";
 import { DayNav } from "@/components/DayNav";
 import { EatingForm } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
+import { feedingHelper } from "@/lib/helpers";
+import { moduleLevel } from "@/lib/master";
+import { prisma } from "@/lib/db";
 import { eatingDayView } from "@/lib/eating";
 import { EAT_LABEL } from "@/lib/eating-labels";
 import { feedingDayView } from "@/lib/feeding";
@@ -23,7 +26,7 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
   const editable = canRecord && (isAdmin || (day === today && lock.state === "OPEN"));
   const rows = new Map(eat.rows.map((r) => [r.animalId, r]));
   return (
-    <Shell title="Evési napló" active="eating" user={user}>
+    <Shell title="Evési napló" active="eating" user={user} helper={await feedingHelper((await moduleLevel(prisma, user.id, user.role, "DOSING")) !== "NONE")}>
       <div className="toolbar">
         <DayNav path="/evesi-naplo" day={day} today={today} />
         <span className="spacer" />

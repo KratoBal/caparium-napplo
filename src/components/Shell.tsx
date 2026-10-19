@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { SessionUser } from "@/lib/auth";
+import type { HelperData } from "@/lib/helpers";
+import { Helper } from "./Helper";
 import { businessDayOf, formatDayLong } from "@/lib/time";
 
 type NavKey = "overview" | "daily" | "weekly" | "log" | "export" | "animals" | "feeds" | "feeding" | "eating" | "feedlog" | "withdrawal" | "calculator" | "dosing" | "reports" | "dailyreport" | "pending" | "settings";
@@ -26,11 +28,14 @@ export function Shell({
   title,
   active,
   user,
+  helper,
   children,
 }: {
   title: string;
   active?: NavKey;
   user: SessionUser | null;
+  /** AST-01: the page's helper, if it has one */
+  helper?: HelperData | null;
   children: React.ReactNode;
 }) {
   const today = formatDayLong(businessDayOf(new Date()));
@@ -79,6 +84,7 @@ export function Shell({
         <div className="nav-foot">CÁPASULI • TESZTKÖRNYEZET</div>
       </nav>
       <main className="main">{children}</main>
+      {helper && <Helper data={helper} />}
     </div>
   );
 }

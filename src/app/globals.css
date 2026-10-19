@@ -170,3 +170,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .card { border: 0; padding: 0 0 12px; }
   .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* AST-01: the helper in the corner */
+.helper { position: fixed; right: 16px; bottom: 16px; z-index: 20; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; max-width: min(420px, calc(100vw - 32px)); }
+.helper-button { min-height: var(--touch); border-radius: 999px; border: 0; padding: 0 20px; background: var(--c-ink); color: var(--c-white); font-weight: 600; cursor: pointer; }
+.helper-button.alert { background: var(--c-warn-ink); }
+.helper-panel { background: var(--c-white); border: 1px solid var(--c-line); border-radius: var(--radius); padding: 14px; box-shadow: 0 6px 24px rgba(17, 47, 62, 0.15); max-height: min(60vh, 520px); overflow: auto; }
+.helper-qs { display: flex; flex-wrap: wrap; gap: 8px; }
+.helper-animal { display: flex; gap: 6px; }
+.helper-answer { margin: 12px 0 0; font-size: 15px; }
+.helper-off { margin-top: 10px; background: none; border: 0; color: var(--c-muted); font-size: 13px; text-decoration: underline; cursor: pointer; }
+.helper-on { position: fixed; right: 16px; bottom: 16px; z-index: 20; background: var(--c-field); border: 0; border-radius: 999px; padding: 8px 14px; font-size: 13px; cursor: pointer; }

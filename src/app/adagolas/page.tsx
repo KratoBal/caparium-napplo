@@ -2,10 +2,11 @@ import { DosingForm, MovementForm, NewChemical, type ChemicalOpt } from "@/compo
 import { InvalidateButton } from "@/components/FeedingForms";
 import { PrintButton } from "@/components/PrintButton";
 import { Shell } from "@/components/Shell";
+import { waterHelper } from "@/lib/helpers";
 import { prisma } from "@/lib/db";
 import { dosingLog, stockLevels } from "@/lib/dosing";
 import { AppError } from "@/lib/errors";
-import { pickValid } from "@/lib/master";
+import { moduleLevel, pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
 import { addDays, businessDayOf, isValidDay, localTimeOf } from "@/lib/time";
 
@@ -44,7 +45,7 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
   const canRecord = level === "RECORD" || level === "ADMIN";
   const isAdmin = level === "ADMIN";
   return (
-    <Shell title="Vegyszeradagolás" active="dosing" user={user}>
+    <Shell title="Vegyszeradagolás" active="dosing" user={user} helper={(await moduleLevel(prisma, user.id, user.role, "WATER")) !== "NONE" ? await waterHelper(true) : null}>
       {canRecord && (
         <div className="card no-print">
           <h2>Adagolás</h2>
