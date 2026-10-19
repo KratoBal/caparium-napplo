@@ -19,6 +19,11 @@ admin.pathname = "/postgres";
 const env: NodeJS.ProcessEnv = { ...process.env, DATABASE_URL: target.toString() };
 for (const name of ["SEED_TEST_PASSWORD", "CAPARIUM_SEED_SZINTETIKUS", "CI"]) delete (env as Record<string, string | undefined>)[name];
 
+// the test drops and creates a database: only ever next to a database named for testing, whatever
+// OWNER_DATABASE_URL says (env.ts takes an outside one unchecked; barracuda, #24 review). The
+// afterAll runs even when the beforeAll throws, so it checks the same flag.
+const besideTestDatabase = owner.pathname.slice(1).endsWith("_test");
+
 let db: PrismaClient;
 
 async function counts() {
@@ -39,6 +44,9 @@ async function counts() {
 }
 
 beforeAll(async () => {
+  if (!besideTestDatabase) {
+    throw new Error(`the basic data test needs a *_test owner database (got "${owner.pathname.slice(1)}")`);
+  }
   const server = new PrismaClient({ datasourceUrl: admin.toString() });
   try {
     await server.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
@@ -53,6 +61,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await db?.$disconnect();
+  if (!besideTestDatabase) return;
   const server = new PrismaClient({ datasourceUrl: admin.toString() });
   try {
     await server.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
