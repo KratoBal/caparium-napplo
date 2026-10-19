@@ -10,7 +10,7 @@ import type { LifecycleEvent, LifecycleType, Sex } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
 import { prisma, type Tx } from "./db";
-import { AppError } from "./errors";
+import { AppError, isUniqueViolation } from "./errors";
 import { moduleLevel, pickValid, validAt } from "./master";
 import type { Actor } from "./measurements";
 import { canCreate, canModify, effectiveNow } from "./permissions";
@@ -116,6 +116,18 @@ function enforce(decision: ReturnType<typeof canCreate>, reasonText: string | un
   }
 }
 
+/**
+ * Serializes the event changes of one animal (review of #9): the sequence check reads the valid events,
+ * and under READ COMMITTED two transactions would not see each other's insert (a death and a later
+ * transfer at the same moment would both pass). The row lock makes the second one wait and re-read.
+ */
+async function lockAnimal(tx: Tx, animalId: string): Promise<boolean> {
+  const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "animal" WHERE "id" = ${animalId}::uuid FOR UPDATE`;
+  return rows.length === 1;
+}
+
+const SAME_INSTANT = "Erre az állatra ugyanerre az időpontra már van érvényes esemény. Adj meg másik időpontot.";
+
 export async function createLifecycleEvent(actor: Actor, input: LifecycleInput, serverNow = new Date()) {
   const prior = await prisma.lifecycleEvent.findUnique({ where: { requestId: input.requestId } });
   if (prior) return { eventId: prior.id, animalId: prior.animalId, replayed: true };
@@ -131,50 +143,58 @@ export async function createLifecycleEvent(actor: Actor, input: LifecycleInput, 
   const day = businessDayOf(occurredAt);
   enforce(canCreate(level, { day, today: businessDayOf(eff.now), closed: false }), input.reason);
 
-  return prisma.$transaction(async (tx) => {
-    let animalId = input.animalId;
-    if (input.type === "ARRIVAL") {
-      if (!input.newAnimal) throw new AppError(422, "NEW_ANIMAL_REQUIRED", "Az érkezéshez az új állat adatai kellenek.");
-      const species = await tx.species.findUnique({ where: { id: input.newAnimal.speciesId } });
-      if (!species || !species.active) throw new AppError(422, "SPECIES_NOT_FOUND", "A faj nem található.");
-      const a = await tx.animal.create({
-        data: {
-          speciesId: species.id,
-          sex: input.newAnimal.sex as Sex,
-          names: { create: { name: input.newAnimal.name, validFrom: occurredAt } },
-        },
-      });
-      animalId = a.id;
-    } else if (!animalId || !(await tx.animal.findUnique({ where: { id: animalId } }))) {
-      throw new AppError(404, "ANIMAL_NOT_FOUND", "Az állat nem található.");
-    }
-    const e = await tx.lifecycleEvent.create({
+  try {
+    return await prisma.$transaction(async (tx) => createInTx(tx, actor, input, { occurredAt, day, clientTs }));
+  } catch (e) {
+    if (isUniqueViolation(e, "occurredAt") || isUniqueViolation(e, "one_valid_per_instant")) throw new AppError(409, "SAME_INSTANT", SAME_INSTANT);
+    throw e;
+  }
+}
+
+async function createInTx(tx: Tx, actor: Actor, input: LifecycleInput, at: { occurredAt: Date; day: string; clientTs: Date | null }) {
+  const { occurredAt, day, clientTs } = at;
+  let animalId = input.animalId;
+  if (input.type === "ARRIVAL") {
+    if (!input.newAnimal) throw new AppError(422, "NEW_ANIMAL_REQUIRED", "Az érkezéshez az új állat adatai kellenek.");
+    const species = await tx.species.findUnique({ where: { id: input.newAnimal.speciesId } });
+    if (!species || !species.active) throw new AppError(422, "SPECIES_NOT_FOUND", "A faj nem található.");
+    const a = await tx.animal.create({
       data: {
-        animalId: animalId!,
-        type: input.type,
-        occurredAt,
-        businessDay: dayToDate(day),
-        toPoolId: input.toPoolId ?? null,
-        toGroupId: input.toGroupId ?? null,
-        note: input.note ?? null,
-        requestId: input.requestId,
-        createdById: actor.id,
-        updatedById: actor.id,
+        speciesId: species.id,
+        sex: input.newAnimal.sex as Sex,
+        names: { create: { name: input.newAnimal.name, validFrom: occurredAt } },
       },
     });
-    await rebuildAnimal(tx, animalId!);
-    await writeAudit(tx, {
-      userId: actor.id,
-      action: "CREATE",
-      entityType: "LifecycleEvent",
-      entityId: e.id,
-      changes: diffFields(null, { animalId, ...eventSnapshot(e) }),
-      reason: input.reason ?? null,
+    animalId = a.id;
+  } else if (!animalId || !(await lockAnimal(tx, animalId))) {
+    throw new AppError(404, "ANIMAL_NOT_FOUND", "Az állat nem található.");
+  }
+  const e = await tx.lifecycleEvent.create({
+    data: {
+      animalId: animalId!,
+      type: input.type,
+      occurredAt,
+      businessDay: dayToDate(day),
+      toPoolId: input.toPoolId ?? null,
+      toGroupId: input.toGroupId ?? null,
+      note: input.note ?? null,
       requestId: input.requestId,
-      clientTimestamp: clientTs,
-    });
-    return { eventId: e.id, animalId: animalId!, replayed: false };
+      createdById: actor.id,
+      updatedById: actor.id,
+    },
   });
+  await rebuildAnimal(tx, animalId!);
+  await writeAudit(tx, {
+    userId: actor.id,
+    action: "CREATE",
+    entityType: "LifecycleEvent",
+    entityId: e.id,
+    changes: diffFields(null, { animalId, ...eventSnapshot(e) }),
+    reason: input.reason ?? null,
+    requestId: input.requestId,
+    clientTimestamp: clientTs,
+  });
+  return { eventId: e.id, animalId: animalId!, replayed: false };
 }
 
 export async function invalidateLifecycleEvent(
@@ -186,6 +206,10 @@ export async function invalidateLifecycleEvent(
   if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId, entityId: id } })) return { replayed: true };
   const level = await moduleLevel(prisma, actor.id, actor.role, "FEEDING");
   return prisma.$transaction(async (tx) => {
+    // the animal's lock first, then the event read again under it (lockAnimal)
+    const owner = await tx.lifecycleEvent.findUnique({ where: { id }, select: { animalId: true } });
+    if (!owner) throw new AppError(404, "NOT_FOUND", "Az esemény nem található.");
+    await lockAnimal(tx, owner.animalId);
     const cur = await tx.lifecycleEvent.findUnique({ where: { id } });
     if (!cur) throw new AppError(404, "NOT_FOUND", "Az esemény nem található.");
     if (cur.status !== "VALID") throw new AppError(409, "NOT_EDITABLE", "Ez az esemény már nem érvényes.");

@@ -233,10 +233,12 @@ ALTER TABLE "coral_feed_dose" ADD CONSTRAINT "coral_feed_dose_unitId_fkey" FOREI
 
 -- Placements and group memberships are derived from the valid lifecycle events and rebuilt per
 -- animal on every event change (src/lib/animals.ts), so the server role may replace them. The
--- events themselves are never deleted (K5); the derived rows carry the id of the event behind them.
+-- events themselves are never deleted (K5); the derived rows carry the id of the event behind them,
+-- on purpose without a foreign key: every rebuild rewrites them from the events.
 GRANT DELETE ON "placement", "animal_group_membership" TO caparium_app;
 
--- INV (adatmodell 6.): an animal is in at most one pool and one group at a time, and one valid
--- event per animal and instant
+-- INV (adatmodell 6.): an animal is in at most one pool and one group at a time
 CREATE UNIQUE INDEX "placement_one_open_per_animal" ON "placement" ("animalId") WHERE "validTo" IS NULL;
 CREATE UNIQUE INDEX "membership_one_open_per_animal" ON "animal_group_membership" ("animalId") WHERE "validTo" IS NULL;
+-- one valid event per animal and instant: the order of the events is their time, a tie has none
+CREATE UNIQUE INDEX "lifecycle_event_one_valid_per_instant" ON "lifecycle_event" ("animalId", "occurredAt") WHERE "status" = 'VALID';

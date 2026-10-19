@@ -1,7 +1,7 @@
 // Animals, lifecycle and feeds against a real database (adatmodell 6., 7., 11.; DAT-05, R-1, NY-20).
 // Days in February 2026: no other test file writes there.
 import { beforeAll, describe, expect, it } from "vitest";
-import { createLifecycleEvent, invalidateLifecycleEvent, listAnimals, renameEntity } from "@/lib/animals";
+import { createLifecycleEvent, invalidateLifecycleEvent, listAnimals, rebuildAnimal, renameEntity } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { createFeed, updateFeed } from "@/lib/feeds";
@@ -95,6 +95,46 @@ describe("lifecycle (DAT-05, T-09)", () => {
     await renameEntity(f.admin, "animal", id, { requestId: rid(), name: "Új Név", mode: "change" });
     const names = await prisma.animalName.findMany({ where: { animalId: id }, orderBy: { validFrom: "asc" } });
     expect(names.map((n) => n.name)).toEqual(["Régi Név", "Új Név"]);
+  });
+
+  it("two events for one animal at the same moment: one wins, the other sees it (review of #9)", async () => {
+    const d = "2026-02-10";
+    const id = await arrive("Párhuzamos", "2026-02-09");
+    // hold the animal's row lock so both calls are in flight together (without the hold the first one
+    // finishes before the second starts, and the race never shows)
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const isLocked = new Promise<void>((r) => (locked = r));
+    const holder = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "animal" WHERE "id" = ${id}::uuid FOR UPDATE`;
+      locked();
+      await held;
+    });
+    await isLocked;
+    const death = createLifecycleEvent(f.aq1, { requestId: rid(), type: "DEATH", animalId: id, occurredAtLocal: `${d}T09:00` }, at(d, "09:15"));
+    const move = createLifecycleEvent(f.aq2, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KIS"), occurredAtLocal: `${d}T09:10` }, at(d, "09:15"));
+    const settled = Promise.allSettled([death, move]);
+    const early = await Promise.race([settled.then(() => "done"), new Promise((r) => setTimeout(() => r("waiting"), 500))]);
+    expect(early, "an event change must wait for the animal's lock").toBe("waiting");
+    release();
+    await holder;
+    const res = await settled;
+    expect(res.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const events = await prisma.lifecycleEvent.findMany({ where: { animalId: id, status: "VALID" }, orderBy: { occurredAt: "asc" } });
+    expect(events.map((e) => e.type)).not.toEqual(["ARRIVAL", "DEATH", "TRANSFER"]);
+    // the animal stays usable: its state rebuilds without an error
+    await prisma.$transaction((tx) => rebuildAnimal(tx, id));
+  });
+
+  it("one valid event per animal and instant", async () => {
+    const d = "2026-02-11";
+    const id = await arrive("Egy Pillanat", "2026-02-09");
+    await createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KIS"), occurredAtLocal: `${d}T09:00` }, at(d, "09:05"));
+    await expectCode(
+      createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("NAGY"), occurredAtLocal: `${d}T09:00` }, at(d, "09:06")),
+      "SAME_INSTANT",
+    );
   });
 });
 
