@@ -159,3 +159,19 @@ describe("the proxy: every path is behind the gate", () => {
     expect((await proxy(req("/"))).headers.get("x-middleware-next")).toBe("1");
   });
 });
+
+describe("FailureLimiter.succeed", () => {
+  it("gives one counted attempt back, never below zero, and not after the window", () => {
+    const l = new FailureLimiter(2, 1000);
+    l.fail("a", 0);
+    l.fail("a", 0);
+    expect(l.blocked("a", 1)).toBe(true);
+    l.succeed("a", 1);
+    expect(l.blocked("a", 1)).toBe(false);
+    l.succeed("a", 1);
+    l.succeed("a", 1);
+    l.fail("a", 2);
+    l.fail("a", 2);
+    expect(l.blocked("a", 3)).toBe(true);
+  });
+});

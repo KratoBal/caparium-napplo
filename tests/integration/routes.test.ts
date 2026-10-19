@@ -112,6 +112,18 @@ describe("login", () => {
     expect(where.filter((l) => l === "/belepes?hiba=sok")).toHaveLength(5);
   });
 
+  it("successful logins do not use up the address's attempts: a shift behind one NAT address logs in (acrobot 32803)", async () => {
+    const ip = "203.0.113.33";
+    for (let i = 0; i < 25; i++) {
+      const r = await loginRoute(form({ loginId: "teszt.akvarista1", password: TEST_PASSWORD }, BASE, ip));
+      expect(r.headers.get("location"), `login ${i + 1}`).toBe("/");
+    }
+    // failures still count: 20 wrong ones pause the address, the right password too
+    for (let i = 0; i < 20; i++) await loginRoute(form({ loginId: `nat-${i}`, password: "akarmi-akarmi" }, BASE, ip));
+    const after = await loginRoute(form({ loginId: "teszt.akvarista1", password: TEST_PASSWORD }, BASE, ip));
+    expect(after.headers.get("location")).toBe("/belepes?hiba=sok");
+  });
+
   it("logout ends the session", async () => {
     const cookie = await loginAs("teszt.akvarista2");
     const out = await logoutRoute(new Request(`${BASE}/api/auth/logout`, { method: "POST", headers: { host: "napplo.test", origin: BASE, cookie } }));

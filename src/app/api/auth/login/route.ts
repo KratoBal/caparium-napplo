@@ -16,8 +16,10 @@ export async function POST(req: Request) {
   const ip = clientIp(req.headers);
   if (addressLimiter.blocked(ip)) return back("hiba=sok");
   // counted at once, BEFORE any await (review 32585): the check and the count are one step, so
-  // parallel attempts from one address cannot all pass blocked() before the first one is counted;
-  // a success is not refunded (20 attempts in 15 minutes is plenty for a person)
+  // parallel attempts from one address cannot all pass blocked() before the first one is counted.
+  // A success gives its attempt back (below): the staff log in from one shared NAT address, and a
+  // shift change must not use up the 20 (acrobot 32803). That reopens no race: the count already
+  // happened, and nobody gets to a success without the password.
   addressLimiter.fail(ip);
   const form = await req.formData().catch(() => null);
   const loginId = String(form?.get("loginId") ?? "");
@@ -26,5 +28,6 @@ export async function POST(req: Request) {
   const client = req.headers.get("user-agent")?.slice(0, 200) ?? null;
   const result = await login(loginId, password, client);
   if (!result.ok) return back(result.code === "BUSY" ? "hiba=sok" : "hiba=adat");
+  addressLimiter.succeed(ip);
   return seeOther("/", sessionCookie(result.token, result.expiresAt, process.env.COOKIE_SECURE === "true"));
 }
