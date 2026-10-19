@@ -124,6 +124,8 @@ model Pool {
   names        PoolName[]
   memberships  GroupMembership[]
   measurements Measurement[]
+  placements   Placement[]
+  arrivals     LifecycleEvent[]
 
   @@map("pool")
 }
@@ -217,6 +219,8 @@ model Unit {
   referenceRanges ReferenceRange[]
   measurements    Measurement[]
   zimsUnitNames   ZimsUnitName[]
+  feeds           Feed[]
+  coralDoses      CoralFeedDose[]
 
   @@map("unit")
 }
@@ -607,4 +611,202 @@ model Setting {
 
   @@index([key, validFrom])
   @@map("setting")
+}
+
+// ---------------------------------------------------------------------------
+// Areas 6, 7, 11 (stage 2): animals, groups, lifecycle, feeds
+// ---------------------------------------------------------------------------
+
+enum Sex {
+  MALE
+  FEMALE
+  UNKNOWN
+}
+
+model Species {
+  id             String   @id @default(uuid()) @db.Uuid
+  scientificName String
+  hungarianName  String?
+  synonyms       String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  animals        Animal[]
+
+  @@map("species")
+}
+
+// DN-04: every animal is an individual with its own id, also inside a group
+model Animal {
+  id        String   @id @default(uuid()) @db.Uuid
+  speciesId String   @db.Uuid
+  sex       Sex      @default(UNKNOWN)
+  note      String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  species     Species                 @relation(fields: [speciesId], references: [id])
+  names       AnimalName[]
+  events      LifecycleEvent[]
+  placements  Placement[]
+  memberships AnimalGroupMembership[]
+
+  @@map("animal")
+}
+
+model AnimalName {
+  id        String    @id @default(uuid()) @db.Uuid
+  animalId  String    @db.Uuid
+  name      String
+  validFrom DateTime  @db.Timestamptz(3)
+  validTo   DateTime? @db.Timestamptz(3)
+  animal    Animal    @relation(fields: [animalId], references: [id])
+
+  @@index([animalId, validFrom])
+  @@map("animal_name")
+}
+
+// a feeding unit ("Ráják"); it has no pool of its own: its members' placements decide
+model AnimalGroup {
+  id          String                  @id @default(uuid()) @db.Uuid
+  active      Boolean                 @default(true)
+  createdAt   DateTime                @default(now()) @db.Timestamptz(3)
+  names       AnimalGroupName[]
+  memberships AnimalGroupMembership[]
+  events      LifecycleEvent[]
+
+  @@map("animal_group")
+}
+
+model AnimalGroupName {
+  id        String      @id @default(uuid()) @db.Uuid
+  groupId   String      @db.Uuid
+  name      String
+  validFrom DateTime    @db.Timestamptz(3)
+  validTo   DateTime?   @db.Timestamptz(3)
+  group     AnimalGroup @relation(fields: [groupId], references: [id])
+
+  @@index([groupId, validFrom])
+  @@map("animal_group_name")
+}
+
+enum LifecycleType {
+  ARRIVAL
+  TRANSFER
+  GROUP_CHANGE
+  DEATH
+  RELEASE
+}
+
+// T-09, DAT-05: dated events; placements and memberships are DERIVED from the valid ones
+model LifecycleEvent {
+  id                 String        @id @default(uuid()) @db.Uuid
+  animalId           String        @db.Uuid
+  type               LifecycleType
+  occurredAt         DateTime      @db.Timestamptz(3)
+  businessDay        DateTime      @db.Date
+  toPoolId           String?       @db.Uuid
+  toGroupId          String?       @db.Uuid
+  note               String?
+  version            Int           @default(1)
+  requestId          String        @unique
+  status             RecordStatus  @default(VALID)
+  invalidationReason String?
+  createdById        String        @db.Uuid
+  createdAt          DateTime      @default(now()) @db.Timestamptz(3)
+  updatedById        String        @db.Uuid
+  updatedAt          DateTime      @default(now()) @db.Timestamptz(3)
+
+  animal  Animal       @relation(fields: [animalId], references: [id])
+  toPool  Pool?        @relation(fields: [toPoolId], references: [id])
+  toGroup AnimalGroup? @relation(fields: [toGroupId], references: [id])
+
+  @@index([animalId, occurredAt])
+  @@map("lifecycle_event")
+}
+
+// derived from LifecycleEvent (never edited by hand); rebuilt per animal on every event change
+model Placement {
+  id        String    @id @default(uuid()) @db.Uuid
+  animalId  String    @db.Uuid
+  poolId    String    @db.Uuid
+  validFrom DateTime  @db.Timestamptz(3)
+  validTo   DateTime? @db.Timestamptz(3)
+  eventId   String    @db.Uuid
+  animal    Animal    @relation(fields: [animalId], references: [id])
+  pool      Pool      @relation(fields: [poolId], references: [id])
+
+  @@index([animalId, validFrom])
+  @@index([poolId, validFrom])
+  @@map("placement")
+}
+
+model AnimalGroupMembership {
+  id        String      @id @default(uuid()) @db.Uuid
+  animalId  String      @db.Uuid
+  groupId   String      @db.Uuid
+  validFrom DateTime    @db.Timestamptz(3)
+  validTo   DateTime?   @db.Timestamptz(3)
+  eventId   String      @db.Uuid
+  animal    Animal      @relation(fields: [animalId], references: [id])
+  group     AnimalGroup @relation(fields: [groupId], references: [id])
+
+  @@index([animalId, validFrom])
+  @@index([groupId, validFrom])
+  @@map("animal_group_membership")
+}
+
+model FeedType {
+  id        String  @id @default(uuid()) @db.Uuid
+  code      String  @unique
+  name      String
+  sortOrder Int
+  emoji     String?
+  feeds     Feed[]
+
+  @@map("feed_type")
+}
+
+model Feed {
+  id                String      @id @default(uuid()) @db.Uuid
+  typeId            String      @db.Uuid
+  // T-08: the dimensions a quantity of this feed may have (Litopenaeus: MASS and COUNT)
+  allowedDimensions Dimension[]
+  defaultUnitId     String      @db.Uuid
+  temporary         Boolean     @default(false)
+  active            Boolean     @default(true)
+  sortOrder         Int
+  createdAt         DateTime    @default(now()) @db.Timestamptz(3)
+
+  type        FeedType        @relation(fields: [typeId], references: [id])
+  defaultUnit Unit            @relation(fields: [defaultUnitId], references: [id])
+  names       FeedName[]
+  coralDoses  CoralFeedDose[]
+
+  @@map("feed")
+}
+
+model FeedName {
+  id        String    @id @default(uuid()) @db.Uuid
+  feedId    String    @db.Uuid
+  name      String
+  validFrom DateTime  @db.Timestamptz(3)
+  validTo   DateTime? @db.Timestamptz(3)
+  feed      Feed      @relation(fields: [feedId], references: [id])
+
+  @@index([feedId, validFrom])
+  @@map("feed_name")
+}
+
+// EGY-09, NY-04 (open): the dose of a coral feed, versioned; the amount is copied onto the record (K4)
+model CoralFeedDose {
+  id        String    @id @default(uuid()) @db.Uuid
+  feedId    String    @db.Uuid
+  dose      Decimal   @db.Decimal(14, 4)
+  unitId    String    @db.Uuid
+  validFrom DateTime  @db.Timestamptz(3)
+  validTo   DateTime? @db.Timestamptz(3)
+  feed      Feed      @relation(fields: [feedId], references: [id])
+  unit      Unit      @relation(fields: [unitId], references: [id])
+
+  @@index([feedId, validFrom])
+  @@map("coral_feed_dose")
 }

@@ -1,0 +1,114 @@
+// Animals, lifecycle and feeds against a real database (adatmodell 6., 7., 11.; DAT-05, R-1, NY-20).
+// Days in February 2026: no other test file writes there.
+import { beforeAll, describe, expect, it } from "vitest";
+import { createLifecycleEvent, invalidateLifecycleEvent, listAnimals, renameEntity } from "@/lib/animals";
+import { prisma } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import { createFeed, updateFeed } from "@/lib/feeds";
+import { fixtures, rid } from "./fixtures";
+
+let f: Awaited<ReturnType<typeof fixtures>>;
+let speciesId: string;
+beforeAll(async () => {
+  f = await fixtures();
+  speciesId = (await prisma.species.findFirstOrThrow()).id;
+});
+
+const at = (day: string, time: string) => new Date(`${day}T${time}:00+01:00`);
+
+async function expectCode(p: Promise<unknown>, code: string) {
+  const e = await p.then(
+    () => null,
+    (err: unknown) => err,
+  );
+  expect(e, `expected ${code}`).toBeInstanceOf(AppError);
+  expect((e as AppError).code).toBe(code);
+}
+
+async function openPlacement(animalId: string) {
+  return prisma.placement.findFirst({ where: { animalId, validTo: null } });
+}
+
+async function arrive(name: string, day = "2026-02-02") {
+  const r = await createLifecycleEvent(
+    f.admin,
+    { requestId: rid(), type: "ARRIVAL", newAnimal: { speciesId, name, sex: "FEMALE" }, toPoolId: f.pool("NAGY"), occurredAtLocal: `${day}T09:00`, reason: "teszt" },
+    at(day, "10:00"),
+  );
+  return r.animalId;
+}
+
+describe("lifecycle (DAT-05, T-09)", () => {
+  it("an arrival is admin work and creates the animal with its placement", async () => {
+    await expectCode(
+      createLifecycleEvent(f.aq1, { requestId: rid(), type: "ARRIVAL", newAnimal: { speciesId, name: "X", sex: "MALE" }, toPoolId: f.pool("NAGY") }),
+      "ADMIN_ONLY",
+    );
+    const id = await arrive("Érkező");
+    expect((await openPlacement(id))?.poolId).toBe(f.pool("NAGY"));
+  });
+
+  it("an aquarist moves an animal today; an earlier day needs an admin and a reason (NY-20 default)", async () => {
+    const id = await arrive("Költöző");
+    await createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KARANTEN"), occurredAtLocal: "2026-02-03T08:00" }, at("2026-02-03", "08:05"));
+    expect((await openPlacement(id))?.poolId).toBe(f.pool("KARANTEN"));
+    expect(await prisma.placement.count({ where: { animalId: id } })).toBe(2);
+    await expectCode(
+      createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("NAGY"), occurredAtLocal: "2026-02-03T20:00" }, at("2026-02-04", "08:00")),
+      "NOT_TODAY",
+    );
+    await expectCode(
+      createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("NAGY"), occurredAtLocal: "2026-02-03T20:00" }, at("2026-02-04", "08:00")),
+      "REASON_REQUIRED",
+    );
+  });
+
+  it("after a death nothing is open, a later event is refused and nothing is written", async () => {
+    const id = await arrive("Elhulló");
+    await createLifecycleEvent(f.aq1, { requestId: rid(), type: "DEATH", animalId: id, occurredAtLocal: "2026-02-05T07:00" }, at("2026-02-05", "07:30"));
+    expect(await openPlacement(id)).toBeNull();
+    const events = await prisma.lifecycleEvent.count({ where: { animalId: id } });
+    await expectCode(
+      createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KIS"), occurredAtLocal: "2026-02-05T09:00" }, at("2026-02-05", "09:05")),
+      "LIFECYCLE_INVALID",
+    );
+    expect(await prisma.lifecycleEvent.count({ where: { animalId: id } })).toBe(events);
+    const row = (await listAnimals(at("2026-02-06", "09:00"))).find((a) => a.id === id)!;
+    expect(row).toMatchObject({ alive: false, ended: { type: "DEATH", day: "2026-02-05" } });
+  });
+
+  it("invalidating a death (by its recorder, today) reopens the placement; the arrival under later events cannot go", async () => {
+    const id = await arrive("Tévedés");
+    const d = await createLifecycleEvent(f.aq1, { requestId: rid(), type: "DEATH", animalId: id, occurredAtLocal: "2026-02-06T07:00" }, at("2026-02-06", "07:30"));
+    await invalidateLifecycleEvent(f.aq1, d.eventId, { requestId: rid(), expectedVersion: 1, reason: "rossz állatra rögzítve" }, at("2026-02-06", "08:00"));
+    expect((await openPlacement(id))?.poolId).toBe(f.pool("NAGY"));
+    const arrival = await prisma.lifecycleEvent.findFirstOrThrow({ where: { animalId: id, type: "ARRIVAL" } });
+    await createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KIS"), occurredAtLocal: "2026-02-06T09:00" }, at("2026-02-06", "09:05"));
+    await expectCode(
+      invalidateLifecycleEvent(f.admin, arrival.id, { requestId: rid(), expectedVersion: 1, reason: "teszt" }, at("2026-02-06", "10:00")),
+      "LIFECYCLE_INVALID",
+    );
+  });
+
+  it("an animal name change keeps the old name for the past (K3)", async () => {
+    const id = await arrive("Régi Név");
+    await renameEntity(f.admin, "animal", id, { requestId: rid(), name: "Új Név", mode: "change" });
+    const names = await prisma.animalName.findMany({ where: { animalId: id }, orderBy: { validFrom: "asc" } });
+    expect(names.map((n) => n.name)).toEqual(["Régi Név", "Új Név"]);
+  });
+});
+
+describe("feeds (DAT-02, TAK-07, T-08)", () => {
+  it("a feed in pieces and grams; the default unit must be one of its dimensions; admin only", async () => {
+    const type = await prisma.feedType.findUniqueOrThrow({ where: { code: "RAK" } });
+    const g = (await prisma.unit.findUniqueOrThrow({ where: { symbol: "g" } })).id;
+    const db = (await prisma.unit.findUniqueOrThrow({ where: { symbol: "db" } })).id;
+    await expectCode(createFeed(f.aq1, { requestId: rid(), typeId: type.id, name: "Teszt rák", dimensions: ["MASS"], defaultUnitId: g }), "ADMIN_ONLY");
+    await expectCode(createFeed(f.admin, { requestId: rid(), typeId: type.id, name: "Teszt rák", dimensions: ["MASS"], defaultUnitId: db }), "UNIT_DIMENSION");
+    const r = await createFeed(f.admin, { requestId: rid(), typeId: type.id, name: "Teszt rák", dimensions: ["MASS", "COUNT"], defaultUnitId: g });
+    const feed = await prisma.feed.findUniqueOrThrow({ where: { id: r.id } });
+    expect(feed.allowedDimensions.sort()).toEqual(["COUNT", "MASS"]);
+    await updateFeed(f.admin, r.id, { requestId: rid(), active: false });
+    expect((await prisma.feed.findUniqueOrThrow({ where: { id: r.id } })).active).toBe(false);
+  });
+});

@@ -91,6 +91,10 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
 - Late-save grace period: 30 minutes (setting `late_save_grace_minutes`, K9); a client timestamp
   older than 48 hours is not trusted at all (`late_save_max_hours`).
 - Trainee (NY-14 / T-06): no own login; "Gyakornok végezte" flag on the measurement.
+- Animals, species, groups and feeds in the seed are **synthetic** ("Teszt Egy", "Teszt faj A",
+  "Teszt hal"); the real list comes at go-live, with a separate approval.
+- Coral feed doses (NY-04, EGY-09): the table exists, no dose and no conversion yet; waits for the
+  customer's answer.
 
 ## Status
 
@@ -107,6 +111,11 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   mapping letter by letter; a missing mapping stops the export instead of writing an empty field).
   Exporting is not submitting: an admin marks a run as submitted, and from then on every changed,
   invalidated or late measurement of the submitted period is listed as "leadás után eltér".
+- Stage 2, master data: every animal an individual (also in a group), species, groups; arrival,
+  transfer, group change, death and release as dated events, and the pool and group of any day follow
+  from them, with the history kept (DAT-01, DAT-05, EVE-03, T-09). An arrival is admin work; an
+  event on an earlier day needs a reason. The feed list by type, never deleted, only made inactive
+  (DAT-02, TAK-07).
 - Trial import file for the customer (VIZ-24): `npx tsx scripts/zims-trial-file.ts --pool <name>
   --date <day> --measured-by "<name in their ZIMS>"`; the real name is an argument, never stored.
 

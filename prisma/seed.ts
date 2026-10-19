@@ -4,6 +4,7 @@
 // (the admin sets the real ones). Idempotent: running it twice changes nothing.
 
 import { PrismaClient, type Dimension } from "@prisma/client";
+import { rebuildAnimal } from "../src/lib/animals";
 import { hashPassword } from "../src/lib/auth";
 
 const prisma = new PrismaClient();
@@ -95,6 +96,34 @@ const GROUPS = [
     params: ["KH", "MG", "CA", "NO3", "PO4"],
   },
 ];
+
+// Stage 2 master data. The feed types are the data model's list (adatmodell 11.); everything else is
+// SYNTHETIC: no real animal, name or zoo record (feladat-4, 7. pont). Litopenaeus vannamei is the data
+// model's own example of a feed counted in pieces AND grams (DN-16).
+const FEED_TYPES = [
+  ["KAGYLO", "Kagylók"],
+  ["RAK", "Rákok"],
+  ["LABASFEJU", "Lábasfejűek"],
+  ["HAL", "Tengeri halak"],
+  ["APRO", "Apró és folyékony takarmány"],
+  ["KORALL", "Koralltáp"],
+  ["EGYEB", "Egyéb"],
+] as const;
+const FEEDS = [
+  { type: "KAGYLO", name: "Teszt kagyló", dims: ["MASS"], unit: "g" },
+  { type: "RAK", name: "Litopenaeus vannamei", dims: ["MASS", "COUNT"], unit: "g" },
+  { type: "HAL", name: "Teszt hal", dims: ["MASS"], unit: "g" },
+  { type: "LABASFEJU", name: "Teszt tintahal", dims: ["MASS"], unit: "g" },
+  { type: "APRO", name: "Teszt plankton", dims: ["VOLUME"], unit: "ml" },
+  { type: "KORALL", name: "Teszt koralltáp", dims: ["MASS"], unit: "g" },
+] as const;
+const SPECIES = ["Teszt faj A", "Teszt faj B", "Teszt faj C"];
+const ANIMALS = [
+  { name: "Teszt Egy", species: 0, sex: "FEMALE", pool: "NAGY", group: "Teszt csoport" },
+  { name: "Teszt Kettő", species: 0, sex: "MALE", pool: "NAGY", group: "Teszt csoport" },
+  { name: "Teszt Három", species: 1, sex: "UNKNOWN", pool: "NAGY", group: null },
+  { name: "Teszt Négy", species: 2, sex: "FEMALE", pool: "RAGADOZOS", group: null },
+] as const;
 
 const USERS = [
   { loginId: "teszt.admin", fullName: "Teszt Admin", role: "ADMIN" as const, monogram: "TA", zims: "Test Admin" },
@@ -207,6 +236,50 @@ async function main() {
         zimsNames: { create: { zimsName: u.zims, validFrom: SINCE } },
       },
     });
+  }
+
+  for (const [i, [code, name]] of FEED_TYPES.entries()) {
+    await prisma.feedType.upsert({ where: { code }, update: {}, create: { code, name, sortOrder: i + 1 } });
+  }
+  if ((await prisma.feed.count()) === 0) {
+    for (const [i, f] of FEEDS.entries()) {
+      const type = await prisma.feedType.findUniqueOrThrow({ where: { code: f.type } });
+      await prisma.feed.create({
+        data: {
+          typeId: type.id,
+          allowedDimensions: [...f.dims],
+          defaultUnitId: unitId.get(f.unit)!,
+          sortOrder: i + 1,
+          names: { create: { name: f.name, validFrom: SINCE } },
+        },
+      });
+    }
+  }
+  if ((await prisma.species.count()) === 0) {
+    const species: { id: string }[] = [];
+    for (const name of SPECIES) species.push(await prisma.species.create({ data: { scientificName: name } }));
+    const group = await prisma.animalGroup.create({ data: { names: { create: { name: "Teszt csoport", validFrom: SINCE } } } });
+    for (const [i, a] of ANIMALS.entries()) {
+      await prisma.$transaction(async (tx) => {
+        const animal = await tx.animal.create({
+          data: { speciesId: species[a.species].id, sex: a.sex, names: { create: { name: a.name, validFrom: SINCE } } },
+        });
+        await tx.lifecycleEvent.create({
+          data: {
+            animalId: animal.id,
+            type: "ARRIVAL",
+            occurredAt: SINCE,
+            businessDay: new Date("2026-01-01T00:00:00.000Z"),
+            toPoolId: poolId.get(a.pool)!,
+            toGroupId: a.group ? group.id : null,
+            requestId: `seed-arrival-${i + 1}`,
+            createdById: SYSTEM_USER_ID,
+            updatedById: SYSTEM_USER_ID,
+          },
+        });
+        await rebuildAnimal(tx, animal.id);
+      });
+    }
   }
 
   console.log(`seed ok: ${UNITS.length} units, ${PARAMETERS.length} parameters, ${POOLS.length} pools, ${GROUPS.length} groups, ${USERS.length} users`);
