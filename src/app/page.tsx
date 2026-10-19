@@ -52,12 +52,14 @@ export default async function OverviewPage() {
             <p className="hint">Dátum és medence szerint</p>
           </Link>
         )}
-        <div className="tile muted">
-          <span className="tag">KH · Ca · Mg</span>
-          <h3>Heti vízmérés</h3>
-          <div className="big">Hamarosan</div>
-          <p className="hint">A következő fejlesztési részben</p>
-        </div>
+        {water && (
+          <Link className="tile" href="/heti" data-testid="tile-weekly">
+            <span className="tag">KH · Ca · Mg</span>
+            <h3>Heti vízmérés</h3>
+            <div className="big">Titrálás és Hanna-checker</div>
+            <p className="hint">Hígítás és RO/SW cellánként</p>
+          </Link>
+        )}
         <div className="tile muted">
           <span className="tag">Etetés</span>
           <h3>Takarmányozás</h3>

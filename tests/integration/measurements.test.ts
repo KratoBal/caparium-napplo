@@ -274,6 +274,46 @@ describe("stale client time without a measurement time (review of #1, note)", ()
   });
 });
 
+describe("weekly measurement (VIZ-05, VIZ-06, DN-07)", () => {
+  it("stores dilution and RO/SW as supplementary data, the entered value stays as entered", async () => {
+    const r = await create(f.aq1, "2026-06-26", "09:00", {
+      groupId: f.group("HETI"),
+      poolId: f.pool("KORALLOS"),
+      parameterId: f.param("KH"),
+      value: "8,4",
+      dilution: 10,
+      diluentWater: "RO",
+    });
+    expect(r.measurement).toMatchObject({ value: "8.4", dilution: 10, diluentWater: "RO" });
+    // a dilution change alone is an audited edit; the value is not recalculated
+    const now = cest("2026-06-26T09:30");
+    const u = await updateMeasurement(f.aq1, r.measurement.id, { requestId: rid(), expectedVersion: 1, value: "8.4", dilution: 20, diluentWater: "SW" }, now);
+    expect(u.measurement).toMatchObject({ value: "8.4", dilution: 20, diluentWater: "SW", version: 2 });
+    const audit = await prisma.auditEntry.findFirstOrThrow({ where: { entityId: r.measurement.id, action: "UPDATE" } });
+    expect(audit.changes).toMatchObject({ dilution: { before: 10, after: 20 }, diluentWater: { before: "RO", after: "SW" } });
+    expect((audit.changes as Record<string, unknown>).value).toBeUndefined();
+  });
+
+  it("rejects a dilution outside 1–100", async () => {
+    const e = await create(f.aq1, "2026-06-26", "09:00", {
+      groupId: f.group("HETI"),
+      poolId: f.pool("INKUBATOR"),
+      parameterId: f.param("CA"),
+      value: "420",
+      dilution: 101,
+    }).then(
+      () => null,
+      (err: unknown) => err,
+    );
+    expect((e as AppError).code).toBe("INVALID_DILUTION");
+  });
+
+  it("the database itself refuses a dilution outside 1–100", async () => {
+    const one = await prisma.measurement.findFirstOrThrow();
+    await expect(ownerPrisma.measurement.update({ where: { id: one.id }, data: { dilution: 0 } })).rejects.toThrow(/measurement_dilution_range/);
+  });
+});
+
 describe("reference binding (VIZ-02, R-10)", () => {
   it("an out-of-range value is marked LOW with the range", async () => {
     await create(f.aq1, "2026-06-20", "08:09", { value: "7,88" });

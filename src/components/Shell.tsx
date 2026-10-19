@@ -2,12 +2,12 @@ import Link from "next/link";
 import type { SessionUser } from "@/lib/auth";
 import { businessDayOf, formatDayLong } from "@/lib/time";
 
-type NavKey = "overview" | "daily" | "log";
+type NavKey = "overview" | "daily" | "weekly" | "log" | "pending" | "settings";
 
 const NAV: { key: NavKey | null; href: string | null; label: string; note?: string }[] = [
   { key: "overview", href: "/", label: "Áttekintés" },
   { key: "daily", href: "/vizmeres", label: "Napi vízmérés" },
-  { key: null, href: null, label: "Heti vízmérés", note: "hamarosan" },
+  { key: "weekly", href: "/heti", label: "Heti vízmérés" },
   { key: "log", href: "/naplo", label: "Vízmérési napló" },
   { key: null, href: null, label: "Takarmánynapló", note: "később" },
   { key: null, href: null, label: "Evési napló", note: "később" },
@@ -47,7 +47,15 @@ export function Shell({
       </header>
       <nav className="nav" aria-label="Fő navigáció">
         {user &&
-          NAV.map((n) =>
+          [
+            ...NAV,
+            ...(user.role === "ADMIN"
+              ? [
+                  { key: "pending" as NavKey, href: "/fuggo", label: "Függő mentések" },
+                  { key: "settings" as NavKey, href: "/beallitasok", label: "Beállítások" },
+                ]
+              : []),
+          ].map((n) =>
             n.href ? (
               <Link key={n.label} href={n.href} className={n.key === active ? "active" : undefined}>
                 {n.label}

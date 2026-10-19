@@ -96,6 +96,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .cell-value { display: flex; align-items: center; min-height: 56px; font-size: 20px; padding: 0 14px; border-radius: var(--radius-sm); background: var(--c-field); max-width: 160px; }
 .cell-value.empty { color: var(--c-muted); }
 .cell-value.out { background: var(--c-error-soft); color: var(--c-error); }
+.meta-row { display: flex; gap: 6px; margin-top: 6px; max-width: 160px; }
+.meta-select { min-height: 40px; flex: 1; min-width: 0; border-radius: 8px; border: 1px solid var(--c-line); background: var(--c-white); font-size: 14px; padding: 0 4px; }
 .cell-meta { font-size: 12px; color: var(--c-muted); margin-top: 4px; min-height: 16px; }
 .cell-meta .ref { color: var(--c-error); }
 .cell-meta .err { color: var(--c-error); font-weight: 600; }
@@ -138,3 +140,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .history-item { border-left: 3px solid var(--c-line); padding: 8px 0 8px 16px; margin: 12px 0; }
 .history-item .when { color: var(--c-muted); font-size: 13px; }
 .history-item ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; }
+
+/* ---- correction form (Figma 21) ---- */
+.tag-soft { display: inline-block; background: var(--c-primary-soft); color: var(--c-primary); font-weight: 600; font-size: 14px; padding: 8px 16px; border-radius: var(--radius-sm); }
+.form-grid { display: grid; grid-template-columns: minmax(140px, 220px) 1fr; gap: 14px 24px; align-items: center; margin-top: 20px; }
+.form-label { color: var(--c-muted); font-weight: 600; font-size: 15px; }
+@media (max-width: 700px) { .form-grid { grid-template-columns: 1fr; } }
+
+.day-controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.day-controls .badge { font-size: 13px; padding: 6px 12px; }
+.err { color: var(--c-error); font-weight: 600; }
+
+.input.small { width: 110px; }

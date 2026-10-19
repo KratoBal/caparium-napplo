@@ -102,6 +102,12 @@ export default async function LogPage({
                       <td>{r.parameterName}</td>
                       <td className={out ? "value-out" : undefined} title={out && r.range ? `ref: ${r.range.min ?? ""}–${r.range.max ?? ""}` : undefined}>
                         {formatDecimalHu(r.value, r.decimals)} {r.unitSymbol !== r.parameterName ? r.unitSymbol : ""}
+                        {(r.dilution || r.diluentWater) && (
+                          <span className="hint">
+                            {" "}
+                            ({[r.dilution ? `1:${r.dilution}` : null, r.diluentWater].filter(Boolean).join(", ")})
+                          </span>
+                        )}
                       </td>
                       <td>
                         {r.responsibleMonogram}

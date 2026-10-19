@@ -1,0 +1,278 @@
+// Master data administration (ÁLT-08, ÁLT-09, DAT-04, VIZ-22; adatmodell K3, 1–3. terület).
+// K3: a CHANGE closes the current version and opens a new one (the past keeps the old value);
+// a CORRECTION fixes the current version in place (it acts on the past too) and needs a reason.
+// Every write is audited in the same transaction; a password never enters the audit.
+
+import { z } from "zod";
+import { diffFields, writeAudit } from "./audit";
+import { hashPassword } from "./auth";
+import { prisma, type Tx } from "./db";
+import { compareDecimal, parseDecimalInput } from "./decimal";
+import { AppError, isUniqueViolation } from "./errors";
+import { moduleLevel, validAt } from "./master";
+import type { Actor } from "./measurements";
+
+const reason = z.string().trim().min(3, "Az indoklás legalább 3 karakter legyen.").max(500);
+const requestId = z.string().min(8).max(100);
+
+async function requireSettingsAdmin(actor: Actor) {
+  const level = await moduleLevel(prisma, actor.id, actor.role, "SETTINGS");
+  if (level !== "ADMIN") throw new AppError(403, "ADMIN_ONLY", "A beállításokat csak adminisztrátor módosíthatja.");
+}
+
+async function replayed(id: string) {
+  return (await prisma.auditEntry.findFirst({ where: { requestId: id } })) !== null;
+}
+
+// ---------------------------------------------------------------------------
+// Reference ranges (DN-08: per parameter)
+// ---------------------------------------------------------------------------
+
+export const referenceSchema = z.object({
+  requestId,
+  parameterId: z.uuid(),
+  min: z.string().max(32).nullable(),
+  max: z.string().max(32).nullable(),
+  mode: z.enum(["change", "correction"]),
+  reason: reason.optional(),
+});
+export type ReferenceInput = z.infer<typeof referenceSchema>;
+
+function bound(raw: string | null, label: string): string | null {
+  if (raw === null || raw.trim() === "") return null;
+  const v = parseDecimalInput(raw);
+  if (v === null) throw new AppError(422, "INVALID_VALUE", `A ${label} nem szám.`);
+  return v;
+}
+
+export async function setReference(actor: Actor, input: ReferenceInput, now = new Date()) {
+  await requireSettingsAdmin(actor);
+  const min = bound(input.min, "minimum");
+  const max = bound(input.max, "maximum");
+  if (min === null && max === null) throw new AppError(422, "EMPTY_RANGE", "Legalább az egyik határt add meg.");
+  if (min !== null && max !== null && compareDecimal(min, max) > 0) {
+    throw new AppError(422, "MIN_ABOVE_MAX", "A minimum nem lehet nagyobb a maximumnál.");
+  }
+  if (input.mode === "correction" && !input.reason) {
+    throw new AppError(422, "REASON_REQUIRED", "A helyesbítés a múltbeli méréseket is érinti, ezért indoklás kell.");
+  }
+  if (await replayed(input.requestId)) return { replayed: true };
+  return prisma.$transaction(async (tx) => {
+    const param = await tx.parameter.findUnique({ where: { id: input.parameterId } });
+    if (!param) throw new AppError(404, "NOT_FOUND", "A paraméter nem található.");
+    const current = await tx.referenceRange.findFirst({ where: { parameterId: param.id, ...validAt(now) } });
+    const before = current ? { min: current.min?.toString() ?? null, max: current.max?.toString() ?? null } : null;
+    if (input.mode === "correction") {
+      if (!current) throw new AppError(409, "NO_CURRENT", "Nincs érvényes referencia, amit helyesbíteni lehetne.");
+      await tx.referenceRange.update({ where: { id: current.id }, data: { min, max } });
+      await writeAudit(tx, {
+        userId: actor.id,
+        action: "MASTER_CORRECTION",
+        entityType: "ReferenceRange",
+        entityId: current.id,
+        changes: diffFields(before, { min, max }),
+        reason: input.reason,
+        requestId: input.requestId,
+      });
+      return { replayed: false, id: current.id };
+    }
+    if (current) await tx.referenceRange.update({ where: { id: current.id }, data: { validTo: now } });
+    const created = await tx.referenceRange.create({
+      data: { parameterId: param.id, min, max, unitId: param.unitId, validFrom: now, createdById: actor.id },
+    });
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: "MASTER_CHANGE",
+      entityType: "ReferenceRange",
+      entityId: created.id,
+      changes: diffFields(before, { min, max }),
+      reason: input.reason ?? null,
+      requestId: input.requestId,
+    });
+    return { replayed: false, id: created.id };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Pool display names (VIZ-22: stable id, changeable name)
+// ---------------------------------------------------------------------------
+
+export const poolNameSchema = z.object({
+  requestId,
+  poolId: z.uuid(),
+  name: z.string().trim().min(2).max(60),
+  mode: z.enum(["change", "correction"]),
+  reason: reason.optional(),
+});
+export type PoolNameInput = z.infer<typeof poolNameSchema>;
+
+async function assertUniquePoolName(tx: Tx, poolId: string, name: string, now: Date) {
+  const clash = await tx.poolName.findFirst({
+    where: { displayName: { equals: name, mode: "insensitive" }, poolId: { not: poolId }, pool: { active: true }, ...validAt(now) },
+  });
+  if (clash) throw new AppError(409, "NAME_TAKEN", "Ilyen nevű aktív medence már van.");
+}
+
+export async function renamePool(actor: Actor, input: PoolNameInput, now = new Date()) {
+  await requireSettingsAdmin(actor);
+  if (input.mode === "correction" && !input.reason) {
+    throw new AppError(422, "REASON_REQUIRED", "A helyesbítés a régi naplókban is átírja a nevet, ezért indoklás kell.");
+  }
+  if (await replayed(input.requestId)) return { replayed: true };
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.poolName.findFirst({ where: { poolId: input.poolId, ...validAt(now) } });
+    if (!current) throw new AppError(404, "NOT_FOUND", "A medence nem található.");
+    await assertUniquePoolName(tx, input.poolId, input.name, now);
+    if (input.mode === "correction") {
+      await tx.poolName.update({ where: { id: current.id }, data: { displayName: input.name } });
+    } else {
+      await tx.poolName.update({ where: { id: current.id }, data: { validTo: now } });
+      await tx.poolName.create({ data: { poolId: input.poolId, displayName: input.name, validFrom: now } });
+    }
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: input.mode === "correction" ? "MASTER_CORRECTION" : "MASTER_CHANGE",
+      entityType: "Pool",
+      entityId: input.poolId,
+      changes: diffFields({ displayName: current.displayName }, { displayName: input.name }),
+      reason: input.reason ?? null,
+      requestId: input.requestId,
+    });
+    return { replayed: false };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Users (ÁLT-04, ÁLT-06, ÁLT-17; the monogram and the ZIMS name are K3-versioned)
+// ---------------------------------------------------------------------------
+
+const password = z.string().min(10, "A jelszó legalább 10 karakter legyen.").max(200);
+const monogram = z.string().trim().min(1).max(6);
+
+export const createUserSchema = z.object({
+  requestId,
+  loginId: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9._-]{3,40}$/, "A felhasználónév 3–40 karakter: kisbetű, szám, pont, kötőjel."),
+  fullName: z.string().trim().min(2).max(100),
+  role: z.enum(["AQUARIST", "ADMIN"]),
+  monogram,
+  zimsName: z.string().trim().min(2).max(100),
+  password,
+});
+export type CreateUserInput = z.infer<typeof createUserSchema>;
+
+export const updateUserSchema = z.object({
+  requestId,
+  role: z.enum(["AQUARIST", "ADMIN"]).optional(),
+  active: z.boolean().optional(),
+  monogram: monogram.optional(),
+  zimsName: z.string().trim().min(2).max(100).optional(),
+  password: password.optional(),
+  reason: reason.optional(),
+});
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+
+async function assertUniqueMonogram(tx: Tx, userId: string | null, mono: string, now: Date) {
+  const clash = await tx.userMonogram.findFirst({
+    where: { monogram: { equals: mono, mode: "insensitive" }, user: { active: true }, ...validAt(now), ...(userId ? { userId: { not: userId } } : {}) },
+  });
+  if (clash) throw new AppError(409, "MONOGRAM_TAKEN", "Ez a monogram már egy aktív dolgozóé.");
+}
+
+export async function createUser(actor: Actor, input: CreateUserInput, now = new Date()) {
+  await requireSettingsAdmin(actor);
+  if (await replayed(input.requestId)) return { replayed: true };
+  const passwordHash = await hashPassword(input.password);
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await assertUniqueMonogram(tx, null, input.monogram, now);
+      const u = await tx.user.create({
+        data: {
+          loginId: input.loginId,
+          fullName: input.fullName,
+          role: input.role,
+          passwordHash,
+          monograms: { create: { monogram: input.monogram, validFrom: now } },
+          zimsNames: { create: { zimsName: input.zimsName, validFrom: now } },
+        },
+      });
+      await writeAudit(tx, {
+        userId: actor.id,
+        action: "MASTER_CHANGE",
+        entityType: "User",
+        entityId: u.id,
+        changes: diffFields(null, {
+          loginId: u.loginId,
+          fullName: u.fullName,
+          role: u.role,
+          monogram: input.monogram,
+          zimsName: input.zimsName,
+          password: "beállítva",
+        }),
+        requestId: input.requestId,
+      });
+      return { replayed: false, id: u.id };
+    });
+  } catch (e) {
+    if (isUniqueViolation(e, "loginId")) throw new AppError(409, "LOGIN_TAKEN", "Ez a felhasználónév már foglalt.");
+    throw e;
+  }
+}
+
+export async function updateUser(actor: Actor, id: string, input: UpdateUserInput, now = new Date()) {
+  await requireSettingsAdmin(actor);
+  if (id === actor.id && (input.active === false || input.role === "AQUARIST")) {
+    throw new AppError(422, "SELF_LOCKOUT", "A saját adminisztrátori jogodat és fiókodat nem veheted el; kérj meg egy másik adminisztrátort.");
+  }
+  if (await replayed(input.requestId)) return { replayed: true };
+  const passwordHash = input.password ? await hashPassword(input.password) : undefined;
+  return prisma.$transaction(async (tx) => {
+    const u = await tx.user.findUnique({ where: { id }, include: { monograms: true, zimsNames: true } });
+    if (!u || u.role === "SYSTEM") throw new AppError(404, "NOT_FOUND", "A felhasználó nem található.");
+    const curMono = u.monograms.find((m) => m.validFrom <= now && (m.validTo === null || m.validTo > now));
+    const curZims = u.zimsNames.find((m) => m.validFrom <= now && (m.validTo === null || m.validTo > now));
+    const before: Record<string, unknown> = { role: u.role, active: u.active, monogram: curMono?.monogram ?? null, zimsName: curZims?.zimsName ?? null };
+    const after: Record<string, unknown> = { ...before };
+
+    if (input.role && input.role !== u.role) after.role = input.role;
+    if (input.active !== undefined && input.active !== u.active) after.active = input.active;
+    await tx.user.update({
+      where: { id },
+      data: {
+        role: after.role as "AQUARIST" | "ADMIN",
+        active: after.active as boolean,
+        deactivatedAt: after.active === false && u.active ? now : after.active === true ? null : undefined,
+        ...(passwordHash ? { passwordHash } : {}),
+      },
+    });
+    if (input.monogram && input.monogram !== curMono?.monogram) {
+      await assertUniqueMonogram(tx, id, input.monogram, now);
+      if (curMono) await tx.userMonogram.update({ where: { id: curMono.id }, data: { validTo: now } });
+      await tx.userMonogram.create({ data: { userId: id, monogram: input.monogram, validFrom: now } });
+      after.monogram = input.monogram;
+    }
+    if (input.zimsName && input.zimsName !== curZims?.zimsName) {
+      if (curZims) await tx.userZimsName.update({ where: { id: curZims.id }, data: { validTo: now } });
+      await tx.userZimsName.create({ data: { userId: id, zimsName: input.zimsName, validFrom: now } });
+      after.zimsName = input.zimsName;
+    }
+    // a deactivated user, or one with a new password, is logged out everywhere
+    if (after.active === false || passwordHash) await tx.session.deleteMany({ where: { userId: id } });
+    const changes = diffFields(before, after);
+    if (passwordHash) changes.password = { before: null, after: "új jelszó beállítva" };
+    if (Object.keys(changes).length === 0) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: "MASTER_CHANGE",
+      entityType: "User",
+      entityId: id,
+      changes,
+      reason: input.reason ?? null,
+      requestId: input.requestId,
+    });
+    return { replayed: false };
+  });
+}

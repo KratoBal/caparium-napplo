@@ -5,7 +5,7 @@ import { prisma } from "./db";
 import { canonicalDecimal } from "./decimal";
 import { groupLayout, monogramResolver, pickValid } from "./master";
 import { evaluateReference, type ReferenceStatus } from "./reference";
-import { businessDayOf, dateToDay, dayToDate, localTimeOf } from "./time";
+import { businessDayOf, dateToDay, dayToDate, localDateTimeOf, localTimeOf } from "./time";
 
 export type RangeView = { min: string | null; max: string | null; unitSymbol: string };
 
@@ -19,6 +19,8 @@ export type CellView = {
   responsibleMonogram: string;
   reference: ReferenceStatus;
   range: RangeView | null;
+  dilution: number | null;
+  diluentWater: "RO" | "SW" | null;
 };
 
 function rangeView(r: { min: Prisma.Decimal | null; max: Prisma.Decimal | null; unit: { symbol: string } } | null): RangeView | null {
@@ -85,6 +87,8 @@ export async function getGrid(groupId: string, day: string, roundSeq?: number) {
     responsibleMonogram: mono.monogram(m.responsibleUserId, m.measuredAt),
     reference: referenceOf(m),
     range: rangeView(m.referenceRange),
+    dilution: m.dilution,
+    diluentWater: m.diluentWater,
   });
 
   const cells: Record<string, CellView> = {};
@@ -176,6 +180,8 @@ export async function searchLog(f: LogFilter) {
       responsibleMonogram: mono.monogram(m.responsibleUserId, m.measuredAt),
       recordedByMonogram: mono.monogram(m.createdById, m.createdAt),
       traineePerformed: m.traineePerformed,
+      dilution: m.dilution,
+      diluentWater: m.diluentWater,
       status: m.status,
       invalidationReason: m.invalidationReason,
       version: m.version,
@@ -233,6 +239,14 @@ export async function measurementHistory(id: string) {
       version: m.version,
       responsibleMonogram: mono.monogram(m.responsibleUserId, m.measuredAt),
       createdByName: mono.name(m.createdById),
+      createdById: m.createdById,
+      groupId: m.round.groupId,
+      weekly: m.round.group.frequency === "WEEKLY",
+      measuredAtLocal: localDateTimeOf(m.measuredAt),
+      responsibleUserId: m.responsibleUserId,
+      traineePerformed: m.traineePerformed,
+      dilution: m.dilution,
+      diluentWater: m.diluentWater,
     },
     entries: entries.map((e) => ({
       id: e.id.toString(),

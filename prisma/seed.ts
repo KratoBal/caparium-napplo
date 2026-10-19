@@ -65,11 +65,10 @@ const GROUPS = [
     params: ["SAL", "PH", "TEMP", "ORP"],
   },
   {
-    // weekly measurement: UI in the second working part; kept inactive until then
     code: "HETI",
     name: "Heti mérés",
     frequency: "WEEKLY" as const,
-    active: false,
+    active: true,
     pools: ["NAGY", "KIS", "KARANTEN", "KORALLOS", "INKUBATOR", "RAGADOZOS"],
     params: ["KH", "MG", "CA", "NO3", "PO4"],
   },
