@@ -261,3 +261,27 @@ test("export: a real .xlsx download and a ZIMS CSV run whose file can be downloa
   expect(text.startsWith("Date,Time,Measurement,MeasurementValue,UnitofMeasure,MeasuredBy\r\n")).toBe(true);
   expect(text).toMatch(/"[A-Z][a-z]{2} \d{1,2}, \d{4}",\d{2}:\d{2},/);
 });
+
+test("animals: the list from the events, a transfer recorded, the history kept; the feed list by type", async ({ page }, info) => {
+  const tablet = info.project.name === "tablet";
+  const name = tablet ? "Teszt Három" : "Teszt Négy";
+  const target = tablet ? "Karantén" : "Kismedence";
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Állatok" }).click();
+  await expect(page.getByTestId("animals-table")).toContainText("Teszt Egy");
+  await page.getByTestId("animals-table").getByRole("link", { name }).click();
+  await expect(page.getByTestId("animal-detail")).toContainText("Érkezés");
+  const actions = page.getByTestId("animal-actions");
+  await actions.getByLabel("Esemény", { exact: true }).selectOption("TRANSFER");
+  await actions.getByLabel("Cél medence").selectOption({ label: target });
+  await actions.getByRole("button", { name: "Rögzítés" }).click();
+  await expect(actions.getByRole("status")).toHaveText("Áthelyezés rögzítve.");
+  await expect(page.getByTestId("animal-detail")).toContainText("Áthelyezés");
+  await expect(page.getByTestId("animals-table").getByRole("row").filter({ hasText: name })).toContainText(target);
+  // an aquarist sees no arrival form (a new animal is admin work)
+  await expect(page.getByTestId("new-arrival")).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Takarmánylista" }).click();
+  await expect(page.getByTestId("feeds-RAK")).toContainText("Litopenaeus vannamei");
+  await expect(page.getByTestId("feeds-RAK")).toContainText("tömeg és darab");
+});
