@@ -141,6 +141,18 @@ describe("the proxy: every path is behind the gate", () => {
     expect((await proxy(req("/"))).status).toBe(503);
   });
 
+  it("BASIC_AUTH=off next to a gate user is a contradiction: closed, never silently open (review of #8)", async () => {
+    // the gate turned back on in Coolify, the old "off" line left behind
+    process.env.COOKIE_SECURE = "true";
+    process.env.BASIC_AUTH = "off";
+    process.env.BASIC_AUTH_USER = "lilian";
+    process.env.BASIC_AUTH_SHA256 = SHA;
+    expect((await proxy(req("/", basic("lilian", PASS)))).status).toBe(503);
+    process.env.BASIC_AUTH_PASSWORD = PASS;
+    delete process.env.BASIC_AUTH_SHA256;
+    expect((await proxy(req("/", basic("lilian", PASS)))).status).toBe(503);
+  });
+
   it("off without configuration (local development, CI)", async () => {
     delete process.env.BASIC_AUTH_USER;
     delete process.env.BASIC_AUTH_SHA256;
