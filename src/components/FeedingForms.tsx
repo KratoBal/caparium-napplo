@@ -19,7 +19,7 @@ function useSend() {
   const router = useRouter();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  async function run(url: string, body: Record<string, unknown>, okText = "Mentve.") {
+  async function run(url: string, body: Record<string, unknown>, okText: string | ((res: Record<string, unknown>) => string) = "Mentve.") {
     setBusy(true);
     setMsg(null);
     let extra: Record<string, unknown> = {};
@@ -31,7 +31,7 @@ function useSend() {
           body: JSON.stringify({ requestId: requestId(), clientTimestamp: new Date().toISOString(), ...body, ...extra }),
         });
         if (res.ok) {
-          setMsg({ ok: true, text: okText });
+          setMsg({ ok: true, text: typeof okText === "string" ? okText : okText((await res.json().catch(() => ({}))) as Record<string, unknown>) });
           router.refresh();
           return true;
         }
@@ -463,11 +463,17 @@ export function PlanForm({ animalId, weekdays }: { animalId: string; weekdays: n
 }
 
 /** JAV-08: selects the animals planned for the day's weekday; it only adds to the common list. */
+function planText(res: Record<string, unknown>): string {
+  const skipped = Array.isArray(res.skipped) ? (res.skipped as string[]) : [];
+  if (skipped.length === 0) return "A terv szerinti állatok a listán.";
+  return `A terv szerinti állatok a listán, kivéve, akinek ma kézi koplalónapja van: ${skipped.join(", ")}. Őket kézzel lehet felvenni.`;
+}
+
 export function ApplyPlan({ day }: { day: string }) {
   const { msg, busy, run } = useSend();
   return (
     <span>
-      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void run("/api/feeding/plan/apply", { day }, "A terv szerinti állatok a listán.")}>
+      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void run("/api/feeding/plan/apply", { day }, planText)}>
         Lista a terv szerint
       </button>
       <Msg msg={msg} />

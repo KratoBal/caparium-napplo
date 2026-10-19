@@ -22,6 +22,12 @@ export default async function DailyReportPage({ searchParams }: { searchParams: 
       <div className="toolbar no-print">
         <DayNav path="/napi-jelento" day={day} today={today} />
         <span className="spacer" />
+        {/* VIZ-15 (NY-09 default: no e-mail): the day's measurements as a file to download */}
+        <form method="post" action="/api/exports/excel">
+          <input type="hidden" name="from" value={day} />
+          <input type="hidden" name="to" value={day} />
+          <button className="btn btn-soft" type="submit" data-testid="daily-excel">Napi jelentő (Excel)</button>
+        </form>
         <PrintButton />
       </div>
       <h2 data-testid="report-day">Vízmérés, {formatDayLong(day)}</h2>

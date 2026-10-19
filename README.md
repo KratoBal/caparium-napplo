@@ -114,6 +114,8 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
 - Chemical stock (NY-08 default): no starting stock; a level may go negative and is flagged, not
   refused (R-16); intake is admin work. The test chemicals ("Teszt só" in kg, "Teszt kalcium" in l) are
   synthetic. The model's shared stock item (area 12) is not built while feed has no stock.
+- Notices (temporary): the measurement deadline is 14:00, "running out" is 3 days (D-18: 2-3 days);
+  no e-mail is sent (NY-09).
 - Feed stock (NY-07 default): none; a withdrawal is usage only, no intake and no stock level. A use
   day is at most 7 days after the withdrawal day.
 - At most 5 "Egyéb" feeds per animal and day (the template's Egyéb 1–5, setting `egyéb_takarmány_max`).
@@ -179,6 +181,11 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   feeding plan per animal (its weekdays) and "Lista a terv szerint", which only adds the planned
   animals of the day to the common list; the plan is not the fact, a fasting day still comes only
   from the finalized list (JAV-08, V-15).
+- Stage 4, notices and files (NY-09 default: no e-mail, everything in the app or as a download): the
+  overview lists the daily pools not measured once 14:00 has passed (JAV-07) and the chemicals at or
+  below zero or expected to run out within 3 days at the 30-day average usage (ADA-07); the daily
+  report page downloads the day's measurements as Excel (VIZ-15); the system prepares the previous
+  month's ZIMS files once a month as a preview run on the export page, never a submission (VIZ-20).
 - Trial import file for the customer (VIZ-24): `npx tsx scripts/zims-trial-file.ts --pool <name>
   --date <day> --measured-by "<name in their ZIMS>"`; the real name is an argument, never stored.
 

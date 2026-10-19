@@ -3,11 +3,13 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { setEatingStatus } from "@/lib/eating";
 import { feedingDayView } from "@/lib/feeding";
 import { applyPlan, currentPlans, setFeedingPlan } from "@/lib/feeding-plan";
 import { knownOtherNames } from "@/lib/feeds";
 import { setIcon } from "@/lib/icons";
 import { saveWithdrawalItem } from "@/lib/withdrawal";
+import { dayToDate } from "@/lib/time";
 import { fixtures, rid } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -49,6 +51,22 @@ describe("the feeding plan (JAV-08)", () => {
     expect(await applyPlan(f.aq1, { requestId: rid(), day: tuesday }, at(tuesday, "08:00"))).toMatchObject({ added: 0 });
     // the day's permissions are the list's: an earlier day is admin work
     await expectCode(applyPlan(f.aq1, { requestId: rid(), day: "2026-12-10" }, at("2026-12-11", "08:00")), "NOT_TODAY");
+  });
+});
+
+describe("the feeding plan and a manual fasting day (JAV-08, review of #18)", () => {
+  it("the plan leaves out an animal with a manual fasting day, names it, and adds the others", async () => {
+    const thursday = "2026-12-17";
+    await setFeedingPlan(f.aq1, { requestId: rid(), animalId: a["Teszt Három"], weekdays: [4] }, at("2026-12-14", "08:00"));
+    await setFeedingPlan(f.aq1, { requestId: rid(), animalId: a["Teszt Négy"], weekdays: [4] }, at("2026-12-14", "08:00"));
+    await setEatingStatus(f.aq1, { requestId: rid(), day: thursday, animalId: a["Teszt Négy"], state: "FASTING" }, at(thursday, "07:30"));
+    expect(await applyPlan(f.aq1, { requestId: rid(), day: thursday }, at(thursday, "08:00"))).toMatchObject({ added: 1, skipped: ["Teszt Négy"] });
+    const view = (await feedingDayView(thursday)).animals;
+    expect(view.find((x) => x.id === a["Teszt Három"])?.selected).toBe(true);
+    expect(view.find((x) => x.id === a["Teszt Négy"])?.selected).toBe(false);
+    // the fasting day stays: the plan did not override a person's decision
+    const fd = await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: dayToDate(thursday) } });
+    expect(await prisma.eatingStatus.count({ where: { feedingDayId: fd.id, animalId: a["Teszt Négy"], status: "VALID", state: "FASTING" } })).toBe(1);
   });
 });
 
