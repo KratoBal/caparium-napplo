@@ -659,6 +659,9 @@ model Animal {
   feedingItems   FeedingItem[]
   participations FeedingParticipant[]
   eatingStatuses EatingStatus[]
+  bodyWeights    BodyWeight[]
+  calculatorRuns CalculatorRun[]
+  references     FeedingReference[]
 
   @@map("animal")
 }
@@ -684,6 +687,7 @@ model AnimalGroup {
   memberships  AnimalGroupMembership[]
   events       LifecycleEvent[]
   feedingItems FeedingItem[]
+  references   FeedingReference[]
 
   @@map("animal_group")
 }
@@ -1017,4 +1021,74 @@ model WithdrawalQuantity {
 
   @@unique([itemId, dimension])
   @@map("withdrawal_quantity")
+}
+
+// ---------------------------------------------------------------------------
+// Area 9, stage 3: the calculator, the feeding reference and the body weight log (KALK-01, KALK-02,
+// EGY-08, JAV-06)
+// ---------------------------------------------------------------------------
+
+// JAV-06: the calculator's BW comes from the last measured weight; K5 (version, status)
+model BodyWeight {
+  id                 String       @id @default(uuid()) @db.Uuid
+  animalId           String       @db.Uuid
+  measuredOn         DateTime     @db.Date
+  weightKg           Decimal      @db.Decimal(12, 4)
+  note               String?
+  version            Int          @default(1)
+  requestId          String       @unique
+  status             RecordStatus @default(VALID)
+  invalidationReason String?
+  createdById        String       @db.Uuid
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedById        String       @db.Uuid
+  updatedAt          DateTime     @default(now()) @db.Timestamptz(3)
+  animal             Animal       @relation(fields: [animalId], references: [id])
+
+  @@index([animalId, measuredOn])
+  @@map("body_weight")
+}
+
+// KALK-01: one calculation, inputs and results as computed then (a snapshot, K4)
+model CalculatorRun {
+  id               String             @id @default(uuid()) @db.Uuid
+  animalId         String             @db.Uuid
+  bwKg             Decimal            @db.Decimal(12, 4)
+  frWeekPct        Decimal            @db.Decimal(5, 2)
+  nWeek            Int
+  frDayPct         Decimal            @db.Decimal(8, 4)
+  fKg              Decimal            @db.Decimal(12, 4)
+  fG               Decimal            @db.Decimal(14, 4)
+  fwG              Decimal            @db.Decimal(14, 4)
+  savedAsReference Boolean            @default(false)
+  requestId        String             @unique
+  createdById      String             @db.Uuid
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+  animal           Animal             @relation(fields: [animalId], references: [id])
+  references       FeedingReference[]
+
+  @@index([animalId, createdAt])
+  @@map("calculator_run")
+}
+
+// KALK-02, EGY-08: the planned amount per feeding for an animal or a group, versioned ("every save
+// overwrites" = a new version; an old day is measured against its own reference). One open version per
+// recipient (partial indexes, SQL); an animal OR a group (SQL check).
+model FeedingReference {
+  id              String         @id @default(uuid()) @db.Uuid
+  animalId        String?        @db.Uuid
+  groupId         String?        @db.Uuid
+  quantityG       Decimal        @db.Decimal(14, 4)
+  calculatorRunId String?        @db.Uuid
+  validFrom       DateTime       @db.Timestamptz(3)
+  validTo         DateTime?      @db.Timestamptz(3)
+  createdById     String         @db.Uuid
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  animal          Animal?        @relation(fields: [animalId], references: [id])
+  group           AnimalGroup?   @relation(fields: [groupId], references: [id])
+  calculatorRun   CalculatorRun? @relation(fields: [calculatorRunId], references: [id])
+
+  @@index([animalId, validFrom])
+  @@index([groupId, validFrom])
+  @@map("feeding_reference")
 }

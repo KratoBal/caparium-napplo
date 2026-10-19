@@ -3,6 +3,7 @@ import { DayNav } from "@/components/DayNav";
 import { FeedingDay } from "@/components/FeedingDay";
 import type { FeedOpt, Recipient } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
+import { referencesOn } from "@/lib/calculator";
 import { prisma } from "@/lib/db";
 import { feedingDayView } from "@/lib/feeding";
 import { listFeeds } from "@/lib/feeds";
@@ -18,11 +19,12 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
   const today = businessDayOf(new Date());
   const sp = await searchParams;
   const day = sp.nap && isValidDay(sp.nap) && sp.nap <= today ? sp.nap : today;
-  const [view, lock, types, units] = await Promise.all([
+  const [view, lock, types, units, references] = await Promise.all([
     feedingDayView(day),
     dayStatus(null, day, "FEEDING"),
     listFeeds(),
     prisma.unit.findMany({ where: { active: true }, orderBy: { symbol: "asc" } }),
+    referencesOn(day),
   ]);
   const canRecord = level === "RECORD" || level === "ADMIN";
   const isAdmin = level === "ADMIN";
@@ -72,6 +74,7 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         groups={[...groups].map(([id, g]) => ({ id, name: g.name, members: g.members }))}
         items={view.items}
         totals={view.totals}
+        references={references}
         recipients={recipients}
         feeds={feeds}
       />

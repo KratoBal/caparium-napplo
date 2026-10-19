@@ -4,6 +4,7 @@
 // the item form. A click on a recipient's row makes it active and the form follows; the live line adds
 // what is typed (not saved yet) to the row's saved total, per base unit, never pieces to grams.
 import { useCallback, useState } from "react";
+import { deviates } from "@/lib/calc-math";
 import type { DayAnimal } from "@/lib/feeding";
 import { FinalizeList, GroupSelect, InvalidateButton, ItemForm, SelectBox, type FeedOpt, type Recipient } from "./FeedingForms";
 
@@ -30,6 +31,8 @@ export function FeedingDay(props: {
   groups: { id: string; name: string; members: string[] }[];
   items: Item[];
   totals: Record<string, Record<string, number>>;
+  /** EGY-08: the reference valid that day, grams per feeding, by recipient key */
+  references?: Record<string, number>;
   recipients: Recipient[];
   feeds: FeedOpt[];
 }) {
@@ -48,6 +51,18 @@ export function FeedingDay(props: {
   const together: Record<string, number> = { ...saved };
   for (const [u, v] of Object.entries(draft)) together[u] = (together[u] ?? 0) + v;
   const activeLabel = recipients.find((r) => r.key === active)?.label;
+  // EGY-08: the row's total against its reference; nothing given (fasting, not on the list) is no deviation
+  const refCell = (key: string) => {
+    const ref = props.references?.[key];
+    if (ref === undefined) return null;
+    const g = totals[key]?.g;
+    const off = g !== undefined && g > 0 && deviates(g, ref);
+    return (
+      <span className={off ? "badge badge-invalid" : "hint"} data-testid={`reference-${key}`}>
+        {" "}ref {num(ref)} g{off ? ": eltér" : ""}
+      </span>
+    );
+  };
   const line = (i: Item) => `${i.otherName ? `${i.feed}: ${i.otherName}` : i.feed} ${i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")}`;
 
   return (
@@ -81,7 +96,10 @@ export function FeedingDay(props: {
                       </div>
                     ))}
                   </td>
-                  <td>{fmt(totals[a.id])}</td>
+                  <td>
+                    {fmt(totals[a.id])}
+                    {refCell(a.id)}
+                  </td>
                 </tr>
               ))}
               {groups.map((g) =>
@@ -102,7 +120,10 @@ export function FeedingDay(props: {
                         </div>
                       ))}
                     </td>
-                    <td>{fmt(totals[`g:${g.id}`])}</td>
+                    <td>
+                      {fmt(totals[`g:${g.id}`])}
+                      {refCell(`g:${g.id}`)}
+                    </td>
                   </tr>
                 ) : null,
               )}

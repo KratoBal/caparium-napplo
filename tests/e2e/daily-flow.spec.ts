@@ -361,3 +361,27 @@ test("withdrawal: an item for tomorrow, the day's total, taken against given, th
   const [file] = await Promise.all([page.waitForEvent("download"), page.getByTestId("excel-kivetel").click()]);
   expect(file.suggestedFilename()).toMatch(/^Takarmanykivetel_\d{4}-\d{2}-\d{2}/);
 });
+
+test("calculator: a body weight, a live result, saved as reference, shown on the feeding page", async ({ page }, info) => {
+  const name = info.project.name === "tablet" ? "Teszt Három" : "Teszt Négy";
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Takarmánykalkulátor" }).click();
+  await page.getByRole("link", { name, exact: true }).click();
+  const weight = page.getByTestId("body-weight-form");
+  await weight.getByLabel("Mért testtömeg (kg)").fill("50");
+  await weight.getByRole("button", { name: "Testtömeg mentése" }).click();
+  await expect(weight.getByRole("status")).toHaveText("Testtömeg mentve.");
+  await expect(page.getByTestId("body-weights")).toContainText("50 kg");
+  const calc = page.getByTestId("calculator");
+  await calc.getByLabel("Testtömeg (kg)").fill("50");
+  await calc.getByLabel("Heti FR (%)").selectOption("2");
+  await calc.getByLabel("Heti etetésszám (N)").selectOption("4");
+  await expect(page.getByTestId("calc-result")).toContainText("250 g");
+  await expect(page.getByTestId("calc-result")).toContainText("1000 g");
+  await calc.getByRole("button", { name: "Mentés referenciaként" }).click();
+  await expect(calc.getByRole("status")).toHaveText("Mentve referenciaként.");
+  await expect(page.getByTestId("current-reference")).toContainText("250 g");
+  // EGY-08: the feeding page shows the reference in the animal's row
+  await page.getByRole("link", { name: "Takarmánynapló" }).click();
+  await expect(page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name })).toContainText("ref 250 g");
+});
