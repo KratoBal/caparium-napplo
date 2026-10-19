@@ -8,19 +8,25 @@ FROM base AS build
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
-RUN npx prisma generate && npm run build
+RUN npx prisma generate && npm run build && npm run build:seed
+
+# production dependencies only (includes the Prisma CLI for "migrate deploy" with its own dependencies)
+FROM base AS deps
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
 
 FROM base AS run
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 NEXT_TELEMETRY_DISABLED=1
 COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/prisma ./prisma
-# the Prisma CLI (for "migrate deploy") and the generated client with its query engine
-COPY --from=build --chown=node:node /app/node_modules/prisma ./node_modules/prisma
-COPY --from=build --chown=node:node /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=build --chown=node:node /app/dist/seed.cjs ./dist/seed.cjs
+COPY --from=build --chown=node:node /app/scripts/start.sh ./start.sh
+# the generated client with its query engine (generated in the build stage)
 COPY --from=build --chown=node:node /app/node_modules/.prisma ./node_modules/.prisma
 USER node
 EXPOSE 3000
-HEALTHCHECK --interval=10s --timeout=3s --retries=12 \
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=12 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
+CMD ["sh", "start.sh"]

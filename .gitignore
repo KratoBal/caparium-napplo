@@ -14,3 +14,4 @@ next-env.d.ts
 *.xls
 *.pdf
 *.zip
+dist/
