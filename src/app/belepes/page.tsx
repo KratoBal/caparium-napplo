@@ -5,8 +5,9 @@ import { currentUser } from "@/lib/session";
 export const dynamic = "force-dynamic";
 
 const ERRORS: Record<string, string> = {
-  adat: "Hibás felhasználónév vagy jelszó.",
-  zarolva: "Túl sok sikertelen próbálkozás. Próbáld újra 15 perc múlva.",
+  // one text for a wrong password, an unknown id and a locked id: it must not tell which
+  adat: "Sikertelen belépés. Ellenőrizd a felhasználónevet és a jelszót; sok hibás próba után a fiók 15 percig nem léptethető be.",
+  sok: "Erről a címről túl sok sikertelen belépés érkezett. Próbáld újra 15 perc múlva.",
   forras: "A belépési kérés nem ebből az alkalmazásból jött. Töltsd újra az oldalt.",
 };
 
