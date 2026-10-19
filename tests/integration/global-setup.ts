@@ -19,7 +19,8 @@ export default async function setup() {
   } finally {
     await prisma.$disconnect();
   }
-  const env = { ...process.env, SEED_TEST_PASSWORD: TEST_PASSWORD };
+  // the test database is synthetic by definition: the test animals, feeds and chemicals go in here too
+  const env = { ...process.env, SEED_TEST_PASSWORD: TEST_PASSWORD, CAPARIUM_SEED_SZINTETIKUS: "1" };
   execFileSync("npx", ["prisma", "migrate", "deploy"], { stdio: "inherit", env });
   execFileSync("npx", ["tsx", "prisma/seed.ts"], { stdio: "inherit", env });
   // the tests run as the application role, like the server (see tests/integration/env.ts)

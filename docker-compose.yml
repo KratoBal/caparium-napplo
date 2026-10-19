@@ -44,6 +44,8 @@ services:
       BASIC_AUTH_SHA256: ${BASIC_AUTH_SHA256:-}
       BASIC_AUTH_PASSWORD: ${SERVICE_PASSWORD_BASICAUTH:-}
       SEED_TEST_PASSWORD: ${SERVICE_PASSWORD_SEED:-}
+      # the synthetic test feeds, chemicals and animals: 1 on the stage only, never on a live system
+      CAPARIUM_SEED_SZINTETIKUS: ${CAPARIUM_SEED_SZINTETIKUS:-}
     ports:
       - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"
     depends_on:
