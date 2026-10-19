@@ -36,8 +36,16 @@ describe("Antennarius, the water helper", () => {
     await createChemical(f.admin, { requestId: rid(), name: "Teszt segítő-só", stockUnitId: unit.kg }, at("2028-08-12T08:00"));
     const chem = (await prisma.chemicalName.findFirstOrThrow({ where: { name: "Teszt segítő-só" } })).chemicalId;
     await saveDosing(f.aq1, { requestId: rid(), performedAtLocal: "2028-08-12T10:00", poolId: f.pool("SOZO"), chemicalId: chem, quantity: "1", unitId: unit.kg }, at("2028-08-12T10:00"));
-    expect((await waterHelper(true, at("2028-08-12T15:00"))).alert).toContain("Teszt segítő-só");
-    expect((await waterHelper(false, at("2028-08-12T15:00"))).alert).toBeUndefined();
+    const first = await waterHelper(true, at("2028-08-12T15:00"));
+    expect(first.alert).toContain("Teszt segítő-só");
+    expect(first.alertKey).toContain("Teszt segítő-só");
+    const off = await waterHelper(false, at("2028-08-12T15:00"));
+    expect([off.alert, off.alertKey]).toEqual([undefined, undefined]);
+    // another dose moves the level and so the text, not the key: it does not open again (review of #20, b)
+    await saveDosing(f.aq1, { requestId: rid(), performedAtLocal: "2028-08-12T16:00", poolId: f.pool("SOZO"), chemicalId: chem, quantity: "1", unitId: unit.kg }, at("2028-08-12T16:00"));
+    const second = await waterHelper(true, at("2028-08-12T17:00"));
+    expect(second.alert).not.toBe(first.alert);
+    expect(second.alertKey).toBe(first.alertKey);
   });
 });
 

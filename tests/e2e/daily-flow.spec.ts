@@ -440,21 +440,34 @@ test("conveniences: a feeding plan, the list from it, the feed type icons", asyn
 
 test("the helper: a quick question about the page, switched off and on", async ({ page }) => {
   await login(page, "teszt.akvarista1");
+  // AST-03: the dosing test above left "Teszt só" below zero: the overview's helper opens by itself, once
+  const first = page.getByTestId("helper");
+  await expect(first).toHaveAttribute("data-ready", "1");
+  await expect(first.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "true");
+  await expect(first.getByTestId("helper-answer")).toContainText("Teszt só");
   await page.getByRole("link", { name: "Napi vízmérés" }).click();
   // the overview has a helper too: wait for the new page, or the clicks below land on the old one
   await expect(page).toHaveURL(/\/vizmeres/);
   await expect(page.getByRole("heading", { name: "Napi vízmérések" })).toBeVisible();
   const helper = page.getByTestId("helper");
-  // AST-03: with a stock alert (the dosing test leaves the salt below zero) it may already be open;
   // wait until the component has read its stored state, or the click races the auto-open
   await expect(helper).toHaveAttribute("data-ready", "1");
-  if ((await helper.getByTestId("helper-button").getAttribute("aria-expanded")) !== "true") await helper.getByTestId("helper-button").click();
+  // the same alert again: it stays closed on the next page (review of #20, c)
+  await expect(helper.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "false");
+  await helper.getByTestId("helper-button").click();
   await helper.getByRole("button", { name: "Mi van még hátra ma?" }).click();
   await expect(helper.getByTestId("helper-answer")).not.toBeEmpty();
   await helper.getByRole("button", { name: "Segítő kikapcsolása" }).click();
   await expect(page.getByTestId("helper-on")).toBeVisible();
+  // a new session while switched off: the alert must not be marked seen behind the closed helper (review of #20, a)
+  await page.evaluate(() => sessionStorage.clear());
   await page.reload();
   await expect(page.getByTestId("helper-on")).toBeVisible();
   await page.getByTestId("helper-on").click();
   await expect(page.getByTestId("helper-button")).toBeVisible();
+  await page.getByRole("link", { name: "Áttekintés" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: "Mai áttekintés" })).toBeVisible();
+  await expect(page.getByTestId("helper")).toHaveAttribute("data-ready", "1");
+  await expect(page.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "true");
 });
