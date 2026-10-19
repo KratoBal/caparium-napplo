@@ -18,12 +18,14 @@ const name = z
   .max(80)
   .refine((v) => !/^[=+\-@]/.test(v), "A név nem kezdődhet =, +, -, @ jellel.");
 
+// The two choices of the form say what is missing, not "Invalid UUID": an empty select sends an empty
+// string, and the raw zod message reached the user (Balázs, 2026-10-19, the stage had no feed type).
 export const createFeedSchema = z.object({
   requestId: z.string().min(8).max(100),
-  typeId: z.uuid(),
+  typeId: z.uuid({ error: "Válassz takarmánytípust." }),
   name,
   dimensions: z.array(z.enum(["MASS", "COUNT", "VOLUME"])).min(1).max(3),
-  defaultUnitId: z.uuid(),
+  defaultUnitId: z.uuid({ error: "Válassz alapértelmezett egységet." }),
 });
 
 export const updateFeedSchema = z.object({
