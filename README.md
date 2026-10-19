@@ -69,6 +69,12 @@ HTTPS proxy. Then, before the first deploy: `BASIC_AUTH_USER` (the password is
 (it answers `{ok}`) is open, for the container healthcheck. 20 wrong passwords from one address lock
 that address for 15 minutes. The app's own login stays behind the gate, with its own lockout.
 
+The gate fails closed: without its variables it is off only where nothing says the site is
+public. Behind an HTTPS proxy (`X-Forwarded-Proto: https`) or with `COOKIE_SECURE=true`, a missing
+gate answers 503 on every path but `/api/health`; running a public site without the gate needs an
+explicit `BASIC_AUTH=off`. With a public domain, `APP_BIND` stays a private address (127.0.0.1 or
+the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only the proxy may write.
+
 ## Before a production deployment
 
 - `COOKIE_SECURE=true` is mandatory behind HTTPS (the test environment runs on plain HTTP on the tailnet).

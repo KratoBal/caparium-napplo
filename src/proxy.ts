@@ -4,7 +4,7 @@
 // the container healthcheck calls from inside; the raw request URL is checked, not nextUrl, which
 // rewrites some internal paths.
 import { NextResponse, type NextRequest } from "next/server";
-import { checkCredentials, clientIp, FailureLimiter, gateConfig } from "@/lib/basic-auth";
+import { checkCredentials, clientIp, effectiveGate, FailureLimiter } from "@/lib/basic-auth";
 
 const limiter = new FailureLimiter();
 
@@ -19,7 +19,7 @@ const challenge = (status: 401 | 429 | 503, text: string) =>
   });
 
 export async function proxy(request: NextRequest) {
-  const gate = gateConfig(process.env);
+  const gate = effectiveGate(process.env, request.headers);
   if (gate.mode === "off") return NextResponse.next();
   if (new URL(request.url).pathname === "/api/health") return NextResponse.next();
   if (gate.mode === "misconfigured") return challenge(503, "A teszthozzaferes nincs helyesen beallitva.");

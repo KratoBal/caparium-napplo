@@ -66,6 +66,8 @@ describe("the proxy: every path is behind the gate", () => {
   delete env.BASIC_AUTH_USER;
   delete env.BASIC_AUTH_SHA256;
   delete env.BASIC_AUTH_PASSWORD;
+  delete env.BASIC_AUTH;
+  delete env.COOKIE_SECURE;
   const req = (path: string, auth?: string, ip = "10.0.0.1") =>
     new NextRequest(`https://caparium-teszt.example${path}`, {
       headers: { ...(auth ? { authorization: auth } : {}), "x-forwarded-for": ip },
@@ -102,6 +104,25 @@ describe("the proxy: every path is behind the gate", () => {
     for (let i = 0; i < 20; i++) expect((await proxy(req("/", basic("lilian", "rossz"), "10.9.9.9"))).status).toBe(401);
     expect((await proxy(req("/", basic("lilian", PASS), "10.9.9.9"))).status).toBe(429);
     expect((await proxy(req("/", basic("lilian", PASS), "10.9.9.8"))).headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it.each([
+    ["COOKIE_SECURE=true", { COOKIE_SECURE: "true" }, {}],
+    ["X-Forwarded-Proto: https", {}, { "x-forwarded-proto": "https" }],
+  ])("a missing gate on a public site (%s) closes every path but /api/health (review of #5)", async (_l, envAdd, headers) => {
+    Object.assign(process.env, envAdd);
+    for (const path of ["/", "/belepes", "/api/grid", "/_next/static/chunks/main.js"]) {
+      const r = await proxy(new NextRequest(`https://caparium-teszt.example${path}`, { headers }));
+      expect(r.status, path).toBe(503);
+    }
+    const h = await proxy(new NextRequest("https://caparium-teszt.example/api/health", { headers }));
+    expect(h.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("only an explicit BASIC_AUTH=off runs a public site without the gate", async () => {
+    process.env.COOKIE_SECURE = "true";
+    process.env.BASIC_AUTH = "off";
+    expect((await proxy(req("/"))).headers.get("x-middleware-next")).toBe("1");
   });
 
   it("off without configuration (local development, CI)", async () => {

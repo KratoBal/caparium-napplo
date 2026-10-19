@@ -7,13 +7,26 @@
 //   BASIC_AUTH_SHA256     hex sha256 of the password, or
 //   BASIC_AUTH_PASSWORD   the password itself (a Coolify-generated secret: the owner has no command
 //                         line to compute a hash, and Coolify keeps the variable as a secret)
-// Nothing set: the gate is off (local development, CI). A user without a password or a password
-// without a user: closed (503), never open.
+// Nothing set: off for local development and CI ONLY. Behind an HTTPS proxy (X-Forwarded-Proto
+// https) or with COOKIE_SECURE=true, a missing gate closes the site (503) instead of opening it
+// (review of #5: a forgotten variable after a redeploy must not publish the site silently).
+// To run publicly without the gate one has to say so: BASIC_AUTH=off.
+// A user without a password or a password without a user: closed (503), never open.
 // Pure functions with Web Crypto, so they run in the proxy and in the tests alike.
 
 export type BasicAuthConfig = { user: string; sha256?: string; password?: string };
 
 export type GateConfig = { mode: "off" } | { mode: "misconfigured" } | { mode: "on"; cfg: BasicAuthConfig };
+
+/** Off only where nothing says the site is public; otherwise a missing gate is a closed site. */
+export function effectiveGate(env: Record<string, string | undefined>, headers: Headers): GateConfig {
+  const g = gateConfig(env);
+  if (g.mode !== "off") return g;
+  if (env.BASIC_AUTH?.trim().toLowerCase() === "off") return g;
+  const proto = headers.get("x-forwarded-proto")?.toLowerCase() ?? "";
+  const publicHint = env.COOKIE_SECURE === "true" || proto.split(",").some((p) => p.trim() === "https");
+  return publicHint ? { mode: "misconfigured" } : g;
+}
 
 export function gateConfig(env: Record<string, string | undefined>): GateConfig {
   const user = env.BASIC_AUTH_USER?.trim() ?? "";
