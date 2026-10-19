@@ -1,0 +1,141 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { SubmissionButtons, ZimsCreate } from "@/components/ExportActions";
+import { Shell } from "@/components/Shell";
+import { prisma } from "@/lib/db";
+import { divergence } from "@/lib/exports/zims";
+import { moduleLevel, pickValid } from "@/lib/master";
+import { requireUser } from "@/lib/session";
+import { addDays, businessDayOf, dateToDay, isValidDay, localTimeOf } from "@/lib/time";
+
+export const dynamic = "force-dynamic";
+
+const PURPOSE = { SUBMISSION: "Leadás", TRIAL: "Próbaimport", PREVIEW: "Előnézet" } as const;
+const STATE = { CREATED: "Elkészült, még nincs leadva", SUBMITTED: "Leadva", REJECTED: "A ZIMS elutasította" } as const;
+const KIND = { MODIFIED: "Leadás után módosult", INVALIDATED: "Leadás után érvénytelenítve", NOT_SUBMITTED: "Leadott időszakban, de nincs leadva" } as const;
+
+// E, F (feladat-4): Excel and ZIMS CSV; exporting is not submitting (T-20, R-9).
+export default async function ExportPage({ searchParams }: { searchParams: Promise<{ tol?: string; ig?: string; medence?: string | string[] }> }) {
+  const user = await requireUser();
+  const level = await moduleLevel(prisma, user.id, user.role, "EXPORT");
+  if (level === "NONE") redirect("/nincs-jogosultsag");
+  const sp = await searchParams;
+  const today = businessDayOf(new Date());
+  const to = sp.ig && isValidDay(sp.ig) ? sp.ig : today;
+  const from = sp.tol && isValidDay(sp.tol) ? sp.tol : addDays(to, -6);
+  const now = new Date();
+  const pools = await prisma.pool.findMany({
+    where: { active: true, memberships: { some: {} } },
+    include: { names: true },
+    orderBy: { code: "asc" },
+  });
+  const chosen = (Array.isArray(sp.medence) ? sp.medence : sp.medence ? [sp.medence] : []).filter((id) => pools.some((p) => p.id === id));
+  const [runs, diffs] = await Promise.all([
+    prisma.exportRun.findMany({
+      where: { kind: "ZIMS_CSV" },
+      include: { files: { select: { id: true, fileName: true, rowCount: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+    from <= to ? divergence(from, to) : Promise.resolve([]),
+  ]);
+  return (
+    <Shell title="Export" active="export" user={user}>
+      <form method="get" action="/export" className="filters">
+        <label className="field">
+          Naptól
+          <input className="input" type="date" name="tol" defaultValue={from} />
+        </label>
+        <label className="field">
+          Napig
+          <input className="input" type="date" name="ig" defaultValue={to} />
+        </label>
+        <fieldset className="field" style={{ border: 0, padding: 0 }}>
+          Rendszerek (üresen: mind)
+          <span style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {pools.map((p) => (
+              <label key={p.id} className="check">
+                <input type="checkbox" name="medence" value={p.id} defaultChecked={chosen.includes(p.id)} />
+                {pickValid(p.names, now)?.displayName ?? p.code}
+              </label>
+            ))}
+          </span>
+        </fieldset>
+        <button className="btn btn-soft" type="submit">Szűrés</button>
+      </form>
+
+      <div className="card">
+        <h2>Excel</h2>
+        <p className="hint">Összesítő lap és rendszerenként egy lap, a sablon oszlopaival, kiegészítve a hígítással és az RO/SW-vel.</p>
+        <form method="post" action="/api/exports/excel" className="toolbar">
+          <input type="hidden" name="from" value={from} />
+          <input type="hidden" name="to" value={to} />
+          {chosen.map((id) => (
+            <input key={id} type="hidden" name="pool" value={id} />
+          ))}
+          <button className="btn" type="submit" data-testid="excel-download">Excel letöltése ({from} – {to})</button>
+        </form>
+      </div>
+
+      <div className="card">
+        <h2>ZIMS CSV</h2>
+        <p className="hint">
+          Rendszerenként külön fájl. Az elkészült export még nincs a ZIMS-ben: amikor feltöltötted, jelöld „Leadva”-ként, és
+          a rendszer onnantól jelzi, ha egy leadott mérés megváltozik. A ZIMS-kompatibilitást a próbaimport igazolja.
+        </p>
+        <ZimsCreate from={from} to={to} poolIds={chosen} />
+      </div>
+
+      {diffs.length > 0 && (
+        <div className="card" data-testid="divergence">
+          <h2>Leadás után eltér ({diffs.length})</h2>
+          <p className="hint">Ezeket a sorokat újra le kell adni; hogy a ZIMS a javítást hogyan fogadja, a próbaimport dönti el (NY-18).</p>
+          <table className="log-table">
+            <thead><tr><th>Nap</th><th>Rendszer</th><th>Eltérés</th><th></th></tr></thead>
+            <tbody>
+              {diffs.map((d) => (
+                <tr key={`${d.kind}-${d.measurementId}`}>
+                  <td>{d.day}</td>
+                  <td>{d.poolName}</td>
+                  <td className="value-out">{KIND[d.kind]}</td>
+                  <td><Link href={`/naplo/${d.measurementId}`}>előzmény</Link></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="card">
+        <h2>Korábbi ZIMS-exportok</h2>
+        {runs.length === 0 ? (
+          <p className="hint">Még nem készült ZIMS-export.</p>
+        ) : (
+          <div className="table-scroll">
+            <table className="log-table" data-testid="runs-table">
+              <thead><tr><th>Készült</th><th>Időszak</th><th>Cél</th><th>Állapot</th><th>Fájlok</th><th></th></tr></thead>
+              <tbody>
+                {runs.map((r) => (
+                  <tr key={r.id}>
+                    <td>{businessDayOf(r.createdAt)} {localTimeOf(r.createdAt)}</td>
+                    <td>{dateToDay(r.periodFrom)} – {dateToDay(r.periodTo)}</td>
+                    <td>{PURPOSE[r.purpose]}</td>
+                    <td>{r.submissionState ? STATE[r.submissionState] : "–"}</td>
+                    <td>
+                      {r.files.map((f) => (
+                        <div key={f.id}>
+                          <a href={`/api/exports/files/${f.id}`} download>{f.fileName}</a> <span className="hint">({f.rowCount} sor)</span>
+                        </div>
+                      ))}
+                    </td>
+                    <td>{level === "ADMIN" && r.submissionState === "CREATED" && <SubmissionButtons runId={r.id} />}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </Shell>
+  );
+}

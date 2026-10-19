@@ -544,6 +544,8 @@ model ExportRun {
   submissionState   SubmissionState?
   submittedById     String?            @db.Uuid
   submittedAt       DateTime?          @db.Timestamptz(3)
+  // warnings of the run (e.g. a measurement in the repeated autumn hour, R-18)
+  warnings          Json               @default("[]")
   zimsProfile       ZimsExportProfile? @relation(fields: [zimsProfileId], references: [id])
   templateVersion   TemplateVersion?   @relation(fields: [templateVersionId], references: [id])
 
@@ -559,6 +561,9 @@ model ExportFile {
   fileName    String
   sha256      String
   rowCount    Int
+  // the exact bytes handed out (CSV); kept so a submitted file can be downloaded again unchanged
+  content     String?
+  poolId      String?   @db.Uuid
   exportRun   ExportRun @relation(fields: [exportRunId], references: [id])
 
   @@map("export_file")

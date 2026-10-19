@@ -139,7 +139,8 @@ export default async function LogPage({
 
       <div className="card">
         <h2>Exportálás</h2>
-        <p className="hint">Az Excel- és a ZIMS CSV-export a harmadik fejlesztési részben készül el.</p>
+        <p className="hint">Az export a kijelölt időszakra és medencékre készül.</p>
+        <Link className="btn" href={`/export?tol=${from}&ig=${to}${poolId ? `&medence=${poolId}` : ""}`}>Excel és ZIMS CSV</Link>
       </div>
     </Shell>
   );

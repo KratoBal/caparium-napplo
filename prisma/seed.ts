@@ -36,6 +36,28 @@ const PARAMETERS = [
   { code: "PO4", name: "PO4", unit: "ppm", decimals: 2, plausible: ["0", "20"], ref: [null, "0.1"] },
 ] as const;
 
+// ZIMS mapping, letter by letter from the customer's description (leírás II.4, tables "Elnevezések"
+// and "Mértékegységek"; DN-05: not rewritten). The workers' ZIMS names are NOT here: real personal data.
+const ZIMS_PARAMETER_NAMES: Record<string, string> = {
+  PH: "pH",
+  SAL: "Salinity",
+  TEMP: "Water temperature",
+  PO4: "Phosphates",
+  CA: "Calcium (Ca)",
+  KH: "Total alkalinity",
+  NO3: "Nitrate (NO₃⁻)",
+  MG: "Magnesium (Mg₂⁺)",
+  ORP: "ORP",
+};
+const ZIMS_UNIT_NAMES: Record<string, string> = {
+  pH: "pH",
+  ppt: "parts per thousand",
+  "°C": "degree Celsius",
+  ppm: "parts per million",
+  dKH: "dKH",
+  mV: "mV",
+};
+
 const POOLS = [
   { code: "NAGY", name: "Nagymedence" },
   { code: "KIS", name: "Kismedence" },
@@ -138,6 +160,37 @@ async function main() {
         active: g.active,
         memberships: { create: g.pools.map((c, j) => ({ poolId: poolId.get(c)!, sortOrder: j + 1, validFrom: SINCE })) },
         parameters: { create: g.params.map((c, j) => ({ parameterId: paramId.get(c)!, sortOrder: j + 1, validFrom: SINCE })) },
+      },
+    });
+  }
+
+  for (const [code, zimsName] of Object.entries(ZIMS_PARAMETER_NAMES)) {
+    const parameterId = paramId.get(code)!;
+    if (await prisma.zimsParameterName.findFirst({ where: { parameterId } })) continue;
+    await prisma.zimsParameterName.create({ data: { parameterId, zimsName, validFrom: SINCE } });
+  }
+  for (const [symbol, zimsUnit] of Object.entries(ZIMS_UNIT_NAMES)) {
+    const id = unitId.get(symbol)!;
+    if (await prisma.zimsUnitName.findFirst({ where: { unitId: id, parameterId: null } })) continue;
+    await prisma.zimsUnitName.create({ data: { unitId: id, zimsUnit, validFrom: SINCE } });
+  }
+  // Export profile v1 (adatmodell 5. terület): the sample file's header and CRLF, "Sep 20, 2026",
+  // 24-hour local time, every row filled (T-14). Not yet approved by a trial import (NY-01).
+  if (!(await prisma.zimsExportProfile.findUnique({ where: { version: 1 } }))) {
+    await prisma.zimsExportProfile.create({
+      data: {
+        version: 1,
+        datePattern: "MMM d, yyyy",
+        timePattern: "HH:mm",
+        decimalSeparator: ".",
+        fieldSeparator: ",",
+        lineEnding: "\r\n",
+        encoding: "utf-8",
+        header: "Date,Time,Measurement,MeasurementValue,UnitofMeasure,MeasuredBy",
+        allRowsFilled: true,
+        timeZone: "Europe/Budapest",
+        active: true,
+        validFrom: SINCE,
       },
     });
   }

@@ -2,13 +2,14 @@ import Link from "next/link";
 import type { SessionUser } from "@/lib/auth";
 import { businessDayOf, formatDayLong } from "@/lib/time";
 
-type NavKey = "overview" | "daily" | "weekly" | "log" | "pending" | "settings";
+type NavKey = "overview" | "daily" | "weekly" | "log" | "export" | "pending" | "settings";
 
 const NAV: { key: NavKey | null; href: string | null; label: string; note?: string }[] = [
   { key: "overview", href: "/", label: "Áttekintés" },
   { key: "daily", href: "/vizmeres", label: "Napi vízmérés" },
   { key: "weekly", href: "/heti", label: "Heti vízmérés" },
   { key: "log", href: "/naplo", label: "Vízmérési napló" },
+  { key: "export", href: "/export", label: "Export" },
   { key: null, href: null, label: "Takarmánynapló", note: "később" },
   { key: null, href: null, label: "Evési napló", note: "később" },
 ];
