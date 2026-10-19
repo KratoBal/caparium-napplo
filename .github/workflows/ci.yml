@@ -1,0 +1,151 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  # synthetic test users only; not a secret
+  SEED_TEST_PASSWORD: ci-synthetic-password
+
+jobs:
+  secret-scan:
+    name: Secret and customer-material scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: node scripts/secret-scan.mjs
+
+  check:
+    name: Typecheck and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm test
+
+  integration:
+    name: Migrations and API tests (PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: caparium
+          POSTGRES_PASSWORD: caparium-ci # secret-scan: allow
+          POSTGRES_DB: caparium_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U caparium" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://caparium:caparium-ci@localhost:5432/caparium_test # secret-scan: allow
+      SHADOW_URL: postgresql://caparium:caparium-ci@localhost:5432/caparium_shadow # secret-scan: allow
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx prisma generate
+      - name: Migrations match the schema (no drift)
+        run: |
+          PGPASSWORD=caparium-ci psql -h localhost -U caparium -d caparium_test -c "CREATE DATABASE caparium_shadow" # secret-scan: allow
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_URL" --exit-code
+      - run: npm run test:integration
+
+  e2e:
+    name: End-to-end (tablet WebKit 1024x768, desktop Chromium 1440x900)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: caparium
+          POSTGRES_PASSWORD: caparium-ci # secret-scan: allow
+          POSTGRES_DB: caparium_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U caparium" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://caparium:caparium-ci@localhost:5432/caparium_e2e # secret-scan: allow
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npx tsx prisma/seed.ts
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
+
+  compose:
+    name: docker compose starts (two DB roles, seed on start), backup restores
+    runs-on: ubuntu-latest
+    env:
+      # what Coolify generates in the stage environment; throwaway values here
+      SERVICE_PASSWORD_POSTGRES: ci-compose-owner-only
+      SERVICE_PASSWORD_APP: ci-compose-app-role-only
+      SERVICE_PASSWORD_SEED: ci-compose-seed-only
+      APP_PORT: "3000"
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up -d --build --wait --wait-timeout 300 app
+      - name: Started in two-role mode, seeded, and a test user can log in
+        run: |
+          docker compose logs app | grep -F "db-role: caparium_app can log in"
+          docker compose logs app | grep -F "seed ok:"
+          curl -fsS http://127.0.0.1:3000/api/health
+          curl -fsS -o /dev/null http://127.0.0.1:3000/belepes
+          code=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -H 'Origin: http://127.0.0.1:3000' \
+            --data-urlencode loginId=teszt.admin --data-urlencode "password=$SERVICE_PASSWORD_SEED" \
+            http://127.0.0.1:3000/api/auth/login)
+          echo "$code"
+          case "$code" in "303 http://127.0.0.1:3000/") ;; *) echo "login failed"; exit 1 ;; esac
+      - name: The server's role cannot touch the audit table
+        run: |
+          out=$(docker compose exec -T db psql "postgresql://caparium_app:$SERVICE_PASSWORD_APP@localhost/caparium" \
+            -c 'UPDATE audit_entry SET reason = NULL' 2>&1 || true)
+          echo "$out"
+          echo "$out" | grep -F "permission denied"
+      - run: scripts/backup.sh "$RUNNER_TEMP/backup"
+      - name: A restarted container repeats the start steps without harm
+        run: |
+          docker compose restart app
+          docker compose up -d --wait --wait-timeout 120 app
+          curl -fsS http://127.0.0.1:3000/api/health
+      - if: failure()
+        run: docker compose logs --no-color
+      - if: always()
+        run: docker compose down -v
