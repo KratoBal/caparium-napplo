@@ -3,6 +3,7 @@ import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { EAT_LABEL } from "@/lib/eating-labels";
 import { AppError } from "@/lib/errors";
+import { weekShade } from "@/lib/exports/feeding-excel";
 import { feedingLog } from "@/lib/feeding-log";
 import { listAnimals } from "@/lib/animals";
 import { moduleLevel, pickValid } from "@/lib/master";
@@ -114,7 +115,10 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
                   <tr>
                     <th>Állat</th>
                     {log.days.map((d) => (
-                      <th key={d}>{d.slice(5).replace("-", ".")}</th>
+                      // EVE-08: the weeks in two alternating colours
+                      <th key={d} style={{ background: `#${weekShade(log!.days[0], d).slice(2)}` }}>
+                        {d.slice(5).replace("-", ".")}
+                      </th>
                     ))}
                   </tr>
                 </thead>

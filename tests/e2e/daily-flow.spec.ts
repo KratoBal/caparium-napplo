@@ -401,3 +401,15 @@ test("dosing: a dose in g, the log, the stock kept in kg, printable", async ({ p
   await expect(page.getByTestId("stock").getByRole("row").filter({ hasText: "Teszt só" })).toContainText("kg");
   await expect(page.getByTestId("print")).toBeVisible();
 });
+
+test("reports and the daily water report: the tables, the Excel, a printable page", async ({ page }) => {
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Kimutatások" }).click();
+  await expect(page.getByTestId("report-by-day")).toContainText("Összesen");
+  await expect(page.getByTestId("report-by-recipient")).toBeVisible();
+  const [file] = await Promise.all([page.waitForEvent("download"), page.getByTestId("excel-kimutatas").click()]);
+  expect(file.suggestedFilename()).toMatch(/^Kimutatas_\d{4}-\d{2}-\d{2}/);
+  await page.getByRole("link", { name: "Napi jelentő" }).click();
+  await expect(page.getByTestId("report-day")).toContainText("Vízmérés");
+  await expect(page.getByTestId("print")).toBeVisible();
+});

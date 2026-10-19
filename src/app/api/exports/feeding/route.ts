@@ -2,7 +2,7 @@ import { writeAudit } from "@/lib/audit";
 import { sameOrigin, userFromRequest } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { buildEatingWorkbook, buildFeedingWorkbook, buildWithdrawalWorkbook } from "@/lib/exports/feeding-excel";
+import { buildEatingWorkbook, buildFeedingWorkbook, buildReportWorkbook, buildWithdrawalWorkbook } from "@/lib/exports/feeding-excel";
 import { moduleLevel } from "@/lib/master";
 import { seeOther } from "@/lib/redirect";
 import { dayToDate, isValidDay } from "@/lib/time";
@@ -22,7 +22,10 @@ export async function POST(req: Request) {
   if (exportLevel === "NONE" || dataLevel === "NONE") return new Response("Ehhez az exporthoz nincs jogosultságod.", { status: 403 });
   const from = String(form?.get("from") ?? "");
   const to = String(form?.get("to") ?? "");
-  if (kind !== "etetes" && kind !== "evesi" && kind !== "kivetel") return new Response("Ismeretlen export.", { status: 422 });
+  if (kind !== "etetes" && kind !== "evesi" && kind !== "kivetel" && kind !== "kimutatas") return new Response("Ismeretlen export.", { status: 422 });
+  const uuid = /^[0-9a-f-]{36}$/;
+  const poolId = String(form?.get("pool") ?? "");
+  const animalId = String(form?.get("animal") ?? "");
   if (!isValidDay(from) || !isValidDay(to) || from > to) return new Response("Az időszak érvénytelen.", { status: 422 });
 
   let built: { buffer: Buffer; rows: number };
@@ -32,12 +35,14 @@ export async function POST(req: Request) {
         ? await buildFeedingWorkbook({ from, to })
         : kind === "evesi"
           ? await buildEatingWorkbook({ from, to })
-          : await buildWithdrawalWorkbook({ from, to });
+          : kind === "kivetel"
+            ? await buildWithdrawalWorkbook({ from, to })
+            : await buildReportWorkbook({ from, to, poolId: uuid.test(poolId) ? poolId : null, animalId: uuid.test(animalId) ? animalId : null });
   } catch (e) {
     if (e instanceof AppError) return new Response(e.message, { status: e.status });
     throw e;
   }
-  const exportKind = kind === "etetes" ? "EXCEL_FEEDING" : kind === "evesi" ? "EXCEL_EATING" : "EXCEL_WITHDRAWAL";
+  const exportKind = kind === "etetes" || kind === "kimutatas" ? "EXCEL_FEEDING" : kind === "evesi" ? "EXCEL_EATING" : "EXCEL_WITHDRAWAL";
   await prisma.$transaction(async (tx) => {
     const run = await tx.exportRun.create({
       data: { kind: exportKind, purpose: "PREVIEW", periodFrom: dayToDate(from), periodTo: dayToDate(to), filters: {}, createdById: user.id },
@@ -50,7 +55,7 @@ export async function POST(req: Request) {
       changes: { export: { before: null, after: { kind: exportKind, from, to, rows: built.rows } } },
     });
   });
-  const base = kind === "etetes" ? "Egyedi_takarmanynaplo" : kind === "evesi" ? "Evesi_minta" : "Takarmanykivetel";
+  const base = kind === "etetes" ? "Egyedi_takarmanynaplo" : kind === "evesi" ? "Evesi_minta" : kind === "kivetel" ? "Takarmanykivetel" : "Kimutatas";
   const name = `${base}_${from}${from === to ? "" : `_${to}`}.xlsx`;
   return new Response(new Uint8Array(built.buffer), {
     headers: {

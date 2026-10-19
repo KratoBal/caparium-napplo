@@ -109,7 +109,8 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   "rough" deviation beyond ±20 %; nothing given that day (fasting, not on the list) is no deviation.
 - The seed (only where `SEED_TEST_PASSWORD` is set) adds the synthetic test feeds, chemicals,
   species and animals only with `CAPARIUM_SEED_SZINTETIKUS=1` (the stage) or on the CI runner;
-  the basic data ("Egyéb" feed, units, parameters, pools) always. A live system sets neither.
+  the basic data ("Egyéb" feed, units, parameters, pools) always. A live system sets neither, and sets
+  `CAPARIUM_SEED_SZINTETIKUS=0` explicitly, so a `CI=true` in its environment could not turn it on.
 - Chemical stock (NY-08 default): no starting stock; a level may go negative and is flagged, not
   refused (R-16); intake is admin work. The test chemicals ("Teszt só" in kg, "Teszt kalcium" in l) are
   synthetic. The model's shared stock item (area 12) is not built while feed has no stock.
@@ -169,6 +170,10 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   chemical is dosed only in its stock unit's dimension); the stock is the sum of the movements, with
   the usage of the last 7 and 30 days (ADA-06); the log filtered by period, pool and chemical (ADA-05),
   printable as PDF (ADA-04). Intake and stock correction, and a new chemical, are admin work.
+- Stage 4, reports: the period's feedings by day and by recipient, per feed and base unit, filtered
+  by pool and animal, as a table and as Excel (EGY-13; NY-11 default); the eating Excel's day headers
+  alternate by calendar week (EVE-08); a one-page daily water report, printable as PDF (VIZ-14, the
+  idea; the official daily report's form, VIZ-13, waits for D-28).
 - Trial import file for the customer (VIZ-24): `npx tsx scripts/zims-trial-file.ts --pool <name>
   --date <day> --measured-by "<name in their ZIMS>"`; the real name is an argument, never stored.
 
