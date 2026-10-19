@@ -27,7 +27,11 @@ export function Helper({ data }: { data: HelperData }) {
     }
     setOff(isOff);
     // switched off, the alert is not marked as seen: switched back on, it still opens once
-    if (!data.alert || isOff) return;
+    if (!isOff) openIfNew();
+  }, [data.alert, data.alertKey]);
+  /** AST-03: opens with the alert once per key and session */
+  function openIfNew() {
+    if (!data.alert) return;
     const key = data.alertKey ?? data.alert;
     try {
       if (sessionStorage.getItem(SEEN_KEY) === key) return;
@@ -37,7 +41,7 @@ export function Helper({ data }: { data: HelperData }) {
     }
     setOpen(true);
     setAnswer(data.alert);
-  }, [data.alert, data.alertKey]);
+  }
   const setStored = (v: boolean) => {
     setOff(v);
     try {
@@ -46,6 +50,8 @@ export function Helper({ data }: { data: HelperData }) {
     } catch {
       /* not stored: it is back on the next page */
     }
+    // switched back on: an alert not seen yet opens on this page, not only on the next one
+    if (!v) openIfNew();
   };
   if (off) {
     return (
