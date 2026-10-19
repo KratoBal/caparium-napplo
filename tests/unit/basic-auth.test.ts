@@ -125,6 +125,34 @@ describe("the proxy: every path is behind the gate", () => {
     expect((await proxy(req("/"))).headers.get("x-middleware-next")).toBe("1");
   });
 
+  it("an explicit BASIC_AUTH=off wins over a password Coolify generated for the compose (first public deploy)", async () => {
+    // the compose names SERVICE_PASSWORD_BASICAUTH, so Coolify fills BASIC_AUTH_PASSWORD even with no gate user
+    process.env.COOKIE_SECURE = "true";
+    process.env.BASIC_AUTH = " Off ";
+    process.env.BASIC_AUTH_PASSWORD = "coolify-altal-generalt-jelszo-32-karakter";
+    delete process.env.BASIC_AUTH_USER;
+    delete process.env.BASIC_AUTH_SHA256;
+    for (const path of ["/", "/api/grid"]) {
+      const r = await proxy(new NextRequest(`https://caparium-teszt.example${path}`, { headers: { "x-forwarded-proto": "https" } }));
+      expect(r.headers.get("x-middleware-next"), path).toBe("1");
+    }
+    // any other value is not the switch: the half configuration stays closed
+    process.env.BASIC_AUTH = "false";
+    expect((await proxy(req("/"))).status).toBe(503);
+  });
+
+  it("BASIC_AUTH=off next to a gate user is a contradiction: closed, never silently open (review of #8)", async () => {
+    // the gate turned back on in Coolify, the old "off" line left behind
+    process.env.COOKIE_SECURE = "true";
+    process.env.BASIC_AUTH = "off";
+    process.env.BASIC_AUTH_USER = "lilian";
+    process.env.BASIC_AUTH_SHA256 = SHA;
+    expect((await proxy(req("/", basic("lilian", PASS)))).status).toBe(503);
+    process.env.BASIC_AUTH_PASSWORD = PASS;
+    delete process.env.BASIC_AUTH_SHA256;
+    expect((await proxy(req("/", basic("lilian", PASS)))).status).toBe(503);
+  });
+
   it("off without configuration (local development, CI)", async () => {
     delete process.env.BASIC_AUTH_USER;
     delete process.env.BASIC_AUTH_SHA256;

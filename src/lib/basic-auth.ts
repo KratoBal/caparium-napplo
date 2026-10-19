@@ -10,7 +10,9 @@
 // Nothing set: off for local development and CI ONLY. Behind an HTTPS proxy (X-Forwarded-Proto
 // https) or with COOKIE_SECURE=true, a missing gate closes the site (503) instead of opening it
 // (review of #5: a forgotten variable after a redeploy must not publish the site silently).
-// To run publicly without the gate one has to say so: BASIC_AUTH=off.
+// To run publicly without the gate one has to say so: BASIC_AUTH=off, with no BASIC_AUTH_USER (a
+// password alone does not count: Coolify fills BASIC_AUTH_PASSWORD from the compose); off together
+// with a user is a contradiction and closes the site.
 // A user without a password or a password without a user: closed (503), never open.
 // Pure functions with Web Crypto, so they run in the proxy and in the tests alike.
 
@@ -18,11 +20,19 @@ export type BasicAuthConfig = { user: string; sha256?: string; password?: string
 
 export type GateConfig = { mode: "off" } | { mode: "misconfigured" } | { mode: "on"; cfg: BasicAuthConfig };
 
-/** Off only where nothing says the site is public; otherwise a missing gate is a closed site. */
+/**
+ * An explicit BASIC_AUTH=off is the owner's decision when no gate user is set: Coolify generates the
+ * SERVICE_PASSWORD_BASICAUTH the compose names, so a lone password does not count. With a gate user
+ * the switch is a contradiction (a gate turned back on, the old "off" left behind) and closes the
+ * site instead of silently dropping the gate (review of #8).
+ * Without the switch the gate is off only where nothing says the site is public.
+ */
 export function effectiveGate(env: Record<string, string | undefined>, headers: Headers): GateConfig {
+  if (env.BASIC_AUTH?.trim().toLowerCase() === "off") {
+    return env.BASIC_AUTH_USER?.trim() ? { mode: "misconfigured" } : { mode: "off" };
+  }
   const g = gateConfig(env);
   if (g.mode !== "off") return g;
-  if (env.BASIC_AUTH?.trim().toLowerCase() === "off") return g;
   const proto = headers.get("x-forwarded-proto")?.toLowerCase() ?? "";
   const publicHint = env.COOKIE_SECURE === "true" || proto.split(",").some((p) => p.trim() === "https");
   return publicHint ? { mode: "misconfigured" } : g;
