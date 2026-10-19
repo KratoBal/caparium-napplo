@@ -440,7 +440,21 @@ test("conveniences: a feeding plan, the list from it, the feed type icons", asyn
 
 test("the helper: a quick question about the page, switched off and on", async ({ page }) => {
   await login(page, "teszt.akvarista1");
-  // AST-03: the dosing test above left "Teszt só" below zero: the overview's helper opens by itself, once
+  // its own dose leaves "Teszt só" below zero, whatever ran before (review of #21)
+  await page.getByRole("link", { name: "Vegyszeradagolás" }).click();
+  const form = page.getByTestId("dosing-form");
+  await form.getByLabel("Medence", { exact: true }).selectOption({ label: "Sózó" });
+  await form.getByLabel("Szer", { exact: true }).selectOption({ label: "Teszt só" });
+  await form.getByLabel("Mennyiség", { exact: true }).fill("100");
+  await form.getByLabel("Egység", { exact: true }).selectOption({ label: "g" });
+  await form.getByRole("button", { name: "+ Adagolás mentése" }).click();
+  await expect(form.getByRole("status")).toHaveText("Adagolás mentve.");
+  // a fresh session on the overview: the pages before may already have shown the alert
+  await page.getByRole("link", { name: "Áttekintés" }).click();
+  await expect(page.getByRole("heading", { name: "Mai áttekintés" })).toBeVisible();
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  // AST-03: the overview's helper opens by itself, once
   const first = page.getByTestId("helper");
   await expect(first).toHaveAttribute("data-ready", "1");
   await expect(first.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "true");
@@ -464,10 +478,7 @@ test("the helper: a quick question about the page, switched off and on", async (
   await page.reload();
   await expect(page.getByTestId("helper-on")).toBeVisible();
   await page.getByTestId("helper-on").click();
-  await expect(page.getByTestId("helper-button")).toBeVisible();
-  await page.getByRole("link", { name: "Áttekintés" }).click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("heading", { name: "Mai áttekintés" })).toBeVisible();
-  await expect(page.getByTestId("helper")).toHaveAttribute("data-ready", "1");
+  // switched back on, the alert not seen in this session opens right here, not only on the next page (review of #21)
   await expect(page.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByTestId("helper-answer")).toContainText("Teszt só");
 });
