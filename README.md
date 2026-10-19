@@ -105,6 +105,8 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   light blue; in the eating Excel a day before arrival is light grey, after death or release dark.
 - PDF (TAK-05) is the browser's print of the log page ("Mentés PDF-ként"), not a server-made file;
   the screen log covers at most 92 days, the Excel a year.
+- Calculator (NY-15 / D-16 defaults, decided at the joint check V-18): FR a week in steps of 0.5, a
+  "rough" deviation beyond ±20 %; nothing given that day (fasting, not on the list) is no deviation.
 - Feed stock (NY-07 default): none; a withdrawal is usage only, no intake and no stock level. A use
   day is at most 7 days after the withdrawal day.
 - At most 5 "Egyéb" feeds per animal and day (the template's Egyéb 1–5, setting `egyéb_takarmány_max`).
@@ -150,6 +152,11 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   closes a forgotten day (KIV-03); taken (by use day) against given (the feeding log) per feed and
   unit, the other feeds unpaired (TAK-06, R-11); the Excel after the customer's template, with the use
   day as an extra column (KIV-05).
+- Stage 3, calculator: a body weight log per animal (JAV-06); the calculator after the description's
+  field table, FR = F × N / (BW/100), BW the last weight, FR a week and N from lists, FR a day, F kg,
+  F g and Fw computed live and stored with each run (KALK-01); "Mentés referenciaként" opens a new
+  reference version, an old day keeps its own (KALK-02); the feeding page shows the reference in the
+  row and marks a rough deviation of the day's grams (EGY-08).
 - Trial import file for the customer (VIZ-24): `npx tsx scripts/zims-trial-file.ts --pool <name>
   --date <day> --measured-by "<name in their ZIMS>"`; the real name is an argument, never stored.
 

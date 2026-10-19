@@ -99,8 +99,13 @@ export async function saveWithdrawalItem(actor: Actor, raw: WithdrawalInput, ser
         // KIV-04: at most 5 different other names a day
         const names = await tx.withdrawalItem.findMany({
           where: { withdrawalDayId: f.wd.id, status: "VALID", otherName: { not: null }, ...(prior ? { id: { not: prior.id } } : {}) },
-          select: { otherName: true },
+          select: { otherName: true, feedId: true },
         });
+        // one name whatever its case (review note on #13). Checked here, not only by the index: the
+        // database's lower() folds ASCII only, "É" and "é" would pass it
+        if (names.some((x) => x.feedId === feed.id && x.otherName!.toLowerCase() === otherName.toLowerCase())) {
+          throw new AppError(409, "CELL_TAKEN", "Ebből a takarmányból ma már van kivételi tétel: azt módosítsd.");
+        }
         const distinct = new Set(names.map((n) => n.otherName!.toLowerCase()));
         if (!distinct.has(otherName.toLowerCase()) && distinct.size >= OTHER_MAX) {
           throw new AppError(422, "TOO_MANY_OTHER", `Egy napon legfeljebb ${OTHER_MAX} különböző egyéb takarmány vehető ki.`);
@@ -179,6 +184,8 @@ export async function closeWithdrawalDay(actor: Actor, raw: z.input<typeof close
     const f = await facts(tx, actor, input.day, serverNow, null);
     if (f.level === "NONE" || f.level === "READ") throw new AppError(403, "READ_ONLY", "A kivételi napot nem zárhatod le.");
     if (f.level !== "ADMIN" && input.day !== f.today) throw new AppError(403, "NOT_TODAY", "Korábbi napot csak adminisztrátor zárhat le.");
+    // a future day closed in advance would lock its aquarists out (review note on #13), admin or not
+    if (input.day > f.today) throw new AppError(422, "FUTURE_DAY", "Jövőbeli napot nem lehet lezárni.");
     const res = await tx.journalDay.updateMany({
       where: { id: f.journal.id, state: "OPEN" },
       data: { state: "CLOSED", closeMode: "MANUAL", closedById: actor.id, closedAt: serverNow, closeRanAt: serverNow },
@@ -265,7 +272,8 @@ export async function takenVersusGiven(from: string, to: string): Promise<Compar
     for (const q of it.quantities) {
       const unit = baseOf.get(q.unit.dimension) ?? q.unit.symbol;
       const paired = it.otherName === null;
-      const key = paired ? `${it.feedId}|${unit}` : `${side}|${it.feedId}|${it.otherName}|${unit}`;
+      // an other feed's name without case: "Tintahal" and "tintahal" are one (as the cell index)
+      const key = paired ? `${it.feedId}|${unit}` : `${side}|${it.feedId}|${it.otherName!.toLowerCase()}|${unit}`;
       const row = rows.get(key) ?? { key, feed: paired ? name : `${name}: ${it.otherName}`, unit, taken: 0, given: 0, paired };
       row[side] += Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
       rows.set(key, row);

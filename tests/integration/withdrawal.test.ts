@@ -55,6 +55,8 @@ describe("withdrawal items (KIV-01, KIV-02, T-08, T-10)", () => {
     for (let i = 1; i <= 5; i++) await take(d, { feedId: feed["Egyéb"], otherName: `egyéb-${i}`, quantities: [{ value: "10", unitId: unit.g }] });
     await expectCode(take(d, { feedId: feed["Egyéb"], otherName: "egyéb-6", quantities: [{ value: "10", unitId: unit.g }] }), "TOO_MANY_OTHER");
     await expectCode(take(d, { feedId: feed["Egyéb"], otherName: "egyéb-1", quantities: [{ value: "5", unitId: unit.g }] }), "CELL_TAKEN");
+    // one name whatever its case (review note on #13)
+    await expectCode(take(d, { feedId: feed["Egyéb"], otherName: "EGYÉB-1", quantities: [{ value: "5", unitId: unit.g }] }), "CELL_TAKEN");
   });
 });
 
@@ -63,6 +65,7 @@ describe("the day's lock (KIV-03)", () => {
     const d = "2026-07-09";
     await take(d, { feedId: feed["Teszt hal"], quantities: [{ value: "100", unitId: unit.g }] });
     await expectCode(closeWithdrawalDay(f.aq1, { requestId: rid(), day: "2026-07-08" }, at(d, "10:00")), "NOT_TODAY");
+    await expectCode(closeWithdrawalDay(f.admin, { requestId: rid(), day: "2026-07-12" }, at(d, "10:00")), "FUTURE_DAY");
     await closeWithdrawalDay(f.aq1, { requestId: rid(), day: d }, at(d, "10:00"));
     await expectCode(take(d, { feedId: feed["Teszt kagyló"], quantities: [{ value: "1", unitId: unit.g }] }, f.aq1, "10:05"), "DAY_CLOSED");
     await reopenDay(f.admin, { requestId: rid(), kind: "WITHDRAWAL", day: d, reason: "pótlás" });
