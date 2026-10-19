@@ -107,6 +107,9 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   the screen log covers at most 92 days, the Excel a year.
 - Calculator (NY-15 / D-16 defaults, decided at the joint check V-18): FR a week in steps of 0.5, a
   "rough" deviation beyond ±20 %; nothing given that day (fasting, not on the list) is no deviation.
+- The seed (only where `SEED_TEST_PASSWORD` is set) adds the synthetic test feeds, chemicals,
+  species and animals only with `CAPARIUM_SEED_SZINTETIKUS=1` (the stage) or on the CI runner;
+  the basic data ("Egyéb" feed, units, parameters, pools) always. A live system sets neither.
 - Chemical stock (NY-08 default): no starting stock; a level may go negative and is flagged, not
   refused (R-16); intake is admin work. The test chemicals ("Teszt só" in kg, "Teszt kalcium" in l) are
   synthetic. The model's shared stock item (area 12) is not built while feed has no stock.

@@ -32,8 +32,11 @@ async function toStockUnit(tx: Tx, chemicalId: string, quantity: string, unitId:
   }
   const v = parseDecimalInput(quantity);
   if (v === null || compareDecimal(v, "0") <= 0) throw new AppError(422, "INVALID_VALUE", "A mennyiség pozitív szám legyen.");
-  const inStock = (Number(v) * Number(unit.factorToBase ?? 1)) / Number(chem.stockUnit.factorToBase ?? 1);
-  return { chem, unit, value: v, inStock: String(Math.round(inStock * 10000) / 10000) };
+  const inStock = Math.round(((Number(v) * Number(unit.factorToBase ?? 1)) / Number(chem.stockUnit.factorToBase ?? 1)) * 10000) / 10000;
+  // review note on #15: an amount too small for the stock unit would round to 0 and fail the sign check
+  // with a 500; fixed digits also keep a tiny or huge number out of the "1e-7" form
+  if (inStock === 0) throw new AppError(422, "ZERO_IN_STOCK", `Ez a mennyiség a készlet egységében (${chem.stockUnit.symbol}) nullára kerekedik; adj meg nagyobbat.`);
+  return { chem, unit, value: v, inStock: inStock.toFixed(4).replace(/\.?0+$/, "") };
 }
 
 export const dosingSchema = z.object({

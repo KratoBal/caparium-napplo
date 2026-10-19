@@ -6,6 +6,7 @@
 import { PrismaClient, type Dimension } from "@prisma/client";
 import { rebuildAnimal } from "../src/lib/animals";
 import { hashPassword } from "../src/lib/auth";
+import { syntheticWanted } from "../src/lib/seed-switch";
 
 const prisma = new PrismaClient();
 const SINCE = new Date("2025-12-31T23:00:00.000Z"); // 2026-01-01 00:00 Europe/Budapest
@@ -109,6 +110,12 @@ const FEED_TYPES = [
   ["KORALL", "Koralltáp"],
   ["EGYEB", "Egyéb"],
 ] as const;
+// The synthetic test master data: see src/lib/seed-switch.ts. "Egyéb" is not synthetic: the KIV-04
+// and EGY-12 paths need it everywhere.
+const BASE_FEEDS = [
+  // EGY-12, KIV-04: the "Egyéb" feed takes its real name in each item
+  { type: "EGYEB", name: "Egyéb", dims: ["MASS"], unit: "g" },
+] as const;
 const FEEDS = [
   { type: "KAGYLO", name: "Teszt kagyló", dims: ["MASS"], unit: "g" },
   { type: "RAK", name: "Litopenaeus vannamei", dims: ["MASS", "COUNT"], unit: "g" },
@@ -116,8 +123,6 @@ const FEEDS = [
   { type: "LABASFEJU", name: "Teszt tintahal", dims: ["MASS"], unit: "g" },
   { type: "APRO", name: "Teszt plankton", dims: ["VOLUME"], unit: "ml" },
   { type: "KORALL", name: "Teszt koralltáp", dims: ["MASS"], unit: "g" },
-  // EGY-12: the "Egyéb" feed takes its real name in each item
-  { type: "EGYEB", name: "Egyéb", dims: ["MASS"], unit: "g" },
 ] as const;
 const CHEMICALS = [
   { name: "Teszt só", unit: "kg" },
@@ -138,6 +143,7 @@ const USERS = [
 ];
 
 async function main() {
+  const synthetic = syntheticWanted();
   const password = process.env.SEED_TEST_PASSWORD;
   if (!password || password.length < 10) {
     throw new Error("SEED_TEST_PASSWORD must be set (at least 10 characters); the seed never uses a built-in password.");
@@ -251,7 +257,7 @@ async function main() {
   // reaches a database seeded before it
   {
     const have = new Set((await prisma.feedName.findMany()).map((n) => n.name));
-    for (const [i, f] of FEEDS.entries()) {
+    for (const [i, f] of [...BASE_FEEDS, ...(synthetic ? FEEDS : [])].entries()) {
       if (have.has(f.name)) continue;
       const type = await prisma.feedType.findUniqueOrThrow({ where: { code: f.type } });
       await prisma.feed.create({
@@ -266,14 +272,14 @@ async function main() {
     }
   }
   // stage 3, dosing: synthetic chemicals, each with its stock unit (JAV-09); the real list comes later
-  {
+  if (synthetic) {
     const have = new Set((await prisma.chemicalName.findMany()).map((n) => n.name));
     for (const c of CHEMICALS) {
       if (have.has(c.name)) continue;
       await prisma.chemical.create({ data: { stockUnitId: unitId.get(c.unit)!, names: { create: { name: c.name, validFrom: SINCE } } } });
     }
   }
-  if ((await prisma.species.count()) === 0) {
+  if (synthetic && (await prisma.species.count()) === 0) {
     const species: { id: string }[] = [];
     for (const name of SPECIES) species.push(await prisma.species.create({ data: { scientificName: name } }));
     const group = await prisma.animalGroup.create({ data: { names: { create: { name: "Teszt csoport", validFrom: SINCE } } } });
@@ -300,7 +306,7 @@ async function main() {
     }
   }
 
-  console.log(`seed ok: ${UNITS.length} units, ${PARAMETERS.length} parameters, ${POOLS.length} pools, ${GROUPS.length} groups, ${USERS.length} users`);
+  console.log(`seed ok: ${UNITS.length} units, ${PARAMETERS.length} parameters, ${POOLS.length} pools, ${GROUPS.length} groups, ${USERS.length} users, synthetic master data ${synthetic ? "on" : "off"}`);
 }
 
 main()

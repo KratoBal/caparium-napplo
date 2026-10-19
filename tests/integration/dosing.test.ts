@@ -49,6 +49,10 @@ describe("dosing and its movement (ADA-01, ADA-02, R-16, JAV-09)", () => {
     await expectCode(dose("2026-09-07", "11:00", "Teszt só", "1", "ml"), "UNIT_DIMENSION");
   });
 
+  it("an amount that rounds to zero in the stock unit is a 422, not a failed check (review note on #15)", async () => {
+    await expectCode(dose("2026-09-07", "11:05", "Teszt só", "0,0001", "g"), "ZERO_IN_STOCK");
+  });
+
   it("an edit moves the movement with it; an invalidation takes it back (the log and the stock cannot drift)", async () => {
     const d = "2026-09-08";
     const start = (await level("Teszt kalcium", at(d, "08:00"))).level;
