@@ -110,6 +110,11 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
                         <div key={i.id}>
                           {i.feed} {i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")} ·{" "}
                           <span className="hint">{i.participants.map((p) => names.get(p) ?? "?").join(", ")}</span>{" "}
+                          {i.noSelectedMember && (
+                            <span className="badge badge-pending" data-testid="group-item-no-member">
+                              nincs kiválasztott tag: az érvénytelenítés külön döntés
+                            </span>
+                          )}{" "}
                           {editable && <InvalidateButton url={`/api/feeding/items/${i.id}/invalidate`} version={i.version} />}
                         </div>
                       ))}

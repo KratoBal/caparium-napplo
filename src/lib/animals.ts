@@ -130,8 +130,12 @@ function enforce(decision: ReturnType<typeof canCreate>, reasonText: string | un
  * and under READ COMMITTED two transactions would not see each other's insert (a death and a later
  * transfer at the same moment would both pass). The row lock makes the second one wait and re-read.
  */
+// FOR NO KEY UPDATE, not FOR UPDATE: it still serializes the event changes of one animal, but it does
+// not block the foreign-key checks (FOR KEY SHARE) of a feeding-day writer inserting a row for the same
+// animal. With FOR UPDATE a lifecycle change (animal, then day) and a day writer (day, then the
+// animal's key) would deadlock.
 async function lockAnimal(tx: Tx, animalId: string): Promise<boolean> {
-  const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "animal" WHERE "id" = ${animalId}::uuid FOR UPDATE`;
+  const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "animal" WHERE "id" = ${animalId}::uuid FOR NO KEY UPDATE`;
   return rows.length === 1;
 }
 

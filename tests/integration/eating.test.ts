@@ -170,3 +170,70 @@ describe("a closed day changes later (T-01/6, R-1, R-2)", () => {
     expect(await prisma.lifecycleEvent.count({ where: { animalId: fed, type: "DEATH" } })).toBe(0);
   });
 });
+
+describe("the writers of one feeding day wait for each other (review of #10)", () => {
+  /** Holds a row lock in its own transaction until release() is called. */
+  async function hold(table: "feeding_day" | "animal", id: string) {
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const isLocked = new Promise<void>((r) => (locked = r));
+    const done = prisma.$transaction(
+      async (tx) => {
+        if (table === "feeding_day") await tx.$queryRaw`SELECT "id" FROM "feeding_day" WHERE "id" = ${id}::uuid FOR UPDATE`;
+        else await tx.$queryRaw`SELECT "id" FROM "animal" WHERE "id" = ${id}::uuid FOR UPDATE`;
+        locked();
+        await held;
+      },
+      { timeout: 20_000 },
+    );
+    await isLocked;
+    return { release: async () => (release(), await done) };
+  }
+  const pending = (p: Promise<unknown>) => Promise.race([p.then(() => "done", () => "done"), new Promise((r) => setTimeout(() => r("waiting"), 400))]);
+
+  it("a removal and an eating status at the same moment end consistent", async () => {
+    const d = "2026-03-16";
+    await select(d, ["Teszt Egy"]);
+    const fd = await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: dayToDate(d) } });
+    const h = await hold("feeding_day", fd.id);
+    const removal = select(d, ["Teszt Egy"], false, f.aq2, at(d, "10:00"));
+    const eating = eat(d, "Teszt Egy", "EATEN");
+    expect([await pending(removal), await pending(eating)], "both must wait for the day").toEqual(["waiting", "waiting"]);
+    await h.release();
+    await Promise.allSettled([removal, eating]);
+    const selected = (await eatingDayView(d)).rows.find((r) => r.animalId === a["Teszt Egy"])!.selected;
+    const manual = (await statuses(d, "Teszt Egy")).filter((s) => s.source === "MANUAL").length;
+    // either the removal won (no selection, no status) or the status did (both stay)
+    expect([selected, manual]).toSatisfy(([s, m]: [boolean, number]) => (s && m === 1) || (!s && m === 0));
+  });
+
+  it("a lifecycle change and a selection on the same closed day do not deadlock", async () => {
+    const d = "2026-03-17";
+    const animal = (
+      await createLifecycleEvent(
+        f.admin,
+        { requestId: rid(), type: "ARRIVAL", newAnimal: { speciesId, name: "Március Zár", sex: "MALE" }, toPoolId: f.pool("NAGY"), occurredAtLocal: "2026-03-14T09:00", reason: "teszt" },
+        at("2026-03-14", "10:00"),
+      )
+    ).animalId;
+    await select(d, ["Teszt Egy"]);
+    await finalize(d);
+    await close(d);
+    const fd = await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: dayToDate(d) } });
+    const next = at("2026-03-18", "09:00");
+    const h = await hold("feeding_day", fd.id);
+    // the selection queues for the day first; then the event takes the animal and queues for the day
+    const selection = select(d, [animal], true, f.admin, next, { reason: "utólag" });
+    await new Promise((r) => setTimeout(r, 300));
+    const event = createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: animal, toPoolId: f.pool("KIS"), occurredAtLocal: `${d}T12:00`, reason: "utólag" }, next);
+    await new Promise((r) => setTimeout(r, 300));
+    await h.release();
+    const res = await Promise.allSettled([selection, event]);
+    expect(res.map((r) => (r.status === "rejected" ? String((r.reason as Error).message).slice(0, 120) : "ok"))).toEqual(["ok", "ok"]);
+  });
+
+  it("the medicine note cannot start like a formula", async () => {
+    await expect(eat("2026-03-16", "Teszt Kettő", "FASTING", f.aq1, { medicine: true, medicineNote: "=1+1" })).rejects.toThrow();
+  });
+});

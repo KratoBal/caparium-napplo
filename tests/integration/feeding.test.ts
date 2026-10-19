@@ -3,7 +3,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { feedingDayView, finalizeList, invalidateFeedingItem, saveFeedingItem, setSelection } from "@/lib/feeding";
+import { feedingDayView, finalizeList, invalidateFeedingItem, itemSchema, saveFeedingItem, setSelection } from "@/lib/feeding";
 import { fixtures, rid } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -29,6 +29,7 @@ async function expectCode(p: Promise<unknown>, code: string) {
   );
   expect(e, `expected ${code}`).toBeInstanceOf(AppError);
   expect((e as AppError).code).toBe(code);
+  return e as AppError;
 }
 
 const select = (d: string, names: string[], selected = true, actor = f?.aq1, extra = {}) =>
@@ -107,5 +108,26 @@ describe("feeding items (EGY-02, EGY-06, TAK-07, T-08)", () => {
     await expectCode(invalidateFeedingItem(f.aq2, r.itemId, { requestId: rid(), expectedVersion: 1, reason: "nem az enyém" }, at(d, "10:00")), "NOT_OWN");
     await invalidateFeedingItem(f.aq1, r.itemId, { requestId: rid(), expectedVersion: 1, reason: "elírás" }, at(d, "10:00"));
     expect((await feedingDayView(d)).items).toHaveLength(0);
+  });
+
+  it("removing a member of a group item: counted in the confirmation, the item and its snapshot stay; a group left without a selected member is shown (R-8)", async () => {
+    const d = "2026-01-15";
+    await select(d, ["Teszt Egy", "Teszt Kettő"]);
+    const r = (await saveFeedingItem(f.aq1, { requestId: rid(), day: d, groupId, feedId: feed["Teszt hal"], quantities: [{ value: "200", unitId: unit.g }] }, at(d, "09:00"))) as { itemId: string };
+    const e = await expectCode(select(d, ["Teszt Egy"], false), "HAS_RECORDS");
+    expect(e.details).toMatchObject({ items: 0, statuses: 0, groupItems: 1 });
+    const first = (await select(d, ["Teszt Egy"], false, f.aq1, { confirmCascade: true })) as { groupsWithoutSelected: string[] };
+    expect(first.groupsWithoutSelected).toEqual([]);
+    expect(await prisma.feedingParticipant.count({ where: { itemId: r.itemId } })).toBe(2);
+    const second = (await select(d, ["Teszt Kettő"], false, f.aq1, { confirmCascade: true })) as { groupsWithoutSelected: string[] };
+    expect(second.groupsWithoutSelected).toEqual([r.itemId]);
+    expect((await prisma.feedingItem.findUniqueOrThrow({ where: { id: r.itemId } })).status).toBe("VALID");
+    expect((await feedingDayView(d)).items.find((i) => i.id === r.itemId)?.noSelectedMember).toBe(true);
+  });
+
+  it("the other feed's name cannot start like a formula (it goes to the Excel and may go to a CSV)", () => {
+    const base = { requestId: rid(), day: "2026-01-15", animalId: a["Teszt Egy"], feedId: feed["Egyéb"], quantities: [{ value: "1", unitId: unit.g }] };
+    expect(itemSchema.safeParse({ ...base, otherName: "=HYPERLINK(1)" }).success).toBe(false);
+    expect(itemSchema.safeParse({ ...base, otherName: "tintahal-fej" }).success).toBe(true);
   });
 });

@@ -59,9 +59,26 @@ export async function aliveOnDay(tx: Tx, d: string, animalIds?: string[]) {
 
 type Facts = { level: Level; d: string; today: string; closed: boolean };
 
+/**
+ * Every writer of a feeding day waits on the day's row (review of #10): selection, items, eating
+ * statuses and the fasting recompute read each other's rows and then write, and under READ COMMITTED
+ * two of them would not see each other (a removal and an "ate" at the same moment would leave a
+ * status on an animal that is not on the list). One common list per day (R-7), so the wait is short.
+ * Lock order: a lifecycle change locks the animal first, then (through the recompute) the day; a day
+ * writer locks only the day. Between a selection and a death recorded at the same moment for the
+ * same day, refuseOrphanRows (animals.ts) is the net, for the rows its own transaction sees.
+ */
+export async function lockFeedingDay(tx: Tx, feedingDayId: string) {
+  await tx.$queryRaw`SELECT "id" FROM "feeding_day" WHERE "id" = ${feedingDayId}::uuid FOR UPDATE`;
+  return tx.feedingDay.findUniqueOrThrow({ where: { id: feedingDayId } });
+}
+
 export async function facts(tx: Tx, actor: Actor, d: string, serverNow: Date, clientTs: Date | null) {
   const level = await moduleLevel(tx, actor.id, actor.role, "FEEDING");
-  const { fd, journal } = await ensureFeedingDay(tx, d);
+  const ensured = await ensureFeedingDay(tx, d);
+  const fd = await lockFeedingDay(tx, ensured.fd.id);
+  // the day's lock state read again under the lock (a close may have happened meanwhile)
+  const journal = await tx.journalDay.findUniqueOrThrow({ where: { id: ensured.journal.id } });
   const eff = effectiveNow(serverNow, clientTs, 30, 48);
   const f: Facts = { level, d, today: businessDayOf(eff.now), closed: closedAt(journal, eff.now) };
   return { f, fd, journal };
@@ -141,11 +158,20 @@ export async function setSelection(actor: Actor, input: z.infer<typeof selection
       for (const sel of current) {
         const items = await tx.feedingItem.findMany({ where: { feedingDayId: fd.id, animalId: sel.animalId, status: "VALID" } });
         const manual = await tx.eatingStatus.findMany({ where: { feedingDayId: fd.id, animalId: sel.animalId, status: "VALID", source: "MANUAL" } });
-        if ((items.length || manual.length) && !input.confirmCascade) {
-          throw new AppError(409, "HAS_RECORDS", "Ennek az állatnak ma már van etetési tétele vagy evési állapota. Megerősítés után ezek is érvénytelenítődnek.", {
-            items: items.length,
-            statuses: manual.length,
-          });
+        // R-8: a group item the animal took part in stays, with its snapshot (adatmodell 8.); the removal
+        // is still not silent: it is counted here, and a group left without a selected member is returned
+        const groupItems = await tx.feedingItem.count({
+          where: { feedingDayId: fd.id, status: "VALID", groupId: { not: null }, participants: { some: { animalId: sel.animalId } } },
+        });
+        if ((items.length || manual.length || groupItems) && !input.confirmCascade) {
+          throw new AppError(
+            409,
+            "HAS_RECORDS",
+            groupItems && !items.length && !manual.length
+              ? "Ez az állat ma egy csoportos etetésben részt vett. A csoportos tétel megmarad (a résztvevők listája az etetéskori), csak ő kerül le a mai listáról. Megerősíted?"
+              : "Ennek az állatnak ma már van etetési tétele vagy evési állapota. Megerősítés után ezek is érvénytelenítődnek; egy csoportos tétel megmarad.",
+            { items: items.length, statuses: manual.length, groupItems },
+          );
         }
         const why = "kivéve a napi listából";
         for (const it of items) {
@@ -162,8 +188,18 @@ export async function setSelection(actor: Actor, input: z.infer<typeof selection
       }
     }
     if (f.closed) await afterClosedDayChange(tx, fd.id, input.day, actor, input.requestId);
-    return { replayed: false, changed };
+    return { replayed: false, changed, groupsWithoutSelected: input.selected ? [] : await groupItemsWithoutSelected(tx, fd.id) };
   });
+}
+
+/** Group items of the day none of whose participants is selected any more (R-8: shown, not invalidated). */
+export async function groupItemsWithoutSelected(tx: Tx, feedingDayId: string): Promise<string[]> {
+  const selected = await selectedOn(tx, feedingDayId);
+  const items = await tx.feedingItem.findMany({
+    where: { feedingDayId, status: "VALID", groupId: { not: null } },
+    include: { participants: true },
+  });
+  return items.filter((i) => !i.participants.some((p) => selected.has(p.animalId))).map((i) => i.id);
 }
 
 /** A change on a closed, finalized day: the automatic fasting days follow it (T-01/6, R-1). */
@@ -204,6 +240,7 @@ export async function fastingEligible(tx: Tx, d: string): Promise<Set<string>> {
  * System user for the automatic close, R-12).
  */
 export async function recomputeFasting(tx: Tx, feedingDayId: string, actorId: string, requestId: string | null, now = new Date()) {
+  await lockFeedingDay(tx, feedingDayId);
   const fd = await tx.feedingDay.findUniqueOrThrow({ where: { id: feedingDayId }, include: { journalDay: true } });
   const d = dateToDay(fd.businessDay);
   const active = fd.journalDay.state === "CLOSED" && fd.listState === "FINALIZED";
@@ -322,7 +359,8 @@ export const itemSchema = z.object({
   animalId: z.uuid().optional(),
   groupId: z.uuid().optional(),
   feedId: z.uuid(),
-  otherName: z.string().trim().min(1).max(60).optional(),
+  // it goes to the Excel and may go to a CSV: no formula start (as the names, review of #3 and #10)
+  otherName: z.string().trim().min(1).max(60).refine((v) => !/^[=+\-@\t\r]/.test(v), "A név nem kezdődhet =, +, -, @ jellel.").optional(),
   quantities: z.array(z.object({ value: z.string().min(1).max(32), unitId: z.uuid() })).min(1).max(3),
   reason: reason.optional(),
 });
@@ -531,6 +569,7 @@ export async function feedingDayView(d: string) {
       otherName: it.otherName,
       quantities: it.quantities.map((q) => ({ value: canonicalDecimal(q.quantity), unit: q.unit.symbol })),
       participants: it.participants.map((p) => p.animalId),
+      noSelectedMember: it.groupId !== null && !it.participants.some((p) => selected.has(p.animalId)),
       createdById: it.createdById,
     })),
     totals: Object.fromEntries([...totals].map(([k, v]) => [k, Object.fromEntries(v)])),

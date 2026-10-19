@@ -102,6 +102,14 @@ describe("the feeding Excel (EGY-10, D-30)", () => {
   });
 });
 
+describe("the export period", () => {
+  it("at most a year, refused before any work (the eating sheet has a column per day)", async () => {
+    for (const build of [buildFeedingWorkbook, buildEatingWorkbook]) {
+      await expect(build({ from: "2000-01-01", to: "2099-12-31" })).rejects.toMatchObject({ code: "PERIOD_TOO_LONG" });
+    }
+  });
+});
+
 describe("the eating Excel (EVE-07)", () => {
   it("species, name, group; days across; colour per state, V and Gy; the medicine note under its day; the dead struck through", async () => {
     const arrive = async (name: string, when: string) =>

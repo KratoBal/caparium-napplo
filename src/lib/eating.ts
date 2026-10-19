@@ -27,7 +27,7 @@ export const eatingSchema = z.object({
   state: z.enum(["EATEN", "PARTIAL", "NOT_EATEN", "FASTING"]),
   vitamin: z.boolean().default(false),
   medicine: z.boolean().default(false),
-  medicineNote: z.string().trim().max(300).optional(),
+  medicineNote: z.string().trim().max(300).refine((v) => !/^[=+\-@\t\r]/.test(v), "A megjegyzés nem kezdődhet =, +, -, @ jellel.").optional(),
   reason: reason.optional(),
 });
 export type EatingInput = z.input<typeof eatingSchema>;

@@ -40,10 +40,15 @@ function colLetter(n: number): string {
   return s;
 }
 
+const MAX_DAYS = 366; // the eating sheet has a column per day, and Excel stops at 16384
+
 function daysOf(from: string, to: string): string[] {
+  // checked before any work (review of #10): a century would otherwise be built first
+  if ((dayToDate(to).getTime() - dayToDate(from).getTime()) / 86_400_000 + 1 > MAX_DAYS) {
+    throw new AppError(422, "PERIOD_TOO_LONG", "Legfeljebb egy év kérhető le egyszerre.");
+  }
   const out: string[] = [];
   for (let d = from; d <= to; d = addDays(d, 1)) out.push(d);
-  if (out.length > 366) throw new AppError(422, "PERIOD_TOO_LONG", "Legfeljebb egy év kérhető le egyszerre.");
   return out;
 }
 
