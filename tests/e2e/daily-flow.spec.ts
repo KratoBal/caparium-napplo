@@ -385,3 +385,19 @@ test("calculator: a body weight, a live result, saved as reference, shown on the
   await page.getByRole("link", { name: "Takarmánynapló" }).click();
   await expect(page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name })).toContainText("ref 250 g");
 });
+
+test("dosing: a dose in g, the log, the stock kept in kg, printable", async ({ page }) => {
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Vegyszeradagolás" }).click();
+  const form = page.getByTestId("dosing-form");
+  await form.getByLabel("Medence", { exact: true }).selectOption({ label: "Sózó" });
+  await form.getByLabel("Szer", { exact: true }).selectOption({ label: "Teszt só" });
+  await form.getByLabel("Mennyiség", { exact: true }).fill("500");
+  await form.getByLabel("Egység", { exact: true }).selectOption({ label: "g" });
+  await form.getByRole("button", { name: "+ Adagolás mentése" }).click();
+  await expect(form.getByRole("status")).toHaveText("Adagolás mentve.");
+  await expect(page.getByTestId("dosing-log")).toContainText("Teszt só");
+  await expect(page.getByTestId("dosing-log")).toContainText("500 g");
+  await expect(page.getByTestId("stock").getByRole("row").filter({ hasText: "Teszt só" })).toContainText("kg");
+  await expect(page.getByTestId("print")).toBeVisible();
+});

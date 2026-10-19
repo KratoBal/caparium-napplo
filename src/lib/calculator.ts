@@ -44,6 +44,8 @@ export async function recordBodyWeight(actor: Actor, raw: z.input<typeof bodyWei
   const eff = effectiveNow(serverNow, clientTs, 30, 48);
   const today = businessDayOf(eff.now);
   const day = input.measuredOn ?? today;
+  // a weight measured in the future would become the calculator's default (review note on #14)
+  if (day > today) throw new AppError(422, "FUTURE_DAY", "Jövőbeli napra nem lehet testtömeget rögzíteni.");
   const level = await moduleLevel(prisma, actor.id, actor.role, "FEEDING");
   const d = canCreate(level, { day, today, closed: false });
   if (d.kind === "DENY") throw new AppError(403, d.code, d.message);
@@ -151,8 +153,11 @@ export async function runCalculator(actor: Actor, raw: z.input<typeof calcSchema
 /** KALK-02: "every save overwrites" = a new version from now; the old one stays for the old days. */
 async function saveReference(tx: Tx, actor: Actor, who: { animalId?: string; groupId?: string }, quantityG: string, runId: string | null, requestId: string, now: Date) {
   const where = who.animalId ? { animalId: who.animalId } : { groupId: who.groupId };
-  // the recipient's open version is replaced under its lock, so two saves cannot both stay open
-  await tx.$queryRaw`SELECT "id" FROM "feeding_reference" WHERE ("animalId" = ${who.animalId ?? null}::uuid OR "groupId" = ${who.groupId ?? null}::uuid) AND "validTo" IS NULL FOR UPDATE`;
+  // the recipient's row is locked first (review note on #14): a lock on the open version alone does
+  // not hold when there is none yet, and two first saves would both insert (FOR NO KEY UPDATE, as for
+  // the lifecycle, so the foreign-key checks of other writers are not blocked)
+  if (who.animalId) await tx.$queryRaw`SELECT "id" FROM "animal" WHERE "id" = ${who.animalId}::uuid FOR NO KEY UPDATE`;
+  else await tx.$queryRaw`SELECT "id" FROM "animal_group" WHERE "id" = ${who.groupId ?? null}::uuid FOR NO KEY UPDATE`;
   const open = await tx.feedingReference.findFirst({ where: { ...where, validTo: null } });
   if (open) await tx.feedingReference.update({ where: { id: open.id }, data: { validTo: now } });
   const ref = await tx.feedingReference.create({ data: { ...where, quantityG, calculatorRunId: runId, validFrom: now, createdById: actor.id } });

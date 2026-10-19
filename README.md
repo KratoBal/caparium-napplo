@@ -107,6 +107,9 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   the screen log covers at most 92 days, the Excel a year.
 - Calculator (NY-15 / D-16 defaults, decided at the joint check V-18): FR a week in steps of 0.5, a
   "rough" deviation beyond ±20 %; nothing given that day (fasting, not on the list) is no deviation.
+- Chemical stock (NY-08 default): no starting stock; a level may go negative and is flagged, not
+  refused (R-16); intake is admin work. The test chemicals ("Teszt só" in kg, "Teszt kalcium" in l) are
+  synthetic. The model's shared stock item (area 12) is not built while feed has no stock.
 - Feed stock (NY-07 default): none; a withdrawal is usage only, no intake and no stock level. A use
   day is at most 7 days after the withdrawal day.
 - At most 5 "Egyéb" feeds per animal and day (the template's Egyéb 1–5, setting `egyéb_takarmány_max`).
@@ -157,6 +160,12 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   F g and Fw computed live and stored with each run (KALK-01); "Mentés referenciaként" opens a new
   reference version, an old day keeps its own (KALK-02); the feeding page shows the reference in the
   row and marks a rough deviation of the day's grams (EGY-08).
+- Stage 3, dosing: a dosing by pool, chemical, amount, unit and who (ADA-01, ADA-02), the form staying
+  for the day's next line (ADA-03); each dosing writes its usage movement in the chemical's stock unit
+  in the same transaction, and its edit or invalidation moves the movement too (R-16, JAV-09: a
+  chemical is dosed only in its stock unit's dimension); the stock is the sum of the movements, with
+  the usage of the last 7 and 30 days (ADA-06); the log filtered by period, pool and chemical (ADA-05),
+  printable as PDF (ADA-04). Intake and stock correction, and a new chemical, are admin work.
 - Trial import file for the customer (VIZ-24): `npx tsx scripts/zims-trial-file.ts --pool <name>
   --date <day> --measured-by "<name in their ZIMS>"`; the real name is an argument, never stored.
 
