@@ -12,6 +12,8 @@ import { prisma } from "../db";
 import { AppError } from "../errors";
 import { dayBounds } from "../feeding";
 import { pickValid } from "../master";
+import { feedingLog } from "../feeding-log";
+import { breakdown, type ReportLine } from "../reports";
 import { addDays, dateToDay, dayToDate, resolveLocalDateTime } from "../time";
 
 // the template's theme fills, resolved (theme_note of the extracts): Excel tints in HSL lightness
@@ -27,6 +29,16 @@ const STATE_FILL: Record<string, string> = { EATEN: "FF00B050", PARTIAL: "FFFFFF
 const NOT_YET = "FFD9D9D9";
 const EMPTY = "FFF2F2F2"; // EGY-05: a feed the animal did not get that day
 const GONE = FILL.dark;
+
+/** EVE-08: the fill of a day's header cell, alternating by calendar week (Monday to Sunday). */
+export const WEEK_FILLS = ["FFDCEAF7", "FFEDEDED"] as const;
+export function weekShade(first: string, day: string): string {
+  const monday = (d: string) => {
+    const t = dayToDate(d);
+    return Math.floor((t.getTime() / 86_400_000 + 3) / 7); // weeks since 1970-01-05, a Monday
+  };
+  return WEEK_FILLS[(monday(day) - monday(first)) % 2];
+}
 
 const OTHER_SLOTS = 5; // the template's "Egyéb 1..5" (setting egyéb_takarmány_max)
 const DIM_ORDER: Dimension[] = ["COUNT", "MASS", "VOLUME"]; // the template: Litopenaeus db, then g
@@ -291,6 +303,8 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
   days.forEach((d, i) => {
     r1.getCell(FIRST + i).value = dayToDate(d);
     r1.getCell(FIRST + i).numFmt = "mm.dd";
+    // EVE-08: the weeks in two alternating colours (Monday starts a week)
+    fill(r1.getCell(FIRST + i), weekShade(f.from, d));
   });
   r2.getCell(1).value = "Állatfaj";
   r2.getCell(2).value = "Név";
@@ -378,4 +392,35 @@ export async function buildWithdrawalWorkbook(f: FeedingExcelFilter): Promise<{ 
   ws.columns.forEach((c, i) => (c.width = [10.8, 22, 16.7, 15, 17.3, 16][i] ?? 10.8));
   ws.views = [{ state: "frozen", ySplit: 1 }];
   return { buffer: Buffer.from(await wb.xlsx.writeBuffer()), rows };
+}
+
+/** EGY-13: the report as Excel: one sheet by day, one by recipient, per feed and base unit. */
+export async function buildReportWorkbook(f: { from: string; to: string; poolId: string | null; animalId: string | null }): Promise<{ buffer: Buffer; rows: number }> {
+  const log = await feedingLog(f);
+  const r = breakdown(log.entries, log.days, log.filtered);
+  const units = [...new Set(r.columns.filter((c) => !c.group).map((c) => c.unit))];
+  const groupUnits = [...new Set(r.columns.filter((c) => c.group).map((c) => c.unit))];
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Cápárium nAPPló";
+  wb.created = new Date();
+  const sheet = (name: string, first: string, lines: ReportLine[]) => {
+    const ws = wb.addWorksheet(name);
+    const header = ws.addRow([
+      first,
+      ...r.columns.map((c) => `${c.feed} (${c.unit})`),
+      ...units.map((u) => `${groupUnits.length ? "Egyedi összesen" : "Összesen"} (${u})`),
+      ...groupUnits.map((u) => `Csoportos tételekben, a csoport teljes mennyisége (${u})`),
+    ]);
+    header.font = { bold: true };
+    header.eachCell((c) => fill(c, FILL.head));
+    for (const l of [...lines, r.total]) {
+      ws.addRow([l.label, ...r.columns.map((c) => l.cells[c.key] ?? null), ...units.map((u) => l.totals[u] ?? null), ...groupUnits.map((u) => l.groupTotals[u] ?? null)]);
+    }
+    ws.getRow(ws.rowCount).font = { bold: true };
+    ws.columns.forEach((c, i) => (c.width = i === 0 ? 24 : 16));
+    ws.views = [{ state: "frozen", xSplit: 1, ySplit: 1 }];
+  };
+  sheet("Napokra bontva", "Nap", r.byDay);
+  sheet("Kinek", "Állat vagy csoport", r.byRecipient);
+  return { buffer: Buffer.from(await wb.xlsx.writeBuffer()), rows: r.byDay.length };
 }

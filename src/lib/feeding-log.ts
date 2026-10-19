@@ -13,6 +13,9 @@ export const LOG_MAX_DAYS = 92; // a screen, not an export: about a quarter
 
 export type LogFilter = { from: string; to: string; poolId: string | null; animalId: string | null };
 
+/** One quantity of one item, in the base unit of its dimension: what the reports add up (EGY-13). */
+export type LogEntry = { day: string; recipient: string; feed: string; unit: string; value: number; group: boolean };
+
 export type LogRow = {
   id: string;
   day: string;
@@ -57,6 +60,7 @@ export async function feedingLog(f: LogFilter) {
   };
 
   const rows: LogRow[] = [];
+  const entries: LogEntry[] = [];
   // R-8 invents no split of a group item: under a filter its whole amount is shown apart, so an
   // animal's (or a pool's) total never reads as if it ate the group's food alone (review of #11)
   const totals: Record<string, number> = {};
@@ -77,6 +81,17 @@ export async function feedingLog(f: LogFilter) {
       part[base] = (part[base] ?? 0) + v;
     }
     const feed = pickValid(it.feed.names, at)?.name ?? it.feed.names.at(-1)?.name ?? "?";
+    const recipient = it.animal ? pickValid(it.animal.names, at)?.name ?? "?" : `${pickValid(it.group!.names, at)?.name ?? "?"} (csoport)`;
+    for (const q of it.quantities) {
+      entries.push({
+        day,
+        recipient,
+        feed: it.otherName ? `${feed}: ${it.otherName}` : feed,
+        unit: baseOf.get(q.unit.dimension) ?? q.unit.symbol,
+        value: Number(q.quantity) * Number(q.unit.factorToBase ?? 1),
+        group: !it.animalId,
+      });
+    }
     rows.push({
       id: it.id,
       day,
@@ -111,5 +126,5 @@ export async function feedingLog(f: LogFilter) {
     })
     .sort((a, b) => a.name.localeCompare(b.name, "hu"));
 
-  return { days, rows, totals, own, group, filtered: f.animalId !== null || f.poolId !== null, pattern };
+  return { days, rows, entries, totals, own, group, filtered: f.animalId !== null || f.poolId !== null, pattern };
 }
