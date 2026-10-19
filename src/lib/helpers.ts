@@ -16,14 +16,20 @@ export type HelperData = {
   perAnimal?: { name: string; a: string }[];
   /** AST-03: something to say without being asked */
   alert?: string;
+  /** what the alert is about; it opens by itself once per key and session */
+  alertKey?: string;
 };
 
 const num = (v: string | number) => String(v).replace(".", ",");
 
-async function stockAlert(now: Date): Promise<string | undefined> {
+async function stockAlert(now: Date): Promise<Pick<HelperData, "alert" | "alertKey">> {
   const low = await runningOut(now);
-  if (!low.length) return undefined;
-  return `Fogyóban: ${low.map((c) => `${c.name} (${num(c.level)} ${c.unit})`).join(", ")}. Érdemes a raktárból hozni.`;
+  if (!low.length) return {};
+  return {
+    alert: `Fogyóban: ${low.map((c) => `${c.name} (${num(c.level)} ${c.unit})`).join(", ")}. Érdemes a raktárból hozni.`,
+    // which chemicals, not their levels: a dose that moves a level does not make it a new alert
+    alertKey: low.map((c) => c.name).sort().join("|"),
+  };
 }
 
 /** Antennarius, the water helper. */
@@ -51,7 +57,7 @@ export async function waterHelper(stock: boolean, now = new Date()): Promise<Hel
       { q: "Melyik érték lóg ki ma?", a: out.length ? out.join("; ") + "." : "Ma egyik mért érték sem lóg ki a referenciából." },
       { q: "Késésben vagyunk?", a: missed.due ? (missed.pools.length ? `Elmúlt a határidő, és még vár: ${missed.pools.join(", ")}.` : "Nem: minden megvan.") : "Még nem járt le a mai határidő." },
     ],
-    alert: stock ? await stockAlert(now) : undefined,
+    ...(stock ? await stockAlert(now) : {}),
   };
 }
 
@@ -79,6 +85,6 @@ export async function feedingHelper(stock: boolean, now = new Date()): Promise<H
       { q: "Kész a mai lista?", a: feed.listState === "FINALIZED" ? "Igen, a lista kész." : "Még nincs kész: akit a kész listán nem választanak ki, a nap végén koplalónapot kap." },
     ],
     perAnimal,
-    alert: stock ? await stockAlert(now) : undefined,
+    ...(stock ? await stockAlert(now) : {}),
   };
 }

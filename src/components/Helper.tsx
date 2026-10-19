@@ -19,21 +19,25 @@ export function Helper({ data }: { data: HelperData }) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     setReady(true);
+    let isOff = false;
     try {
-      setOff(localStorage.getItem(OFF_KEY) === "1");
+      isOff = localStorage.getItem(OFF_KEY) === "1";
     } catch {
       /* no storage: the helper stays on */
     }
-    if (!data.alert) return;
+    setOff(isOff);
+    // switched off, the alert is not marked as seen: switched back on, it still opens once
+    if (!data.alert || isOff) return;
+    const key = data.alertKey ?? data.alert;
     try {
-      if (sessionStorage.getItem(SEEN_KEY) === data.alert) return;
-      sessionStorage.setItem(SEEN_KEY, data.alert);
+      if (sessionStorage.getItem(SEEN_KEY) === key) return;
+      sessionStorage.setItem(SEEN_KEY, key);
     } catch {
       /* without storage it opens on every page with an alert */
     }
     setOpen(true);
     setAnswer(data.alert);
-  }, [data.alert]);
+  }, [data.alert, data.alertKey]);
   const setStored = (v: boolean) => {
     setOff(v);
     try {
