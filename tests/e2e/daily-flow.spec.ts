@@ -224,3 +224,38 @@ test("settings: an admin changes a reference range and creates a user who can lo
   await expect(page.getByTestId("current-user")).toContainText("Új Akvarista");
   await expect(page.getByRole("link", { name: "Beállítások" })).toHaveCount(0);
 });
+
+test("export: a real .xlsx download and a ZIMS CSV run whose file can be downloaded", async ({ page }, info) => {
+  const tablet = info.project.name === "tablet";
+  await login(page, "teszt.admin");
+  // a measurement today, so the export has something to carry
+  await page.goto("/vizmeres?csoport=NAPI_KIS");
+  const pool = tablet ? "Korallos" : "Ragadozós";
+  await page.getByRole("button", { name: pool, exact: true }).click();
+  const orp = page.getByTestId(`cell-${pool}-ORP`);
+  if ((await orp.inputValue()) === "") {
+    await orp.fill(tablet ? "301" : "302");
+    await orp.press("Enter");
+    await expect(page.getByTestId(`cell-${pool}-ORP`)).not.toHaveValue("");
+  }
+  await page.waitForLoadState("networkidle");
+
+  await page.getByRole("link", { name: "Export" }).first().click();
+  const [xlsx] = await Promise.all([page.waitForEvent("download"), page.getByTestId("excel-download").click()]);
+  expect(xlsx.suggestedFilename()).toMatch(/^Vizmeres_.*\.xlsx$/);
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(await xlsx.path());
+  expect(wb.worksheets[0].name).toBe("Vízmérés teljes");
+  expect((wb.worksheets[0].getRow(1).values as unknown[]).slice(1)).toContain("Mérést végezte");
+
+  await page.getByLabel("Az export célja").selectOption("PREVIEW");
+  await page.getByRole("button", { name: "ZIMS CSV készítése" }).click();
+  await expect(page.getByTestId("zims-message")).toContainText("Elkészült");
+  const link = page.getByTestId("runs-table").getByRole("link").first();
+  const [csv] = await Promise.all([page.waitForEvent("download"), link.click()]);
+  const fs = await import("node:fs/promises");
+  const text = await fs.readFile(await csv.path(), "utf8");
+  expect(text.startsWith("Date,Time,Measurement,MeasurementValue,UnitofMeasure,MeasuredBy\r\n")).toBe(true);
+  expect(text).toMatch(/"[A-Z][a-z]{2} \d{1,2}, \d{4}",\d{2}:\d{2},/);
+});

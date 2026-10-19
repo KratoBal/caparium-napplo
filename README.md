@@ -85,7 +85,14 @@ and Chromium (desktop 1440×900), and a docker compose start with a backup resto
   approved or rejected by an admin, settings for admins: reference ranges and pool names as a
   change or a correction (K3), users (create, role, deactivate, password, versioned monogram and
   ZIMS name).
-- Part 3 (next): Excel and ZIMS CSV exports with submission states.
+- Part 3: Excel export (summary sheet and one sheet per system, the template's 8 columns plus
+  dilution and RO/SW, red out-of-range values, old periods with their old names) and ZIMS CSV
+  (one file per system, the sample's header, CRLF, quoted "Sep 20, 2026" dates, the customer's
+  mapping letter by letter; a missing mapping stops the export instead of writing an empty field).
+  Exporting is not submitting: an admin marks a run as submitted, and from then on every changed,
+  invalidated or late measurement of the submitted period is listed as "leadás után eltér".
+- Trial import file for the customer (VIZ-24): `npx tsx scripts/zims-trial-file.ts --pool <name>
+  --date <day> --measured-by "<name in their ZIMS>"`; the real name is an argument, never stored.
 
 The journal job runs once a minute inside the server (`src/instrumentation.ts`); `JOURNAL_JOB=off`
 switches it off for an extra replica.
