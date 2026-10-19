@@ -25,6 +25,7 @@ const FILL = {
 // dark (EVE-10).
 const STATE_FILL: Record<string, string> = { EATEN: "FF00B050", PARTIAL: "FFFFFF00", NOT_EATEN: "FFFF0000", FASTING: "FFBDD7EE" };
 const NOT_YET = "FFD9D9D9";
+const EMPTY = "FFF2F2F2"; // EGY-05: a feed the animal did not get that day
 const GONE = FILL.dark;
 
 const OTHER_SLOTS = 5; // the template's "Egyéb 1..5" (setting egyéb_takarmány_max)
@@ -56,7 +57,7 @@ export type FeedingExcelFilter = { from: string; to: string };
 
 /** EGY-10: one row per day and recipient, one column per feed and unit, SUM per unit (D-30). */
 export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buffer: Buffer; rows: number }> {
-  daysOf(f.from, f.to);
+  const days = daysOf(f.from, f.to);
   const endOfPeriod = resolveLocalDateTime(`${f.to}T23:59`)!.instant;
   const [items, types, baseUnits] = await Promise.all([
     prisma.feedingItem.findMany({
@@ -125,6 +126,25 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       row.values.set(i, (row.values.get(i) ?? 0) + Number(q.quantity) * Number(q.unit.factorToBase ?? 1));
     }
   }
+  // EGY-05: an animal alive on a day but not fed has its row too, with empty, coloured cells
+  const events = await prisma.lifecycleEvent.findMany({ where: { status: "VALID" }, select: { animalId: true, type: true, occurredAt: true } });
+  const life = new Map<string, { arrived?: Date; ended?: Date }>();
+  for (const e of events) {
+    const r = life.get(e.animalId) ?? {};
+    if (e.type === "ARRIVAL") r.arrived = e.occurredAt;
+    if (e.type === "DEATH" || e.type === "RELEASE") r.ended = e.occurredAt;
+    life.set(e.animalId, r);
+  }
+  const animals = await prisma.animal.findMany({ where: { id: { in: [...life.keys()] } }, include: { names: true, species: true } });
+  for (const d of days) {
+    const { start, end } = dayBounds(d);
+    for (const a of animals) {
+      const r = life.get(a.id)!;
+      if (!r.arrived || r.arrived >= end || (r.ended && r.ended < start) || rows.has(`${d}|${a.id}`)) continue;
+      const name = pickValid(a.names, start)?.name ?? a.names.at(-1)?.name ?? "?";
+      rows.set(`${d}|${a.id}`, { day: d, species: a.species.scientificName, name, values: new Map(), other: [] });
+    }
+  }
   const sorted = [...rows.values()].sort((a, b) => a.day.localeCompare(b.day) || a.name.localeCompare(b.name, "hu"));
 
   // column layout: A date, B species, C name, D label column, feeds, Egyéb 1..5, SUM/Állat per unit, notes
@@ -182,6 +202,11 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
     r.getCell(2).value = row.species;
     r.getCell(3).value = row.name;
     for (const [i, v] of row.values) r.getCell(FIRST + i).value = v;
+    // EGY-05: what the animal did not get that day stays empty and coloured
+    for (let c = FIRST; c < otherCol(OTHER_SLOTS); c++) {
+      const cell = r.getCell(c);
+      if (cell.value === null || cell.value === undefined) fill(cell, EMPTY);
+    }
     row.other.forEach((o, k) => {
       r.getCell(otherCol(k)).value = o.qty;
       r.getCell(noteCol(k)).value = o.name;

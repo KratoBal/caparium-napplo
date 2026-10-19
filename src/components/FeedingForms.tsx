@@ -128,13 +128,44 @@ export function FinalizeList({ day }: { day: string }) {
 }
 
 export type Recipient = { key: string; label: string; animalId?: string; groupId?: string };
-export type FeedOpt = { id: string; name: string; isOther: boolean; dims: { dimension: string; units: { id: string; symbol: string }[] }[] };
+export type FeedOpt = {
+  id: string;
+  name: string;
+  isOther: boolean;
+  /** per dimension: the base unit's symbol and the units with their factor to it */
+  dims: { dimension: string; base: string; units: { id: string; symbol: string; factor: number }[] }[];
+};
+
+/** "42,5" or "42.5" -> 42.5; anything else -> null */
+export function parseAmount(v: string): number | null {
+  const t = v.trim().replace(",", ".");
+  if (!/^\d+(\.\d+)?$/.test(t)) return null;
+  return Number(t);
+}
 
 const DIM: Record<string, string> = { MASS: "tömeg", COUNT: "darab", VOLUME: "térfogat" };
 
 /** A feeding item: one recipient, one feed, at most one quantity per dimension (T-08). */
-export function ItemForm({ day, recipients, feeds }: { day: string; recipients: Recipient[]; feeds: FeedOpt[] }) {
-  const [rec, setRec] = useState(recipients[0]?.key ?? "");
+export function ItemForm({
+  day,
+  recipients,
+  feeds,
+  active,
+  onActive,
+  onDraft,
+}: {
+  day: string;
+  recipients: Recipient[];
+  feeds: FeedOpt[];
+  /** EGY-07: the recipient follows the clicked row when the parent holds it */
+  active?: string;
+  onActive?: (key: string) => void;
+  /** EGY-06: what is typed but not saved yet, in base units */
+  onDraft?: (draft: Record<string, number>) => void;
+}) {
+  const [ownRec, setOwnRec] = useState(recipients[0]?.key ?? "");
+  const rec = active ?? ownRec;
+  const setRec = (k: string) => (onActive ? onActive(k) : setOwnRec(k));
   const [feedId, setFeedId] = useState(feeds[0]?.id ?? "");
   const [other, setOther] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
@@ -142,6 +173,16 @@ export function ItemForm({ day, recipients, feeds }: { day: string; recipients: 
   const { msg, busy, run } = useSend();
   const feed = feeds.find((x) => x.id === feedId);
   const r = recipients.find((x) => x.key === rec);
+  useEffect(() => {
+    if (!onDraft || !feed) return;
+    const draft: Record<string, number> = {};
+    for (const d of feed.dims) {
+      const v = parseAmount(values[d.dimension] ?? "");
+      const u = d.units.find((x) => x.id === (units[d.dimension] ?? d.units[0]?.id));
+      if (v !== null && u) draft[d.base] = (draft[d.base] ?? 0) + v * u.factor;
+    }
+    onDraft(draft);
+  }, [feed, values, units, onDraft]);
   if (recipients.length === 0) return <p className="hint">Tételt csak a listán kiválasztott állat vagy csoport kaphat.</p>;
   async function save() {
     if (!feed || !r) return;

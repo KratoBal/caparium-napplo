@@ -66,6 +66,9 @@ describe("feeding items (EGY-02, EGY-06, TAK-07, T-08)", () => {
     const ok = await saveFeedingItem(f.aq1, { requestId: rid(), ...base, quantities: [{ value: "6", unitId: unit.db }, { value: "42,5", unitId: unit.g }] }, at(d, "09:00"));
     const v = await feedingDayView(d);
     expect(v.totals[a["Teszt Három"]]).toEqual({ db: 6, g: 42.5 });
+    // a second feed in kilograms adds to the grams of the row, in the base unit (EGY-06)
+    await saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId: a["Teszt Három"], feedId: feed["Teszt hal"], quantities: [{ value: "0,5", unitId: unit.kg }] }, at(d, "09:01"));
+    expect((await feedingDayView(d)).totals[a["Teszt Három"]]).toEqual({ db: 6, g: 542.5 });
     // a second item for the same cell is a conflict, not a silent duplicate
     await expectCode(saveFeedingItem(f.aq2, { requestId: rid(), ...base, quantities: [{ value: "1", unitId: unit.db }] }, at(d, "09:05")), "CELL_TAKEN");
     // edit with the version, then a stale version is a conflict
