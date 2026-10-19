@@ -6,7 +6,8 @@
 #   - every variable below shows up in Coolify's Environment Variables;
 #     SERVICE_PASSWORD_* are Coolify's generated secrets (set them yourself elsewhere):
 #     POSTGRES = table owner (migrations), APP = the server's role, SEED = test users;
-#   - the test seed runs at every start when SEED_TEST_PASSWORD is set (idempotent);
+#   - the basic data loads at every start, without a password; the test seed runs too when
+#     SEED_TEST_PASSWORD is set (both idempotent);
 #   - backups: run `caparium-backup` in the db container (a Coolify scheduled task),
 #     dumps land in the db-backups volume, each one restore-checked.
 services:
