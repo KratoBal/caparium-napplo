@@ -1,0 +1,41 @@
+{
+  "name": "caparium-napplo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "C\u00e1p\u00e1rium nAPPl\u00f3: water measurement log for the Budapest Zoo C\u00e1p\u00e1rium",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "playwright test",
+    "secret-scan": "node scripts/secret-scan.mjs",
+    "build:seed": "esbuild prisma/seed.ts prisma/db-role.ts --bundle --platform=node --format=cjs --target=node22 --external:@prisma/client --outdir=dist --out-extension:.js=.cjs"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "next": "16.3.8",
+    "prisma": "6.19.3",
+    "react": "19.2.9",
+    "react-dom": "19.2.9",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "22.20.5",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "4.1.12"
+  }
+}

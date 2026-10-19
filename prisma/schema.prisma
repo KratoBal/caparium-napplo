@@ -1,0 +1,605 @@
+// Cápárium nAPPló database schema.
+// Source of the rules: caparium-adatmodell-v1.md (areas 0-5, 14-15 for the first stage).
+// Area numbers in comments refer to that document; K1..K9 are its common rules.
+// Constraints Prisma cannot express (partial unique indexes, append-only audit)
+// live in the migration SQL, see prisma/migrations/*/migration.sql.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Area 1: users and permissions
+// ---------------------------------------------------------------------------
+
+enum Role {
+  AQUARIST
+  ADMIN
+  SYSTEM // the non-login actor of automatic operations (R-12)
+}
+
+enum AppModule {
+  WATER
+  FEEDING
+  WITHDRAWAL
+  DOSING
+  SETTINGS
+  EXPORT
+}
+
+enum PermissionLevel {
+  NONE
+  READ
+  RECORD
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  fullName      String
+  loginId       String    @unique
+  passwordHash  String?
+  role          Role
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  deactivatedAt DateTime? @db.Timestamptz(3)
+
+  monograms         UserMonogram[]
+  zimsNames         UserZimsName[]
+  modulePermissions ModulePermission[]
+  sessions          Session[]
+
+  @@map("app_user")
+}
+
+// K3: time-versioned monogram, the single source of the monogram (R-13).
+model UserMonogram {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  monogram  String
+  validFrom DateTime  @db.Timestamptz(3)
+  validTo   DateTime? @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, validFrom])
+  @@map("user_monogram")
+}
+
+// K3: ZIMS display name of the worker, letter by letter from the customer table (DN-06).
+model UserZimsName {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  zimsName  String
+  validFrom DateTime  @db.Timestamptz(3)
+  validTo   DateTime? @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, validFrom])
+  @@map("user_zims_name")
+}
+
+// ÁLT-04 "later": the structure exists now, the UI comes in stage 4.
+// If a row exists it overrides the role default in that module, both ways (R-17).
+model ModulePermission {
+  id     String          @id @default(uuid()) @db.Uuid
+  userId String          @db.Uuid
+  module AppModule
+  level  PermissionLevel
+  user   User            @relation(fields: [userId], references: [id])
+
+  @@unique([userId, module])
+  @@map("module_permission")
+}
+
+model Session {
+  // sha256 of the random token; the raw token lives only in the cookie
+  id         String   @id
+  userId     String   @db.Uuid
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt  DateTime @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @db.Timestamptz(3)
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("session")
+}
+
+// ---------------------------------------------------------------------------
+// Area 2: pools (medencék) with changing names
+// ---------------------------------------------------------------------------
+
+model Pool {
+  id        String    @id @default(uuid()) @db.Uuid
+  code      String    @unique // internal, never shown as a key to users
+  emoji     String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  closedAt  DateTime? @db.Timestamptz(3)
+
+  names        PoolName[]
+  memberships  GroupMembership[]
+  measurements Measurement[]
+
+  @@map("pool")
+}
+
+model PoolName {
+  id          String    @id @default(uuid()) @db.Uuid
+  poolId      String    @db.Uuid
+  displayName String
+  validFrom   DateTime  @db.Timestamptz(3)
+  validTo     DateTime? @db.Timestamptz(3)
+  pool        Pool      @relation(fields: [poolId], references: [id])
+
+  @@index([poolId, validFrom])
+  @@map("pool_name")
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+}
+
+model MeasurementGroup {
+  id        String    @id @default(uuid()) @db.Uuid
+  code      String    @unique
+  name      String
+  frequency Frequency
+  sortOrder Int
+  active    Boolean   @default(true)
+
+  memberships GroupMembership[]
+  parameters  GroupParameter[]
+  rounds      MeasurementRound[]
+  journalDays JournalDay[]
+
+  @@map("measurement_group")
+}
+
+model GroupMembership {
+  id        String           @id @default(uuid()) @db.Uuid
+  groupId   String           @db.Uuid
+  poolId    String           @db.Uuid
+  sortOrder Int
+  validFrom DateTime         @db.Timestamptz(3)
+  validTo   DateTime?        @db.Timestamptz(3)
+  group     MeasurementGroup @relation(fields: [groupId], references: [id])
+  pool      Pool             @relation(fields: [poolId], references: [id])
+
+  @@index([groupId, validFrom])
+  @@map("group_membership")
+}
+
+model GroupParameter {
+  id          String           @id @default(uuid()) @db.Uuid
+  groupId     String           @db.Uuid
+  parameterId String           @db.Uuid
+  sortOrder   Int
+  validFrom   DateTime         @db.Timestamptz(3)
+  validTo     DateTime?        @db.Timestamptz(3)
+  group       MeasurementGroup @relation(fields: [groupId], references: [id])
+  parameter   Parameter        @relation(fields: [parameterId], references: [id])
+
+  @@index([groupId, validFrom])
+  @@map("group_parameter")
+}
+
+// ---------------------------------------------------------------------------
+// Area 3 and part of 11: units, parameters, reference ranges
+// ---------------------------------------------------------------------------
+
+enum Dimension {
+  MASS
+  COUNT
+  VOLUME
+  CONCENTRATION
+  TEMPERATURE
+  VOLTAGE
+  HARDNESS // dKH: carbonate hardness, not convertible to ppm without a chemistry rule
+  DIMENSIONLESS
+}
+
+model Unit {
+  id           String    @id @default(uuid()) @db.Uuid
+  symbol       String    @unique
+  dimension    Dimension
+  // factor to the base unit of the dimension; null = not convertible (pH)
+  factorToBase Decimal?  @db.Decimal(20, 10)
+  isBase       Boolean   @default(false)
+  active       Boolean   @default(true)
+
+  parameters      Parameter[]
+  referenceRanges ReferenceRange[]
+  measurements    Measurement[]
+  zimsUnitNames   ZimsUnitName[]
+
+  @@map("unit")
+}
+
+model Parameter {
+  id           String   @id @default(uuid()) @db.Uuid
+  code         String   @unique
+  unitId       String   @db.Uuid
+  decimals     Int
+  // plausibility bounds (JAV-02): outside means "probably a typo", asks for confirmation; NOT the reference
+  plausibleMin Decimal? @db.Decimal(14, 4)
+  plausibleMax Decimal? @db.Decimal(14, 4)
+  active       Boolean  @default(true)
+  sortOrder    Int
+
+  unit            Unit                @relation(fields: [unitId], references: [id])
+  names           ParameterName[]
+  referenceRanges ReferenceRange[]
+  groups          GroupParameter[]
+  measurements    Measurement[]
+  zimsNames       ZimsParameterName[]
+  zimsUnitNames   ZimsUnitName[]
+
+  @@map("parameter")
+}
+
+model ParameterName {
+  id          String    @id @default(uuid()) @db.Uuid
+  parameterId String    @db.Uuid
+  displayName String
+  validFrom   DateTime  @db.Timestamptz(3)
+  validTo     DateTime? @db.Timestamptz(3)
+  parameter   Parameter @relation(fields: [parameterId], references: [id])
+
+  @@index([parameterId, validFrom])
+  @@map("parameter_name")
+}
+
+// DN-08: per parameter, not per pool.
+model ReferenceRange {
+  id          String    @id @default(uuid()) @db.Uuid
+  parameterId String    @db.Uuid
+  min         Decimal?  @db.Decimal(14, 4)
+  max         Decimal?  @db.Decimal(14, 4)
+  unitId      String    @db.Uuid
+  validFrom   DateTime  @db.Timestamptz(3)
+  validTo     DateTime? @db.Timestamptz(3)
+  createdById String    @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+
+  parameter    Parameter     @relation(fields: [parameterId], references: [id])
+  unit         Unit          @relation(fields: [unitId], references: [id])
+  measurements Measurement[]
+
+  @@index([parameterId, validFrom])
+  @@map("reference_range")
+}
+
+// ---------------------------------------------------------------------------
+// Area 4: measurements
+// ---------------------------------------------------------------------------
+
+enum RecordStatus {
+  VALID
+  INVALIDATED
+  PENDING // arrived after the grace period (K9), waits for an admin decision
+}
+
+enum DiluentWater {
+  RO
+  SW
+}
+
+// T-07: one sheet of a group on a business day; "Új mérés ma" opens the next round.
+model MeasurementRound {
+  id          String           @id @default(uuid()) @db.Uuid
+  groupId     String           @db.Uuid
+  businessDay DateTime         @db.Date
+  seq         Int
+  createdById String           @db.Uuid
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  group       MeasurementGroup @relation(fields: [groupId], references: [id])
+
+  measurements Measurement[]
+
+  @@unique([groupId, businessDay, seq])
+  @@map("measurement_round")
+}
+
+model Measurement {
+  id                 String        @id @default(uuid()) @db.Uuid
+  roundId            String        @db.Uuid
+  poolId             String        @db.Uuid
+  parameterId        String        @db.Uuid
+  value              Decimal       @db.Decimal(14, 4)
+  unitId             String        @db.Uuid // K4 snapshot
+  measuredAt         DateTime      @db.Timestamptz(3)
+  businessDay        DateTime      @db.Date
+  dilution           Int?
+  diluentWater       DiluentWater?
+  responsibleUserId  String        @db.Uuid
+  traineePerformed   Boolean       @default(false)
+  referenceRangeId   String?       @db.Uuid
+  // K5
+  version            Int           @default(1)
+  requestId          String        @unique
+  status             RecordStatus  @default(VALID)
+  invalidationReason String?
+  createdById        String        @db.Uuid
+  createdAt          DateTime      @default(now()) @db.Timestamptz(3)
+  clientTimestamp    DateTime?     @db.Timestamptz(3)
+  updatedById        String        @db.Uuid
+  updatedAt          DateTime      @default(now()) @db.Timestamptz(3)
+
+  round          MeasurementRound @relation(fields: [roundId], references: [id])
+  pool           Pool             @relation(fields: [poolId], references: [id])
+  parameter      Parameter        @relation(fields: [parameterId], references: [id])
+  unit           Unit             @relation(fields: [unitId], references: [id])
+  referenceRange ReferenceRange?  @relation(fields: [referenceRangeId], references: [id])
+  exportItems    ExportItem[]
+
+  // the "one valid value per cell" partial unique index is in the migration SQL
+  @@index([businessDay, poolId])
+  @@index([roundId])
+  @@map("measurement")
+}
+
+// ---------------------------------------------------------------------------
+// Area 5: ZIMS mapping (data, not code; letter by letter from the customer table)
+// ---------------------------------------------------------------------------
+
+model ZimsParameterName {
+  id          String    @id @default(uuid()) @db.Uuid
+  parameterId String    @db.Uuid
+  zimsName    String
+  validFrom   DateTime  @db.Timestamptz(3)
+  validTo     DateTime? @db.Timestamptz(3)
+  parameter   Parameter @relation(fields: [parameterId], references: [id])
+
+  @@index([parameterId, validFrom])
+  @@map("zims_parameter_name")
+}
+
+model ZimsUnitName {
+  id          String     @id @default(uuid()) @db.Uuid
+  unitId      String     @db.Uuid
+  parameterId String?    @db.Uuid // a parameter-specific row beats the generic one
+  zimsUnit    String
+  validFrom   DateTime   @db.Timestamptz(3)
+  validTo     DateTime?  @db.Timestamptz(3)
+  unit        Unit       @relation(fields: [unitId], references: [id])
+  parameter   Parameter? @relation(fields: [parameterId], references: [id])
+
+  @@index([unitId, validFrom])
+  @@map("zims_unit_name")
+}
+
+model ZimsExportProfile {
+  id                String   @id @default(uuid()) @db.Uuid
+  version           Int      @unique
+  datePattern       String
+  timePattern       String
+  decimalSeparator  String
+  fieldSeparator    String
+  lineEnding        String
+  encoding          String
+  header            String
+  allRowsFilled     Boolean
+  timeZone          String
+  active            Boolean  @default(false)
+  validFrom         DateTime @db.Timestamptz(3)
+  approvedByTrialId String?  @db.Uuid
+
+  trialImports ZimsTrialImport[] @relation("trialProfile")
+  exportRuns   ExportRun[]
+
+  @@map("zims_export_profile")
+}
+
+enum TrialResult {
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+model ZimsTrialImport {
+  id          String            @id @default(uuid()) @db.Uuid
+  date        DateTime          @db.Date
+  profileId   String            @db.Uuid
+  exportRunId String?           @db.Uuid
+  result      TrialResult
+  deviations  String?
+  checkedBy   String
+  createdById String            @db.Uuid
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  profile     ZimsExportProfile @relation("trialProfile", fields: [profileId], references: [id])
+
+  @@map("zims_trial_import")
+}
+
+// ---------------------------------------------------------------------------
+// Area 14: journal days, reopening, audit
+// ---------------------------------------------------------------------------
+
+enum JournalKind {
+  WATER
+  FEEDING
+  WITHDRAWAL
+  DOSING
+}
+
+enum JournalDayState {
+  OPEN
+  CLOSED
+}
+
+enum CloseMode {
+  MANUAL
+  AUTOMATIC
+}
+
+// The single lock of a day (R-4). Unique (kind, group, day) with NULLS NOT DISTINCT is in the migration SQL.
+model JournalDay {
+  id          String            @id @default(uuid()) @db.Uuid
+  kind        JournalKind
+  groupId     String?           @db.Uuid
+  businessDay DateTime          @db.Date
+  state       JournalDayState   @default(OPEN)
+  closeMode   CloseMode?
+  closedById  String?           @db.Uuid
+  closedAt    DateTime?         @db.Timestamptz(3) // planned close time for automatic closing
+  closeRanAt  DateTime?         @db.Timestamptz(3) // when it actually ran
+  group       MeasurementGroup? @relation(fields: [groupId], references: [id])
+
+  reopenings JournalReopen[]
+
+  @@index([businessDay])
+  @@map("journal_day")
+}
+
+model JournalReopen {
+  id           String     @id @default(uuid()) @db.Uuid
+  journalDayId String     @db.Uuid
+  reopenedById String     @db.Uuid
+  at           DateTime   @default(now()) @db.Timestamptz(3)
+  reason       String
+  reclosedAt   DateTime?  @db.Timestamptz(3)
+  journalDay   JournalDay @relation(fields: [journalDayId], references: [id])
+
+  @@map("journal_reopen")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  INVALIDATE
+  CLOSE
+  REOPEN
+  MASTER_CHANGE
+  MASTER_CORRECTION
+  EXPORT
+  LOGIN
+  LOGIN_FAILED
+  LOGOUT
+  CONFLICT_REJECTED
+  PENDING_CREATED
+  PENDING_APPROVED
+  PENDING_REJECTED
+  ANONYMIZE
+}
+
+// K6: append-only. UPDATE, DELETE and TRUNCATE are rejected by triggers (migration SQL).
+model AuditEntry {
+  id              BigInt      @id @default(autoincrement())
+  at              DateTime    @default(now()) @db.Timestamptz(3)
+  userId          String      @db.Uuid
+  action          AuditAction
+  entityType      String
+  entityId        String
+  changes         Json        @default("{}")
+  reason          String?
+  requestId       String?
+  client          String?
+  clientTimestamp DateTime?   @db.Timestamptz(3)
+
+  @@index([entityType, entityId])
+  @@index([at])
+  @@index([requestId])
+  @@map("audit_entry")
+}
+
+// ---------------------------------------------------------------------------
+// Area 15: exports (used from stage 3; the structure is here so later stages add no rework)
+// ---------------------------------------------------------------------------
+
+enum ExportKind {
+  ZIMS_CSV
+  EXCEL_WATER
+  PDF_WATER
+}
+
+enum ExportPurpose {
+  SUBMISSION
+  TRIAL
+  PREVIEW
+}
+
+enum SubmissionState {
+  CREATED
+  SUBMITTED
+  REJECTED
+}
+
+model ExportRun {
+  id                String             @id @default(uuid()) @db.Uuid
+  kind              ExportKind
+  purpose           ExportPurpose
+  periodFrom        DateTime           @db.Date
+  periodTo          DateTime           @db.Date
+  filters           Json               @default("{}")
+  zimsProfileId     String?            @db.Uuid
+  templateVersionId String?            @db.Uuid
+  createdById       String             @db.Uuid
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  submissionState   SubmissionState?
+  submittedById     String?            @db.Uuid
+  submittedAt       DateTime?          @db.Timestamptz(3)
+  zimsProfile       ZimsExportProfile? @relation(fields: [zimsProfileId], references: [id])
+  templateVersion   TemplateVersion?   @relation(fields: [templateVersionId], references: [id])
+
+  files ExportFile[]
+  items ExportItem[]
+
+  @@map("export_run")
+}
+
+model ExportFile {
+  id          String    @id @default(uuid()) @db.Uuid
+  exportRunId String    @db.Uuid
+  fileName    String
+  sha256      String
+  rowCount    Int
+  exportRun   ExportRun @relation(fields: [exportRunId], references: [id])
+
+  @@map("export_file")
+}
+
+model ExportItem {
+  id                 String      @id @default(uuid()) @db.Uuid
+  exportRunId        String      @db.Uuid
+  measurementId      String      @db.Uuid
+  measurementVersion Int
+  rowSha256          String
+  exportRun          ExportRun   @relation(fields: [exportRunId], references: [id])
+  measurement        Measurement @relation(fields: [measurementId], references: [id])
+
+  @@index([measurementId])
+  @@map("export_item")
+}
+
+model TemplateVersion {
+  id           String      @id @default(uuid()) @db.Uuid
+  templateKind String
+  version      Int
+  sha256       String
+  validFrom    DateTime    @db.Timestamptz(3)
+  exportRuns   ExportRun[]
+
+  @@unique([templateKind, version])
+  @@map("template_version")
+}
+
+// ---------------------------------------------------------------------------
+// Area 16: settings (time-versioned key/value)
+// ---------------------------------------------------------------------------
+
+model Setting {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String
+  value       String
+  validFrom   DateTime @default(now()) @db.Timestamptz(3)
+  changedById String   @db.Uuid
+
+  @@index([key, validFrom])
+  @@map("setting")
+}
