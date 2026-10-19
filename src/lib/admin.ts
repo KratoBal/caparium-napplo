@@ -20,6 +20,15 @@ async function requireSettingsAdmin(actor: Actor) {
   if (level !== "ADMIN") throw new AppError(403, "ADMIN_ONLY", "A beállításokat csak adminisztrátor módosíthatja.");
 }
 
+/**
+ * User management is for the ADMIN ROLE only, not for a module level (review of #2): an aquarist
+ * with a SETTINGS=ADMIN override for the reference values must not be able to promote anyone,
+ * create an admin, or set someone else's password and log in as them.
+ */
+function requireUserAdmin(actor: Actor) {
+  if (actor.role !== "ADMIN") throw new AppError(403, "ADMIN_ROLE_ONLY", "Felhasználókat csak adminisztrátor szerepű dolgozó kezelhet.");
+}
+
 async function replayed(id: string) {
   return (await prisma.auditEntry.findFirst({ where: { requestId: id } })) !== null;
 }
@@ -183,6 +192,7 @@ async function assertUniqueMonogram(tx: Tx, userId: string | null, mono: string,
 }
 
 export async function createUser(actor: Actor, input: CreateUserInput, now = new Date()) {
+  requireUserAdmin(actor);
   await requireSettingsAdmin(actor);
   if (await replayed(input.requestId)) return { replayed: true };
   const passwordHash = await hashPassword(input.password);
@@ -223,9 +233,11 @@ export async function createUser(actor: Actor, input: CreateUserInput, now = new
 }
 
 export async function updateUser(actor: Actor, id: string, input: UpdateUserInput, now = new Date()) {
+  requireUserAdmin(actor);
   await requireSettingsAdmin(actor);
-  if (id === actor.id && (input.active === false || input.role === "AQUARIST")) {
-    throw new AppError(422, "SELF_LOCKOUT", "A saját adminisztrátori jogodat és fiókodat nem veheted el; kérj meg egy másik adminisztrátort.");
+  // nobody changes their own role (either way) or deactivates themselves: another admin does
+  if (id === actor.id && (input.active === false || input.role !== undefined)) {
+    throw new AppError(422, "SELF_LOCKOUT", "A saját szerepedet és fiókodat nem módosíthatod; kérj meg egy másik adminisztrátort.");
   }
   if (await replayed(input.requestId)) return { replayed: true };
   const passwordHash = input.password ? await hashPassword(input.password) : undefined;

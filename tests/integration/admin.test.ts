@@ -113,7 +113,25 @@ describe("users (ÁLT-04, ÁLT-06, ÁLT-17)", () => {
     await expectCode(updateUser(f.admin, f.admin.id, { requestId: rid(), role: "AQUARIST" }), "SELF_LOCKOUT");
   });
 
+  it("a SETTINGS=ADMIN override does not make user management possible (review of #2)", async () => {
+    const lead = await prisma.user.create({
+      data: { loginId: `ref-gazda-${Date.now()}`, fullName: "Referencia Gazda", role: "AQUARIST" },
+    });
+    await prisma.modulePermission.create({ data: { userId: lead.id, module: "SETTINGS", level: "ADMIN" } });
+    const actor = { id: lead.id, role: "AQUARIST" as const };
+    // the override is for master data: a reference change is allowed
+    await setReference(actor, { requestId: rid(), parameterId: f.param("PO4"), min: null, max: "0.2", mode: "change" });
+    // but no self promotion, no new admin, no password of someone else
+    await expectCode(updateUser(actor, lead.id, { requestId: rid(), role: "ADMIN" }), "ADMIN_ROLE_ONLY");
+    await expectCode(createUser(actor, { requestId: rid(), loginId: "uj.admin.x", monogram: "UX", ...base, role: "ADMIN" }), "ADMIN_ROLE_ONLY");
+    await expectCode(updateUser(actor, f.aq2.id, { requestId: rid(), password: "atvett-jelszo-123" }), "ADMIN_ROLE_ONLY");
+  });
+
+  it("an admin cannot change their own role in either direction", async () => {
+    await expectCode(updateUser(f.admin, f.admin.id, { requestId: rid(), role: "ADMIN" }), "SELF_LOCKOUT");
+  });
+
   it("an aquarist cannot manage users", async () => {
-    await expectCode(createUser(f.aq1, { requestId: rid(), loginId: "proba.harmadik", monogram: "P3", ...base }), "ADMIN_ONLY");
+    await expectCode(createUser(f.aq1, { requestId: rid(), loginId: "proba.harmadik", monogram: "P3", ...base }), "ADMIN_ROLE_ONLY");
   });
 });

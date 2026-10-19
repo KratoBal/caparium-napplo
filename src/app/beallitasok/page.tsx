@@ -24,11 +24,14 @@ export default async function SettingsPage() {
       orderBy: { code: "asc" },
       include: { names: true, memberships: { where: validAt(now), include: { group: true } } },
     }),
-    prisma.user.findMany({
-      where: { role: { in: ["AQUARIST", "ADMIN"] } },
-      orderBy: [{ active: "desc" }, { fullName: "asc" }],
-      include: { monograms: true, zimsNames: true },
-    }),
+    // user management is for the admin role only (review of #2), not for a SETTINGS override
+    user.role === "ADMIN"
+      ? prisma.user.findMany({
+          where: { role: { in: ["AQUARIST", "ADMIN"] } },
+          orderBy: [{ active: "desc" }, { fullName: "asc" }],
+          include: { monograms: true, zimsNames: true },
+        })
+      : Promise.resolve([]),
   ]);
   return (
     <Shell title="Beállítások" active="settings" user={user}>
@@ -83,6 +86,7 @@ export default async function SettingsPage() {
         </div>
       </div>
 
+      {user.role === "ADMIN" && (
       <div className="card">
         <h2>Felhasználók</h2>
         <p className="hint">Törlés nincs, csak inaktiválás: a régi naplók és az auditnapló a felhasználóra hivatkoznak.</p>
@@ -109,6 +113,7 @@ export default async function SettingsPage() {
         <h3 style={{ marginTop: 20 }}>Új felhasználó</h3>
         <NewUserForm />
       </div>
+      )}
     </Shell>
   );
 }
