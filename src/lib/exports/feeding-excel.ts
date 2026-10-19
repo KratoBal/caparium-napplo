@@ -340,3 +340,42 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
   ws.views = [{ state: "frozen", xSplit: 4, ySplit: 2 }];
   return { buffer: Buffer.from(await wb.xlsx.writeBuffer()), rows: list.length };
 }
+
+/**
+ * KIV-05: the withdrawal log after the customer's template (forras-kivonat/takarmany-kivetel-template-
+ * szerkezet.json: one header row A1:E1, Dátum, Takarmány típusa, Takarmány, Mennyiség, Mértékegység).
+ * One row per item and dimension; the use day as a sixth column, because the two days are separate
+ * (T-10). An "Egyéb" item shows its own name in the feed column (KIV-04).
+ */
+export async function buildWithdrawalWorkbook(f: FeedingExcelFilter): Promise<{ buffer: Buffer; rows: number }> {
+  daysOf(f.from, f.to);
+  const items = await prisma.withdrawalItem.findMany({
+    where: { status: "VALID", withdrawalDay: { businessDay: { gte: dayToDate(f.from), lte: dayToDate(f.to) } } },
+    include: { withdrawalDay: true, quantities: { include: { unit: true } }, feed: { include: { names: true, type: true } } },
+    orderBy: [{ withdrawalDay: { businessDay: "asc" } }, { createdAt: "asc" }],
+  });
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Cápárium nAPPló";
+  wb.created = new Date();
+  const ws = wb.addWorksheet("Munka1");
+  const header = ws.getRow(1);
+  ["Dátum", "Takarmány típusa", "Takarmány", "Mennyiség", "Mértékegység", "Felhasználás napja"].forEach((h, i) => {
+    header.getCell(i + 1).value = h;
+    fill(header.getCell(i + 1), FILL.head);
+  });
+  header.font = { bold: true };
+  let rows = 0;
+  for (const it of items) {
+    const day = dateToDay(it.withdrawalDay.businessDay);
+    const name = it.otherName ?? pickValid(it.feed.names, dayBounds(day).start)?.name ?? it.feed.names.at(-1)?.name ?? "?";
+    for (const q of it.quantities) {
+      const r = ws.addRow([dayToDate(day), it.feed.type.name, name, Number(q.quantity), q.unit.symbol, dayToDate(dateToDay(it.useDay))]);
+      r.getCell(1).numFmt = "yyyy.mm.dd";
+      r.getCell(6).numFmt = "yyyy.mm.dd";
+      rows += 1;
+    }
+  }
+  ws.columns.forEach((c, i) => (c.width = [10.8, 22, 16.7, 15, 17.3, 16][i] ?? 10.8));
+  ws.views = [{ state: "frozen", ySplit: 1 }];
+  return { buffer: Buffer.from(await wb.xlsx.writeBuffer()), rows };
+}

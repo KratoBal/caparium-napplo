@@ -1,6 +1,8 @@
 // The feeding log on screen (TAK-04): a period filtered by pool and animal, totals in base units, a
 // group item counted for its participants, the eating pattern of the same filter. Days in June 2026.
 import { beforeAll, describe, expect, it } from "vitest";
+import { renamePool } from "@/lib/admin";
+import { createLifecycleEvent } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { setEatingStatus } from "@/lib/eating";
 import { saveFeedingItem, setSelection } from "@/lib/feeding";
@@ -58,6 +60,26 @@ describe("the feeding log (TAK-04)", () => {
     // the name valid that day (another file renames this pool from April: the order of files must not matter)
     const names = await prisma.poolName.findMany({ where: { poolId: f.pool("RAGADOZOS") } });
     expect(log.rows[0].pools).toBe(pickValid(names, new Date("2026-06-01T00:00:00+02:00"))?.displayName);
+  });
+
+  it("the pool's name is the one valid on the day, not today's (review of #11: a rename after the day)", async () => {
+    // its own animal and its own rename, in a pool no other file renames: the file order cannot matter
+    const species = (await prisma.species.findFirstOrThrow({ where: { active: true } })).id;
+    const lako = (
+      await createLifecycleEvent(
+        f.admin,
+        { requestId: rid(), type: "ARRIVAL", newAnimal: { speciesId: species, name: "Inkubátor Lakó", sex: "MALE" }, toPoolId: f.pool("INKUBATOR"), occurredAtLocal: "2026-06-04T09:00", reason: "teszt" },
+        at("2026-06-04", "10:00"),
+      )
+    ).animalId;
+    const d = "2026-06-05";
+    await setSelection(f.aq1, { requestId: rid(), day: d, animalIds: [lako], selected: true }, at(d, "09:00"));
+    await saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId: lako, feedId: feed["Teszt hal"], quantities: [{ value: "10", unitId: unit.g }] }, at(d, "09:00"));
+    const before = (await prisma.poolName.findMany({ where: { poolId: f.pool("INKUBATOR") } })).find((n) => n.validTo === null)!.displayName;
+    await renamePool(f.admin, { requestId: rid(), poolId: f.pool("INKUBATOR"), name: "Inkubátor (átnevezve)", mode: "change" }, at("2026-06-10", "08:00"));
+    const log = await feedingLog({ from: d, to: d, poolId: null, animalId: lako });
+    expect(log.rows.map((r) => r.pools)).toEqual([before]);
+    expect(before).not.toBe("Inkubátor (átnevezve)");
   });
 
   it("the eating pattern of the same filter; a period over the limit is refused", async () => {

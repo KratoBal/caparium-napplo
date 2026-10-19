@@ -344,3 +344,20 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
     expect(file.suggestedFilename()).toMatch(new RegExp(`^${prefix}\\d{4}-\\d{2}-\\d{2}`));
   }
 });
+
+test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
+  // each layout takes out its own feed: one item per feed and day
+  const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Takarmánykivétel" }).click();
+  const form = page.getByTestId("withdrawal-form");
+  await form.getByLabel("Takarmány", { exact: true }).selectOption({ label: feedName });
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("200");
+  await form.getByRole("button", { name: "Kivétel mentése" }).click();
+  await expect(form.getByRole("status")).toHaveText("Kivétel mentve.");
+  await expect(page.getByTestId("withdrawal-list")).toContainText(feedName);
+  await expect(page.getByTestId("withdrawal-total")).toContainText("g");
+  await expect(page.getByTestId("taken-given")).toBeVisible();
+  const [file] = await Promise.all([page.waitForEvent("download"), page.getByTestId("excel-kivetel").click()]);
+  expect(file.suggestedFilename()).toMatch(/^Takarmanykivetel_\d{4}-\d{2}-\d{2}/);
+});

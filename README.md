@@ -105,6 +105,8 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   light blue; in the eating Excel a day before arrival is light grey, after death or release dark.
 - PDF (TAK-05) is the browser's print of the log page ("Mentés PDF-ként"), not a server-made file;
   the screen log covers at most 92 days, the Excel a year.
+- Feed stock (NY-07 default): none; a withdrawal is usage only, no intake and no stock level. A use
+  day is at most 7 days after the withdrawal day.
 - At most 5 "Egyéb" feeds per animal and day (the template's Egyéb 1–5, setting `egyéb_takarmány_max`).
 
 ## Status
@@ -142,6 +144,12 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   adds what is typed to the row's total in base units (EGY-06, EGY-07); the feeding log of a period
   filtered by pool and animal, with the eating pattern (TAK-04), printable as PDF from the browser and
   exportable as Excel (TAK-05).
+- Stage 3, feed withdrawal: what goes out of the freezer on a day, for a use day (default the next
+  day, T-10), per dimension, at most 5 different other feeds a day (KIV-01, KIV-04); the day's total in
+  the corner (KIV-02); "Lezárás" closes the day's input, an admin reopens with a reason, midnight
+  closes a forgotten day (KIV-03); taken (by use day) against given (the feeding log) per feed and
+  unit, the other feeds unpaired (TAK-06, R-11); the Excel after the customer's template, with the use
+  day as an extra column (KIV-05).
 - Trial import file for the customer (VIZ-24): `npx tsx scripts/zims-trial-file.ts --pool <name>
   --date <day> --measured-by "<name in their ZIMS>"`; the real name is an argument, never stored.
 

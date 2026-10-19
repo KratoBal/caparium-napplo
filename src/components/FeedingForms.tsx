@@ -328,3 +328,92 @@ export function EatingForm({ day, animalId, name, selected, status }: { day: str
     </div>
   );
 }
+
+/** KIV-01, KIV-04: one withdrawal item; the use day defaults to the next day (T-10). */
+export function WithdrawalForm({ day, useDay, feeds }: { day: string; useDay: string; feeds: FeedOpt[] }) {
+  const [feedId, setFeedId] = useState(feeds[0]?.id ?? "");
+  const [other, setOther] = useState("");
+  const [use, setUse] = useState(useDay);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [units, setUnits] = useState<Record<string, string>>({});
+  const { msg, busy, run } = useSend();
+  const feed = feeds.find((x) => x.id === feedId);
+  async function save() {
+    if (!feed) return;
+    const quantities = feed.dims
+      .filter((d) => (values[d.dimension] ?? "").trim())
+      .map((d) => ({ value: values[d.dimension].trim(), unitId: units[d.dimension] ?? d.units[0].id }));
+    const ok = await run("/api/withdrawals/items", { day, useDay: use, feedId: feed.id, quantities, ...(feed.isOther ? { otherName: other.trim() } : {}) }, "Kivétel mentve.");
+    if (ok) setValues({});
+  }
+  return (
+    <div className="toolbar" data-testid="withdrawal-form">
+      <label className="field">
+        Takarmány
+        <select className="input" value={feedId} onChange={(e) => setFeedId(e.target.value)} aria-label="Takarmány">
+          {feeds.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {feed?.isOther && (
+        <label className="field">
+          Az egyéb takarmány neve
+          <input className="input" value={other} onChange={(e) => setOther(e.target.value)} aria-label="Az egyéb takarmány neve" />
+        </label>
+      )}
+      {feed?.dims.map((d) => (
+        <label className="field" key={d.dimension}>
+          Mennyiség ({DIM[d.dimension] ?? d.dimension})
+          <span style={{ display: "flex", gap: 6 }}>
+            <input
+              className="input"
+              inputMode="decimal"
+              style={{ width: 110 }}
+              value={values[d.dimension] ?? ""}
+              onChange={(e) => setValues({ ...values, [d.dimension]: e.target.value })}
+              aria-label={`Mennyiség (${DIM[d.dimension] ?? d.dimension})`}
+            />
+            <select className="input" value={units[d.dimension] ?? d.units[0]?.id} onChange={(e) => setUnits({ ...units, [d.dimension]: e.target.value })} aria-label={`Egység (${DIM[d.dimension] ?? d.dimension})`}>
+              {d.units.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.symbol}
+                </option>
+              ))}
+            </select>
+          </span>
+        </label>
+      ))}
+      <label className="field">
+        Felhasználás napja
+        <input className="input" type="date" value={use} onChange={(e) => setUse(e.target.value)} aria-label="Felhasználás napja" />
+      </label>
+      <button className="btn" type="button" disabled={busy} onClick={() => void save()}>
+        Kivétel mentése
+      </button>
+      <Msg msg={msg} />
+    </div>
+  );
+}
+
+/** KIV-03 "Lezárás": closes the day's input; reopening is admin work. */
+export function CloseWithdrawalDay({ day }: { day: string }) {
+  const { msg, busy, run } = useSend();
+  return (
+    <span>
+      <button
+        className="btn btn-soft"
+        type="button"
+        disabled={busy}
+        onClick={() => {
+          if (window.confirm("Lezárod a mai kivételt? Utána csak adminisztrátor nyithatja újra.")) void run("/api/withdrawals/close", { day }, "A nap lezárva.");
+        }}
+      >
+        Lezárás
+      </button>
+      <Msg msg={msg} />
+    </span>
+  );
+}
