@@ -39,7 +39,7 @@ export async function runJournalJob(now = new Date()): Promise<JobResult> {
   // T-01/3); a withdrawal day left open by the "Lezárás" button too (KIV-03).
   const due = await prisma.journalDay.findMany({
     where: {
-      kind: { in: ["WATER", "FEEDING", "WITHDRAWAL"] },
+      kind: { in: ["WATER", "FEEDING", "WITHDRAWAL", "DOSING"] },
       state: "OPEN",
       businessDay: { lt: dayToDate(today) },
       reopenings: { none: { reclosedAt: null } },

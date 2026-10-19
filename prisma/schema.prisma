@@ -52,6 +52,7 @@ model User {
   monograms         UserMonogram[]
   zimsNames         UserZimsName[]
   modulePermissions ModulePermission[]
+  dosingsPerformed  Dosing[]
   sessions          Session[]
 
   @@map("app_user")
@@ -126,6 +127,7 @@ model Pool {
   measurements Measurement[]
   placements   Placement[]
   arrivals     LifecycleEvent[]
+  dosings      Dosing[]
 
   @@map("pool")
 }
@@ -223,6 +225,9 @@ model Unit {
   coralDoses           CoralFeedDose[]
   feedingQuantities    FeedingQuantity[]
   withdrawalQuantities WithdrawalQuantity[]
+  chemicalStocks       Chemical[]
+  dosings              Dosing[]
+  movementsOriginal    StockMovement[]
 
   @@map("unit")
 }
@@ -1091,4 +1096,100 @@ model FeedingReference {
   @@index([animalId, validFrom])
   @@index([groupId, validFrom])
   @@map("feeding_reference")
+}
+
+// ---------------------------------------------------------------------------
+// Area 13 (stage 3): chemicals, dosing and their stock (ADA-01..ADA-06, JAV-09, R-16)
+// The model's shared "stock item" (area 12) is not built: feed has no stock (NY-07 default), so a
+// movement belongs to a chemical directly. If feed stock comes, the item table comes with it.
+// ---------------------------------------------------------------------------
+
+enum MovementType {
+  INTAKE
+  USAGE
+  CORRECTION
+}
+
+// JAV-09: a chemical keeps its stock in one unit; it is dosed only in units of the same dimension
+// (salt kept in g is not dosed in ml: no density)
+model Chemical {
+  id          String          @id @default(uuid()) @db.Uuid
+  stockUnitId String          @db.Uuid
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  stockUnit   Unit            @relation(fields: [stockUnitId], references: [id])
+  names       ChemicalName[]
+  dosings     Dosing[]
+  movements   StockMovement[]
+
+  @@map("chemical")
+}
+
+// K3: a chemical's name over time
+model ChemicalName {
+  id         String    @id @default(uuid()) @db.Uuid
+  chemicalId String    @db.Uuid
+  name       String
+  validFrom  DateTime  @db.Timestamptz(3)
+  validTo    DateTime? @db.Timestamptz(3)
+  chemical   Chemical  @relation(fields: [chemicalId], references: [id])
+
+  @@index([chemicalId, validFrom])
+  @@map("chemical_name")
+}
+
+// ADA-01, ADA-02: one dosing; it writes its USAGE movement in the same transaction (R-16)
+model Dosing {
+  id                 String         @id @default(uuid()) @db.Uuid
+  performedAt        DateTime       @db.Timestamptz(3)
+  businessDay        DateTime       @db.Date
+  poolId             String         @db.Uuid
+  chemicalId         String         @db.Uuid
+  quantity           Decimal        @db.Decimal(14, 4)
+  unitId             String         @db.Uuid
+  performedById      String         @db.Uuid
+  version            Int            @default(1)
+  requestId          String         @unique
+  status             RecordStatus   @default(VALID)
+  invalidationReason String?
+  createdById        String         @db.Uuid
+  createdAt          DateTime       @default(now()) @db.Timestamptz(3)
+  updatedById        String         @db.Uuid
+  updatedAt          DateTime       @default(now()) @db.Timestamptz(3)
+  pool               Pool           @relation(fields: [poolId], references: [id])
+  chemical           Chemical       @relation(fields: [chemicalId], references: [id])
+  unit               Unit           @relation(fields: [unitId], references: [id])
+  performedBy        User           @relation(fields: [performedById], references: [id])
+  movement           StockMovement?
+
+  @@index([businessDay])
+  @@index([chemicalId, businessDay])
+  @@map("dosing")
+}
+
+// R-16: the stock is the sum of the valid movements (never a stored level); a negative level is
+// allowed and flagged. quantity is signed, in the chemical's stock unit; the original as entered stays
+model StockMovement {
+  id                 String       @id @default(uuid()) @db.Uuid
+  chemicalId         String       @db.Uuid
+  type               MovementType
+  quantity           Decimal      @db.Decimal(14, 4)
+  originalQuantity   Decimal      @db.Decimal(14, 4)
+  originalUnitId     String       @db.Uuid
+  at                 DateTime     @db.Timestamptz(3)
+  businessDay        DateTime     @db.Date
+  dosingId           String?      @unique @db.Uuid
+  note               String?
+  version            Int          @default(1)
+  requestId          String       @unique
+  status             RecordStatus @default(VALID)
+  invalidationReason String?
+  createdById        String       @db.Uuid
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  chemical           Chemical     @relation(fields: [chemicalId], references: [id])
+  originalUnit       Unit         @relation(fields: [originalUnitId], references: [id])
+  dosing             Dosing?      @relation(fields: [dosingId], references: [id])
+
+  @@index([chemicalId, businessDay])
+  @@map("stock_movement")
 }

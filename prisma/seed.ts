@@ -119,6 +119,10 @@ const FEEDS = [
   // EGY-12: the "Egyéb" feed takes its real name in each item
   { type: "EGYEB", name: "Egyéb", dims: ["MASS"], unit: "g" },
 ] as const;
+const CHEMICALS = [
+  { name: "Teszt só", unit: "kg" },
+  { name: "Teszt kalcium", unit: "l" },
+] as const;
 const SPECIES = ["Teszt faj A", "Teszt faj B", "Teszt faj C"];
 const ANIMALS = [
   { name: "Teszt Egy", species: 0, sex: "FEMALE", pool: "NAGY", group: "Teszt csoport" },
@@ -243,8 +247,12 @@ async function main() {
   for (const [i, [code, name]] of FEED_TYPES.entries()) {
     await prisma.feedType.upsert({ where: { code }, update: {}, create: { code, name, sortOrder: i + 1 } });
   }
-  if ((await prisma.feed.count()) === 0) {
+  // by name, not only into an empty table: a feed added to the list later (the "Egyéb" of stage 2)
+  // reaches a database seeded before it
+  {
+    const have = new Set((await prisma.feedName.findMany()).map((n) => n.name));
     for (const [i, f] of FEEDS.entries()) {
+      if (have.has(f.name)) continue;
       const type = await prisma.feedType.findUniqueOrThrow({ where: { code: f.type } });
       await prisma.feed.create({
         data: {
@@ -255,6 +263,14 @@ async function main() {
           names: { create: { name: f.name, validFrom: SINCE } },
         },
       });
+    }
+  }
+  // stage 3, dosing: synthetic chemicals, each with its stock unit (JAV-09); the real list comes later
+  {
+    const have = new Set((await prisma.chemicalName.findMany()).map((n) => n.name));
+    for (const c of CHEMICALS) {
+      if (have.has(c.name)) continue;
+      await prisma.chemical.create({ data: { stockUnitId: unitId.get(c.unit)!, names: { create: { name: c.name, validFrom: SINCE } } } });
     }
   }
   if ((await prisma.species.count()) === 0) {

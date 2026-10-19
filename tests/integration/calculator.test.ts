@@ -36,6 +36,7 @@ describe("body weight (JAV-06)", () => {
     await invalidateBodyWeight(f.aq1, later.id, { requestId: rid(), expectedVersion: 1, reason: "elírás" }, at("2026-08-05", "09:10"));
     expect(await lastBodyWeight(id)).toEqual({ day: "2026-08-03", weightKg: "48.5" });
     await expectCode(recordBodyWeight(f.aq1, { requestId: rid(), animalId: id, weightKg: "-1" }, at("2026-08-05", "09:00")), "INVALID_VALUE");
+    await expectCode(recordBodyWeight(f.admin, { requestId: rid(), animalId: id, measuredOn: "2026-08-06", weightKg: "51", reason: "előre" }, at("2026-08-05", "09:00")), "FUTURE_DAY");
   });
 });
 
@@ -54,6 +55,31 @@ describe("calculator and reference (KALK-01, KALK-02, EGY-08)", () => {
     expect((await referencesOn("2026-08-10", at("2026-08-12", "12:00")))[id]).toBe(250);
     expect(await prisma.feedingReference.count({ where: { animalId: id, validTo: null } })).toBe(1);
     expect(await prisma.calculatorRun.count({ where: { animalId: id } })).toBe(3);
+  });
+
+  it("two first saves as reference at once: one open version, both answers fine (review note on #14)", async () => {
+    const id = a["Teszt Kettő"];
+    // the test holds the animal's row so both saves are in flight together (without the hold the first
+    // one finishes before the second starts, and the race does not show)
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const isLocked = new Promise<void>((r) => (locked = r));
+    const holder = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "animal" WHERE "id" = ${id}::uuid FOR UPDATE`;
+      locked();
+      await held;
+    });
+    await isLocked;
+    const saves = Promise.allSettled(
+      [2, 3].map((fr) => runCalculator(f.aq1, { requestId: rid(), animalId: id, bwKg: "40", frWeekPct: fr, nWeek: 4, saveAsReference: true }, at("2026-08-14", "09:00"))),
+    );
+    await new Promise((r) => setTimeout(r, 300));
+    release();
+    await holder;
+    const res = await saves;
+    expect(res.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
+    expect(await prisma.feedingReference.count({ where: { animalId: id, validTo: null } })).toBe(1);
   });
 
   it("refuses inputs the description does not offer", async () => {
