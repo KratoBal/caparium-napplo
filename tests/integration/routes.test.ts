@@ -85,6 +85,22 @@ describe("login", () => {
   });
 });
 
+describe("module access (R-17, review of PR #1 point A)", () => {
+  it("an explicit NONE on the water module closes reading too: the grid answers 403", async () => {
+    const u = await prisma.user.create({
+      data: { loginId: `nincs-viz-${Date.now()}`, fullName: "Nincs Víz", role: "AQUARIST", passwordHash: await hashPassword(TEST_PASSWORD) },
+    });
+    await prisma.modulePermission.create({ data: { userId: u.id, module: "WATER", level: "NONE" } });
+    const cookie = await loginAs(u.loginId);
+    const res = await gridRoute(new Request(`${BASE}/api/grid?groupId=${f.group("NAPI_NAGY")}&day=2026-06-01`, { headers: { cookie } }));
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("NO_ACCESS");
+    // a normal aquarist still reads it
+    const ok = await gridRoute(new Request(`${BASE}/api/grid?groupId=${f.group("NAPI_NAGY")}&day=2026-06-01`, { headers: { cookie: await loginAs("teszt.akvarista2") } }));
+    expect(ok.status).toBe(200);
+  });
+});
+
 describe("measurement API", () => {
   it("refuses without a session (401) and from another origin (403)", async () => {
     const body = { requestId: rid(), groupId: f.group("NAPI_NAGY"), poolId: f.pool("NAGY"), parameterId: f.param("PH"), value: "8.1" };

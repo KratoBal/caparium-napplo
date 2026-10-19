@@ -14,6 +14,9 @@ referenced in the code where a rule is implemented.
 - **PostgreSQL + Prisma 6.** Rules Prisma cannot express are in the migration SQL: one valid value per
   grid cell (partial unique index, T-02) and an append-only audit table (triggers reject
   UPDATE/DELETE/TRUNCATE, K6).
+- **Two database roles.** Migrations and the seed run as the table owner; the server connects as
+  `caparium_app`, which owns nothing, has no DELETE on journal data and only INSERT/SELECT on the
+  audit table, so it cannot switch the audit triggers off either (K6 at the storage level).
 - **Own session login** (scrypt password hash, random token in an httpOnly SameSite=Lax cookie, only its
   hash in the database, same-origin check on every write). No external identity provider.
 - **Optimistic concurrency** (version per record), **idempotent writes** (client request id), and a
@@ -57,12 +60,20 @@ npm run secret-scan      # no secrets, no customer documents in the repo
 CI runs all of the above, the migration drift check, Playwright on WebKit (tablet 1024×768, touch)
 and Chromium (desktop 1440×900), and a docker compose start with a backup restore check.
 
+## Before a production deployment
+
+- `COOKIE_SECURE=true` is mandatory behind HTTPS (the test environment runs on plain HTTP on the tailnet).
+- The login lockout (10 failures in 15 minutes) applies to existing login ids only, so the "locked"
+  answer reveals that an id exists. Accepted for an internal staff app; revisit if it goes public.
+- `SERVICE_PASSWORD_SEED` must be empty: no test users outside the test environment.
+
 ## Temporary settings (not final business rules)
 
 - Reference ranges in the seed are **placeholder test values**; the admin sets the real ones.
 - Pool groups follow the NY-03 default: "Nagy medencék" = Nagymedence, Kismedence, Karantén;
   "Kismedencék" = Korallos, Inkubátor, Ragadozós; Kis sózó and Sózó have no water measurement.
-- Late-save grace period: 30 minutes (setting `late_save_grace_minutes`, K9).
+- Late-save grace period: 30 minutes (setting `late_save_grace_minutes`, K9); a client timestamp
+  older than 48 hours is not trusted at all (`late_save_max_hours`).
 - Trainee (NY-14 / T-06): no own login; "Gyakornok végezte" flag on the measurement.
 
 ## Status

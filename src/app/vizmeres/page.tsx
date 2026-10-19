@@ -3,7 +3,7 @@ import { MeasurementGrid } from "@/components/MeasurementGrid";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { getGrid, listGroups } from "@/lib/queries";
-import { requireUser } from "@/lib/session";
+import { requireModuleRead } from "@/lib/session";
 import { businessDayOf, formatDayLong, isValidDay, weekdayName } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export default async function DailyMeasurementPage({
 }: {
   searchParams: Promise<{ csoport?: string; nap?: string; kor?: string }>;
 }) {
-  const user = await requireUser();
+  const { user, level } = await requireModuleRead("WATER");
   const sp = await searchParams;
   const today = businessDayOf(new Date());
   const day = sp.nap && isValidDay(sp.nap) ? sp.nap : today;
@@ -70,6 +70,8 @@ export default async function DailyMeasurementPage({
           groupCode={group.code}
           today={today}
           user={{ id: user.id, role: user.role }}
+          canWrite={level === "RECORD" || level === "ADMIN"}
+          isAdmin={level === "ADMIN"}
           people={people}
         />
       )}

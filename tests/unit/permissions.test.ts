@@ -57,13 +57,17 @@ describe("late save (K9)", () => {
   const server = new Date("2026-10-15T22:10:00Z");
   it("within the grace period the client time counts", () => {
     const c = new Date("2026-10-15T21:50:00Z");
-    expect(effectiveNow(server, c, 30)).toEqual({ now: c, late: false, clientNow: c });
+    expect(effectiveNow(server, c, 30, 48)).toEqual({ now: c, late: false, clientNow: c });
   });
   it("beyond the grace period it is late", () => {
     const c = new Date("2026-10-15T21:30:00Z");
-    expect(effectiveNow(server, c, 30)).toEqual({ now: server, late: true, clientNow: c });
+    expect(effectiveNow(server, c, 30, 48)).toEqual({ now: server, late: true, clientNow: c });
+  });
+  it("a client time older than the upper bound is ignored, not trusted as late (review #1 B)", () => {
+    const weekOld = new Date("2026-10-08T21:30:00Z");
+    expect(effectiveNow(server, weekOld, 30, 48)).toEqual({ now: server, late: false, clientNow: null });
   });
   it("a client clock ahead of the server is ignored", () => {
-    expect(effectiveNow(server, new Date("2026-10-15T23:00:00Z"), 30)).toEqual({ now: server, late: false, clientNow: null });
+    expect(effectiveNow(server, new Date("2026-10-15T23:00:00Z"), 30, 48)).toEqual({ now: server, late: false, clientNow: null });
   });
 });

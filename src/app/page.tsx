@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
-import { validAt } from "@/lib/master";
+import { moduleLevel, validAt } from "@/lib/master";
 import { requireUser } from "@/lib/session";
 import { businessDayOf, dayToDate } from "@/lib/time";
 
@@ -26,26 +26,32 @@ async function dailyProgress(day: string) {
 export default async function OverviewPage() {
   const user = await requireUser();
   const today = businessDayOf(new Date());
-  const { done, total } = await dailyProgress(today);
+  // R-17: without access to the water module its numbers are not shown either
+  const water = (await moduleLevel(prisma, user.id, user.role, "WATER")) !== "NONE";
+  const { done, total } = water ? await dailyProgress(today) : { done: 0, total: 0 };
   return (
     <Shell title="Mai áttekintés" active="overview" user={user}>
       <h2 style={{ fontSize: 40 }}>Jó munkát!</h2>
       <p className="hint" style={{ fontSize: 17 }}>A mai feladatok és a naplók állapota egy helyen.</p>
       <div className="cards">
-        <Link className="tile" href="/vizmeres" data-testid="tile-daily">
-          <span className="tag">Víz</span>
-          <h3>Napi mérések</h3>
-          <div className="big">
-            {done} / {total} medence
-          </div>
-          <p className="hint">{total - done > 0 ? `${total - done} medence még vár` : "Minden medence mérve"}</p>
-        </Link>
-        <Link className="tile" href="/naplo">
-          <span className="tag">Napló</span>
-          <h3>Vízmérési napló</h3>
-          <div className="big">Keresés és előzmények</div>
-          <p className="hint">Dátum és medence szerint</p>
-        </Link>
+        {water && (
+          <Link className="tile" href="/vizmeres" data-testid="tile-daily">
+            <span className="tag">Víz</span>
+            <h3>Napi mérések</h3>
+            <div className="big">
+              {done} / {total} medence
+            </div>
+            <p className="hint">{total - done > 0 ? `${total - done} medence még vár` : "Minden medence mérve"}</p>
+          </Link>
+        )}
+        {water && (
+          <Link className="tile" href="/naplo">
+            <span className="tag">Napló</span>
+            <h3>Vízmérési napló</h3>
+            <div className="big">Keresés és előzmények</div>
+            <p className="hint">Dátum és medence szerint</p>
+          </Link>
+        )}
         <div className="tile muted">
           <span className="tag">KH · Ca · Mg</span>
           <h3>Heti vízmérés</h3>

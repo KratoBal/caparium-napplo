@@ -3,7 +3,8 @@
 #   - no domain is needed: the app is published only on APP_BIND:APP_PORT (on the stage host:
 #     the tailnet address), never through the public proxy;
 #   - every variable below shows up in Coolify's Environment Variables;
-#     SERVICE_PASSWORD_* are Coolify's generated secrets (set them yourself elsewhere);
+#     SERVICE_PASSWORD_* are Coolify's generated secrets (set them yourself elsewhere):
+#     POSTGRES = table owner (migrations), APP = the server's role, SEED = test users;
 #   - the test seed runs at every start when SEED_TEST_PASSWORD is set (idempotent);
 #   - backups: run `caparium-backup` in the db container (a Coolify scheduled task),
 #     dumps land in the db-backups volume, each one restore-checked.
@@ -30,7 +31,9 @@ services:
     build: .
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://caparium:${SERVICE_PASSWORD_POSTGRES}@db:5432/caparium
+      # migrations and seed as the table owner, the server as caparium_app (scripts/start.sh)
+      MIGRATE_DATABASE_URL: postgresql://caparium:${SERVICE_PASSWORD_POSTGRES}@db:5432/caparium
+      DATABASE_URL: postgresql://caparium_app:${SERVICE_PASSWORD_APP:?set SERVICE_PASSWORD_APP}@db:5432/caparium
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       SEED_TEST_PASSWORD: ${SERVICE_PASSWORD_SEED:-}
     ports:

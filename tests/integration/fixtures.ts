@@ -1,4 +1,8 @@
+import { PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/db";
+
+/** The table owner: for fixture changes the application role may not make (DELETE). */
+export const ownerPrisma = new PrismaClient({ datasources: { db: { url: process.env.OWNER_DATABASE_URL } } });
 import type { Actor } from "@/lib/measurements";
 
 export async function fixtures() {

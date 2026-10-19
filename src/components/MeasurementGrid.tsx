@@ -70,12 +70,18 @@ export function MeasurementGrid({
   groupCode,
   today,
   user,
+  canWrite,
+  isAdmin,
   people,
 }: {
   initial: Grid;
   groupCode: string;
   today: string;
   user: { id: string; role: string };
+  /** the effective module level (R-17) allows recording */
+  canWrite: boolean;
+  /** the effective module level is ADMIN */
+  isAdmin: boolean;
   people: { id: string; fullName: string }[];
 }) {
   const router = useRouter();
@@ -94,8 +100,7 @@ export function MeasurementGrid({
 
   const queueKey = `napplo-queue-v1-${user.id}`;
   const isPastDay = grid.day !== today;
-  const isAdmin = user.role === "ADMIN";
-  const readOnly = isPastDay && !isAdmin;
+  const readOnly = !canWrite || (isPastDay && !isAdmin);
 
   const readQueue = useCallback((): QueueItem[] => {
     try {
@@ -356,7 +361,12 @@ export function MeasurementGrid({
         )}
       </div>
 
-      {isPastDay && (
+      {!canWrite && (
+        <div className="banner banner-warn" style={{ marginBottom: 16 }}>
+          Ebben a modulban csak olvasási jogod van.
+        </div>
+      )}
+      {canWrite && isPastDay && (
         <div className="banner banner-warn" style={{ marginBottom: 16 }}>
           {isAdmin
             ? "Korábbi nap: minden módosításhoz indoklás kell, és bekerül a módosítási naplóba."

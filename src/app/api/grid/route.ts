@@ -1,12 +1,17 @@
 import { handle } from "@/lib/api";
+import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { moduleLevel } from "@/lib/master";
 import { getGrid } from "@/lib/queries";
 import { isValidDay } from "@/lib/time";
 
 export async function GET(req: Request) {
   return handle(
     req,
-    async () => {
+    async (user) => {
+      if ((await moduleLevel(prisma, user.id, user.role, "WATER")) === "NONE") {
+        throw new AppError(403, "NO_ACCESS", "Ehhez a modulhoz nincs jogosultságod.");
+      }
       const url = new URL(req.url);
       const groupId = url.searchParams.get("groupId") ?? "";
       const day = url.searchParams.get("day") ?? "";

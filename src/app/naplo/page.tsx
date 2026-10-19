@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { formatDecimalHu } from "@/lib/decimal";
 import { pickValid } from "@/lib/master";
 import { searchLog } from "@/lib/queries";
-import { requireUser } from "@/lib/session";
+import { requireModuleRead } from "@/lib/session";
 import { addDays, businessDayOf, isValidDay } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export default async function LogPage({
 }: {
   searchParams: Promise<{ tol?: string; ig?: string; medence?: string; allapot?: string; oldal?: string }>;
 }) {
-  const user = await requireUser();
+  const { user } = await requireModuleRead("WATER");
   const sp = await searchParams;
   const today = businessDayOf(new Date());
   const to = sp.ig && isValidDay(sp.ig) ? sp.ig : today;

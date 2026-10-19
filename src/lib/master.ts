@@ -20,6 +20,7 @@ export function pickValid<T extends Versioned>(rows: T[], at: Date): T | undefin
 
 export const SETTING_DEFAULTS = {
   late_save_grace_minutes: "30",
+  late_save_max_hours: "48",
   business_day_time_zone: "Europe/Budapest",
   show_reference_on_deviation: "true",
 } as const;

@@ -75,6 +75,8 @@ export function canModify(
 
 /**
  * K9: which instant counts as "now" for the day rule.
+ * The client time is trusted at most `maxLateHours` back (review #1, B): beyond that it is
+ * ignored altogether, so an old client timestamp cannot open a pending row on any past day.
  * Within the grace period the client's original timestamp counts (the request was made
  * before midnight but arrived after it). A client clock ahead of the server is not trusted.
  * Returns `late: true` when the client time is older than the grace period: such a save,
@@ -84,10 +86,11 @@ export function effectiveNow(
   serverNow: Date,
   clientTimestamp: Date | null,
   graceMinutes: number,
+  maxLateHours: number,
 ): { now: Date; late: boolean; clientNow: Date | null } {
   if (!clientTimestamp || Number.isNaN(clientTimestamp.getTime())) return { now: serverNow, late: false, clientNow: null };
   const ageMs = serverNow.getTime() - clientTimestamp.getTime();
-  if (ageMs < 0) return { now: serverNow, late: false, clientNow: null };
+  if (ageMs < 0 || ageMs > maxLateHours * 3600_000) return { now: serverNow, late: false, clientNow: null };
   if (ageMs <= graceMinutes * 60_000) return { now: clientTimestamp, late: false, clientNow: clientTimestamp };
   return { now: serverNow, late: true, clientNow: clientTimestamp };
 }

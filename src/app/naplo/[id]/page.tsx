@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Shell } from "@/components/Shell";
 import { formatDecimalHu } from "@/lib/decimal";
 import { measurementHistory } from "@/lib/queries";
-import { requireUser } from "@/lib/session";
+import { requireModuleRead } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,7 @@ function show(v: unknown): string {
 }
 
 export default async function MeasurementHistoryPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
+  const { user } = await requireModuleRead("WATER");
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const h = await measurementHistory(id);

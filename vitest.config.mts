@@ -17,6 +17,7 @@ export default defineConfig({
           // one database: files run one after another
           fileParallelism: false,
           globalSetup: ["tests/integration/global-setup.ts"],
+          setupFiles: ["tests/integration/env.ts"],
           testTimeout: 30_000,
           hookTimeout: 60_000,
         },

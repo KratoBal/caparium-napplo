@@ -164,6 +164,15 @@ function checkPlausible(value: string, p: { plausibleMin: string | null; plausib
   }
 }
 
+type LateWindow = { graceMinutes: number; maxLateHours: number };
+
+async function lateWindow(tx: Tx, at: Date): Promise<LateWindow> {
+  return {
+    graceMinutes: Number(await getSetting(tx, "late_save_grace_minutes", at)),
+    maxLateHours: Number(await getSetting(tx, "late_save_max_hours", at)),
+  };
+}
+
 /**
  * Applies the K9 rule around a permission check: first at the effective time; if that denies,
  * but the client's (late) original time would allow it, the save becomes PENDING.
@@ -172,9 +181,9 @@ function decideWithLateRule(
   check: (today: string) => Decision,
   serverNow: Date,
   clientTs: Date | null,
-  graceMinutes: number,
+  window: LateWindow,
 ): { decision: Decision; pending: boolean } {
-  const eff = effectiveNow(serverNow, clientTs, graceMinutes);
+  const eff = effectiveNow(serverNow, clientTs, window.graceMinutes, window.maxLateHours);
   const decision = check(businessDayOf(eff.now));
   if (decision.kind === "ALLOW") return { decision, pending: false };
   if (eff.late && eff.clientNow) {
@@ -258,8 +267,8 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
 
   try {
     return await prisma.$transaction(async (tx) => {
-      const grace = Number(await getSetting(tx, "late_save_grace_minutes", serverNow));
-      const eff = effectiveNow(serverNow, clientTs, grace);
+      const grace = await lateWindow(tx, serverNow);
+      const eff = effectiveNow(serverNow, clientTs, grace.graceMinutes, grace.maxLateHours);
       const { at: measuredAt, ambiguous } = resolveMeasuredAt(input.measuredAtLocal, eff.clientNow ?? serverNow);
       const day = businessDayOf(measuredAt);
 
@@ -367,7 +376,7 @@ export async function updateMeasurement(
       if (cur.version !== input.expectedVersion) {
         throw new AppError(409, "VERSION_CONFLICT", "A mérés időközben megváltozott.", { current: toView(cur) });
       }
-      const grace = Number(await getSetting(tx, "late_save_grace_minutes", serverNow));
+      const grace = await lateWindow(tx, serverNow);
       const { at: measuredAt, ambiguous } = resolveMeasuredAt(input.measuredAtLocal, cur.measuredAt);
       const oldDay = dateToDay(cur.businessDay);
       const newDay = businessDayOf(measuredAt);
@@ -481,7 +490,7 @@ export async function invalidateMeasurement(
     if (cur.version !== input.expectedVersion) {
       throw new AppError(409, "VERSION_CONFLICT", "A mérés időközben megváltozott.", { current: toView(cur) });
     }
-    const grace = Number(await getSetting(tx, "late_save_grace_minutes", serverNow));
+    const grace = await lateWindow(tx, serverNow);
     const day = dateToDay(cur.businessDay);
     const journal = await ensureJournalDay(tx, "WATER", cur.round.groupId, day);
     const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
@@ -529,7 +538,7 @@ export async function openNewRound(actor: Actor, input: NewRoundInput, serverNow
   return prisma.$transaction(async (tx) => {
     const group = await tx.measurementGroup.findUnique({ where: { id: input.groupId } });
     if (!group || !group.active) throw new AppError(404, "GROUP_NOT_FOUND", "A mérési csoport nem található.");
-    const grace = Number(await getSetting(tx, "late_save_grace_minutes", serverNow));
+    const grace = await lateWindow(tx, serverNow);
     const journal = await ensureJournalDay(tx, "WATER", group.id, input.day);
     const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
     const { decision } = decideWithLateRule(

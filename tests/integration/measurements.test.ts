@@ -11,7 +11,7 @@ import {
   type Actor,
 } from "@/lib/measurements";
 import { getGrid } from "@/lib/queries";
-import { cest, fixtures, rid } from "./fixtures";
+import { cest, fixtures, ownerPrisma, rid } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
 beforeAll(async () => {
@@ -226,6 +226,31 @@ describe("late save (K9)", () => {
   });
 });
 
+describe("late save upper bound (review of PR #1, point B)", () => {
+  it("a client timestamp a week old is not trusted: the aquarist is denied, no pending row", async () => {
+    const clientTimestamp = cest("2026-06-24T10:00").toISOString();
+    const before = await prisma.measurement.count({ where: { status: "PENDING" } });
+    await expectAppError(
+      createMeasurement(
+        f.aq1,
+        {
+          requestId: rid(),
+          clientTimestamp,
+          groupId: f.group("NAPI_NAGY"),
+          poolId: f.pool("NAGY"),
+          parameterId: f.param("PH"),
+          value: "8.1",
+          measuredAtLocal: "2026-06-24T09:55",
+        },
+        cest("2026-07-01T10:00"),
+      ),
+      403,
+      "NOT_TODAY",
+    );
+    expect(await prisma.measurement.count({ where: { status: "PENDING" } })).toBe(before);
+  });
+});
+
 describe("reference binding (VIZ-02, R-10)", () => {
   it("an out-of-range value is marked LOW with the range", async () => {
     await create(f.aq1, "2026-06-20", "08:09", { value: "7,88" });
@@ -237,10 +262,10 @@ describe("reference binding (VIZ-02, R-10)", () => {
 
   it("binds the range valid at the measurement time, not at the save time", async () => {
     const ph = f.param("PH");
-    const old = await prisma.referenceRange.findFirstOrThrow({ where: { parameterId: ph, validTo: null } });
+    const old = await ownerPrisma.referenceRange.findFirstOrThrow({ where: { parameterId: ph, validTo: null } });
     const change = cest("2026-06-22T00:00");
-    await prisma.referenceRange.update({ where: { id: old.id }, data: { validTo: change } });
-    const next = await prisma.referenceRange.create({
+    await ownerPrisma.referenceRange.update({ where: { id: old.id }, data: { validTo: change } });
+    const next = await ownerPrisma.referenceRange.create({
       data: { parameterId: ph, min: "7.5", max: "8.4", unitId: old.unitId, validFrom: change, createdById: f.admin.id },
     });
     try {
@@ -249,18 +274,35 @@ describe("reference binding (VIZ-02, R-10)", () => {
       const row = await prisma.measurement.findUniqueOrThrow({ where: { id: r.measurement.id } });
       expect(row.referenceRangeId).toBe(old.id);
     } finally {
-      await prisma.referenceRange.delete({ where: { id: next.id } });
-      await prisma.referenceRange.update({ where: { id: old.id }, data: { validTo: null } });
+      await ownerPrisma.referenceRange.delete({ where: { id: next.id } });
+      await ownerPrisma.referenceRange.update({ where: { id: old.id }, data: { validTo: null } });
     }
   });
 });
 
 describe("audit is append-only at the storage level (K6, R-12)", () => {
-  it("UPDATE, DELETE and TRUNCATE are rejected by the database", async () => {
+  it("the application role has no UPDATE, DELETE or TRUNCATE on the audit table", async () => {
     const one = await prisma.auditEntry.findFirstOrThrow();
-    await expect(prisma.$executeRaw`UPDATE "audit_entry" SET "reason" = 'x' WHERE "id" = ${one.id}`).rejects.toThrow(/append-only/);
-    await expect(prisma.$executeRaw`DELETE FROM "audit_entry" WHERE "id" = ${one.id}`).rejects.toThrow(/append-only/);
-    await expect(prisma.$executeRaw`TRUNCATE "audit_entry"`).rejects.toThrow(/append-only/);
+    await expect(prisma.$executeRaw`UPDATE "audit_entry" SET "reason" = 'x' WHERE "id" = ${one.id}`).rejects.toThrow(/permission denied/);
+    await expect(prisma.$executeRaw`DELETE FROM "audit_entry" WHERE "id" = ${one.id}`).rejects.toThrow(/permission denied/);
+    await expect(prisma.$executeRaw`TRUNCATE "audit_entry"`).rejects.toThrow(/permission denied/);
+  });
+
+  it("the application role cannot switch the audit triggers off (it does not own the table, review C)", async () => {
+    await expect(prisma.$executeRawUnsafe(`ALTER TABLE "audit_entry" DISABLE TRIGGER USER`)).rejects.toThrow(/must be owner/);
+    await expect(prisma.$executeRawUnsafe(`DROP TRIGGER "audit_entry_no_update_delete" ON "audit_entry"`)).rejects.toThrow(/must be owner/);
+  });
+
+  it("even the owner hits the triggers: UPDATE, DELETE and TRUNCATE are rejected", async () => {
+    const one = await ownerPrisma.auditEntry.findFirstOrThrow();
+    await expect(ownerPrisma.$executeRaw`UPDATE "audit_entry" SET "reason" = 'x' WHERE "id" = ${one.id}`).rejects.toThrow(/append-only/);
+    await expect(ownerPrisma.$executeRaw`DELETE FROM "audit_entry" WHERE "id" = ${one.id}`).rejects.toThrow(/append-only/);
+    await expect(ownerPrisma.$executeRaw`TRUNCATE "audit_entry"`).rejects.toThrow(/append-only/);
+  });
+
+  it("the application role cannot physically delete a measurement (K5)", async () => {
+    const one = await prisma.measurement.findFirstOrThrow();
+    await expect(prisma.measurement.delete({ where: { id: one.id } })).rejects.toThrow(/denied|permission/i);
   });
 
   it("a failed business write leaves no audit entry (one transaction)", async () => {
