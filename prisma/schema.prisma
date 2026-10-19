@@ -215,12 +215,13 @@ model Unit {
   isBase       Boolean   @default(false)
   active       Boolean   @default(true)
 
-  parameters      Parameter[]
-  referenceRanges ReferenceRange[]
-  measurements    Measurement[]
-  zimsUnitNames   ZimsUnitName[]
-  feeds           Feed[]
-  coralDoses      CoralFeedDose[]
+  parameters        Parameter[]
+  referenceRanges   ReferenceRange[]
+  measurements      Measurement[]
+  zimsUnitNames     ZimsUnitName[]
+  feeds             Feed[]
+  coralDoses        CoralFeedDose[]
+  feedingQuantities FeedingQuantity[]
 
   @@map("unit")
 }
@@ -456,6 +457,7 @@ model JournalDay {
   group       MeasurementGroup? @relation(fields: [groupId], references: [id])
 
   reopenings JournalReopen[]
+  feedingDay FeedingDay?
 
   @@index([businessDay])
   @@map("journal_day")
@@ -520,6 +522,8 @@ enum ExportKind {
   ZIMS_CSV
   EXCEL_WATER
   PDF_WATER
+  EXCEL_FEEDING
+  EXCEL_EATING
 }
 
 enum ExportPurpose {
@@ -643,11 +647,15 @@ model Animal {
   note      String?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
-  species     Species                 @relation(fields: [speciesId], references: [id])
-  names       AnimalName[]
-  events      LifecycleEvent[]
-  placements  Placement[]
-  memberships AnimalGroupMembership[]
+  species        Species                 @relation(fields: [speciesId], references: [id])
+  names          AnimalName[]
+  events         LifecycleEvent[]
+  placements     Placement[]
+  memberships    AnimalGroupMembership[]
+  selections     FeedingSelection[]
+  feedingItems   FeedingItem[]
+  participations FeedingParticipant[]
+  eatingStatuses EatingStatus[]
 
   @@map("animal")
 }
@@ -666,12 +674,13 @@ model AnimalName {
 
 // a feeding unit ("Ráják"); it has no pool of its own: its members' placements decide
 model AnimalGroup {
-  id          String                  @id @default(uuid()) @db.Uuid
-  active      Boolean                 @default(true)
-  createdAt   DateTime                @default(now()) @db.Timestamptz(3)
-  names       AnimalGroupName[]
-  memberships AnimalGroupMembership[]
-  events      LifecycleEvent[]
+  id           String                  @id @default(uuid()) @db.Uuid
+  active       Boolean                 @default(true)
+  createdAt    DateTime                @default(now()) @db.Timestamptz(3)
+  names        AnimalGroupName[]
+  memberships  AnimalGroupMembership[]
+  events       LifecycleEvent[]
+  feedingItems FeedingItem[]
 
   @@map("animal_group")
 }
@@ -780,6 +789,7 @@ model Feed {
   defaultUnit Unit            @relation(fields: [defaultUnitId], references: [id])
   names       FeedName[]
   coralDoses  CoralFeedDose[]
+  items       FeedingItem[]
 
   @@map("feed")
 }
@@ -809,4 +819,142 @@ model CoralFeedDose {
 
   @@index([feedId, validFrom])
   @@map("coral_feed_dose")
+}
+
+// ---------------------------------------------------------------------------
+// Areas 8, 9, 10 (stage 2): feeding days, daily selection, feeding items, eating status
+// ---------------------------------------------------------------------------
+
+enum ListState {
+  NOT_FINALIZED
+  FINALIZED
+}
+
+// T-01, R-4: the list state of a day; its lock is the FEEDING JournalDay (one per day, NY-06 default:
+// one common list for the whole Cápárium)
+model FeedingDay {
+  id            String     @id @default(uuid()) @db.Uuid
+  businessDay   DateTime   @unique @db.Date
+  journalDayId  String     @unique @db.Uuid
+  listState     ListState  @default(NOT_FINALIZED)
+  finalizedById String?    @db.Uuid
+  finalizedAt   DateTime?  @db.Timestamptz(3)
+  journalDay    JournalDay @relation(fields: [journalDayId], references: [id])
+
+  selections FeedingSelection[]
+  items      FeedingItem[]
+  statuses   EatingStatus[]
+
+  @@map("feeding_day")
+}
+
+// EGY-01, R-3: the valid row IS the selection; one valid row per (day, animal) (partial index, SQL)
+model FeedingSelection {
+  id                 String       @id @default(uuid()) @db.Uuid
+  feedingDayId       String       @db.Uuid
+  animalId           String       @db.Uuid
+  version            Int          @default(1)
+  requestId          String       @unique
+  status             RecordStatus @default(VALID)
+  invalidationReason String?
+  createdById        String       @db.Uuid
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedById        String       @db.Uuid
+  updatedAt          DateTime     @default(now()) @db.Timestamptz(3)
+  feedingDay         FeedingDay   @relation(fields: [feedingDayId], references: [id])
+  animal             Animal       @relation(fields: [animalId], references: [id])
+
+  @@index([feedingDayId])
+  @@map("feeding_selection")
+}
+
+// EGY-02..EGY-12, DN-17 (the "given" amount): to an animal OR a group (exactly one, SQL check)
+model FeedingItem {
+  id                 String       @id @default(uuid()) @db.Uuid
+  feedingDayId       String       @db.Uuid
+  animalId           String?      @db.Uuid
+  groupId            String?      @db.Uuid
+  feedId             String       @db.Uuid
+  otherName          String?
+  version            Int          @default(1)
+  requestId          String       @unique
+  status             RecordStatus @default(VALID)
+  invalidationReason String?
+  createdById        String       @db.Uuid
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedById        String       @db.Uuid
+  updatedAt          DateTime     @default(now()) @db.Timestamptz(3)
+  feedingDay         FeedingDay   @relation(fields: [feedingDayId], references: [id])
+  animal             Animal?      @relation(fields: [animalId], references: [id])
+  group              AnimalGroup? @relation(fields: [groupId], references: [id])
+  feed               Feed         @relation(fields: [feedId], references: [id])
+
+  quantities   FeedingQuantity[]
+  participants FeedingParticipant[]
+
+  @@index([feedingDayId])
+  @@map("feeding_item")
+}
+
+// T-08: at most one quantity per dimension (the Litopenaeus: one in pieces and one in grams)
+model FeedingQuantity {
+  id        String      @id @default(uuid()) @db.Uuid
+  itemId    String      @db.Uuid
+  quantity  Decimal     @db.Decimal(14, 4)
+  unitId    String      @db.Uuid
+  dimension Dimension
+  item      FeedingItem @relation(fields: [itemId], references: [id])
+  unit      Unit        @relation(fields: [unitId], references: [id])
+
+  @@unique([itemId, dimension])
+  @@map("feeding_quantity")
+}
+
+// R-8: who of a group was selected when the group item was saved
+model FeedingParticipant {
+  id       String      @id @default(uuid()) @db.Uuid
+  itemId   String      @db.Uuid
+  animalId String      @db.Uuid
+  item     FeedingItem @relation(fields: [itemId], references: [id])
+  animal   Animal      @relation(fields: [animalId], references: [id])
+
+  @@unique([itemId, animalId])
+  @@map("feeding_participant")
+}
+
+enum EatingState {
+  EATEN
+  PARTIAL
+  NOT_EATEN
+  FASTING
+}
+
+enum StatusSource {
+  MANUAL
+  AUTOMATIC
+}
+
+// EVE-01, EVE-02, EVE-04, EVE-11, DN-03: one valid row per (day, animal) (partial index, SQL)
+model EatingStatus {
+  id                 String       @id @default(uuid()) @db.Uuid
+  feedingDayId       String       @db.Uuid
+  animalId           String       @db.Uuid
+  state              EatingState
+  source             StatusSource @default(MANUAL)
+  vitamin            Boolean      @default(false)
+  medicine           Boolean      @default(false)
+  medicineNote       String?
+  version            Int          @default(1)
+  requestId          String       @unique
+  status             RecordStatus @default(VALID)
+  invalidationReason String?
+  createdById        String       @db.Uuid
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedById        String       @db.Uuid
+  updatedAt          DateTime     @default(now()) @db.Timestamptz(3)
+  feedingDay         FeedingDay   @relation(fields: [feedingDayId], references: [id])
+  animal             Animal       @relation(fields: [animalId], references: [id])
+
+  @@index([feedingDayId])
+  @@map("eating_status")
 }

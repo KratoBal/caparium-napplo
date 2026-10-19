@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { SessionUser } from "@/lib/auth";
 import { businessDayOf, formatDayLong } from "@/lib/time";
 
-type NavKey = "overview" | "daily" | "weekly" | "log" | "export" | "animals" | "feeds" | "pending" | "settings";
+type NavKey = "overview" | "daily" | "weekly" | "log" | "export" | "animals" | "feeds" | "feeding" | "eating" | "pending" | "settings";
 
 const NAV: { key: NavKey | null; href: string | null; label: string; note?: string }[] = [
   { key: "overview", href: "/", label: "Áttekintés" },
@@ -12,8 +12,8 @@ const NAV: { key: NavKey | null; href: string | null; label: string; note?: stri
   { key: "export", href: "/export", label: "Export" },
   { key: "animals", href: "/allatok", label: "Állatok" },
   { key: "feeds", href: "/takarmanyok", label: "Takarmánylista" },
-  { key: null, href: null, label: "Takarmánynapló", note: "hamarosan" },
-  { key: null, href: null, label: "Evési napló", note: "később" },
+  { key: "feeding", href: "/etetes", label: "Takarmánynapló" },
+  { key: "eating", href: "/evesi-naplo", label: "Evési napló" },
 ];
 
 export function Shell({

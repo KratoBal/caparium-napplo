@@ -9,6 +9,7 @@
 import type { LifecycleEvent, LifecycleType, Sex } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
+import { manualRowsOutsideLife, recomputeClosedDaysFrom } from "./feeding";
 import { prisma, type Tx } from "./db";
 import { AppError, isUniqueViolation } from "./errors";
 import { moduleLevel, pickValid, validAt } from "./master";
@@ -109,6 +110,14 @@ function eventSnapshot(e: LifecycleEvent): Record<string, unknown> {
   };
 }
 
+/** R-1 (2): stop, with the list, if the change leaves manual rows on days the animal was not alive. */
+async function refuseOrphanRows(tx: Tx, animalId: string) {
+  const rows = await manualRowsOutsideLife(tx, animalId);
+  if (rows.length) {
+    throw new AppError(409, "MANUAL_ROWS_CONFLICT", "Az állatnak a módosítás után olyan napokon is maradna kiválasztása, etetési tétele vagy evési állapota, amikor nem élt. Előbb ezeket kell érvényteleníteni, vagy az esemény dátumát javítani.", { rows });
+  }
+}
+
 function enforce(decision: ReturnType<typeof canCreate>, reasonText: string | undefined) {
   if (decision.kind === "DENY") throw new AppError(403, decision.code, decision.message);
   if (decision.reasonRequired && !reasonText) {
@@ -184,6 +193,9 @@ async function createInTx(tx: Tx, actor: Actor, input: LifecycleInput, at: { occ
     },
   });
   await rebuildAnimal(tx, animalId!);
+  await refuseOrphanRows(tx, animalId!);
+  // R-1: a death or arrival dated into a closed, finalized feeding day changes its fasting days
+  await recomputeClosedDaysFrom(tx, day, actor.id, input.requestId);
   await writeAudit(tx, {
     userId: actor.id,
     action: "CREATE",
@@ -227,6 +239,8 @@ export async function invalidateLifecycleEvent(
     });
     if (res.count !== 1) throw new AppError(409, "VERSION_CONFLICT", "Az esemény időközben megváltozott.");
     await rebuildAnimal(tx, cur.animalId);
+    await refuseOrphanRows(tx, cur.animalId);
+    await recomputeClosedDaysFrom(tx, dateToDay(cur.businessDay), actor.id, input.requestId);
     const after = await tx.lifecycleEvent.findUniqueOrThrow({ where: { id } });
     await writeAudit(tx, {
       userId: actor.id,
