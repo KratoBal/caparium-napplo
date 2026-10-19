@@ -72,7 +72,8 @@ that address for 15 minutes. The app's own login stays behind the gate, with its
 The gate fails closed: without its variables it is off only where nothing says the site is
 public. Behind an HTTPS proxy (`X-Forwarded-Proto: https`) or with `COOKIE_SECURE=true`, a missing
 gate answers 503 on every path but `/api/health`; running a public site without the gate needs an
-explicit `BASIC_AUTH=off` (passed to the container by `docker-compose.yml`, like every variable the
+explicit `BASIC_AUTH=off`, which wins over the other gate variables (Coolify generates `SERVICE_PASSWORD_BASICAUTH` for
+the compose even when no gate user is set) (passed to the container by `docker-compose.yml`, like every variable the
 gate reads; `tests/unit/compose-env.test.ts` fails if one is left out). With a public domain, `APP_BIND` stays a private address (127.0.0.1 or
 the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only the proxy may write.
 
