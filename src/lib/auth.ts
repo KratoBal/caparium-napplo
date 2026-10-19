@@ -46,7 +46,40 @@ const DUMMY_HASH = "scrypt$16384$8$1$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAA
 
 export type LoginResult =
   | { ok: true; token: string; expiresAt: Date; user: SessionUser }
-  | { ok: false; code: "INVALID" | "LOCKED" };
+  | { ok: false; code: "INVALID" | "LOCKED" | "BUSY" };
+
+/**
+ * A shared cap on the password checks running at once (review 32585): scrypt runs in the libuv
+ * thread pool (4 threads by default) with about 16 MB each, so a burst of logins must not take the
+ * pool or the memory. Up to `max` run, up to `maxWaiting` wait in order, anything beyond is refused
+ * at once (no scrypt, no audit). A finished check hands its slot straight to the next waiting one.
+ */
+export class Slots {
+  private active = 0;
+  private readonly waiting: (() => void)[] = [];
+  constructor(
+    private readonly max = 4,
+    private readonly maxWaiting = 32,
+  ) {}
+
+  async run<T>(fn: () => Promise<T>): Promise<{ ran: true; value: T } | { ran: false }> {
+    if (this.active >= this.max) {
+      if (this.waiting.length >= this.maxWaiting) return { ran: false };
+      await new Promise<void>((resolve) => this.waiting.push(resolve));
+    } else {
+      this.active += 1;
+    }
+    try {
+      return { ran: true, value: await fn() };
+    } finally {
+      const next = this.waiting.shift();
+      if (next) next();
+      else this.active -= 1;
+    }
+  }
+}
+
+export const passwordSlots = new Slots(4, 32);
 
 /** Checks the password, writes the LOGIN or LOGIN_FAILED audit entry, and opens a session. */
 export async function login(loginId: string, password: string, client: string | null): Promise<LoginResult> {
@@ -59,12 +92,14 @@ export async function login(loginId: string, password: string, client: string | 
     });
     if (failures >= MAX_FAILURES) {
       // the same work as a wrong password, so the time of the answer does not tell either
-      await verifyPassword(password, DUMMY_HASH);
-      return { ok: false, code: "LOCKED" };
+      const r = await passwordSlots.run(() => verifyPassword(password, DUMMY_HASH));
+      return { ok: false, code: r.ran ? "LOCKED" : "BUSY" };
     }
   }
   const usable = user && user.active && user.role !== "SYSTEM" && user.passwordHash;
-  const ok = await verifyPassword(password, usable ? user.passwordHash! : DUMMY_HASH);
+  const checked = await passwordSlots.run(() => verifyPassword(password, usable ? user.passwordHash! : DUMMY_HASH));
+  if (!checked.ran) return { ok: false, code: "BUSY" };
+  const ok = checked.value;
   if (!usable || !ok) {
     if (user) {
       await prisma.$transaction((tx) =>

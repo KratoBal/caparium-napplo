@@ -119,6 +119,12 @@ export class FailureLimiter {
     return h.count >= this.max;
   }
 
+  /** Gives one counted attempt back (a successful login, acrobot 32803: the staff share one NAT address). */
+  succeed(key: string, now = Date.now()): void {
+    const h = this.hits.get(key);
+    if (h && h.until > now && h.count > 0) h.count -= 1;
+  }
+
   fail(key: string, now = Date.now()): void {
     const h = this.hits.get(key);
     if (!h || h.until <= now) this.hits.set(key, { count: 1, until: now + this.windowMs });
