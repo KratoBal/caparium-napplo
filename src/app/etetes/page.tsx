@@ -1,6 +1,7 @@
 import { DayControls } from "@/components/DayControls";
 import { DayNav } from "@/components/DayNav";
-import { FinalizeList, GroupSelect, InvalidateButton, ItemForm, SelectBox, type FeedOpt, type Recipient } from "@/components/FeedingForms";
+import { FeedingDay } from "@/components/FeedingDay";
+import type { FeedOpt, Recipient } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { feedingDayView } from "@/lib/feeding";
@@ -10,9 +11,6 @@ import { requireModuleRead } from "@/lib/session";
 import { businessDayOf, isValidDay } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
-
-const fmt = (t: Record<string, number> | undefined) =>
-  t ? Object.entries(t).map(([u, v]) => `${String(v).replace(".", ",")} ${u}`).join(", ") : "";
 
 // EGY-01..EGY-12: the common daily list (NY-06 default), then the items, totals per unit (DN-16).
 export default async function FeedingPage({ searchParams }: { searchParams: Promise<{ nap?: string }> }) {
@@ -29,7 +27,6 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
   const canRecord = level === "RECORD" || level === "ADMIN";
   const isAdmin = level === "ADMIN";
   const editable = canRecord && (isAdmin || (day === today && lock.state === "OPEN"));
-  const names = new Map(view.animals.map((a) => [a.id, a.name]));
   const groups = new Map<string, { name: string; members: string[]; selected: number }>();
   for (const a of view.animals) {
     if (!a.groupId) continue;
@@ -49,11 +46,13 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         id: f.id,
         name: f.name,
         isOther: t.code === "EGYEB",
-        dims: f.dimensions.map((d) => ({ dimension: d, units: units.filter((u) => u.dimension === d).map((u) => ({ id: u.id, symbol: u.symbol })) })),
+        dims: f.dimensions.map((d) => ({
+          dimension: d,
+          base: units.find((u) => u.dimension === d && u.isBase)?.symbol ?? "?",
+          units: units.filter((u) => u.dimension === d).map((u) => ({ id: u.id, symbol: u.symbol, factor: Number(u.factorToBase ?? 1) })),
+        })),
       })),
   );
-  const itemsFor = (key: string) => view.items.filter((i) => (i.animalId ?? `g:${i.groupId}`) === key);
-  const selectedCount = view.animals.filter((a) => a.selected).length;
   return (
     <Shell title="Takarmánynapló" active="feeding" user={user}>
       <div className="toolbar">
@@ -65,81 +64,17 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         <DayControls kind="FEEDING" day={day} status={lock} isAdmin={isAdmin} />
       </div>
 
-      <div className="card">
-        <h2>Napi lista ({selectedCount} állat)</h2>
-        <p className="hint">
-          Közös lista: bármelyik akvarista módosíthatja. Akit a kész listán nem választottak ki, a nap lezárásakor koplalónapot kap.
-        </p>
-        {editable && groups.size > 0 && (
-          <div className="toolbar">
-            {[...groups].map(([id, g]) => (
-              <GroupSelect key={id} day={day} name={g.name} memberIds={g.members} />
-            ))}
-          </div>
-        )}
-        <div className="table-scroll">
-          <table className="log-table" data-testid="feeding-list">
-            <thead>
-              <tr><th>Listán</th><th>Állat</th><th>Medence</th><th>Csoport</th><th>Tételek</th><th>Összesen</th></tr>
-            </thead>
-            <tbody>
-              {view.animals.map((a) => (
-                <tr key={a.id}>
-                  <td className="keep"><SelectBox day={day} animalId={a.id} name={a.name} selected={a.selected} disabled={!editable} /></td>
-                  <td>{a.name}</td>
-                  <td>{a.poolName ?? "–"}</td>
-                  <td>{a.groupName ?? "–"}</td>
-                  <td className="keep">
-                    {itemsFor(a.id).map((i) => (
-                      <div key={i.id}>
-                        {i.otherName ? `${i.feed}: ${i.otherName}` : i.feed} {i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")}{" "}
-                        {editable && <InvalidateButton url={`/api/feeding/items/${i.id}/invalidate`} version={i.version} />}
-                      </div>
-                    ))}
-                  </td>
-                  <td>{fmt(view.totals[a.id])}</td>
-                </tr>
-              ))}
-              {[...groups].map(([id, g]) =>
-                itemsFor(`g:${id}`).length ? (
-                  <tr key={id}>
-                    <td></td>
-                    <td colSpan={3}>{g.name} (csoport)</td>
-                    <td className="keep">
-                      {itemsFor(`g:${id}`).map((i) => (
-                        <div key={i.id}>
-                          {i.feed} {i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")} ·{" "}
-                          <span className="hint">{i.participants.map((p) => names.get(p) ?? "?").join(", ")}</span>{" "}
-                          {i.noSelectedMember && (
-                            <span className="badge badge-pending" data-testid="group-item-no-member">
-                              nincs kiválasztott tag: az érvénytelenítés külön döntés
-                            </span>
-                          )}{" "}
-                          {editable && <InvalidateButton url={`/api/feeding/items/${i.id}/invalidate`} version={i.version} />}
-                        </div>
-                      ))}
-                    </td>
-                    <td>{fmt(view.totals[`g:${id}`])}</td>
-                  </tr>
-                ) : null,
-              )}
-            </tbody>
-          </table>
-        </div>
-        {editable && view.listState !== "FINALIZED" && (
-          <div className="toolbar">
-            <FinalizeList day={day} />
-          </div>
-        )}
-      </div>
-
-      {editable && (
-        <div className="card">
-          <h2>Új tétel</h2>
-          <p className="hint">A darab és a tömeg külön mennyiség, sosem adódik össze.</p>
-          <ItemForm day={day} recipients={recipients} feeds={feeds} />
-        </div>
-      )}
+      <FeedingDay
+        day={day}
+        editable={editable}
+        finalized={view.listState === "FINALIZED"}
+        animals={view.animals}
+        groups={[...groups].map(([id, g]) => ({ id, name: g.name, members: g.members }))}
+        items={view.items}
+        totals={view.totals}
+        recipients={recipients}
+        feeds={feeds}
+      />
     </Shell>
   );
 }

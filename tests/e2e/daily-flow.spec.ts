@@ -304,6 +304,17 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   const row = page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name });
   await expect(row).toContainText("6 db");
   await expect(row).toContainText("42,5 g");
+  // EGY-06, EGY-07: the clicked row is active, the form follows it, the live line adds what is typed
+  // (the form first points at the group, so only the click can bring the animal back)
+  await form.getByLabel("Kinek", { exact: true }).selectOption({ label: "Teszt csoport (csoport)" });
+  await expect(page.getByTestId("live-total")).toContainText("Teszt csoport (csoport): eddig");
+  await row.getByRole("cell", { name, exact: true }).click();
+  const live = page.getByTestId("live-total");
+  await expect(live).toContainText(`${name}: eddig`);
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("10");
+  await expect(live).toContainText("most beírva 10 g");
+  await expect(live).toContainText("együtt 52,5 g");
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("");
   const finalize = page.getByRole("button", { name: "Lista kész" });
   if (await finalize.count()) await finalize.click();
   await expect(page.getByTestId("list-state")).toHaveText("Lista kész");
@@ -319,6 +330,12 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   await page.reload();
   await expect(page.getByTestId(`state-${name}`)).toHaveText("nem evett meg mindent");
   await expect(page.getByTestId("eating-table").getByRole("row").filter({ hasText: name })).toContainText("V");
+
+  // TAK-04: the period log shows the item and the eating pattern; TAK-05: printable as PDF
+  await page.getByRole("link", { name: "Takarmányozási napló" }).click();
+  await expect(page.getByTestId("feeding-log")).toContainText(name);
+  await expect(page.getByTestId("eating-pattern")).toContainText(name);
+  await expect(page.getByTestId("print")).toBeVisible();
 
   // EGY-10, EVE-07: both Excel files are real downloads from the export page
   await page.getByRole("link", { name: "Export" }).click();

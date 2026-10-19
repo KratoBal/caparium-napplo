@@ -108,6 +108,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .log-table th { text-align: left; color: var(--c-muted); font-size: 13px; padding: 10px 8px; border-bottom: 1px solid var(--c-line); }
 .log-table td { padding: 12px 8px; border-bottom: 1px solid var(--c-line); font-size: 15px; }
 .log-table tr.invalid td { color: var(--c-muted); text-decoration: line-through; }
+/* EGY-07: the clicked recipient's row is the active one */
+.log-table tr.clickable { cursor: pointer; }
+.log-table tr.active-row td { background: var(--c-primary-soft); }
 .log-table tr.invalid td.keep { text-decoration: none; }
 .value-out { color: var(--c-error); font-weight: 600; }
 .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
@@ -158,3 +161,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .err { color: var(--c-error); font-weight: 600; }
 
 .input.small { width: 110px; }
+
+/* TAK-05: the page as PDF through the print dialog; navigation and forms stay out */
+@media print {
+  .nav, .brand, .userbox, .no-print, .day-controls { display: none !important; }
+  .shell { display: block; }
+  .main { padding: 0; }
+  .card { border: 0; padding: 0 0 12px; }
+  .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

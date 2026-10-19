@@ -64,8 +64,8 @@ type Facts = { level: Level; d: string; today: string; closed: boolean };
  * statuses and the fasting recompute read each other's rows and then write, and under READ COMMITTED
  * two of them would not see each other (a removal and an "ate" at the same moment would leave a
  * status on an animal that is not on the list). One common list per day (R-7), so the wait is short.
- * Lock order: a lifecycle change locks the animal first, then (through the recompute) the day; a day
- * writer locks only the day. Between a selection and a death recorded at the same moment for the
+ * Lock order: a lifecycle change locks the animal first, then (through the recompute) the days in
+ * ascending order; a day writer locks only its day. Between a selection and a death recorded at the same moment for the
  * same day, refuseOrphanRows (animals.ts) is the net, for the rows its own transaction sees.
  */
 export async function lockFeedingDay(tx: Tx, feedingDayId: string) {
@@ -306,8 +306,10 @@ export async function manualRowsOutsideLife(tx: Tx, animalId: string) {
 
 /** R-1: after a lifecycle change, the closed finalized days from that day on follow it. */
 export async function recomputeClosedDaysFrom(tx: Tx, fromDay: string, actorId: string, requestId: string | null) {
+  // in day order, always: two lifecycle changes lock the same days in the same order (no 40P01)
   const days = await tx.feedingDay.findMany({
     where: { businessDay: { gte: dayToDate(fromDay) }, listState: "FINALIZED", journalDay: { state: "CLOSED" } },
+    orderBy: { businessDay: "asc" },
   });
   for (const fd of days) await recomputeFasting(tx, fd.id, actorId, requestId);
 }
@@ -547,12 +549,17 @@ export async function feedingDayView(d: string) {
       };
     })
     .sort((x, y) => (x.groupName ?? "~").localeCompare(y.groupName ?? "~", "hu") || x.name.localeCompare(y.name, "hu"));
-  // row totals per recipient and unit (EGY-08), never summing pieces and grams
+  // row totals per recipient in the base unit of each dimension (EGY-06, EGY-08): 1 kg and 500 g are
+  // 1500 g, pieces and grams never add up
+  const baseOf = new Map((await prisma.unit.findMany({ where: { isBase: true } })).map((u) => [u.dimension, u.symbol]));
   const totals = new Map<string, Map<string, number>>();
   for (const it of items) {
     const key = it.animalId ?? `g:${it.groupId}`;
     const t = totals.get(key) ?? new Map<string, number>();
-    for (const q of it.quantities) t.set(q.unit.symbol, (t.get(q.unit.symbol) ?? 0) + Number(q.quantity));
+    for (const q of it.quantities) {
+      const base = baseOf.get(q.unit.dimension) ?? q.unit.symbol;
+      t.set(base, (t.get(base) ?? 0) + Number(q.quantity) * Number(q.unit.factorToBase ?? 1));
+    }
     totals.set(key, t);
   }
   return {

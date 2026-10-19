@@ -64,7 +64,7 @@ describe("the feeding Excel (EGY-10, D-30)", () => {
     await item({ groupId, feedId: feed["Teszt kagyló"], quantities: [{ value: "300", unitId: unit.g }] });
 
     const { buffer, rows } = await buildFeedingWorkbook({ from: d, to: d });
-    expect(rows).toBe(3);
+    expect(rows).toBeGreaterThan(3); // the three recipients plus every other animal alive that day (EGY-05)
     const ws = await sheet(buffer);
     expect([ws.getCell("D1").value, ws.getCell("D2").value, ws.getCell("A3").value, ws.getCell("B3").value, ws.getCell("C3").value]).toEqual([
       "Takarmány",
@@ -92,6 +92,10 @@ describe("the feeding Excel (EGY-10, D-30)", () => {
     expect((egy.getCell(gSum).value as { formula: string }).formula).not.toContain(`${ws.getColumn(lit).letter}${egy.number}`);
 
     expect(val(rowOf(ws, 3, "Teszt Három").getCell(colOf(ws, 1, "Teszt hal")))).toBe(1000); // 1 kg in grams
+    // EGY-05: an animal not fed that day has its row, its cells empty and coloured; a fed row's gaps too
+    const negy = rowOf(ws, 3, "Teszt Négy");
+    expect([negy.getCell(lit).value, fillOf(negy.getCell(lit)), fillOf(negy.getCell(other1))]).toEqual([null, "FFF2F2F2", "FFF2F2F2"]);
+    expect([fillOf(egy.getCell(colOf(ws, 1, "Teszt hal"))), fillOf(egy.getCell(lit))]).toEqual(["FFF2F2F2", null]);
     const group = rowOf(ws, 3, "Teszt csoport (csoport)");
     expect(val(group.getCell(colOf(ws, 1, "Teszt kagyló")))).toBe(300);
     // EGY-11: the SUM row is the last one

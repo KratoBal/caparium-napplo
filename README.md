@@ -103,6 +103,8 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   it by hand earlier. The automatic fasting days are born at the close, and only for a finalized list.
 - Eating state colours (display only, DN-03): ate green, partly yellow, did not eat red, fasting
   light blue; in the eating Excel a day before arrival is light grey, after death or release dark.
+- PDF (TAK-05) is the browser's print of the log page ("Mentés PDF-ként"), not a server-made file;
+  the screen log covers at most 92 days, the Excel a year.
 - At most 5 "Egyéb" feeds per animal and day (the template's Egyéb 1–5, setting `egyéb_takarmány_max`).
 
 ## Status
@@ -135,6 +137,11 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   list of those rows. Excel: the individual feeding log (one row per day and recipient, SUM per unit,
   never pieces with grams, D-30; Egyéb 1–5 with their names) and the eating pattern (days across,
   colours, V and Gy, the medicine note under its day, the dead struck through).
+- Stage 2, additions: the Excel lists every animal alive on a day, with empty, coloured cells for
+  what it did not get (EGY-05); on the feeding page the clicked row is the active one and a live line
+  adds what is typed to the row's total in base units (EGY-06, EGY-07); the feeding log of a period
+  filtered by pool and animal, with the eating pattern (TAK-04), printable as PDF from the browser and
+  exportable as Excel (TAK-05).
 - Trial import file for the customer (VIZ-24): `npx tsx scripts/zims-trial-file.ts --pool <name>
   --date <day> --measured-by "<name in their ZIMS>"`; the real name is an argument, never stored.
 
