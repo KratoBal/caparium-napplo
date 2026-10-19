@@ -269,6 +269,15 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
     return await prisma.$transaction(async (tx) => {
       const grace = await lateWindow(tx, serverNow);
       const eff = effectiveNow(serverNow, clientTs, grace.graceMinutes, grace.maxLateHours);
+      // A client time beyond the upper bound is not trusted; without an explicit measurement time
+      // the save would silently become a measurement of today (review of #1, note): refuse instead.
+      if (!input.measuredAtLocal && clientTs && serverNow.getTime() - clientTs.getTime() > grace.maxLateHours * 3600_000) {
+        throw new AppError(
+          422,
+          "STALE_CLIENT_TIME",
+          "Ez a mentés túl régen készült. Add meg a mérés időpontját, és küldd el újra.",
+        );
+      }
       const { at: measuredAt, ambiguous } = resolveMeasuredAt(input.measuredAtLocal, eff.clientNow ?? serverNow);
       const day = businessDayOf(measuredAt);
 

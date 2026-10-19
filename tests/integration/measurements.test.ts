@@ -251,6 +251,29 @@ describe("late save upper bound (review of PR #1, point B)", () => {
   });
 });
 
+describe("stale client time without a measurement time (review of #1, note)", () => {
+  it("is refused instead of becoming a measurement of today", async () => {
+    const before = await prisma.measurement.count();
+    await expectAppError(
+      createMeasurement(
+        f.aq1,
+        {
+          requestId: rid(),
+          clientTimestamp: cest("2026-06-25T10:00").toISOString(),
+          groupId: f.group("NAPI_NAGY"),
+          poolId: f.pool("NAGY"),
+          parameterId: f.param("PH"),
+          value: "8.1",
+        },
+        cest("2026-07-02T10:00"),
+      ),
+      422,
+      "STALE_CLIENT_TIME",
+    );
+    expect(await prisma.measurement.count()).toBe(before);
+  });
+});
+
 describe("reference binding (VIZ-02, R-10)", () => {
   it("an out-of-range value is marked LOW with the range", async () => {
     await create(f.aq1, "2026-06-20", "08:09", { value: "7,88" });
