@@ -285,3 +285,45 @@ test("animals: the list from the events, a transfer recorded, the history kept; 
   await expect(page.getByTestId("feeds-RAK")).toContainText("Litopenaeus vannamei");
   await expect(page.getByTestId("feeds-RAK")).toContainText("tömeg és darab");
 });
+
+test("feeding: the daily list, an item in pieces and grams, the list finalized; the eating log", async ({ page }, info) => {
+  // each layout feeds its own animal: the day is shared, the cells are not
+  const name = info.project.name === "tablet" ? "Teszt Egy" : "Teszt Kettő";
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Takarmánynapló" }).click();
+  const box = page.getByLabel(`${name} a mai listán`);
+  await box.check();
+  await expect(box).toBeChecked();
+  const form = page.getByTestId("item-form");
+  await form.getByLabel("Kinek", { exact: true }).selectOption({ label: name });
+  await form.getByLabel("Takarmány", { exact: true }).selectOption({ label: "Litopenaeus vannamei" });
+  await form.getByLabel("Mennyiség (darab)", { exact: true }).fill("6");
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("42,5");
+  await form.getByRole("button", { name: "Tétel mentése" }).click();
+  await expect(form.getByRole("status")).toHaveText("Tétel mentve.");
+  const row = page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name });
+  await expect(row).toContainText("6 db");
+  await expect(row).toContainText("42,5 g");
+  const finalize = page.getByRole("button", { name: "Lista kész" });
+  if (await finalize.count()) await finalize.click();
+  await expect(page.getByTestId("list-state")).toHaveText("Lista kész");
+
+  await page.getByRole("link", { name: "Evési napló" }).click();
+  // not on the list: a fasting day once the finalized list is closed, shown as pending until then
+  await expect(page.getByTestId("state-Teszt Négy")).toHaveText("koplal, még nem végleges");
+  const eat = page.getByTestId(`eating-${name}`);
+  await eat.getByLabel(`${name} evési állapota`).selectOption({ label: "nem evett meg mindent" });
+  await eat.getByLabel(`${name} vitamin`).check();
+  await eat.getByRole("button", { name: "Mentés" }).click();
+  await expect(page.getByTestId(`state-${name}`)).toHaveText("nem evett meg mindent");
+  await page.reload();
+  await expect(page.getByTestId(`state-${name}`)).toHaveText("nem evett meg mindent");
+  await expect(page.getByTestId("eating-table").getByRole("row").filter({ hasText: name })).toContainText("V");
+
+  // EGY-10, EVE-07: both Excel files are real downloads from the export page
+  await page.getByRole("link", { name: "Export" }).click();
+  for (const [id, prefix] of [["excel-etetes", "Egyedi_takarmanynaplo_"], ["excel-evesi", "Evesi_minta_"]] as const) {
+    const [file] = await Promise.all([page.waitForEvent("download"), page.getByTestId(id).click()]);
+    expect(file.suggestedFilename()).toMatch(new RegExp(`^${prefix}\\d{4}-\\d{2}-\\d{2}`));
+  }
+});

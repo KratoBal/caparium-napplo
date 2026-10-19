@@ -116,6 +116,8 @@ const FEEDS = [
   { type: "LABASFEJU", name: "Teszt tintahal", dims: ["MASS"], unit: "g" },
   { type: "APRO", name: "Teszt plankton", dims: ["VOLUME"], unit: "ml" },
   { type: "KORALL", name: "Teszt koralltáp", dims: ["MASS"], unit: "g" },
+  // EGY-12: the "Egyéb" feed takes its real name in each item
+  { type: "EGYEB", name: "Egyéb", dims: ["MASS"], unit: "g" },
 ] as const;
 const SPECIES = ["Teszt faj A", "Teszt faj B", "Teszt faj C"];
 const ANIMALS = [

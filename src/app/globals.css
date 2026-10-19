@@ -114,6 +114,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .badge-valid { background: var(--c-primary-soft); color: var(--c-primary); }
 .badge-invalid { background: var(--c-error-soft); color: var(--c-error); }
 .badge-pending { background: var(--c-warn-soft); color: var(--c-warn-ink); }
+/* EVE-02: the colour of an eating state is display, not data (DN-03) */
+.eat-EATEN { background: #dff3e4; color: #1f7a3a; }
+.eat-PARTIAL { background: #fff3c4; color: #7a5d00; }
+.eat-NOT_EATEN { background: var(--c-error-soft); color: var(--c-error); }
+.eat-FASTING { background: #e2f0fb; color: #1d6694; }
+.eat-pending { background: var(--c-field); color: #1d6694; border: 1px dashed #8fbfdf; }
 .table-scroll { overflow-x: auto; }
 .filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 20px; }
 

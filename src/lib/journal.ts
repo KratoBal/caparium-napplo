@@ -7,6 +7,7 @@ import { z } from "zod";
 import { writeAudit } from "./audit";
 import { prisma, SYSTEM_USER_ID } from "./db";
 import { AppError } from "./errors";
+import { ensureFeedingDay, recomputeFasting } from "./feeding";
 import { ensureJournalDay, moduleLevel } from "./master";
 import type { Actor } from "./measurements";
 import { addDays, businessDayOf, dateToDay, dayToDate, resolveLocalDateTime } from "./time";
@@ -30,10 +31,14 @@ export async function runJournalJob(now = new Date()): Promise<JobResult> {
     if (before === 0) created += 1;
   }
 
-  // every open water day before today, unless an admin has reopened it and not closed it again
+  // the common feeding day of today (NY-06 default: one list for the whole Cápárium)
+  await prisma.$transaction((tx) => ensureFeedingDay(tx, today));
+
+  // every open water or feeding day before today, unless an admin has reopened it and not closed it
+  // again. The feeding day closes at the end of the business day (NY-05 default: 24:00, T-01/3).
   const due = await prisma.journalDay.findMany({
     where: {
-      kind: "WATER",
+      kind: { in: ["WATER", "FEEDING"] },
       state: "OPEN",
       businessDay: { lt: dayToDate(today) },
       reopenings: { none: { reclosedAt: null } },
@@ -49,6 +54,11 @@ export async function runJournalJob(now = new Date()): Promise<JobResult> {
         data: { state: "CLOSED", closeMode: "AUTOMATIC", closedById: SYSTEM_USER_ID, closedAt: plannedClose(day), closeRanAt: now },
       });
       if (res.count !== 1) return false;
+      if (j.kind === "FEEDING") {
+        // the automatic fasting days are born at the close, and only for a finalized list (T-01/2, /4)
+        const fd = await ensureFeedingDay(tx, day);
+        await recomputeFasting(tx, fd.fd.id, SYSTEM_USER_ID, null, now);
+      }
       await writeAudit(tx, {
         userId: SYSTEM_USER_ID,
         action: "CLOSE",
@@ -65,14 +75,22 @@ export async function runJournalJob(now = new Date()): Promise<JobResult> {
 
 export const dayActionSchema = z.object({
   requestId: z.string().min(8).max(100),
-  groupId: z.uuid(),
+  kind: z.enum(["WATER", "FEEDING"]).default("WATER"),
+  groupId: z.uuid().nullable().optional(),
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   reason: z.string().trim().min(3, "Az indoklás legalább 3 karakter legyen.").max(500).optional(),
 });
-export type DayActionInput = z.infer<typeof dayActionSchema>;
+export type DayActionInput = z.input<typeof dayActionSchema>;
 
-async function requireAdmin(actor: Actor) {
-  const level = await moduleLevel(prisma, actor.id, actor.role, "WATER");
+/** The lock row an action names: a water day needs its measurement group, the feeding day has none. */
+function dayWhere(input: DayActionInput) {
+  const kind = input.kind ?? "WATER";
+  if (kind === "WATER" && !input.groupId) throw new AppError(422, "GROUP_REQUIRED", "A vízmérési naphoz a mérési csoport is kell.");
+  return { kind, groupId: kind === "WATER" ? input.groupId! : null, businessDay: dayToDate(input.day) };
+}
+
+async function requireAdmin(actor: Actor, kind: "WATER" | "FEEDING" = "WATER") {
+  const level = await moduleLevel(prisma, actor.id, actor.role, kind);
   if (level !== "ADMIN") throw new AppError(403, "ADMIN_ONLY", "Napot újranyitni és lezárni csak adminisztrátor tud.");
 }
 
@@ -81,11 +99,11 @@ async function replayed(requestId: string) {
 }
 
 export async function reopenDay(actor: Actor, input: DayActionInput) {
-  await requireAdmin(actor);
+  await requireAdmin(actor, input.kind ?? "WATER");
   if (!input.reason) throw new AppError(422, "REASON_REQUIRED", "Az újranyitáshoz indoklás kell.");
   if (await replayed(input.requestId)) return { replayed: true };
   return prisma.$transaction(async (tx) => {
-    const j = await tx.journalDay.findFirst({ where: { kind: "WATER", groupId: input.groupId, businessDay: dayToDate(input.day) } });
+    const j = await tx.journalDay.findFirst({ where: dayWhere(input) });
     if (!j || j.state !== "CLOSED") throw new AppError(409, "NOT_CLOSED", "Ez a nap nincs lezárva.");
     const res = await tx.journalDay.updateMany({
       where: { id: j.id, state: "CLOSED" },
@@ -107,14 +125,16 @@ export async function reopenDay(actor: Actor, input: DayActionInput) {
 }
 
 export async function recloseDay(actor: Actor, input: DayActionInput, now = new Date()) {
-  await requireAdmin(actor);
+  await requireAdmin(actor, input.kind ?? "WATER");
   if (await replayed(input.requestId)) return { replayed: true };
   return prisma.$transaction(async (tx) => {
     const j = await tx.journalDay.findFirst({
-      where: { kind: "WATER", groupId: input.groupId, businessDay: dayToDate(input.day) },
+      where: dayWhere(input),
       include: { reopenings: { where: { reclosedAt: null } } },
     });
-    if (!j || j.state !== "OPEN" || j.reopenings.length === 0) {
+    // a feeding day may also be closed by hand before its automatic close (T-01/3); a water day
+    // only after a reopen
+    if (!j || j.state !== "OPEN" || (j.kind === "WATER" && j.reopenings.length === 0)) {
       throw new AppError(409, "NOT_REOPENED", "Csak újranyitott napot lehet kézzel lezárni.");
     }
     await tx.journalDay.update({
@@ -122,6 +142,11 @@ export async function recloseDay(actor: Actor, input: DayActionInput, now = new 
       data: { state: "CLOSED", closeMode: "MANUAL", closedById: actor.id, closedAt: now, closeRanAt: now },
     });
     await tx.journalReopen.updateMany({ where: { journalDayId: j.id, reclosedAt: null }, data: { reclosedAt: now } });
+    // R-2: at the reclose the automatic fasting days are recomputed (they stayed valid while open)
+    if (j.kind === "FEEDING") {
+      const fd = await tx.feedingDay.findUnique({ where: { journalDayId: j.id } });
+      if (fd) await recomputeFasting(tx, fd.id, actor.id, input.requestId, now);
+    }
     await writeAudit(tx, {
       userId: actor.id,
       action: "CLOSE",
@@ -136,9 +161,9 @@ export async function recloseDay(actor: Actor, input: DayActionInput, now = new 
 }
 
 /** The lock of a day as the pages show it. */
-export async function dayStatus(groupId: string, day: string) {
+export async function dayStatus(groupId: string | null, day: string, kind: "WATER" | "FEEDING" = "WATER") {
   const j = await prisma.journalDay.findFirst({
-    where: { kind: "WATER", groupId, businessDay: dayToDate(day) },
+    where: { kind, groupId, businessDay: dayToDate(day) },
     include: { reopenings: { where: { reclosedAt: null } } },
   });
   return {

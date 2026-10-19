@@ -19,6 +19,7 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
   const user = await requireUser();
   const level = await moduleLevel(prisma, user.id, user.role, "EXPORT");
   if (level === "NONE") redirect("/nincs-jogosultsag");
+  const feedingLevel = await moduleLevel(prisma, user.id, user.role, "FEEDING");
   const sp = await searchParams;
   const today = businessDayOf(new Date());
   const to = sp.ig && isValidDay(sp.ig) ? sp.ig : today;
@@ -76,6 +77,28 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
           <button className="btn" type="submit" data-testid="excel-download">Excel letöltése ({from} – {to})</button>
         </form>
       </div>
+
+      {feedingLevel !== "NONE" && (
+        <div className="card">
+          <h2>Takarmányozás (Excel)</h2>
+          <p className="hint">
+            Egyedi takarmánynapló: naponként és állatonként egy sor, a SUM mértékegységenként külön (a darab és a gramm nem adódik össze). Evési minta:
+            állatonként egy sor, a napok vízszintesen, az állapot színnel, a gyógyszer megjegyzése a nap oszlopának alján.
+          </p>
+          <div className="toolbar">
+            {(["etetes", "evesi"] as const).map((kind) => (
+              <form key={kind} method="post" action="/api/exports/feeding">
+                <input type="hidden" name="kind" value={kind} />
+                <input type="hidden" name="from" value={from} />
+                <input type="hidden" name="to" value={to} />
+                <button className="btn" type="submit" data-testid={`excel-${kind}`}>
+                  {kind === "etetes" ? "Egyedi takarmánynapló" : "Evési minta"} ({from} – {to})
+                </button>
+              </form>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h2>ZIMS CSV</h2>

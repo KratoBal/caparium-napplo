@@ -97,6 +97,13 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   "Teszt hal"); the real list comes at go-live, with a separate approval.
 - Coral feed doses (NY-04, EGY-09): the table exists, no dose and no conversion yet; waits for the
   customer's answer.
+- One common daily feeding list for the whole Cápárium (NY-06 default): any aquarist may change it
+  and finalize it on an open day (R-7).
+- The feeding day closes automatically at local midnight (NY-05 default, T-01/3); an admin may close
+  it by hand earlier. The automatic fasting days are born at the close, and only for a finalized list.
+- Eating state colours (display only, DN-03): ate green, partly yellow, did not eat red, fasting
+  light blue; in the eating Excel a day before arrival is light grey, after death or release dark.
+- At most 5 "Egyéb" feeds per animal and day (the template's Egyéb 1–5, setting `egyéb_takarmány_max`).
 
 ## Status
 
@@ -118,6 +125,16 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   from them, with the history kept (DAT-01, DAT-05, EVE-03, T-09). An arrival is admin work; an
   event on an earlier day needs a reason. The feed list by type, never deleted, only made inactive
   (DAT-02, TAK-07).
+- Stage 2, feeding: the common daily list (a group selects its members of the day one by one), the
+  list finalized, feeding items in pieces and grams that never add up (T-08, DN-16), a group item
+  with a snapshot of who was selected (R-8), the same feed not twice to one animal (T-21). Eating
+  statuses: ate, partly, did not eat for a selected animal, a fasting day only for one not selected,
+  V and Gy with a medicine note (EVE-01..EVE-05). Automatic fasting days at the close of a finalized
+  list, recomputed when an admin changes a closed day, at a reclose (R-2) and when a lifecycle event
+  is recorded later (R-1); a later death that would leave manual rows after it is refused with the
+  list of those rows. Excel: the individual feeding log (one row per day and recipient, SUM per unit,
+  never pieces with grams, D-30; Egyéb 1–5 with their names) and the eating pattern (days across,
+  colours, V and Gy, the medicine note under its day, the dead struck through).
 - Trial import file for the customer (VIZ-24): `npx tsx scripts/zims-trial-file.ts --pool <name>
   --date <day> --measured-by "<name in their ZIMS>"`; the real name is an argument, never stored.
 
