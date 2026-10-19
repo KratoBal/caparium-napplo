@@ -196,13 +196,15 @@ test("settings: an admin changes a reference range and creates a user who can lo
   await row.getByLabel("NO3 maximum").fill(tablet ? "5" : "4");
   await row.getByRole("button", { name: "Mentés" }).click();
   await expect(row.getByRole("status")).toHaveText("Mentve.");
+  await page.waitForLoadState("networkidle"); // the save refreshes the page; let it finish first
 
-  // the new range applies to a new weekly measurement
+  // a value outside the old range (max 10) AND the new one: the grid sends the measurement time
+  // rounded to the minute, so within the same minute the measurement may still bind the old range
   const pool = tablet ? "Korallos" : "Nagymedence";
   await page.goto("/heti");
   await page.getByRole("button", { name: pool, exact: true }).click();
   const no3 = page.getByTestId(`cell-${pool}-NO3`);
-  await no3.fill("6");
+  await no3.fill("12");
   await no3.press("Enter");
   await expect(page.getByTestId(`cell-${pool}-NO3`)).toHaveClass(/out/);
 
