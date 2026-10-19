@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { setEatingStatus } from "@/lib/eating";
 import { saveFeedingItem, setSelection } from "@/lib/feeding";
 import { feedingLog } from "@/lib/feeding-log";
+import { pickValid } from "@/lib/master";
 import { fixtures, rid } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -54,7 +55,9 @@ describe("the feeding log (TAK-04)", () => {
   it("by pool: where the animal was that day", async () => {
     const log = await feedingLog({ ...period, poolId: f.pool("RAGADOZOS"), animalId: null });
     expect(log.rows.map((r) => r.recipient)).toEqual(["Teszt Négy"]);
-    expect(log.rows[0].pools).toBe("Ragadozós");
+    // the name valid that day (another file renames this pool from April: the order of files must not matter)
+    const names = await prisma.poolName.findMany({ where: { poolId: f.pool("RAGADOZOS") } });
+    expect(log.rows[0].pools).toBe(pickValid(names, new Date("2026-06-01T00:00:00+02:00"))?.displayName);
   });
 
   it("the eating pattern of the same filter; a period over the limit is refused", async () => {
