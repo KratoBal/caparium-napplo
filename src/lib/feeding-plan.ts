@@ -7,7 +7,7 @@ import { writeAudit } from "./audit";
 import { prisma } from "./db";
 import { AppError } from "./errors";
 import { aliveOnDay, selectedOn, setSelection, ensureFeedingDay } from "./feeding";
-import { moduleLevel } from "./master";
+import { moduleLevel, pickValid } from "./master";
 import type { Actor } from "./measurements";
 import { dayToDate } from "./time";
 
@@ -69,8 +69,23 @@ export async function applyPlan(actor: Actor, raw: z.input<typeof applySchema>, 
   const alive = await aliveOnDay(prisma, input.day, planned);
   const fd = await prisma.$transaction((tx) => ensureFeedingDay(tx, input.day));
   const already = await selectedOn(prisma, fd.fd.id);
-  const toAdd = planned.filter((id) => alive.has(id) && !already.has(id));
-  if (toAdd.length === 0) return { replayed: false, added: 0 };
+  const candidates = planned.filter((id) => alive.has(id) && !already.has(id));
+  // a manual fasting day is a person's decision for that day: the plan does not override it (setSelection
+  // would ask for a confirmation and stop the whole list), so those animals are left out and named
+  const fasting = await prisma.eatingStatus.findMany({
+    where: { feedingDayId: fd.fd.id, animalId: { in: candidates }, status: "VALID", source: "MANUAL", state: "FASTING" },
+    select: { animalId: true },
+  });
+  const fastingIds = new Set(fasting.map((f) => f.animalId));
+  const skipped = await animalNames([...fastingIds], dayToDate(input.day));
+  const toAdd = candidates.filter((id) => !fastingIds.has(id));
+  if (toAdd.length === 0) return { replayed: false, added: 0, skipped };
   const r = await setSelection(actor, { requestId: input.requestId, clientTimestamp: input.clientTimestamp, day: input.day, animalIds: toAdd, selected: true, reason: input.reason }, serverNow);
-  return { replayed: r.replayed, added: r.changed };
+  return { replayed: r.replayed, added: r.changed, skipped };
+}
+
+async function animalNames(ids: string[], at: Date): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const animals = await prisma.animal.findMany({ where: { id: { in: ids } }, include: { names: true } });
+  return animals.map((a) => pickValid(a.names, at)?.name ?? a.names.at(-1)?.name ?? "?").sort((a, b) => a.localeCompare(b, "hu"));
 }

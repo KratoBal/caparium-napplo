@@ -412,6 +412,14 @@ test("reports and the daily water report: the tables, the Excel, a printable pag
   await page.getByRole("link", { name: "Napi jelentő" }).click();
   await expect(page.getByTestId("report-day")).toContainText("Vízmérés");
   await expect(page.getByTestId("print")).toBeVisible();
+  // VIZ-15 (no e-mail): the day's measurements as a file
+  const [daily] = await Promise.all([page.waitForEvent("download"), page.getByTestId("daily-excel").click()]);
+  expect(daily.suggestedFilename()).toMatch(/^Vizmeres_\d{4}-\d{2}-\d{2}\.xlsx$/);
+  // VIZ-20: the monthly package's card on the export page; the overview's feeding tile
+  await page.getByRole("link", { name: "Export" }).click();
+  await expect(page.getByTestId("monthly-package")).toContainText("Havi ZIMS-csomag");
+  await page.getByRole("link", { name: "Áttekintés" }).click();
+  await expect(page.getByTestId("tile-feeding")).toBeVisible();
 });
 
 test("conveniences: a feeding plan, the list from it, the feed type icons", async ({ page }) => {

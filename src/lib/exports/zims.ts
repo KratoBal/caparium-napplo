@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { writeAudit } from "../audit";
-import { prisma } from "../db";
+import { prisma, SYSTEM_USER_ID } from "../db";
 import { canonicalDecimal } from "../decimal";
 import { AppError } from "../errors";
 import { moduleLevel, pickValid } from "../master";
@@ -147,8 +147,13 @@ async function requireLevel(actor: Actor, admin: boolean) {
  * Builds the files of one ZIMS export run and stores the run, the files (with their exact
  * content) and one item per measurement with the hash of the row written for it.
  */
-export async function createZimsExport(actor: Actor, input: ZimsExportInput) {
-  await requireLevel(actor, false);
+export async function createZimsExport(actor: Actor, input: ZimsExportInput, opts: { system?: boolean } = {}) {
+  // the monthly package (VIZ-20) is the System user's, without a person's EXPORT right; only a PREVIEW
+  if (opts.system) {
+    if (actor.id !== SYSTEM_USER_ID || input.purpose !== "PREVIEW") throw new AppError(403, "NO_ACCESS", "Csak a rendszer előnézeti csomagja.");
+  } else {
+    await requireLevel(actor, false);
+  }
   if (!isValidDay(input.from) || !isValidDay(input.to) || input.from > input.to) {
     throw new AppError(422, "BAD_PERIOD", "Az időszak érvénytelen.");
   }
@@ -336,4 +341,35 @@ export async function divergence(from: string, to: string): Promise<Divergence[]
     });
   }
   return out;
+}
+
+/**
+ * VIZ-20 (NY-09 default: no e-mail): the previous month's ZIMS files, prepared once by the System user
+ * as a PREVIEW run and offered for download on the export page. A preview is never a submission
+ * (R-9): what counts as "in ZIMS" stays the runs an admin marked as submitted. A month without
+ * measurements, or with a missing mapping, gets no package; the export page says so.
+ */
+export function previousMonth(now: Date): { from: string; to: string } {
+  const today = businessDayOf(now);
+  const [y, m] = today.split("-").map(Number);
+  const py = m === 1 ? y - 1 : y;
+  const pm = m === 1 ? 12 : m - 1;
+  const last = new Date(Date.UTC(py, pm, 0)).getUTCDate();
+  const mm = String(pm).padStart(2, "0");
+  return { from: `${py}-${mm}-01`, to: `${py}-${mm}-${String(last).padStart(2, "0")}` };
+}
+
+export async function monthlyPackage(now = new Date()): Promise<{ created: boolean; runId?: string; reason?: string }> {
+  const { from, to } = previousMonth(now);
+  const existing = await prisma.exportRun.findFirst({
+    where: { kind: "ZIMS_CSV", purpose: "PREVIEW", createdById: SYSTEM_USER_ID, periodFrom: dayToDate(from), periodTo: dayToDate(to) },
+  });
+  if (existing) return { created: false, runId: existing.id };
+  try {
+    const r = await createZimsExport({ id: SYSTEM_USER_ID, role: "SYSTEM" }, { requestId: `havi-zims-${from}`, from, to, poolIds: null, purpose: "PREVIEW" }, { system: true });
+    return { created: !r.replayed, runId: r.runId };
+  } catch (e) {
+    if (e instanceof AppError) return { created: false, reason: e.code };
+    throw e;
+  }
 }

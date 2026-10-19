@@ -3,6 +3,7 @@ import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { moduleLevel, validAt } from "@/lib/master";
 import { requireUser } from "@/lib/session";
+import { missedMeasurements, MEASUREMENT_DEADLINE, RUN_OUT_DAYS, runningOut } from "@/lib/notices";
 import { businessDayOf, dateToDay, dayToDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,11 @@ export default async function OverviewPage() {
   // R-17: without access to the water module its numbers are not shown either
   const water = (await moduleLevel(prisma, user.id, user.role, "WATER")) !== "NONE";
   const { done, total } = water ? await dailyProgress(today) : { done: 0, total: 0 };
+  const feeding = (await moduleLevel(prisma, user.id, user.role, "FEEDING")) !== "NONE";
+  const dosing = (await moduleLevel(prisma, user.id, user.role, "DOSING")) !== "NONE";
+  // JAV-07, ADA-07: in-app notices (NY-09 default: no e-mail)
+  const missed = water ? await missedMeasurements() : { due: false, pools: [] as string[] };
+  const low = dosing ? await runningOut() : [];
   // a reopened day stays open until an admin closes it again: list it so it is not forgotten
   const reopened =
     water && (await moduleLevel(prisma, user.id, user.role, "WATER")) === "ADMIN"
@@ -54,6 +60,22 @@ export default async function OverviewPage() {
             </span>
           ))}
           . Ha a javítás kész, zárd le őket.
+        </div>
+      )}
+      {(missed.pools.length > 0 || low.length > 0) && (
+        <div className="banner banner-warn" style={{ marginTop: 20 }} data-testid="notices">
+          {missed.pools.length > 0 && (
+            <div data-testid="notice-missed">
+              {MEASUREMENT_DEADLINE} elmúlt, és ma még nincs napi mérés: {missed.pools.join(", ")}. <Link href="/vizmeres">Mérés rögzítése</Link>
+            </div>
+          )}
+          {low.length > 0 && (
+            <div data-testid="notice-stock">
+              Fogyóban ({RUN_OUT_DAYS} napon belül vagy már nulla alatt):{" "}
+              {low.map((c) => `${c.name} (${String(c.level).replace(".", ",")} ${c.unit}${c.daysLeft !== null ? `, kb. ${String(c.daysLeft).replace(".", ",")} nap` : ""})`).join("; ")}.{" "}
+              <Link href="/adagolas">Készlet</Link>
+            </div>
+          )}
         </div>
       )}
       <div className="cards">
@@ -83,12 +105,22 @@ export default async function OverviewPage() {
             <p className="hint">Hígítás és RO/SW cellánként</p>
           </Link>
         )}
-        <div className="tile muted">
-          <span className="tag">Etetés</span>
-          <h3>Takarmányozás</h3>
-          <div className="big">Később</div>
-          <p className="hint">A vízmérési változat kipróbálása után</p>
-        </div>
+        {feeding && (
+          <Link className="tile" href="/etetes" data-testid="tile-feeding">
+            <span className="tag">Etetés</span>
+            <h3>Mai etetés</h3>
+            <div className="big">Napi lista és tételek</div>
+            <p className="hint">Evés, kivétel és kalkulátor a menüben</p>
+          </Link>
+        )}
+        {dosing && (
+          <Link className="tile" href="/adagolas" data-testid="tile-dosing">
+            <span className="tag">Vegyszer</span>
+            <h3>Vegyszerek</h3>
+            <div className="big">Adagolás és készlet</div>
+            <p className="hint">Medencénként, a készletből levonva</p>
+          </Link>
+        )}
       </div>
       <div className="quick">
         <h3 style={{ fontSize: 21 }}>A mai nap gyorsindítója</h3>

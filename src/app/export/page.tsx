@@ -3,10 +3,11 @@ import { redirect } from "next/navigation";
 import { SubmissionButtons, ZimsCreate } from "@/components/ExportActions";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
-import { divergence } from "@/lib/exports/zims";
+import { divergence, previousMonth } from "@/lib/exports/zims";
+import { SYSTEM_USER_ID } from "@/lib/db";
 import { moduleLevel, pickValid } from "@/lib/master";
 import { requireUser } from "@/lib/session";
-import { addDays, businessDayOf, dateToDay, isValidDay, localTimeOf } from "@/lib/time";
+import { addDays, businessDayOf, dateToDay, dayToDate, isValidDay, localTimeOf } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,8 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
         </fieldset>
         <button className="btn btn-soft" type="submit">Szűrés</button>
       </form>
+
+      <MonthlyPackage />
 
       <div className="card">
         <h2>Excel</h2>
@@ -160,5 +163,34 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
         )}
       </div>
     </Shell>
+  );
+}
+
+/** VIZ-20 (NY-09 default: no e-mail): the previous month's ZIMS files, prepared by the system once a month. */
+async function MonthlyPackage() {
+  const { from, to } = previousMonth(new Date());
+  const run = await prisma.exportRun.findFirst({
+    where: { kind: "ZIMS_CSV", purpose: "PREVIEW", createdById: SYSTEM_USER_ID, periodFrom: dayToDate(from), periodTo: dayToDate(to) },
+    include: { files: { select: { id: true, fileName: true, rowCount: true } } },
+  });
+  return (
+    <div className="card" data-testid="monthly-package">
+      <h2>Havi ZIMS-csomag ({from} – {to})</h2>
+      <p className="hint">
+        A rendszer havonta egyszer előkészíti az előző hónap ZIMS-fájljait letöltésre (e-mailt nem küld). Ez előnézet, nem leadás: a ZIMS-be
+        feltöltött futást továbbra is egy adminisztrátor jelöli leadottnak.
+      </p>
+      {run ? (
+        <ul>
+          {run.files.map((f) => (
+            <li key={f.id}>
+              <a href={`/api/exports/files/${f.id}`} download>{f.fileName}</a> <span className="hint">({f.rowCount} sor)</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="hint">Még nem készült el: vagy nincs a hónapban érvényes mérés, vagy valamelyik méréshez hiányzik a ZIMS-megfeleltetés (a fenti kézi export megmutatja, melyik).</p>
+      )}
+    </div>
   );
 }
