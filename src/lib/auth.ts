@@ -57,7 +57,11 @@ export async function login(loginId: string, password: string, client: string | 
     const failures = await prisma.auditEntry.count({
       where: { action: "LOGIN_FAILED", entityType: "User", entityId: user.id, at: { gte: since } },
     });
-    if (failures >= MAX_FAILURES) return { ok: false, code: "LOCKED" };
+    if (failures >= MAX_FAILURES) {
+      // the same work as a wrong password, so the time of the answer does not tell either
+      await verifyPassword(password, DUMMY_HASH);
+      return { ok: false, code: "LOCKED" };
+    }
   }
   const usable = user && user.active && user.role !== "SYSTEM" && user.passwordHash;
   const ok = await verifyPassword(password, usable ? user.passwordHash! : DUMMY_HASH);

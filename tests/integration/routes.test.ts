@@ -18,10 +18,13 @@ beforeAll(async () => {
   f = await fixtures();
 });
 
-function form(fields: Record<string, string>, origin = BASE): Request {
+// every call from its own address unless a test says otherwise, so the per-address limiter of
+// the login route does not carry failures from one test into the next
+let addr = 0;
+function form(fields: Record<string, string>, origin = BASE, ip = `10.77.${Math.floor(++addr / 250)}.${addr % 250}`): Request {
   return new Request(`${BASE}/api/auth/login`, {
     method: "POST",
-    headers: { origin, host: "napplo.test", "content-type": "application/x-www-form-urlencoded" },
+    headers: { origin, host: "napplo.test", "content-type": "application/x-www-form-urlencoded", "x-forwarded-for": ip },
     body: new URLSearchParams(fields).toString(),
   });
 }
@@ -67,13 +70,36 @@ describe("login", () => {
     expect(res.headers.get("location")).toBe("/belepes?hiba=forras");
   });
 
-  it("locks after repeated failures, even with the right password", async () => {
+  it("locks after repeated failures, even with the right password, with the answer of a wrong password (32580)", async () => {
     const u = await prisma.user.create({
       data: { loginId: `zar-${Date.now()}`, fullName: "Zárolás Teszt", role: "AQUARIST", passwordHash: await hashPassword("helyes-jelszo-1") },
     });
     for (let i = 0; i < 10; i++) await loginRoute(form({ loginId: u.loginId, password: "rossz" }));
-    const res = await loginRoute(form({ loginId: u.loginId, password: "helyes-jelszo-1" }));
-    expect(res.headers.get("location")).toBe("/belepes?hiba=zarolva");
+    const locked = await loginRoute(form({ loginId: u.loginId, password: "helyes-jelszo-1" }));
+    const unknown = await loginRoute(form({ loginId: "nincs.ilyen.felhasznalo", password: "helyes-jelszo-1" }));
+    // the locked id and an id that does not exist cannot be told apart from the answer
+    for (const r of [locked, unknown]) {
+      expect(r.status).toBe(303);
+      expect(r.headers.get("location")).toBe("/belepes?hiba=adat");
+      expect(r.headers.get("set-cookie")).toBeNull();
+    }
+    expect(await prisma.auditEntry.count({ where: { action: "LOGIN_FAILED", entityId: u.id } })).toBeGreaterThanOrEqual(10);
+  });
+
+  it("20 failed logins from one address pause that address, also for the right password; another address is not affected", async () => {
+    const ip = "203.0.113.9";
+    for (let i = 0; i < 20; i++) {
+      const r = await loginRoute(form({ loginId: `ismeretlen-${i}`, password: "akarmi-akarmi" }, BASE, `198.51.100.1, ${ip}`));
+      expect(r.headers.get("location")).toBe("/belepes?hiba=adat");
+    }
+    const blocked = await loginRoute(form({ loginId: "teszt.akvarista1", password: TEST_PASSWORD }, BASE, ip));
+    expect(blocked.headers.get("location")).toBe("/belepes?hiba=sok");
+    expect(blocked.headers.get("set-cookie")).toBeNull();
+    // the first X-Forwarded-For entry is the client's own text: it does not move the key
+    const forged = await loginRoute(form({ loginId: "teszt.akvarista1", password: TEST_PASSWORD }, BASE, `203.0.113.77, ${ip}`));
+    expect(forged.headers.get("location")).toBe("/belepes?hiba=sok");
+    const other = await loginRoute(form({ loginId: "teszt.akvarista1", password: TEST_PASSWORD }, BASE, "203.0.113.10"));
+    expect(other.headers.get("location")).toBe("/");
   });
 
   it("logout ends the session", async () => {
