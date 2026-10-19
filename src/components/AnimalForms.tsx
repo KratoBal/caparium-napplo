@@ -240,6 +240,12 @@ export function NewFeed({ types, units }: { types: Opt[]; units: { id: string; s
   const [f, setF] = useState({ typeId: types[0]?.id ?? "", name: "", unit: usable[0]?.id ?? "", count: false });
   const { msg, busy, call } = useApi();
   const unit = usable.find((u) => u.id === f.unit);
+  if (types.length === 0)
+    return (
+      <p className="banner banner-warn" data-testid="new-feed">
+        Még nincs egyetlen takarmánytípus sem, ezért takarmány sem vehető fel. A típusokat az alapadatok betöltése hozza létre.
+      </p>
+    );
   return (
     <div className="toolbar" data-testid="new-feed">
       <select className="input" aria-label="Takarmánytípus" value={f.typeId} onChange={(e) => setF({ ...f, typeId: e.target.value })}>
@@ -264,7 +270,7 @@ export function NewFeed({ types, units }: { types: Opt[]; units: { id: string; s
       <button
         className="btn"
         type="button"
-        disabled={busy || !unit}
+        disabled={busy || !unit || !f.typeId || !f.name.trim()}
         onClick={() =>
           void call("/api/admin/feeds", "POST", {
             typeId: f.typeId,
