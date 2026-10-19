@@ -667,6 +667,7 @@ model Animal {
   bodyWeights    BodyWeight[]
   calculatorRuns CalculatorRun[]
   references     FeedingReference[]
+  feedingPlans   FeedingPlan[]
 
   @@map("animal")
 }
@@ -1192,4 +1193,21 @@ model StockMovement {
 
   @@index([chemicalId, businessDay])
   @@map("stock_movement")
+}
+
+// JAV-08 (stage 4): the weekdays an animal is planned to be fed, to prefill the day's list. The plan and
+// the fact stay apart (V-15): a fasting day still comes only from the finalized list at the close.
+// Versioned: one open plan per animal (partial index, SQL); weekdays 1 = Monday .. 7 = Sunday.
+model FeedingPlan {
+  id          String    @id @default(uuid()) @db.Uuid
+  animalId    String    @db.Uuid
+  weekdays    Int[]
+  validFrom   DateTime  @db.Timestamptz(3)
+  validTo     DateTime? @db.Timestamptz(3)
+  createdById String    @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  animal      Animal    @relation(fields: [animalId], references: [id])
+
+  @@index([animalId, validFrom])
+  @@map("feeding_plan")
 }

@@ -116,6 +116,7 @@ const BASE_FEEDS = [
   // EGY-12, KIV-04: the "Egyéb" feed takes its real name in each item
   { type: "EGYEB", name: "Egyéb", dims: ["MASS"], unit: "g" },
 ] as const;
+const FEED_TYPE_ICONS: Record<string, string> = { KAGYLO: "🐚", RAK: "🦐", HAL: "🐟", LABASFEJU: "🦑", APRO: "💧", KORALL: "🪸", EGYEB: "➕" };
 const FEEDS = [
   { type: "KAGYLO", name: "Teszt kagyló", dims: ["MASS"], unit: "g" },
   { type: "RAK", name: "Litopenaeus vannamei", dims: ["MASS", "COUNT"], unit: "g" },
@@ -252,6 +253,8 @@ async function main() {
 
   for (const [i, [code, name]] of FEED_TYPES.entries()) {
     await prisma.feedType.upsert({ where: { code }, update: {}, create: { code, name, sortOrder: i + 1 } });
+    // DAT-03: a default icon where none is set yet; an admin's choice is never overwritten
+    await prisma.feedType.updateMany({ where: { code, emoji: null }, data: { emoji: FEED_TYPE_ICONS[code] } });
   }
   // by name, not only into an empty table: a feed added to the list later (the "Egyéb" of stage 2)
   // reaches a database seeded before it

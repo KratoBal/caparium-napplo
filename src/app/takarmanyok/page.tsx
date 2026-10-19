@@ -2,6 +2,7 @@ import { FeedActive, NewFeed } from "@/components/AnimalForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { listFeeds } from "@/lib/feeds";
+import { withIcon } from "@/lib/icons";
 import { requireModuleRead } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export default async function FeedsPage() {
     <Shell title="Takarmánylista" active="feeds" user={user}>
       {types.map((t) => (
         <div className="card" key={t.id}>
-          <h2>{t.name}</h2>
+          <h2>{withIcon(t.emoji, t.name)}</h2>
           {t.feeds.length === 0 ? (
             <p className="hint">Nincs takarmány ebben a típusban.</p>
           ) : (

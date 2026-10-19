@@ -1,12 +1,13 @@
 import { DayControls } from "@/components/DayControls";
 import { DayNav } from "@/components/DayNav";
 import { FeedingDay } from "@/components/FeedingDay";
+import { ApplyPlan } from "@/components/FeedingForms";
 import type { FeedOpt, Recipient } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { referencesOn } from "@/lib/calculator";
 import { prisma } from "@/lib/db";
 import { feedingDayView } from "@/lib/feeding";
-import { listFeeds } from "@/lib/feeds";
+import { knownOtherNames, listFeeds } from "@/lib/feeds";
 import { dayStatus } from "@/lib/journal";
 import { requireModuleRead } from "@/lib/session";
 import { businessDayOf, isValidDay } from "@/lib/time";
@@ -19,12 +20,13 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
   const today = businessDayOf(new Date());
   const sp = await searchParams;
   const day = sp.nap && isValidDay(sp.nap) && sp.nap <= today ? sp.nap : today;
-  const [view, lock, types, units, references] = await Promise.all([
+  const [view, lock, types, units, references, otherNames] = await Promise.all([
     feedingDayView(day),
     dayStatus(null, day, "FEEDING"),
     listFeeds(),
     prisma.unit.findMany({ where: { active: true }, orderBy: { symbol: "asc" } }),
     referencesOn(day),
+    knownOtherNames(),
   ]);
   const canRecord = level === "RECORD" || level === "ADMIN";
   const isAdmin = level === "ADMIN";
@@ -63,6 +65,7 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         <span className={`badge ${view.listState === "FINALIZED" ? "badge-valid" : "badge-pending"}`} data-testid="list-state">
           {view.listState === "FINALIZED" ? "Lista kész" : "Lista nincs kész"}
         </span>
+        {editable && <ApplyPlan day={day} />}
         <DayControls kind="FEEDING" day={day} status={lock} isAdmin={isAdmin} />
       </div>
 
@@ -75,6 +78,7 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         items={view.items}
         totals={view.totals}
         references={references}
+        otherNames={otherNames}
         recipients={recipients}
         feeds={feeds}
       />

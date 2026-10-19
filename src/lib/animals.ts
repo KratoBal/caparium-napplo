@@ -361,6 +361,8 @@ export type AnimalRow = {
   sex: Sex;
   poolId: string | null;
   poolName: string | null;
+  /** DAT-03: display only */
+  poolEmoji: string | null;
   groupId: string | null;
   groupName: string | null;
   alive: boolean;
@@ -391,6 +393,7 @@ export async function listAnimals(at = new Date()): Promise<AnimalRow[]> {
       sex: a.sex,
       poolId: p?.poolId ?? null,
       poolName: p ? pickValid(p.pool.names, at)?.displayName ?? p.pool.code : null,
+      poolEmoji: p ? p.pool.emoji : null,
       groupId: m?.groupId ?? null,
       groupName: m ? pickValid(m.group.names, at)?.name ?? "?" : null,
       alive: !!arrival && arrival.occurredAt <= at && !end,

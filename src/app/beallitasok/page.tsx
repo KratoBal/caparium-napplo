@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { NewUserForm, PoolRow, ReferenceRow, UserRow } from "@/components/SettingsForms";
+import { IconForm } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { canonicalDecimal } from "@/lib/decimal";
@@ -13,7 +14,7 @@ export default async function SettingsPage() {
   const user = await requireUser();
   if ((await moduleLevel(prisma, user.id, user.role, "SETTINGS")) !== "ADMIN") redirect("/nincs-jogosultsag");
   const now = new Date();
-  const [params, pools, users] = await Promise.all([
+  const [params, pools, users, feedTypes] = await Promise.all([
     prisma.parameter.findMany({
       where: { active: true },
       orderBy: { sortOrder: "asc" },
@@ -32,6 +33,7 @@ export default async function SettingsPage() {
           include: { monograms: true, zimsNames: true },
         })
       : Promise.resolve([]),
+    prisma.feedType.findMany({ orderBy: { sortOrder: "asc" } }),
   ]);
   return (
     <Shell title="Beállítások" active="settings" user={user}>
@@ -84,6 +86,28 @@ export default async function SettingsPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* the page is for a SETTINGS admin already; the icon is master data of the same kind */}
+      <div className="card" data-testid="icons">
+        <h2>Ikonok</h2>
+        <p className="hint">Medencék és takarmánytípusok ikonja (DAT-03): csak megjelenítés, exportba nem kerül. Üresen hagyva nincs ikon.</p>
+        <table className="log-table">
+          <tbody>
+            {pools.map((p) => (
+              <tr key={p.id}>
+                <td>{pickValid(p.names, now)?.displayName ?? p.code}</td>
+                <td className="keep"><IconForm target="pool" id={p.id} name={pickValid(p.names, now)?.displayName ?? p.code} emoji={p.emoji} /></td>
+              </tr>
+            ))}
+            {feedTypes.map((t) => (
+              <tr key={t.id}>
+                <td>{t.name} (takarmánytípus)</td>
+                <td className="keep"><IconForm target="feedType" id={t.id} name={t.name} emoji={t.emoji} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {user.role === "ADMIN" && (

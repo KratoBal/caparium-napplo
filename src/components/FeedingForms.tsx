@@ -146,10 +146,23 @@ export function parseAmount(v: string): number | null {
 const DIM: Record<string, string> = { MASS: "tömeg", COUNT: "darab", VOLUME: "térfogat" };
 
 /** A feeding item: one recipient, one feed, at most one quantity per dimension (T-08). */
+/** EGY-03: the other feed names used before, offered while typing (a suggestion, not a list to pick from). */
+function OtherNames({ id, names }: { id: string; names?: string[] }) {
+  if (!names?.length) return null;
+  return (
+    <datalist id={id}>
+      {names.map((n) => (
+        <option key={n} value={n} />
+      ))}
+    </datalist>
+  );
+}
+
 export function ItemForm({
   day,
   recipients,
   feeds,
+  otherNames,
   active,
   onActive,
   onDraft,
@@ -157,6 +170,7 @@ export function ItemForm({
   day: string;
   recipients: Recipient[];
   feeds: FeedOpt[];
+  otherNames?: string[];
   /** EGY-07: the recipient follows the clicked row when the parent holds it */
   active?: string;
   onActive?: (key: string) => void;
@@ -221,7 +235,8 @@ export function ItemForm({
       {feed?.isOther && (
         <label className="field">
           Az egyéb takarmány neve
-          <input className="input" value={other} onChange={(e) => setOther(e.target.value)} aria-label="Az egyéb takarmány neve" />
+          <input className="input" list="egyeb-nevek-etetes" value={other} onChange={(e) => setOther(e.target.value)} aria-label="Az egyéb takarmány neve" />
+          <OtherNames id="egyeb-nevek-etetes" names={otherNames} />
         </label>
       )}
       {feed?.dims.map((d) => (
@@ -330,7 +345,7 @@ export function EatingForm({ day, animalId, name, selected, status }: { day: str
 }
 
 /** KIV-01, KIV-04: one withdrawal item; the use day defaults to the next day (T-10). */
-export function WithdrawalForm({ day, useDay, feeds }: { day: string; useDay: string; feeds: FeedOpt[] }) {
+export function WithdrawalForm({ day, useDay, feeds, otherNames }: { day: string; useDay: string; feeds: FeedOpt[]; otherNames?: string[] }) {
   const [feedId, setFeedId] = useState(feeds[0]?.id ?? "");
   const [other, setOther] = useState("");
   const [use, setUse] = useState(useDay);
@@ -361,7 +376,8 @@ export function WithdrawalForm({ day, useDay, feeds }: { day: string; useDay: st
       {feed?.isOther && (
         <label className="field">
           Az egyéb takarmány neve
-          <input className="input" value={other} onChange={(e) => setOther(e.target.value)} aria-label="Az egyéb takarmány neve" />
+          <input className="input" list="egyeb-nevek-kivetel" value={other} onChange={(e) => setOther(e.target.value)} aria-label="Az egyéb takarmány neve" />
+          <OtherNames id="egyeb-nevek-kivetel" names={otherNames} />
         </label>
       )}
       {feed?.dims.map((d) => (
@@ -412,6 +428,62 @@ export function CloseWithdrawalDay({ day }: { day: string }) {
         }}
       >
         Lezárás
+      </button>
+      <Msg msg={msg} />
+    </span>
+  );
+}
+
+const WEEKDAYS = ["H", "K", "Sze", "Cs", "P", "Szo", "V"];
+
+/** JAV-08: the weekdays an animal is planned to be fed (1 = Monday). */
+export function PlanForm({ animalId, weekdays }: { animalId: string; weekdays: number[] }) {
+  const [days, setDays] = useState<number[]>(weekdays);
+  const { msg, busy, run } = useSend();
+  return (
+    <div className="toolbar" data-testid="plan-form">
+      <span className="hint">Etetési napok:</span>
+      {WEEKDAYS.map((label, i) => (
+        <label key={label} className="check">
+          <input
+            type="checkbox"
+            checked={days.includes(i + 1)}
+            onChange={(e) => setDays(e.target.checked ? [...days, i + 1] : days.filter((d) => d !== i + 1))}
+            aria-label={`Etetési nap: ${label}`}
+          />
+          {label}
+        </label>
+      ))}
+      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void run("/api/feeding/plan", { animalId, weekdays: days }, "Terv mentve.")}>
+        Terv mentése
+      </button>
+      <Msg msg={msg} />
+    </div>
+  );
+}
+
+/** JAV-08: selects the animals planned for the day's weekday; it only adds to the common list. */
+export function ApplyPlan({ day }: { day: string }) {
+  const { msg, busy, run } = useSend();
+  return (
+    <span>
+      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void run("/api/feeding/plan/apply", { day }, "A terv szerinti állatok a listán.")}>
+        Lista a terv szerint
+      </button>
+      <Msg msg={msg} />
+    </span>
+  );
+}
+
+/** DAT-03: an admin sets the icon of a pool or a feed type (empty clears it). */
+export function IconForm({ target, id, name, emoji }: { target: "pool" | "feedType"; id: string; name: string; emoji: string | null }) {
+  const [value, setValue] = useState(emoji ?? "");
+  const { msg, busy, run } = useSend();
+  return (
+    <span className="toolbar" style={{ margin: 0 }}>
+      <input className="input" style={{ width: 70 }} value={value} onChange={(e) => setValue(e.target.value)} aria-label={`${name} ikonja`} />
+      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void run("/api/admin/icon", { target, id, emoji: value.trim() }, "Ikon mentve.")}>
+        Mentés
       </button>
       <Msg msg={msg} />
     </span>
