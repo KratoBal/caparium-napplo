@@ -339,7 +339,10 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   const eat = page.getByTestId(`eating-${name}`);
   await eat.getByLabel(`${name} evési állapota`).selectOption({ label: "nem evett meg mindent" });
   await eat.getByLabel(`${name} vitamin`).check();
-  await eat.getByRole("button", { name: "Mentés" }).click();
+  // caparium-hibak-4: one save for every filled-in row, no save button per row
+  await expect(eat.getByRole("button", { name: "Mentés" })).toHaveCount(0);
+  await page.getByTestId("eating-save-all").click();
+  await expect(page.getByTestId("eating-save-result")).toHaveText("1 sor mentve.");
   await expect(page.getByTestId(`state-${name}`)).toHaveText("nem evett meg mindent");
   await page.reload();
   await expect(page.getByTestId(`state-${name}`)).toHaveText("nem evett meg mindent");
@@ -564,6 +567,19 @@ test("the helper: a quick question about the page, switched off and on", async (
   // switched back on, the alert not seen in this session opens right here, not only on the next page (review of #21)
   await expect(page.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId("helper-answer")).toContainText("Teszt só");
+});
+
+test("feeds: an aquarist adds an Egyéb feed, and only that type is offered (caparium-hibak-4)", async ({ page }, info) => {
+  const name = info.project.name === "tablet" ? "Teszt egyéb T" : "Teszt egyéb D";
+  await login(page, "teszt.akvarista1");
+  await page.goto("/takarmanyok");
+  await expect(page.getByRole("heading", { name: "Új Egyéb takarmány" })).toBeVisible();
+  const form = page.getByTestId("new-feed");
+  await expect(form.getByLabel("Takarmánytípus").locator("option")).toHaveText(["Egyéb"]);
+  await form.getByLabel("Takarmány neve").fill(name);
+  await form.getByRole("button", { name: "Felvétel" }).click();
+  await expect(form.getByRole("status")).toHaveText("Takarmány felvéve.");
+  await expect(page.getByTestId("feeds-EGYEB")).toContainText(name);
 });
 
 // Last in the file: it loads the description's 25 animals into the shared e2e database (acrobot 33380). The tablet

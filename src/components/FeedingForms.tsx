@@ -291,59 +291,6 @@ export function InvalidateButton({ url, version, label = "Érvénytelenítés" }
 
 export type StatusView = { id: string; version: number; state: string; source: string; vitamin: boolean; medicine: boolean; medicineNote: string | null };
 
-/** The eating status of one animal (EVE-01, EVE-02, EVE-04, EVE-05). */
-export function EatingForm({ day, animalId, name, selected, status }: { day: string; animalId: string; name: string; selected: boolean; status: StatusView | null }) {
-  const manual = status?.source === "MANUAL" ? status : null;
-  const states = selected ? ["EATEN", "PARTIAL", "NOT_EATEN"] : ["FASTING"];
-  const [state, setState] = useState(status && states.includes(status.state) ? status.state : states[0]);
-  const [vitamin, setVitamin] = useState(status?.vitamin ?? false);
-  const [medicine, setMedicine] = useState(status?.medicine ?? false);
-  const [note, setNote] = useState(status?.medicineNote ?? "");
-  const { msg, busy, run } = useSend();
-  return (
-    <div className="toolbar" style={{ margin: 0 }} data-testid={`eating-${name}`}>
-      <select className="input" value={state} onChange={(e) => setState(e.target.value)} aria-label={`${name} evési állapota`}>
-        {states.map((s) => (
-          <option key={s} value={s}>
-            {EAT_LABEL[s]}
-          </option>
-        ))}
-      </select>
-      <label className="check">
-        <input type="checkbox" checked={vitamin} onChange={(e) => setVitamin(e.target.checked)} aria-label={`${name} vitamin`} />V
-      </label>
-      <label className="check">
-        <input type="checkbox" checked={medicine} onChange={(e) => setMedicine(e.target.checked)} aria-label={`${name} gyógyszer`} />Gy
-      </label>
-      {medicine && <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Gyógyszer megjegyzés" aria-label={`${name} gyógyszer megjegyzés`} />}
-      <button
-        className="btn"
-        type="button"
-        disabled={busy}
-        onClick={() =>
-          void run(
-            "/api/feeding/eating",
-            {
-              day,
-              animalId,
-              state,
-              vitamin,
-              medicine,
-              ...(medicine && note.trim() ? { medicineNote: note.trim() } : {}),
-              ...(manual ? { statusId: manual.id, expectedVersion: manual.version } : {}),
-            },
-            "Mentve.",
-          )
-        }
-      >
-        Mentés
-      </button>
-      {manual && <InvalidateButton url={`/api/feeding/eating/${manual.id}/invalidate`} version={manual.version} label="Törlés (érvénytelenítés)" />}
-      <Msg msg={msg} />
-    </div>
-  );
-}
-
 /** KIV-01, KIV-04: one withdrawal item; the use day defaults to the next day (T-10). */
 export function WithdrawalForm({ day, useDay, feeds, otherNames }: { day: string; useDay: string; feeds: FeedOpt[]; otherNames?: string[] }) {
   const [feedId, setFeedId] = useState(feeds[0]?.id ?? "");
@@ -493,5 +440,180 @@ export function IconForm({ target, id, name, emoji }: { target: "pool" | "feedTy
       </button>
       <Msg msg={msg} />
     </span>
+  );
+}
+
+export type EatingRowView = {
+  animalId: string;
+  name: string;
+  groupName: string | null;
+  poolName: string | null;
+  selected: boolean;
+  pendingFasting: boolean;
+  status: StatusView | null;
+};
+
+type RowDraft = { state: string; vitamin: boolean; medicine: boolean; note: string };
+
+/**
+ * The eating log with ONE save for every filled-in row (caparium-hibak-4, Balázs 2026-10-20 09:35 UTC, msg
+ * 1562036548856447068: "ne egyenként kelljen menteni"). A row is sent when it has no manual status yet and a state is
+ * picked, or when its manual status was changed; each row stays its own audited write on the server (its own
+ * version check and request id), so one refused row does not undo the others, and it is named in the result.
+ * A new row has no preselected state: the save records only what someone actually filled in.
+ */
+export function EatingTable({ day, rows, editable }: { day: string; rows: EatingRowView[]; editable: boolean }) {
+  const router = useRouter();
+  const initial = (r: EatingRowView): RowDraft => {
+    const manual = r.status?.source === "MANUAL" ? r.status : null;
+    return { state: manual?.state ?? "", vitamin: manual?.vitamin ?? false, medicine: manual?.medicine ?? false, note: manual?.medicineNote ?? "" };
+  };
+  const [drafts, setDrafts] = useState<Record<string, RowDraft>>(() => Object.fromEntries(rows.map((r) => [r.animalId, initial(r)])));
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // after a save the server's rows come back: start the drafts from them again
+  useEffect(() => setDrafts(Object.fromEntries(rows.map((r) => [r.animalId, initial(r)]))), [rows]);
+  const set = (id: string, patch: Partial<RowDraft>) => setDrafts((d) => ({ ...d, [id]: { ...d[id]!, ...patch } }));
+  const changed = (r: EatingRowView) => {
+    const d = drafts[r.animalId];
+    if (!d || !d.state) return false;
+    const i = initial(r);
+    return !i.state || d.state !== i.state || d.vitamin !== i.vitamin || d.medicine !== i.medicine || (d.medicine && d.note.trim() !== i.note);
+  };
+  const toSave = rows.filter(changed);
+
+  async function saveAll() {
+    setBusy(true);
+    setMsg(null);
+    let reason: string | undefined;
+    const failed: string[] = [];
+    let saved = 0;
+    try {
+      for (const r of toSave) {
+        const d = drafts[r.animalId]!;
+        const manual = r.status?.source === "MANUAL" ? r.status : null;
+        const body = {
+          day,
+          animalId: r.animalId,
+          state: d.state,
+          vitamin: d.vitamin,
+          medicine: d.medicine,
+          ...(d.medicine && d.note.trim() ? { medicineNote: d.note.trim() } : {}),
+          ...(manual ? { statusId: manual.id, expectedVersion: manual.version } : {}),
+        };
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const res = await fetch("/api/feeding/eating", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ requestId: requestId(), clientTimestamp: new Date().toISOString(), ...body, ...(reason ? { reason } : {}) }),
+          });
+          if (res.ok) {
+            saved += 1;
+            break;
+          }
+          const b = (await res.json().catch(() => ({}))) as ErrorBody;
+          const message = b.error?.issues?.[0]?.message ?? b.error?.message ?? "Nem sikerült.";
+          // an earlier day: one reason for the whole save, asked once
+          if (b.error?.code === "REASON_REQUIRED" && !reason && attempt === 0) {
+            const given = window.prompt(`${message} Indoklás (minden mentett sorra):`);
+            if (given && given.trim().length >= 3) {
+              reason = given.trim();
+              continue;
+            }
+          }
+          failed.push(`${r.name}: ${message}`);
+          break;
+        }
+      }
+    } catch {
+      failed.push("Nincs kapcsolat a szerverrel.");
+    } finally {
+      setBusy(false);
+    }
+    setMsg(
+      failed.length
+        ? { ok: false, text: `${saved} sor mentve, ${failed.length} nem: ${failed.join("; ")}` }
+        : { ok: true, text: `${saved} sor mentve.` },
+    );
+    if (saved) router.refresh();
+  }
+
+  return (
+    <>
+      <div className="table-scroll">
+        <table className="log-table" data-testid="eating-table">
+          <thead>
+            <tr><th>Állat</th><th>Csoport</th><th>Medence</th><th>Állapot</th><th>Jelölés</th>{editable && <th>Rögzítés</th>}</tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const s = r.status;
+              const d = drafts[r.animalId] ?? initial(r);
+              const states = r.selected ? ["EATEN", "PARTIAL", "NOT_EATEN"] : ["FASTING"];
+              const manual = s?.source === "MANUAL" ? s : null;
+              return (
+                <tr key={r.animalId} className={changed(r) ? "active-row" : undefined}>
+                  <td>{r.name}</td>
+                  <td>{r.groupName ?? "–"}</td>
+                  <td>{r.poolName ?? "–"}</td>
+                  <td className="keep">
+                    {s ? (
+                      <span className={`badge eat-${s.state}`} data-testid={`state-${r.name}`}>
+                        {EAT_LABEL[s.state]}
+                        {s.source === "AUTOMATIC" ? " (automatikus)" : ""}
+                      </span>
+                    ) : r.pendingFasting ? (
+                      <span className="badge eat-pending" data-testid={`state-${r.name}`}>koplal, még nem végleges</span>
+                    ) : (
+                      <span className="hint" data-testid={`state-${r.name}`}>{r.selected ? "nincs rögzítve" : "–"}</span>
+                    )}
+                  </td>
+                  <td>
+                    {s?.vitamin ? "V " : ""}
+                    {s?.medicine ? `Gy${s.medicineNote ? `: ${s.medicineNote}` : ""}` : ""}
+                  </td>
+                  {editable && (
+                    <td className="keep">
+                      <div className="toolbar" style={{ margin: 0 }} data-testid={`eating-${r.name}`}>
+                        <select className="input" value={d.state} onChange={(e) => set(r.animalId, { state: e.target.value })} aria-label={`${r.name} evési állapota`}>
+                          <option value="">– válassz –</option>
+                          {states.map((x) => (
+                            <option key={x} value={x}>
+                              {EAT_LABEL[x]}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="check">
+                          <input type="checkbox" checked={d.vitamin} onChange={(e) => set(r.animalId, { vitamin: e.target.checked })} aria-label={`${r.name} vitamin`} />V
+                        </label>
+                        <label className="check">
+                          <input type="checkbox" checked={d.medicine} onChange={(e) => set(r.animalId, { medicine: e.target.checked })} aria-label={`${r.name} gyógyszer`} />Gy
+                        </label>
+                        {d.medicine && (
+                          <input className="input" value={d.note} onChange={(e) => set(r.animalId, { note: e.target.value })} placeholder="Gyógyszer megjegyzés" aria-label={`${r.name} gyógyszer megjegyzés`} />
+                        )}
+                        {manual && <InvalidateButton url={`/api/feeding/eating/${manual.id}/invalidate`} version={manual.version} label="Törlés (érvénytelenítés)" />}
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {editable && (
+        <div className="toolbar" style={{ marginTop: 12 }}>
+          <button className="btn" type="button" disabled={busy || toSave.length === 0} onClick={() => void saveAll()} data-testid="eating-save-all">
+            {toSave.length ? `Mentés (${toSave.length} sor)` : "Mentés"}
+          </button>
+          {msg && (
+            <span className={msg.ok ? "hint" : "err"} role="status" data-testid="eating-save-result">
+              {msg.text}
+            </span>
+          )}
+        </div>
+      )}
+    </>
   );
 }
