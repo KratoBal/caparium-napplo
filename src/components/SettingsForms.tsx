@@ -189,3 +189,18 @@ export function NewUserForm() {
     </div>
   );
 }
+
+/** caparium-hibak-4: where "Vízmérés kiküldése" sends (one address). */
+export function WaterReportRecipient({ email }: { email: string }) {
+  const [v, setV] = useState(email);
+  const { msg, busy, save } = useSave();
+  return (
+    <div className="toolbar" data-testid="water-report-recipient">
+      <input className="input" type="email" aria-label="A vízmérés címzettje" placeholder="nev@pelda.hu" value={v} onChange={(e) => setV(e.target.value)} />
+      <button className="btn" type="button" disabled={busy || v.trim() === email} onClick={() => void save("/api/admin/water-report-recipient", "POST", { email: v.trim() })}>
+        Mentés
+      </button>
+      <Msg msg={msg} />
+    </div>
+  );
+}

@@ -503,19 +503,15 @@ test("a pool's own band and volume in the settings; the chemical calculator unde
   await expect(calc.getByTestId("chem-CA-result")).toHaveText("A célérték nem magasabb a jelenlegi értéknél, nincs szükség adagolásra.");
 });
 
-test("reports and the daily water report: the tables, the Excel, a printable page", async ({ page }) => {
+test("reports: the tables and the Excel; no daily report menu any more", async ({ page }) => {
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Kimutatások" }).click();
   await expect(page.getByTestId("report-by-day")).toContainText("Összesen");
   await expect(page.getByTestId("report-by-recipient")).toBeVisible();
   const [file] = await Promise.all([page.waitForEvent("download"), page.getByTestId("excel-kimutatas").click()]);
   expect(file.suggestedFilename()).toMatch(/^Kimutatas_\d{4}-\d{2}-\d{2}/);
-  await page.getByRole("link", { name: "Napi jelentő" }).click();
-  await expect(page.getByTestId("report-day")).toContainText("Vízmérés");
-  await expect(page.getByTestId("print")).toBeVisible();
-  // VIZ-15 (no e-mail): the day's measurements as a file
-  const [daily] = await Promise.all([page.waitForEvent("download"), page.getByTestId("daily-excel").click()]);
-  expect(daily.suggestedFilename()).toMatch(/^Vizmeres_\d{4}-\d{2}-\d{2}\.xlsx$/);
+  // caparium-hibak-4: the daily report menu is gone (its Excel is the export page's, for one day)
+  await expect(page.getByRole("link", { name: "Napi jelentő" })).toHaveCount(0);
   // VIZ-20: the monthly package's card on the export page; the overview's feeding tile
   await page.getByRole("link", { name: "Export" }).click();
   await expect(page.getByTestId("monthly-package")).toContainText("Havi ZIMS-csomag");
@@ -582,6 +578,29 @@ test("the helper: a quick question about the page, switched off and on", async (
   // switched back on, the alert not seen in this session opens right here, not only on the next page (review of #21)
   await expect(page.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId("helper-answer")).toContainText("Teszt só");
+});
+
+test("water measurements by e-mail: the recipient in the settings, the button first on the export page", async ({ page }, info) => {
+  // caparium-hibak-4. The e2e run has no SMTP: the button must say which variables are missing, by NAME, and send
+  // nothing. The address is a test address of our own domain, never typed into the export page.
+  const to = info.project.name === "tablet" ? "vizmeres-teszt-t@acropora.hu" : "vizmeres-teszt-d@acropora.hu";
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Beállítások" }).click();
+  const rec = page.getByTestId("water-report-recipient");
+  await rec.getByLabel("A vízmérés címzettje").fill(to);
+  await rec.getByRole("button", { name: "Mentés" }).click();
+  await expect(rec.getByRole("status")).toHaveText("Mentve.");
+  await page.getByRole("link", { name: "Export" }).click();
+  await expect(page).toHaveURL(/\/export/);
+  await expect(page.getByRole("heading", { name: "Excel", exact: true })).toBeVisible();
+  const headings = await page.locator("main h2").allTextContents();
+  expect(headings.indexOf("Vízmérés kiküldése"), "above the Excel").toBeLessThan(headings.indexOf("Excel"));
+  const box = page.getByTestId("water-mail");
+  await expect(box).toContainText(`Címzett: ${to}`);
+  await box.getByRole("button", { name: "Vízmérés kiküldése" }).click();
+  await expect(box.getByRole("status")).toHaveText(
+    "A levélküldés nincs beállítva: hiányzik vagy hibás: CAPARIUM_SMTP_HOST, CAPARIUM_SMTP_PORT, CAPARIUM_SMTP_USER, CAPARIUM_SMTP_PASSWORD, CAPARIUM_MAIL_FROM.",
+  );
 });
 
 test("feeds: an aquarist adds an Egyéb feed, and only that type is offered (caparium-hibak-4)", async ({ page }, info) => {

@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // pdfkit reads its own data files from its package directory at run time: it must not be bundled
+  serverExternalPackages: ["pdfkit"],
   poweredByHeader: false,
   async headers() {
     return [

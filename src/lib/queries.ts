@@ -37,7 +37,7 @@ type MeasurementWithRefs = Prisma.MeasurementGetPayload<{
   include: { unit: true; referenceRange: { include: { unit: true } } };
 }>;
 
-function referenceOf(m: MeasurementWithRefs): ReferenceStatus {
+export function referenceOf(m: MeasurementWithRefs): ReferenceStatus {
   const value = canonicalDecimal(m.value);
   const unit = { id: m.unit.id, dimension: m.unit.dimension, factorToBase: m.unit.factorToBase?.toString() ?? null };
   const r = m.referenceRange;

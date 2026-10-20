@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { SubmissionButtons, ZimsCreate } from "@/components/ExportActions";
+import { SubmissionButtons, WaterMailButton, ZimsCreate } from "@/components/ExportActions";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { divergence, previousMonth } from "@/lib/exports/zims";
 import { SYSTEM_USER_ID } from "@/lib/db";
-import { moduleLevel, pickValid } from "@/lib/master";
+import { getSetting, moduleLevel, pickValid } from "@/lib/master";
 import { requireUser } from "@/lib/session";
 import { addDays, businessDayOf, dateToDay, dayToDate, isValidDay, localTimeOf } from "@/lib/time";
 
@@ -41,8 +41,17 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
     }),
     from <= to ? divergence(from, to) : Promise.resolve([]),
   ]);
+  const recipient = await getSetting(prisma, "water_report_recipient", now);
+  const canSend = level === "RECORD" || level === "ADMIN";
   return (
     <Shell title="Export" active="export" user={user}>
+      {/* caparium-hibak-4 (Balázs 2026-10-20 09:45 UTC): the first item of Export, above the Excel */}
+      <div className="card">
+        <h2>Vízmérés kiküldése</h2>
+        <p className="hint">A mai napi és az e heti vízmérés eredményei medencénként, PDF-ben, e-mailben.</p>
+        {canSend ? <WaterMailButton recipient={recipient} /> : <p className="hint">A kiküldéshez exportálási jog kell.</p>}
+      </div>
+
       <form method="get" action="/export" className="filters">
         <label className="field">
           Naptól

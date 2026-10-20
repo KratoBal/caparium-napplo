@@ -4,7 +4,7 @@ import type { HelperData } from "@/lib/helpers";
 import { Helper } from "./Helper";
 import { businessDayOf, formatDayLong } from "@/lib/time";
 
-type NavKey = "overview" | "daily" | "weekly" | "log" | "export" | "animals" | "feeds" | "feeding" | "eating" | "feedlog" | "withdrawal" | "calculator" | "dosing" | "reports" | "dailyreport" | "pending" | "settings";
+type NavKey = "overview" | "daily" | "weekly" | "log" | "export" | "animals" | "feeds" | "feeding" | "eating" | "feedlog" | "withdrawal" | "calculator" | "dosing" | "reports" | "pending" | "settings";
 
 const NAV: { key: NavKey | null; href: string | null; label: string; note?: string }[] = [
   { key: "overview", href: "/", label: "Áttekintés" },
@@ -21,7 +21,6 @@ const NAV: { key: NavKey | null; href: string | null; label: string; note?: stri
   { key: "withdrawal", href: "/kivetel", label: "Takarmánykivétel" },
   { key: "dosing", href: "/adagolas", label: "Vegyszeradagolás" },
   { key: "reports", href: "/kimutatasok", label: "Kimutatások" },
-  { key: "dailyreport", href: "/napi-jelento", label: "Napi jelentő" },
 ];
 
 export function Shell({

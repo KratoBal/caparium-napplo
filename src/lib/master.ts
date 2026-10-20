@@ -28,6 +28,8 @@ export const SETTING_DEFAULTS = {
   // 08:10 UTC, msg 1562015239485128707, caparium-hibak-2). Code, table and data stay; a setting row with "true"
   // brings the calculator page's log back. There is no screen for it on purpose: it is not to be seen.
   body_weight_log_visible: "false",
+  // caparium-hibak-4 (Balázs 2026-10-20 09:45 UTC): where "Vízmérés kiküldése" sends; empty = not set yet
+  water_report_recipient: "",
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
