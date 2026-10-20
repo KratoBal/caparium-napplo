@@ -115,6 +115,10 @@ the tailnet): the limiter trusts the last `X-Forwarded-For` entry, which only th
   reference ranges, and the synthetic test feeds, chemicals, species and animals, the latter only with
   `CAPARIUM_SEED_SZINTETIKUS=1` (the stage) or on the CI runner. A live system sets neither, and sets
   `CAPARIUM_SEED_SZINTETIKUS=0` explicitly, so a `CI=true` in its environment could not turn it on.
+- The description's starting lists (leírás 18-19. o.): the feeds load with the basic data everywhere; the
+  animals by pool only where `CAPARIUM_SEED_SZINTETIKUS=1` is set explicitly (the test system, not the CI
+  fallback), because their 2026-01-01 arrival is made up. A live system's admin records them with their
+  real arrival.
 - Chemical stock (NY-08 default): no starting stock; a level may go negative and is flagged, not
   refused (R-16); intake is admin work. The test chemicals ("Teszt só" in kg, "Teszt kalcium" in l) are
   synthetic. The model's shared stock item (area 12) is not built while feed has no stock.

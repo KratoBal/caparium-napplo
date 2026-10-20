@@ -1,8 +1,9 @@
 "use client";
 
 // The measurement grid, daily and weekly (VIZ-03..VIZ-09, ÁLT-03, ÁLT-07, ÁLT-12, ÁLT-15, VIZ-02).
-// Weekly mode adds the dilution (1–100) and the diluent water (RO/SW) per cell: supplementary data,
-// nothing is recalculated from them (VIZ-06, DN-07).
+// Weekly mode adds the dilution (1–100) and the diluent water (RO/SW) to the nitrate and phosphate cells of
+// every pool (src/lib/dilution.ts, caparium-hibak-1): supplementary data, nothing is recalculated from them
+// (VIZ-06, DN-07).
 // Autosave on leaving a cell; a "Mérés mentése" button as confirmation. A failed network
 // request goes to a local queue with the same request id, so a retry never saves twice.
 
@@ -15,7 +16,7 @@ type Grid = {
   day: string;
   layout: {
     pools: { id: string; name: string }[];
-    parameters: { id: string; name: string; decimals: number; unit: { symbol: string } }[];
+    parameters: { id: string; name: string; decimals: number; unit: { symbol: string }; dilution: boolean }[];
   };
   rounds: { id: string; seq: number }[];
   selectedRound: { id: string; seq: number } | null;
@@ -84,7 +85,7 @@ export function MeasurementGrid({
 }: {
   initial: Grid;
   groupCode: string;
-  /** weekly measurement: dilution and RO/SW per cell */
+  /** weekly measurement: dilution and RO/SW on the nitrate and phosphate cells */
   weekly?: boolean;
   /** the page of this grid, for the round and day links */
   basePath?: string;
@@ -114,6 +115,11 @@ export function MeasurementGrid({
   // and an RO/SW picked in quick succession must not race into two creations of the same cell.
   const gridRef = useRef(grid);
   gridRef.current = grid;
+  // the weekly dilution and RO/SW fields belong to the nitrate and the phosphate only
+  const dilutable = useCallback(
+    (parameterId: string) => weekly && gridRef.current.layout.parameters.some((p) => p.id === parameterId && p.dilution),
+    [weekly],
+  );
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
   const metaRef = useRef(metaDrafts);
@@ -262,7 +268,7 @@ export function MeasurementGrid({
         value,
         responsibleUserId: responsibleId,
         traineePerformed: trainee,
-        ...(weekly && meta ? { dilution: meta.dilution, diluentWater: meta.diluentWater } : {}),
+        ...(dilutable(parameterId) && meta ? { dilution: meta.dilution, diluentWater: meta.diluentWater } : {}),
       };
       if (existing) {
         // an edit keeps the original measurement time unless the user changed the time field
@@ -287,7 +293,7 @@ export function MeasurementGrid({
         },
       };
     },
-    [grid, responsibleId, trainee, timeLocal, timeTouched, weekly],
+    [grid, responsibleId, trainee, timeLocal, timeTouched, dilutable],
   );
 
   const metaOf = useCallback(
@@ -328,7 +334,7 @@ export function MeasurementGrid({
       }
       const valueChanged = !existing || text.trim().replace(",", ".") !== existing.value;
       const metaChanged =
-        weekly && (!existing || meta.dilution !== existing.dilution || meta.diluentWater !== existing.diluentWater);
+        dilutable(parameterId) && (!existing || meta.dilution !== existing.dilution || meta.diluentWater !== existing.diluentWater);
       if (!valueChanged && !metaChanged) {
         clear();
         return;
@@ -339,7 +345,7 @@ export function MeasurementGrid({
         clear();
       }
     },
-    [send, buildItem, refresh, weekly],
+    [send, buildItem, refresh, dilutable],
   );
 
   const saveCell = useCallback(
@@ -540,7 +546,7 @@ export function MeasurementGrid({
                               {shown || "–"}
                             </div>
                           )}
-                          {weekly && (
+                          {weekly && param.dilution && (
                             <WeeklyMeta
                               label={`${pool.name} ${param.name}`}
                               testId={`${pool.name}-${param.name}`}

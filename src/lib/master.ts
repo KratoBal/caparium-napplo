@@ -2,6 +2,7 @@
 
 import type { AppModule, JournalKind, Prisma } from "@prisma/client";
 import { prisma, type Tx } from "./db";
+import { takesDilution } from "./dilution";
 import { effectiveLevel, type Level, type Role } from "./permissions";
 import { dayToDate } from "./time";
 
@@ -47,7 +48,10 @@ export async function moduleLevel(tx: Tx, userId: string, role: Role, module: Ap
 export type LayoutPool = { id: string; name: string };
 export type LayoutParameter = {
   id: string;
+  code: string;
   name: string;
+  /** the weekly dilution and RO/SW fields belong to this parameter (src/lib/dilution.ts) */
+  dilution: boolean;
   decimals: number;
   unit: { id: string; symbol: string; dimension: string; factorToBase: string | null };
   plausibleMin: string | null;
@@ -76,7 +80,9 @@ export async function groupLayout(
     pools: memberships.map((m) => ({ id: m.pool.id, name: pickValid(m.pool.names, at)?.displayName ?? m.pool.code })),
     parameters: params.map((gp) => ({
       id: gp.parameter.id,
+      code: gp.parameter.code,
       name: pickValid(gp.parameter.names, at)?.displayName ?? gp.parameter.code,
+      dilution: takesDilution(gp.parameter.code),
       decimals: gp.parameter.decimals,
       unit: {
         id: gp.parameter.unit.id,

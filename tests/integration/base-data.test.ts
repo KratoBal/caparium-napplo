@@ -1,12 +1,14 @@
 // The basic data step (task caparium-alapadat, a go-live condition): on an EMPTY database, without a
-// password, it loads the units, parameters, pools, groups, ZIMS names, export profile, feed types and
-// the "Egyéb" feed, and nothing a test environment only gets (test users, placeholder reference ranges,
-// synthetic data). A second run changes nothing. Runs on its own database next to the test database,
+// password, it loads the units, parameters, pools, groups, ZIMS names, export profile, feed types, the
+// "Egyéb" feed and the description's starting feed list, and nothing a test environment only gets (test users,
+// placeholder reference ranges, synthetic data, the description's starting animals). With
+// CAPARIUM_SEED_SZINTETIKUS=1 (the test system) the starting animals come too (caparium-hibak-1). A second run changes nothing. Runs on its own database next to the test database,
 // created and dropped here as the owner, because the shared one is already seeded.
 import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FEED_TYPES, GROUPS, PARAMETERS, POOLS, UNITS } from "@/lib/base-data";
+import { INITIAL_ANIMALS, INITIAL_FEEDS } from "@/lib/initial-data";
 
 const owner = new URL(process.env.OWNER_DATABASE_URL!);
 const name = `${owner.pathname.slice(1)}_alapadat`;
@@ -27,7 +29,7 @@ const besideTestDatabase = owner.pathname.slice(1).endsWith("_test");
 let db: PrismaClient;
 
 async function counts() {
-  const [units, parameters, ranges, pools, groups, feedTypes, feeds, users, species, chemicals, profiles] = await Promise.all([
+  const [units, parameters, ranges, pools, groups, feedTypes, feeds, users, species, chemicals, profiles, animals, events, placements] = await Promise.all([
     db.unit.count(),
     db.parameter.count(),
     db.referenceRange.count(),
@@ -39,8 +41,11 @@ async function counts() {
     db.species.count(),
     db.chemical.count(),
     db.zimsExportProfile.count(),
+    db.animal.count(),
+    db.lifecycleEvent.count(),
+    db.placement.count(),
   ]);
-  return { units, parameters, ranges, pools, groups, feedTypes, feeds, users, species, chemicals, profiles };
+  return { units, parameters, ranges, pools, groups, feedTypes, feeds, users, species, chemicals, profiles, animals, events, placements };
 }
 
 beforeAll(async () => {
@@ -79,24 +84,79 @@ describe("the basic data, without a password", () => {
       pools: POOLS.length,
       groups: GROUPS.length,
       feedTypes: FEED_TYPES.length,
-      feeds: 1, // "Egyéb"
+      feeds: 1 + INITIAL_FEEDS.length, // "Egyéb" and the description's list (no date: everywhere)
       users: 1, // the System user of the init migration, no test user
       species: 0,
       chemicals: 0,
       profiles: 1,
+      animals: 0, // the starting animals only on the test system (a live system's admin records real arrivals)
+      events: 0,
+      placements: 0,
     });
-    expect((await db.feedName.findMany()).map((n) => n.name)).toEqual(["Egyéb"]);
+    expect((await db.feedName.findMany({ orderBy: { feed: { sortOrder: "asc" } } })).map((n) => n.name)).toEqual([
+      "Egyéb",
+      ...INITIAL_FEEDS.map((f) => f.name),
+    ]);
+    expect(await db.feedType.findUnique({ where: { code: "KORALL" } }), "no separate coral feed type").toBeNull();
     expect(await db.user.findMany({ select: { loginId: true } })).toEqual([{ loginId: "__system__" }]);
   });
 
+  it("the CI fallback or an unclear switch does not bring the starting animals", async () => {
+    for (const extra of [{ CI: "true" }, { CAPARIUM_SEED_SZINTETIKUS: "0" }, { CAPARIUM_SEED_SZINTETIKUS: "igen" }]) {
+      execFileSync("npx", ["tsx", "prisma/base-data.ts"], { stdio: "pipe", env: { ...env, ...extra } });
+      expect(await db.animal.count(), JSON.stringify(extra)).toBe(0);
+    }
+  }, 120_000);
+
+  it("CAPARIUM_SEED_SZINTETIKUS=1 (the test system): the starting animals in their pools and groups from 2026-01-01", async () => {
+    const before = await counts();
+    execFileSync("npx", ["tsx", "prisma/base-data.ts"], { stdio: "pipe", env: { ...env, CAPARIUM_SEED_SZINTETIKUS: "1" } });
+    expect(await counts()).toEqual({
+      ...before,
+      species: new Set(INITIAL_ANIMALS.map((a) => a.species)).size,
+      animals: INITIAL_ANIMALS.length,
+      events: INITIAL_ANIMALS.length, // one arrival each
+      placements: INITIAL_ANIMALS.length,
+    });
+    const where = async (name: string) => {
+      const animal = await db.animal.findFirstOrThrow({
+        where: { names: { some: { name } } },
+        include: {
+          species: true,
+          placements: { include: { pool: true } },
+          memberships: { include: { group: { include: { names: true } } } },
+        },
+      });
+      return {
+        species: animal.species.scientificName,
+        sex: animal.sex,
+        pools: animal.placements.map((p) => [p.pool.code, p.validFrom.toISOString(), p.validTo]),
+        groups: animal.memberships.map((m) => m.group.names[0]!.name),
+      };
+    };
+    const from = "2025-12-31T23:00:00.000Z";
+    expect(await where("Nokedli")).toEqual({ species: "Giglymostoma cirratum", sex: "MALE", pools: [["NAGY", from, null]], groups: [] });
+    expect(await where("SeaFlap")).toEqual({ species: "Rhinoptera bonasus", sex: "MALE", pools: [["KARANTEN", from, null]], groups: ["Ráják"] });
+    expect(await where("Hópehely")).toEqual({ species: "Echidna nebulosa", sex: "UNKNOWN", pools: [["RAGADOZOS", from, null]], groups: ["Murénák"] });
+    expect(await where("Korallos – korallok")).toMatchObject({ pools: [["KORALLOS", from, null]], groups: [] });
+    expect((await db.animalGroupName.findMany()).map((g) => g.name).sort()).toEqual(["Murénák", "RFD", "Ráják"]);
+    const litopenaeus = await db.feed.findFirstOrThrow({ where: { names: { some: { name: "Litopenaeus vannamei" } } }, include: { type: true } });
+    expect([litopenaeus.type.code, litopenaeus.allowedDimensions]).toEqual(["RAK", ["MASS", "COUNT"]]);
+  }, 60_000);
+
   it("a second start changes nothing, and an admin's change stays", async () => {
     await db.feedType.update({ where: { code: "HAL" }, data: { name: "Halak (átnevezve)", emoji: null } });
+    // an admin's rename keeps the old name in the history: the start does not make the animal again
+    const tango = await db.animalName.findFirstOrThrow({ where: { name: "Tango" } });
+    await db.animalName.update({ where: { id: tango.id }, data: { validTo: new Date("2026-03-01T00:00:00.000Z") } });
+    await db.animalName.create({ data: { animalId: tango.animalId, name: "Tangó", validFrom: new Date("2026-03-01T00:00:00.000Z") } });
     const before = await counts();
     execFileSync("npx", ["tsx", "prisma/base-data.ts"], { stdio: "pipe", env });
+    execFileSync("npx", ["tsx", "prisma/base-data.ts"], { stdio: "pipe", env: { ...env, CAPARIUM_SEED_SZINTETIKUS: "1" } });
     expect(await counts()).toEqual(before);
     const hal = await db.feedType.findUniqueOrThrow({ where: { code: "HAL" } });
     expect(hal.name).toBe("Halak (átnevezve)");
     expect(hal.emoji, "a cleared icon does not come back at the next start").toBeNull();
     expect((await db.feedType.findUniqueOrThrow({ where: { code: "RAK" } })).emoji).toBe("🦐");
-  }, 60_000);
+  }, 120_000);
 });

@@ -3,6 +3,7 @@
 import type { Prisma, RecordStatus } from "@prisma/client";
 import { prisma } from "./db";
 import { canonicalDecimal } from "./decimal";
+import { takesDilution } from "./dilution";
 import { groupLayout, monogramResolver, pickValid } from "./master";
 import { evaluateReference, type ReferenceStatus } from "./reference";
 import { businessDayOf, dateToDay, dayToDate, localDateTimeOf, localTimeOf } from "./time";
@@ -241,7 +242,7 @@ export async function measurementHistory(id: string) {
       createdByName: mono.name(m.createdById),
       createdById: m.createdById,
       groupId: m.round.groupId,
-      weekly: m.round.group.frequency === "WEEKLY",
+      dilutable: m.round.group.frequency === "WEEKLY" && takesDilution(m.parameter.code),
       measuredAtLocal: localDateTimeOf(m.measuredAt),
       responsibleUserId: m.responsibleUserId,
       traineePerformed: m.traineePerformed,

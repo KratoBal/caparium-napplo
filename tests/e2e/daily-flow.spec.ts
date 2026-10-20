@@ -102,21 +102,24 @@ test("weekly measurement: value with dilution and RO/SW, kept after a reload, sh
   await expect(page.getByRole("heading", { name: "Heti vízmérések" })).toBeVisible();
   await page.getByRole("button", { name: pool, exact: true }).click();
 
-  const kh = page.getByTestId(`cell-${pool}-KH`);
-  await kh.fill("8,4");
-  await page.getByTestId(`dilution-${pool}-KH`).selectOption("10");
-  await page.getByTestId(`diluent-${pool}-KH`).selectOption("RO");
+  // the dilution and RO/SW pickers belong to the nitrate and the phosphate only (caparium-hibak-1)
+  await expect(page.getByTestId(`dilution-${pool}-KH`)).toHaveCount(0);
+  await expect(page.getByTestId(`dilution-${pool}-PO4`)).toBeVisible();
+  const no3 = page.getByTestId(`cell-${pool}-NO3`);
+  await no3.fill("8,4");
+  await page.getByTestId(`dilution-${pool}-NO3`).selectOption("10");
+  await page.getByTestId(`diluent-${pool}-NO3`).selectOption("RO");
   await page.getByTestId("save-all").click();
   await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
 
   await page.reload();
   await page.getByRole("button", { name: pool, exact: true }).click();
-  await expect(page.getByTestId(`cell-${pool}-KH`)).toHaveValue("8,4");
-  await expect(page.getByTestId(`dilution-${pool}-KH`)).toHaveValue("10");
-  await expect(page.getByTestId(`diluent-${pool}-KH`)).toHaveValue("RO");
+  await expect(page.getByTestId(`cell-${pool}-NO3`)).toHaveValue("8,4");
+  await expect(page.getByTestId(`dilution-${pool}-NO3`)).toHaveValue("10");
+  await expect(page.getByTestId(`diluent-${pool}-NO3`)).toHaveValue("RO");
 
   await page.getByRole("link", { name: "Vízmérési napló" }).first().click();
-  const row = page.getByTestId("log-table").getByRole("row").filter({ hasText: pool }).filter({ hasText: "KH" }).first();
+  const row = page.getByTestId("log-table").getByRole("row").filter({ hasText: pool }).filter({ hasText: "NO3" }).first();
   await expect(row).toContainText("8,4");
   await expect(row).toContainText("1:10, RO");
 });
