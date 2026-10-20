@@ -1,0 +1,70 @@
+DejaVuSans.ttf -- a szamla- es munkalap-PDF betukeszlete
+
+SZARMAZAS (merve, nem feltetelezve):
+  upstream            DejaVu fonts, https://dejavu-fonts.github.io/
+  szerzoi jog         Copyright (c) 2003 by Bitstream, Inc. All Rights Reserved.
+                      A DejaVu valtoztatasai kozkincsben (public domain).
+  a peldany forrasa   a Debian `fonts-dejavu-core` csomag,
+                      /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+  a fajl merete       759720 bajt, VALTOZATLAN (nem szukitettuk, nem modositottuk)
+  sha256              abdc775b21b1bc470d50c97e790d276f2054b7504e56e5bd3e64f48d68582322
+
+MIERT VALTOZATLAN, ES MIERT NEM SZUKITETT:
+  A pdfkit beagyazaskor MAGATOL szukit: egy kilenc soros lapon a beagyazott
+  betufolyam 7787 bajt, a teljes keszlet egy szazaleka. Az eloszukites tehat a
+  kimenetbol nem vesz el semmit -- viszont minden karakter, ami kimaradna a
+  listabol, NEMAN ures jelet adna (merve: U+0000, kilepesi kod 0). Ugyanaz a nema
+  alak, ami ellen ez az egesz betu-csere tortent.
+
+A LICENC KET KIKOTESE, AMI RANK VONATKOZIK:
+  1. Ez a licencszoveg minden peldannyal EGYUTT kell, hogy utazzon -- ezert all
+     ez a fajl a betu mellett, es ezert nem szabad kulon-kulon mozgatni oket.
+  2. Modositott (pl. szukitett) valtozatot at kell nevezni olyan nevre, amiben
+     nincs benne sem a "Bitstream", sem a "Vera" szo. Amig a fajl valtozatlan,
+     ez a kikotes fel sem merul.
+
+  MEGJEGYZES: a Debian csomag `copyright` fajlja egy MASODIK licencet is tartalmaz,
+  GPL-2+ alatt -- az KIZAROLAG a `debian/*` csomagolasi fajlokra all, es abbol
+  semmit nem masoltunk at. A betu licence az alabbi.
+
+License: bitstream-vera
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of the fonts accompanying this license ("Fonts") and associated
+documentation files (the "Font Software"), to reproduce and distribute the
+Font Software, including without limitation the rights to use, copy, merge,
+publish, distribute, and/or sell copies of the Font Software, and to permit
+persons to whom the Font Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright and trademark notices and this permission notice shall
+be included in all copies of one or more of the Font Software typefaces.
+
+The Font Software may be modified, altered, or added to, and in particular
+the designs of glyphs or characters in the Fonts may be modified and
+additional glyphs or characters may be added to the Fonts, only if the fonts
+are renamed to names not containing either the words "Bitstream" or the word
+"Vera".
+
+This License becomes null and void to the extent applicable to Fonts or Font
+Software that has been modified and is distributed under the "Bitstream
+Vera" names.
+
+The Font Software may be sold as part of a larger software package but no
+copy of one or more of the Font Software typefaces may be sold by itself.
+
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF COPYRIGHT, PATENT,
+TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL BITSTREAM OR THE GNOME
+FOUNDATION BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, INCLUDING
+ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE
+FONT SOFTWARE.
+
+Except as contained in this notice, the names of Gnome, the Gnome
+Foundation, and Bitstream Inc., shall not be used in advertising or
+otherwise to promote the sale, use or other dealings in this Font Software
+without prior written authorization from the Gnome Foundation or Bitstream
+Inc., respectively. For further information, contact: fonts at gnome dot
+org.
