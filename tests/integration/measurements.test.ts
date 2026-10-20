@@ -279,7 +279,7 @@ describe("weekly measurement (VIZ-05, VIZ-06, DN-07)", () => {
     const r = await create(f.aq1, "2026-06-26", "09:00", {
       groupId: f.group("HETI"),
       poolId: f.pool("KORALLOS"),
-      parameterId: f.param("KH"),
+      parameterId: f.param("NO3"),
       value: "8,4",
       dilution: 10,
       diluentWater: "RO",
@@ -306,6 +306,31 @@ describe("weekly measurement (VIZ-05, VIZ-06, DN-07)", () => {
       (err: unknown) => err,
     );
     expect((e as AppError).code).toBe("INVALID_DILUTION");
+  });
+
+  it("dilution and RO/SW only on the nitrate and the phosphate, in every pool (caparium-hibak-1)", async () => {
+    const grid = await getGrid(f.group("HETI"), "2026-06-27");
+    expect(grid!.layout.parameters.filter((p) => p.dilution).map((p) => p.code)).toEqual(["NO3", "PO4"]);
+    const refused = (fields: Record<string, unknown>) =>
+      create(f.aq1, "2026-06-27", "09:00", { groupId: f.group("HETI"), poolId: f.pool("NAGY"), parameterId: f.param("KH"), value: "8,1", ...fields }).then(
+        () => null,
+        (err: unknown) => (err as AppError).code,
+      );
+    expect(await refused({ dilution: 10 })).toBe("DILUTION_NOT_ALLOWED");
+    expect(await refused({ diluentWater: "SW" })).toBe("DILUTION_NOT_ALLOWED");
+    // the phosphate takes it in a pool of the other daily group too
+    const po4 = await create(f.aq1, "2026-06-27", "09:05", { groupId: f.group("HETI"), poolId: f.pool("RAGADOZOS"), parameterId: f.param("PO4"), value: "0,05", dilution: 5, diluentWater: "SW" });
+    expect(po4.measurement).toMatchObject({ dilution: 5, diluentWater: "SW" });
+    // an undiluted value: an edit may not add one, may clear (null), and an edit without the fields is untouched
+    const kh = await create(f.aq1, "2026-06-27", "09:10", { groupId: f.group("HETI"), poolId: f.pool("NAGY"), parameterId: f.param("KH"), value: "8,1" });
+    const now = cest("2026-06-27T09:30");
+    const add = await updateMeasurement(f.aq1, kh.measurement.id, { requestId: rid(), expectedVersion: 1, dilution: 2 }, now).then(
+      () => null,
+      (err: unknown) => (err as AppError).code,
+    );
+    expect(add).toBe("DILUTION_NOT_ALLOWED");
+    const cleared = await updateMeasurement(f.aq1, kh.measurement.id, { requestId: rid(), expectedVersion: 1, value: "8.2", dilution: null, diluentWater: null }, now);
+    expect(cleared.measurement).toMatchObject({ value: "8.2", dilution: null, diluentWater: null, version: 2 });
   });
 
   it("the database itself refuses a dilution outside 1–100", async () => {

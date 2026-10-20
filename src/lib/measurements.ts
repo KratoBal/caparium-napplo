@@ -146,6 +146,14 @@ function checkDilution(d: number | null | undefined): void {
   }
 }
 
+/** A dilution or a diluent water only on the nitrate and the phosphate (src/lib/dilution.ts); clearing is allowed. */
+function checkDilutionAllowed(param: { name: string; dilution: boolean }, input: { dilution?: number | null; diluentWater?: string | null }): void {
+  if (param.dilution) return;
+  if ((input.dilution ?? null) !== null || (input.diluentWater ?? null) !== null) {
+    throw new AppError(422, "DILUTION_NOT_ALLOWED", `Hígítás és RO/SW csak a nitráthoz és a foszfáthoz adható meg, a(z) ${param.name} értékhez nem.`);
+  }
+}
+
 function parseClientTs(s: string | undefined): Date | null {
   return s ? new Date(s) : null;
 }
@@ -308,6 +316,7 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
         throw new AppError(422, "NOT_IN_GROUP", "Ez a medence vagy paraméter ezen a napon nem tartozik a csoporthoz.");
       }
       checkPlausible(value, param, input.confirmPlausibility);
+      checkDilutionAllowed(param, input);
 
       const journal = await ensureJournalDay(tx, "WATER", group.id, day);
       const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
@@ -436,6 +445,7 @@ export async function updateMeasurement(
         throw new AppError(422, "NOT_IN_GROUP", "Ezen a napon ez a medence vagy paraméter nem tartozik a csoporthoz.");
       }
       if (newValue !== undefined) checkPlausible(newValue, param, input.confirmPlausibility);
+      checkDilutionAllowed(param, input);
 
       let roundId = cur.roundId;
       if (newDay !== oldDay || input.newRound) {
