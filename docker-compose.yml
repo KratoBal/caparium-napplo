@@ -47,6 +47,12 @@ services:
       SEED_TEST_PASSWORD: ${SERVICE_PASSWORD_SEED:-}
       # the synthetic test feeds, chemicals and animals: 1 on the stage only, never on a live system
       CAPARIUM_SEED_SZINTETIKUS: ${CAPARIUM_SEED_SZINTETIKUS:-}
+      # "Vízmérés kiküldése" (src/lib/mail.ts): SMTP; empty = the button says which ones are missing, nothing is sent
+      CAPARIUM_SMTP_HOST: ${CAPARIUM_SMTP_HOST:-}
+      CAPARIUM_SMTP_PORT: ${CAPARIUM_SMTP_PORT:-}
+      CAPARIUM_SMTP_USER: ${CAPARIUM_SMTP_USER:-}
+      CAPARIUM_SMTP_PASSWORD: ${CAPARIUM_SMTP_PASSWORD:-}
+      CAPARIUM_MAIL_FROM: ${CAPARIUM_MAIL_FROM:-}
     ports:
       - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"
     depends_on:

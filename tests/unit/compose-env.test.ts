@@ -15,6 +15,14 @@ function appEnvironmentKeys(compose: string): Set<string> {
 }
 
 describe("docker-compose app environment", () => {
+  it("passes every SMTP variable src/lib/mail.ts reads (caparium-hibak-4)", () => {
+    const named = [...read("src/lib/mail.ts").matchAll(/"(CAPARIUM_[A-Z_]+)"/g)].map((m) => m[1]);
+    const names = [...new Set(named)];
+    expect(names).toEqual(expect.arrayContaining(["CAPARIUM_SMTP_HOST", "CAPARIUM_SMTP_PASSWORD", "CAPARIUM_MAIL_FROM"]));
+    const passed = appEnvironmentKeys(read("docker-compose.yml"));
+    expect(names.filter((n) => !passed.has(n))).toEqual([]);
+  });
+
   it("passes every variable src/lib/basic-auth.ts reads", () => {
     const read_ = [...read("src/lib/basic-auth.ts").matchAll(/env\.([A-Z][A-Z0-9_]*)/g)].map((m) => m[1]);
     const names = [...new Set(read_)];

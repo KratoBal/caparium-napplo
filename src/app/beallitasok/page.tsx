@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import { NewUserForm, PoolRow, PoolVolumeForm, ReferenceRow, UserRow } from "@/components/SettingsForms";
+import { NewUserForm, PoolRow, PoolVolumeForm, ReferenceRow, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { canonicalDecimal } from "@/lib/decimal";
-import { moduleLevel, pickValid, validAt } from "@/lib/master";
+import { getSetting, moduleLevel, pickValid, validAt } from "@/lib/master";
 import { requireUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -153,6 +153,12 @@ export default async function SettingsPage() {
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="card">
+        <h2>Vízmérés kiküldése</h2>
+        <p className="hint">Erre a címre küldi az Export oldal „Vízmérés kiküldése” gombja a mai és az e heti eredményeket, PDF-ben.</p>
+        <WaterReportRecipient email={await getSetting(prisma, "water_report_recipient", now)} />
       </div>
 
       {/* the page is for a SETTINGS admin already; the icon is master data of the same kind */}

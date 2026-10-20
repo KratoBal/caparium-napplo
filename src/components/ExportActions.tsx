@@ -92,3 +92,36 @@ export function SubmissionButtons({ runId }: { runId: string }) {
     </span>
   );
 }
+
+/** "Vízmérés kiküldése" (caparium-hibak-4): today's and this week's results by pool, as a PDF, to the address set in Beállítások. */
+export function WaterMailButton({ recipient }: { recipient: string }) {
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function send() {
+    setBusy(true);
+    setMsg(null);
+    const res = await fetch("/api/exports/water-mail", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requestId: requestId() }),
+    }).catch(() => null);
+    setBusy(false);
+    if (!res) return setMsg({ ok: false, text: "Nincs kapcsolat a szerverrel." });
+    const b = (await res.json().catch(() => ({}))) as ApiError & { to?: string; pools?: number };
+    if (!res.ok) return setMsg({ ok: false, text: b.error?.message ?? "A kiküldés nem sikerült." });
+    setMsg({ ok: true, text: `Elküldve: ${b.to} (${b.pools ?? 0} medence).` });
+  }
+  return (
+    <div className="toolbar" data-testid="water-mail">
+      <button className="btn" type="button" disabled={busy || !recipient} onClick={() => void send()}>
+        Vízmérés kiküldése
+      </button>
+      <span className="hint">{recipient ? `Címzett: ${recipient}` : "Nincs megadva címzett: a Beállításokban állítható be."}</span>
+      {msg && (
+        <span className={msg.ok ? "hint" : "err"} role="status">
+          {msg.text}
+        </span>
+      )}
+    </div>
+  );
+}

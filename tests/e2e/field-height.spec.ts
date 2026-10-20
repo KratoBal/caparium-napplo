@@ -26,7 +26,6 @@ const PAGES = [
   "/kivetel",
   "/adagolas",
   "/kimutatasok",
-  "/napi-jelento",
   "/fuggo",
   "/beallitasok",
 ];
