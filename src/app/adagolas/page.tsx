@@ -1,8 +1,10 @@
+import { ChemistryCalculator } from "@/components/ChemistryCalculator";
 import { DosingForm, MovementForm, NewChemical, type ChemicalOpt } from "@/components/DosingForms";
 import { InvalidateButton } from "@/components/FeedingForms";
 import { PrintButton } from "@/components/PrintButton";
 import { Shell } from "@/components/Shell";
 import { waterHelper } from "@/lib/helpers";
+import { chemistryCalcPools } from "@/lib/chemistry-calc";
 import { prisma } from "@/lib/db";
 import { dosingLog, stockLevels } from "@/lib/dosing";
 import { AppError } from "@/lib/errors";
@@ -25,10 +27,11 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
   const poolId = sp.medence && uuid.test(sp.medence) ? sp.medence : null;
   const chemicalId = sp.szer && uuid.test(sp.szer) ? sp.szer : null;
   const now = new Date();
-  const [pools, stock, units] = await Promise.all([
+  const [pools, stock, units, calcPools] = await Promise.all([
     prisma.pool.findMany({ where: { active: true }, include: { names: true }, orderBy: { code: "asc" } }),
     stockLevels(now),
     prisma.unit.findMany({ where: { active: true, dimension: { in: ["MASS", "VOLUME", "COUNT"] } }, orderBy: { symbol: "asc" } }),
+    chemistryCalcPools(now),
   ]);
   let log: Awaited<ReturnType<typeof dosingLog>> = [];
   let error: string | null = null;
@@ -53,6 +56,15 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
           <DosingForm pools={poolOpts} chemicals={chemOpts} />
         </div>
       )}
+      {/* caparium-hibak-3: a calculation, saves nothing; open to everyone who sees the dosing page */}
+      <div className="card no-print">
+        <h2>Vegyszer-kalkulátor</h2>
+        <p className="hint">
+          Tiszta vegyszerekre: a szükséges mennyiség a kémiai képletből és a medence térfogatából. A javasolt értékek a
+          medence legutóbbi méréséből és célsávjából jönnek, mind átírható. Nem ment semmit.
+        </p>
+        <ChemistryCalculator pools={calcPools} />
+      </div>
       <div className="card">
         <h2>Napló</h2>
         <form method="get" action="/adagolas" className="filters no-print">

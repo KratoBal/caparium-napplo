@@ -54,27 +54,57 @@ function ModeSelect({ value, onChange, id }: { value: string; onChange: (v: "cha
   );
 }
 
-export function ReferenceRow(p: { parameterId: string; name: string; unit: string; min: string | null; max: string | null }) {
+export function ReferenceRow(p: {
+  parameterId: string;
+  name: string;
+  unit: string;
+  min: string | null;
+  max: string | null;
+  /** a pool's own range (caparium-hibak-3); without it the common one */
+  pool?: { id: string; name: string; inherited: boolean };
+}) {
   const [min, setMin] = useState((p.min ?? "").replace(".", ","));
   const [max, setMax] = useState((p.max ?? "").replace(".", ","));
   const [mode, setMode] = useState<"change" | "correction">("change");
   const [reason, setReason] = useState("");
   const { msg, busy, save } = useSave();
+  const label = p.pool ? `${p.pool.name} ${p.name}` : p.name;
+  // an inherited range has no own version to correct: the first save of a pool is always a change
+  const inherited = p.pool?.inherited ?? false;
   return (
-    <tr data-testid={`ref-${p.name}`}>
-      <td><b>{p.name}</b></td>
-      <td>{p.unit}</td>
-      <td><input className="input small" aria-label={`${p.name} minimum`} inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} /></td>
-      <td><input className="input small" aria-label={`${p.name} maximum`} inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} /></td>
-      <td><ModeSelect id={p.name} value={mode} onChange={setMode} /></td>
-      <td><input className="input" aria-label={`${p.name} indoklás`} placeholder={mode === "correction" ? "indoklás (kötelező)" : "indoklás"} value={reason} onChange={(e) => setReason(e.target.value)} /></td>
+    <tr data-testid={p.pool ? `ref-${p.pool.name}-${p.name}` : `ref-${p.name}`}>
       <td>
-        <button className="btn" type="button" disabled={busy} onClick={() => void save("/api/admin/reference", "POST", { parameterId: p.parameterId, min: min || null, max: max || null, mode, ...(reason.trim() ? { reason: reason.trim() } : {}) })}>
+        <b>{p.name}</b>
+        {inherited && <div className="hint">a közös érték</div>}
+      </td>
+      <td>{p.unit}</td>
+      <td><input className="input small" aria-label={`${label} minimum`} inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} /></td>
+      <td><input className="input small" aria-label={`${label} maximum`} inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} /></td>
+      <td>{inherited ? <span className="hint">Változás (mostantól)</span> : <ModeSelect id={label} value={mode} onChange={setMode} />}</td>
+      <td><input className="input" aria-label={`${label} indoklás`} placeholder={mode === "correction" && !inherited ? "indoklás (kötelező)" : "indoklás"} value={reason} onChange={(e) => setReason(e.target.value)} /></td>
+      <td>
+        <button className="btn" type="button" disabled={busy} onClick={() => void save("/api/admin/reference", "POST", { parameterId: p.parameterId, ...(p.pool ? { poolId: p.pool.id } : {}), min: min || null, max: max || null, mode: inherited ? "change" : mode, ...(reason.trim() ? { reason: reason.trim() } : {}) })}>
           Mentés
         </button>{" "}
         <Msg msg={msg} />
       </td>
     </tr>
+  );
+}
+
+/** caparium-hibak-3: a pool's volume in litres, the chemical calculator works with it. */
+export function PoolVolumeForm(p: { poolId: string; name: string; volumeLiters: string | null }) {
+  const [v, setV] = useState((p.volumeLiters ?? "").replace(".", ","));
+  const { msg, busy, save } = useSave();
+  const unchanged = v.trim() === (p.volumeLiters ?? "").replace(".", ",");
+  return (
+    <span className="toolbar" style={{ margin: 0 }}>
+      <input className="input small" inputMode="decimal" aria-label={`${p.name} űrtartalma (liter)`} value={v} onChange={(e) => setV(e.target.value)} />
+      <button className="btn btn-soft" type="button" disabled={busy || unchanged} onClick={() => void save("/api/admin/pool-volume", "POST", { poolId: p.poolId, volumeLiters: v.trim() ? v.trim().replace(",", ".") : null })}>
+        Mentés
+      </button>
+      <Msg msg={msg} />
+    </span>
   );
 }
 

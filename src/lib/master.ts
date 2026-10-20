@@ -96,12 +96,15 @@ export async function groupLayout(
   };
 }
 
-/** Finds the reference range of a parameter valid at the measurement instant (R-10). */
-export async function referenceAt(tx: Tx, parameterId: string, at: Date) {
-  return tx.referenceRange.findFirst({
-    where: { parameterId, ...validAt(at) },
-    include: { unit: true },
-  });
+/**
+ * Finds the reference range of a parameter in a pool valid at the measurement instant (R-10): the pool's own
+ * range, else the common one every pool starts from (caparium-hibak-3, Balázs 2026-10-20: per pool, not one for all).
+ */
+export async function referenceAt(tx: Tx, parameterId: string, poolId: string, at: Date) {
+  return (
+    (await tx.referenceRange.findFirst({ where: { parameterId, poolId, ...validAt(at) }, include: { unit: true } })) ??
+    (await tx.referenceRange.findFirst({ where: { parameterId, poolId: null, ...validAt(at) }, include: { unit: true } }))
+  );
 }
 
 /**

@@ -100,7 +100,7 @@ export async function getGrid(groupId: string, day: string, roundSeq?: number) {
     // ascending order: the last one wins = latest measuredAt, ties by later creation
     daily[key] = toCell(m);
   }
-  // Ranges valid now, to show next to empty cells as a hint.
+  // Ranges valid now, to show next to empty cells as a hint: per pool, the pool's own or else the common one
   const now = new Date();
   const ranges = await prisma.referenceRange.findMany({
     where: {
@@ -111,7 +111,12 @@ export async function getGrid(groupId: string, day: string, roundSeq?: number) {
     include: { unit: true },
   });
   const currentRanges: Record<string, RangeView | null> = {};
-  for (const p of layout.parameters) currentRanges[p.id] = rangeView(ranges.find((r) => r.parameterId === p.id) ?? null);
+  for (const pool of layout.pools) {
+    for (const p of layout.parameters) {
+      const own = ranges.find((r) => r.parameterId === p.id && r.poolId === pool.id);
+      currentRanges[`${pool.id}:${p.id}`] = rangeView(own ?? ranges.find((r) => r.parameterId === p.id && r.poolId === null) ?? null);
+    }
+  }
 
   return {
     group: { id: group.id, name: group.name, frequency: group.frequency },

@@ -21,6 +21,7 @@ type Grid = {
   rounds: { id: string; seq: number }[];
   selectedRound: { id: string; seq: number } | null;
   cells: Record<string, CellView>;
+  /** "poolId:parameterId" -> the range valid now in that pool (its own, else the common one) */
   currentRanges: Record<string, RangeView | null>;
 };
 
@@ -518,9 +519,9 @@ export function MeasurementGrid({
                       const shown = draft ?? (cell ? huNumber(cell.value) : "");
                       const out =
                         draft !== undefined
-                          ? draftOutOfRange(draft, grid.currentRanges[param.id])
+                          ? draftOutOfRange(draft, grid.currentRanges[key])
                           : cell?.reference === "LOW" || cell?.reference === "HIGH";
-                      const range = cell?.range ?? grid.currentRanges[param.id];
+                      const range = cell?.range ?? grid.currentRanges[key];
                       return (
                         <td key={param.id}>
                           {active ? (

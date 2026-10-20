@@ -115,12 +115,14 @@ model Session {
 // ---------------------------------------------------------------------------
 
 model Pool {
-  id        String    @id @default(uuid()) @db.Uuid
-  code      String    @unique // internal, never shown as a key to users
-  emoji     String?
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now()) @db.Timestamptz(3)
-  closedAt  DateTime? @db.Timestamptz(3)
+  id           String    @id @default(uuid()) @db.Uuid
+  code         String    @unique // internal, never shown as a key to users
+  emoji        String?
+  // caparium-hibak-3: the pool's volume in litres, the chemical calculator works with it; null = not given yet
+  volumeLiters Decimal?  @db.Decimal(14, 4)
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  closedAt     DateTime? @db.Timestamptz(3)
 
   names        PoolName[]
   memberships  GroupMembership[]
@@ -128,6 +130,7 @@ model Pool {
   placements   Placement[]
   arrivals     LifecycleEvent[]
   dosings      Dosing[]
+  references   ReferenceRange[]
 
   @@map("pool")
 }
@@ -267,9 +270,12 @@ model ParameterName {
 }
 
 // DN-08: per parameter, not per pool.
+// caparium-hibak-3: a range is a pool's own (poolId) or the common one every pool starts from (poolId null);
+// the pool's own valid range wins, else the common one (src/lib/master.ts referenceAt)
 model ReferenceRange {
   id          String    @id @default(uuid()) @db.Uuid
   parameterId String    @db.Uuid
+  poolId      String?   @db.Uuid
   min         Decimal?  @db.Decimal(14, 4)
   max         Decimal?  @db.Decimal(14, 4)
   unitId      String    @db.Uuid
@@ -279,10 +285,12 @@ model ReferenceRange {
   createdAt   DateTime  @default(now()) @db.Timestamptz(3)
 
   parameter    Parameter     @relation(fields: [parameterId], references: [id])
+  pool         Pool?         @relation(fields: [poolId], references: [id], onDelete: Restrict)
   unit         Unit          @relation(fields: [unitId], references: [id])
   measurements Measurement[]
 
   @@index([parameterId, validFrom])
+  @@index([parameterId, poolId, validFrom])
   @@map("reference_range")
 }
 

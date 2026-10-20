@@ -331,7 +331,7 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
       const round = await findOrCreateRound(tx, actor, group.id, day, { roundId: input.roundId, newRound: input.newRound });
       cell = { roundId: round.id };
       const responsibleId = await responsibleUser(tx, input.responsibleUserId ?? actor.id);
-      const ref = await referenceAt(tx, param.id, measuredAt);
+      const ref = await referenceAt(tx, param.id, pool.id, measuredAt);
 
       const created = await tx.measurement.create({
         data: {
@@ -455,7 +455,7 @@ export async function updateMeasurement(
       target = { roundId, poolId: cur.poolId, parameterId: cur.parameterId };
       const responsibleId =
         input.responsibleUserId !== undefined ? await responsibleUser(tx, input.responsibleUserId) : cur.responsibleUserId;
-      const ref = await referenceAt(tx, cur.parameterId, measuredAt);
+      const ref = await referenceAt(tx, cur.parameterId, cur.poolId, measuredAt);
 
       const res = await tx.measurement.updateMany({
         where: { id, version: input.expectedVersion, status: "VALID" },
