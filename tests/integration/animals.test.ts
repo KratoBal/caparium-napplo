@@ -1,7 +1,7 @@
 // Animals, lifecycle and feeds against a real database (adatmodell 6., 7., 11.; DAT-05, R-1, NY-20).
 // Days in February 2026: no other test file writes there.
 import { beforeAll, describe, expect, it } from "vitest";
-import { createLifecycleEvent, invalidateLifecycleEvent, listAnimals, rebuildAnimal, renameEntity } from "@/lib/animals";
+import { createLifecycleEvent, editAnimal, invalidateLifecycleEvent, listAnimals, rebuildAnimal, renameEntity } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { createFeed, updateFeed } from "@/lib/feeds";
@@ -135,6 +135,71 @@ describe("lifecycle (DAT-05, T-09)", () => {
       createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("NAGY"), occurredAtLocal: `${d}T09:00` }, at(d, "09:06")),
       "SAME_INSTANT",
     );
+  });
+});
+
+describe("editing an animal (caparium-hibak-5)", () => {
+  const now = at("2026-02-25", "10:00");
+  const arrivalOf = (id: string) => prisma.lifecycleEvent.findFirstOrThrow({ where: { animalId: id, type: "ARRIVAL", status: "VALID" } });
+
+  it("whoever may record an arrival may edit; species and sex in place, one audit row with before and after", async () => {
+    const id = await arrive("Szerkesztendő", "2026-02-20");
+    await expectCode(editAnimal(f.aq1, id, { requestId: rid(), sex: "MALE" }, now), "ADMIN_ONLY");
+    await expectCode(editAnimal(f.admin, id, { requestId: rid(), sex: "FEMALE" }, now), "NO_CHANGE");
+    const other = await prisma.species.create({ data: { scientificName: "Teszt faj szerkesztéshez" } });
+    const req = rid();
+    await editAnimal(f.admin, id, { requestId: req, speciesId: other.id, sex: "MALE" }, now);
+    const a = await prisma.animal.findUniqueOrThrow({ where: { id } });
+    expect([a.speciesId, a.sex]).toEqual([other.id, "MALE"]);
+    const audit = await prisma.auditEntry.findFirstOrThrow({ where: { requestId: req } });
+    expect([audit.action, audit.entityType, audit.entityId]).toEqual(["MASTER_CHANGE", "Animal", id]);
+    expect(audit.changes).toMatchObject({ sex: { before: "FEMALE", after: "MALE" }, species: { after: "Teszt faj szerkesztéshez" } });
+    // a replay changes nothing more
+    expect(await editAnimal(f.admin, id, { requestId: req, sex: "UNKNOWN" }, now)).toEqual({ replayed: true });
+  });
+
+  it("the name: a correction (reason needed) fixes the current one; a change opens a new one from now", async () => {
+    const id = await arrive("Elgépelt", "2026-02-20");
+    await expectCode(editAnimal(f.admin, id, { requestId: rid(), name: "Elgépelt2", nameMode: "correction" }, now), "REASON_REQUIRED");
+    await editAnimal(f.admin, id, { requestId: rid(), name: "Javított", nameMode: "correction", reason: "elírás a felvételkor" }, now);
+    expect((await prisma.animalName.findMany({ where: { animalId: id } })).map((n) => [n.name, n.validTo])).toEqual([["Javított", null]]);
+    await editAnimal(f.admin, id, { requestId: rid(), name: "Új név", nameMode: "change" }, now);
+    const names = await prisma.animalName.findMany({ where: { animalId: id }, orderBy: { validFrom: "asc" } });
+    expect(names.map((n) => [n.name, n.validTo?.getTime() ?? null])).toEqual([["Javított", now.getTime()], ["Új név", null]]);
+  });
+
+  it("the arrival: pool, group, time and note corrected as a past fact; the placement follows; a reason is needed", async () => {
+    const id = await arrive("Rossz medence", "2026-02-20");
+    const arr = await arrivalOf(id);
+    await expectCode(editAnimal(f.admin, id, { requestId: rid(), arrival: { expectedVersion: arr.version, toPoolId: f.pool("KIS") } }, now), "REASON_REQUIRED");
+    const group = await prisma.animalGroup.create({ data: { names: { create: { name: "Szerkesztési csoport", validFrom: at("2026-01-01", "00:00") } } } });
+    await editAnimal(
+      f.admin,
+      id,
+      { requestId: rid(), arrival: { expectedVersion: arr.version, toPoolId: f.pool("KIS"), toGroupId: group.id, occurredAtLocal: "2026-02-19T15:30", note: "a karanténból jött" }, reason: "rossz medencébe rögzítve" },
+      now,
+    );
+    const p = await prisma.placement.findMany({ where: { animalId: id } });
+    expect(p.map((x) => [x.poolId, x.validFrom.toISOString(), x.validTo])).toEqual([[f.pool("KIS"), at("2026-02-19", "15:30").toISOString(), null]]);
+    expect((await prisma.animalGroupMembership.findMany({ where: { animalId: id } })).map((m) => m.groupId)).toEqual([group.id]);
+    const after = await arrivalOf(id);
+    expect([after.version, after.note, after.id]).toEqual([arr.version + 1, "a karanténból jött", arr.id]);
+    const audit = await prisma.auditEntry.findFirstOrThrow({ where: { entityType: "Animal", entityId: id, action: "MASTER_CORRECTION" } });
+    expect(audit.changes).toMatchObject({ arrivalPool: { before: f.pool("NAGY"), after: f.pool("KIS") }, arrivalNote: { before: null, after: "a karanténból jött" } });
+    // the version the form saw is gone now
+    await expectCode(editAnimal(f.admin, id, { requestId: rid(), arrival: { expectedVersion: arr.version, note: "x" }, reason: "teszt" }, now), "VERSION_CONFLICT");
+  });
+
+  it("an arrival moved after a later event is refused, and nothing changes", async () => {
+    const id = await arrive("Áthelyezett", "2026-02-20");
+    await createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KARANTEN"), occurredAtLocal: "2026-02-21T09:00", reason: "teszt" }, at("2026-02-21", "10:00"));
+    const arr = await arrivalOf(id);
+    await expectCode(
+      editAnimal(f.admin, id, { requestId: rid(), arrival: { expectedVersion: arr.version, occurredAtLocal: "2026-02-22T09:00" }, reason: "teszt" }, now),
+      "LIFECYCLE_INVALID",
+    );
+    expect((await arrivalOf(id)).occurredAt.getTime()).toBe(arr.occurredAt.getTime());
+    expect((await openPlacement(id))?.poolId).toBe(f.pool("KARANTEN"));
   });
 });
 

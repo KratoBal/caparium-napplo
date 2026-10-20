@@ -620,6 +620,32 @@ test("feeds: an aquarist adds an Egyéb feed, and only that type is offered (cap
   await expect(page.getByTestId("feeds-EGYEB")).toContainText(name);
 });
 
+test("animals: an admin edits an animal's data with a reason; an aquarist sees no edit form (caparium-hibak-5)", async ({ page }, info) => {
+  await login(page, "teszt.admin");
+  await page.goto("/allatok");
+  await page.getByTestId("animals-table").getByRole("link", { name: "Teszt Egy", exact: true }).click();
+  const form = page.getByTestId("animal-edit");
+  const sex = form.getByLabel("Nem (módosítás)");
+  const next = (await sex.inputValue()) === "MALE" ? "UNKNOWN" : "MALE";
+  await sex.selectOption(next);
+  const note = `e2e megjegyzés ${info.project.name} ${Date.now()}`;
+  await form.getByLabel("Érkezési megjegyzés (módosítás)").fill(note);
+  const save = form.getByRole("button", { name: "Módosítás mentése" });
+  await expect(save, "the arrival is a past fact: no save without a reason").toBeDisabled();
+  await form.getByLabel("Indoklás a módosításhoz").fill("e2e: az érkezés megjegyzése pontosítva");
+  await save.click();
+  await expect(form.getByRole("status")).toHaveText("Az állat adatai mentve.");
+  await expect(page.getByTestId("animal-detail")).toContainText(note);
+  await expect(page.getByTestId("animal-edit").getByLabel("Nem (módosítás)")).toHaveValue(next);
+
+  await page.context().clearCookies();
+  await login(page, "teszt.akvarista1");
+  await page.goto("/allatok");
+  await page.getByTestId("animals-table").getByRole("link", { name: "Teszt Egy", exact: true }).click();
+  await expect(page.getByTestId("animal-detail")).toBeVisible();
+  await expect(page.getByTestId("animal-edit")).toHaveCount(0);
+});
+
 // Last in the file: it loads the description's 25 animals into the shared e2e database (acrobot 33380). The tablet
 // run meets 0 of 25 (no switch and no synthetic seed arrival before the basic data on this database) and clicks;
 // the desktop run meets them in.

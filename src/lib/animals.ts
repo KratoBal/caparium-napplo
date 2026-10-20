@@ -351,6 +351,156 @@ export async function renameEntity(actor: Actor, kind: "animal" | "group", id: s
 }
 
 // ---------------------------------------------------------------------------
+// Editing an animal (caparium-hibak-5, Balázs 2026-10-20 11:24 UTC: "Lehessen modositani az allatokat")
+// ---------------------------------------------------------------------------
+// Every field given at the arrival can be changed later, by whoever may record an arrival (FEEDING admin):
+// - name: a CHANGE (from now on; the past keeps the old name) or a CORRECTION (a typo; the past too, reason needed),
+//   the same K3 rule as the settings;
+// - species and sex: attributes without a history; changed in place;
+// - the ARRIVAL itself (time, pool, group, note): corrected in place, as a past fact (reason needed); the placement
+//   and membership are derived again (deriveLifecycle), and a correction that would contradict a later event or
+//   leave manual feeding rows outside the animal's life is refused, as for any lifecycle change.
+// Where the animal is NOW is still a transfer or a group change (AnimalActions), not an edit of the arrival.
+// One audit row per save names every changed field, before and after.
+
+export const editAnimalSchema = z.object({
+  requestId: z.string().min(8).max(100),
+  name: exportSafeName.optional(),
+  nameMode: z.enum(["change", "correction"]).default("correction"),
+  speciesId: z.uuid().optional(),
+  sex: z.enum(["MALE", "FEMALE", "UNKNOWN"]).optional(),
+  arrival: z
+    .object({
+      expectedVersion: z.number().int().min(1),
+      occurredAtLocal: z.string().optional(),
+      toPoolId: z.uuid().optional(),
+      toGroupId: z.uuid().nullable().optional(),
+      note: z.string().trim().max(500).nullable().optional(),
+    })
+    .optional(),
+  reason: reason.optional(),
+});
+export type EditAnimalInput = z.input<typeof editAnimalSchema>;
+
+export async function editAnimal(actor: Actor, animalId: string, raw: EditAnimalInput, serverNow = new Date()) {
+  const input = editAnimalSchema.parse(raw);
+  if (!z.uuid().safeParse(animalId).success) throw new AppError(404, "ANIMAL_NOT_FOUND", "Az állat nem található.");
+  if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId, entityId: animalId } })) return { replayed: true };
+  if ((await moduleLevel(prisma, actor.id, actor.role, "FEEDING")) !== "ADMIN") {
+    throw new AppError(403, "ADMIN_ONLY", "Állatot az módosíthat, aki érkezést is rögzíthet (adminisztrátor).");
+  }
+  try {
+    return await prisma.$transaction(async (tx) => {
+      if (!(await lockAnimal(tx, animalId))) throw new AppError(404, "ANIMAL_NOT_FOUND", "Az állat nem található.");
+      const animal = await tx.animal.findUniqueOrThrow({ where: { id: animalId }, include: { species: true } });
+      const before: Record<string, unknown> = {};
+      const after: Record<string, unknown> = {};
+      let corrects = false;
+
+      if (input.name !== undefined) {
+        const cur = await tx.animalName.findFirst({ where: { animalId, ...validAt(serverNow) } });
+        if (!cur) throw new AppError(404, "NOT_FOUND", "Az állat mai neve nem található.");
+        if (cur.name !== input.name) {
+          before.name = cur.name;
+          after.name = input.name;
+          if (input.nameMode === "correction") {
+            corrects = true;
+            await tx.animalName.update({ where: { id: cur.id }, data: { name: input.name } });
+          } else {
+            await tx.animalName.update({ where: { id: cur.id }, data: { validTo: serverNow } });
+            await tx.animalName.create({ data: { animalId, name: input.name, validFrom: serverNow } });
+          }
+        }
+      }
+      if (input.speciesId !== undefined && input.speciesId !== animal.speciesId) {
+        const sp = await tx.species.findUnique({ where: { id: input.speciesId } });
+        if (!sp || !sp.active) throw new AppError(422, "SPECIES_NOT_FOUND", "A faj nem található.");
+        before.species = animal.species.scientificName;
+        after.species = sp.scientificName;
+        await tx.animal.update({ where: { id: animalId }, data: { speciesId: sp.id } });
+      }
+      if (input.sex !== undefined && input.sex !== animal.sex) {
+        before.sex = animal.sex;
+        after.sex = input.sex;
+        await tx.animal.update({ where: { id: animalId }, data: { sex: input.sex as Sex } });
+      }
+
+      let fromDay: string | null = null;
+      if (input.arrival) {
+        const a = input.arrival;
+        const arr = await tx.lifecycleEvent.findFirst({ where: { animalId, type: "ARRIVAL", status: "VALID" } });
+        if (!arr) throw new AppError(409, "NO_ARRIVAL", "Az állatnak nincs érvényes érkezése, amit javítani lehetne.");
+        if (arr.version !== a.expectedVersion) throw new AppError(409, "VERSION_CONFLICT", "Az érkezés időközben megváltozott.");
+        const data: Record<string, unknown> = {};
+        if (a.occurredAtLocal !== undefined) {
+          const at = resolveLocalDateTime(a.occurredAtLocal)?.instant;
+          if (!at) throw new AppError(422, "INVALID_TIME", "Az érkezés időpontja érvénytelen.");
+          if (at.getTime() > serverNow.getTime() + 5 * 60_000) throw new AppError(422, "FUTURE_TIME", "Jövőbeli érkezést nem lehet rögzíteni.");
+          if (at.getTime() !== arr.occurredAt.getTime()) {
+            data.occurredAt = at;
+            data.businessDay = dayToDate(businessDayOf(at));
+            before.arrivalAt = arr.occurredAt.toISOString();
+            after.arrivalAt = at.toISOString();
+          }
+        }
+        if (a.toPoolId !== undefined && a.toPoolId !== arr.toPoolId) {
+          if (!(await tx.pool.findUnique({ where: { id: a.toPoolId } }))) throw new AppError(422, "POOL_NOT_FOUND", "A medence nem található.");
+          data.toPoolId = a.toPoolId;
+          before.arrivalPool = arr.toPoolId;
+          after.arrivalPool = a.toPoolId;
+        }
+        if (a.toGroupId !== undefined && a.toGroupId !== arr.toGroupId) {
+          if (a.toGroupId && !(await tx.animalGroup.findUnique({ where: { id: a.toGroupId } }))) {
+            throw new AppError(422, "GROUP_NOT_FOUND", "A csoport nem található.");
+          }
+          data.toGroupId = a.toGroupId;
+          before.arrivalGroup = arr.toGroupId;
+          after.arrivalGroup = a.toGroupId;
+        }
+        if (a.note !== undefined && (a.note || null) !== arr.note) {
+          data.note = a.note || null;
+          before.arrivalNote = arr.note;
+          after.arrivalNote = a.note || null;
+        }
+        if (Object.keys(data).length) {
+          corrects = true;
+          const res = await tx.lifecycleEvent.updateMany({
+            where: { id: arr.id, version: a.expectedVersion, status: "VALID" },
+            data: { ...data, version: { increment: 1 }, updatedById: actor.id, updatedAt: serverNow },
+          });
+          if (res.count !== 1) throw new AppError(409, "VERSION_CONFLICT", "Az érkezés időközben megváltozott.");
+          await rebuildAnimal(tx, animalId);
+          await refuseOrphanRows(tx, animalId);
+          const newDay = data.businessDay ? dateToDay(data.businessDay as Date) : dateToDay(arr.businessDay);
+          const oldDay = dateToDay(arr.businessDay);
+          fromDay = newDay < oldDay ? newDay : oldDay;
+        }
+      }
+
+      if (Object.keys(after).length === 0) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
+      if (corrects && !input.reason) {
+        throw new AppError(422, "REASON_REQUIRED", "A javítás a múltra is hat (név helyesbítése vagy az érkezés adatai), ezért indoklás kell.");
+      }
+      // a moved arrival changes which closed, finalized days the animal was alive on: their fasting days follow
+      if (fromDay) await recomputeClosedDaysFrom(tx, fromDay, actor.id, input.requestId);
+      await writeAudit(tx, {
+        userId: actor.id,
+        action: corrects ? "MASTER_CORRECTION" : "MASTER_CHANGE",
+        entityType: "Animal",
+        entityId: animalId,
+        changes: diffFields(before, after),
+        reason: input.reason ?? null,
+        requestId: input.requestId,
+      });
+      return { replayed: false, changed: Object.keys(after) };
+    });
+  } catch (e) {
+    if (isUniqueViolation(e, "occurredAt") || isUniqueViolation(e, "one_valid_per_instant")) throw new AppError(409, "SAME_INSTANT", SAME_INSTANT);
+    throw e;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
 
