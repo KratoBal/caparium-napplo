@@ -126,8 +126,14 @@ describe("the basic data, without a password", () => {
         updatedById: "00000000-0000-0000-0000-000000000001",
       },
     });
+    // the stage's case (acrobot 33344): an admin recorded an animal of their own under a list name before the list
+    // loaded ("Margit", Capus capus). It is another animal: the list's Margit still comes.
+    const capus = await db.species.create({ data: { scientificName: "Capus capus" } });
+    await db.animal.create({ data: { speciesId: capus.id, sex: "FEMALE", names: { create: { name: "Margit", validFrom: new Date("2026-10-20T08:00:00.000Z") } } } });
     const before = await counts();
     execFileSync("npx", ["tsx", "prisma/base-data.ts"], { stdio: "pipe", env });
+    const margits = await db.animal.findMany({ where: { names: { some: { name: "Margit" } } }, include: { species: true } });
+    expect(margits.map((m) => m.species.scientificName).sort()).toEqual(["Capus capus", "Giglymostoma cirratum"]);
     expect(await counts()).toEqual({
       ...before,
       species: before.species + new Set(INITIAL_ANIMALS.map((a) => a.species)).size,

@@ -1,9 +1,9 @@
 // THE STARTING LISTS of the customer's description (task caparium-hibak-1, Balázs 2026-10-20): the animals
 // by pool (leírás 18. o., "Adatok a medencékhez, állatokhoz és takarmányhoz", DN-04) and the feeds by type
 // (leírás 19. o., T-13). Loaded with the basic data at every start, the animals only on the test system
-// (src/lib/seed-switch.ts: a live system's admin records them with their real arrival): an animal, a group
-// or a feed is created only where no row has ever carried its name, so an admin's rename, death, release or
-// deactivation stays.
+// (src/lib/seed-switch.ts: a live system's admin records them with their real arrival): a feed is created only
+// where no row has ever carried its name, an animal only where its own arrival (a fixed request id) is missing,
+// so an admin's rename, death, release or deactivation stays.
 //
 // Letter by letter from the description, with two kinds of reading and nothing else:
 // - "Elkülönítő" is the pool KARANTEN (DN-01); "♂", "1.0" (zoo notation: one male) and the names "Hím" /
@@ -108,13 +108,22 @@ export async function loadInitialFeeds(prisma: PrismaClient, unitId: Map<string,
   }
 }
 
+/** The arrival of a list entry carries this request id: the loader's own mark, not the animal's name. */
+export const initialArrivalRequestId = (a: Pick<InitialAnimal, "pool" | "name">) => `kezdo-allat:${a.pool}:${a.name}`;
+
 /**
- * The animals of the list no animal name has ever carried: each arrives in its pool (and group) at
- * `since`, by the System user, and its placement is derived the way every lifecycle change derives it.
+ * The animals of the list whose own arrival is not there yet: each arrives in its pool (and group) at `since`, by
+ * the System user, and its placement is derived the way every lifecycle change derives it. Keyed by the arrival's
+ * request id, not by the name (acrobot 33344): an animal an admin recorded under the same name ("Margit", Capus
+ * capus, on the stage) is another animal and does not stop the list's one; and an admin's rename, species
+ * correction, death or release of a list animal does not bring it back. A group of the list is looked up among the
+ * list's own arrivals, so an admin's group of the same name is not joined either.
  */
 export async function loadInitialAnimals(prisma: PrismaClient, poolId: Map<string, string>, since: Date): Promise<void> {
-  const have = new Set((await prisma.animalName.findMany({ select: { name: true } })).map((n) => n.name));
-  const missing = INITIAL_ANIMALS.filter((a) => !have.has(a.name));
+  const done = new Set(
+    (await prisma.lifecycleEvent.findMany({ where: { requestId: { startsWith: "kezdo-allat:" } }, select: { requestId: true } })).map((e) => e.requestId),
+  );
+  const missing = INITIAL_ANIMALS.filter((a) => !done.has(initialArrivalRequestId(a)));
   if (missing.length === 0) return;
   const businessDay = dayToDate(businessDayOf(since));
   for (const a of missing) {
@@ -124,8 +133,13 @@ export async function loadInitialAnimals(prisma: PrismaClient, poolId: Map<strin
         (await tx.species.create({ data: { scientificName: a.species } }));
       let groupId: string | null = null;
       if (a.group) {
-        const named = await tx.animalGroupName.findFirst({ where: { name: a.group } });
-        groupId = named?.groupId ?? (await tx.animalGroup.create({ data: { names: { create: { name: a.group, validFrom: since } } } })).id;
+        const sibling = await tx.lifecycleEvent.findFirst({
+          where: {
+            requestId: { in: INITIAL_ANIMALS.filter((b) => b.group === a.group).map(initialArrivalRequestId) },
+            toGroupId: { not: null },
+          },
+        });
+        groupId = sibling?.toGroupId ?? (await tx.animalGroup.create({ data: { names: { create: { name: a.group, validFrom: since } } } })).id;
       }
       const animal = await tx.animal.create({
         data: { speciesId: species.id, sex: a.sex, names: { create: { name: a.name, validFrom: since } } },
@@ -139,7 +153,7 @@ export async function loadInitialAnimals(prisma: PrismaClient, poolId: Map<strin
           toPoolId: poolId.get(a.pool)!,
           toGroupId: groupId,
           note: "Kezdő állatlista (leírás 18. o.)",
-          requestId: `alapadat-erkezes-${animal.id}`,
+          requestId: initialArrivalRequestId(a),
           createdById: SYSTEM_USER_ID,
           updatedById: SYSTEM_USER_ID,
         },
