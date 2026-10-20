@@ -26,7 +26,8 @@ COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/assets ./assets
 # the image proves at build time that the water report PDF can be made here (review of #32: the e2e runs `next
 # start`, not this image): pdfkit resolves from these node_modules with its own data files, and the copied font
-# parses and carries "ő"/"ű". A missing font or package stops the build instead of the first button press.
+# parses. A missing font or package stops the build instead of the first button press. That the font CARRIES
+# "ő"/"ű" is not measured here (a missing glyph is silent): the unit test reads the PDF back, on the same blob.
 RUN node -e "const P=require('pdfkit');const d=new P();d.registerFont('b','assets/fonts/DejaVuSans.ttf');d.font('b').text('Hőmérséklet Sűrűség');d.on('data',()=>{});d.end()"
 COPY --from=build --chown=node:node /app/scripts/start.sh ./start.sh
 # the generated client with its query engine (generated in the build stage)

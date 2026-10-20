@@ -48,7 +48,8 @@ export const sendSchema = z.object({ requestId });
 export async function sendWaterReport(actor: Actor, input: z.infer<typeof sendSchema>, now = new Date(), sender?: MailSender) {
   const level = await moduleLevel(prisma, actor.id, actor.role, "EXPORT");
   if (level !== "RECORD" && level !== "ADMIN") throw new AppError(403, "READ_ONLY", "A vízmérés kiküldéséhez exportálási jog kell.");
-  const prior = await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } });
+  // only this action's row (review of #32): another action's row with the same request id is not a sending
+  const prior = await prisma.auditEntry.findFirst({ where: { requestId: input.requestId, entityType: "WaterReportMail" } });
   if (prior) {
     // what that sending said (review of #32): a replay must not read "Elküldve: undefined"
     const c = prior.changes as { recipient?: { after?: string }; pools?: { after?: string[] } };
