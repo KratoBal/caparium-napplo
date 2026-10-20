@@ -1,6 +1,7 @@
 // THE BASIC DATA (task caparium-alapadat, a go-live condition, acrobot 33140): units, water parameters,
-// pools, measurement groups, the ZIMS names and export profile, the feed types and the "Egyéb" feed, and
-// the description's starting lists of feeds and animals (src/lib/initial-data.ts, caparium-hibak-1).
+// pools, measurement groups, the ZIMS names and export profile, the feed types, the "Egyéb" feed and the
+// description's starting feed list, and on the test system only its starting animals (src/lib/initial-data.ts,
+// caparium-hibak-1).
 // Loaded WITHOUT a password at every container start (scripts/start.sh -> dist/base-data.cjs), because
 // a live system has no SEED_TEST_PASSWORD, and until 2026-10-19 all of this came only from the
 // password seed: the stage showed an empty feed type list and "Invalid UUID" (Balázs, #23).
@@ -12,6 +13,7 @@
 
 import type { Dimension, PrismaClient } from "@prisma/client";
 import { loadInitialAnimals, loadInitialFeeds } from "./initial-data";
+import { initialAnimalsWanted } from "./seed-switch";
 
 export const SINCE = new Date("2025-12-31T23:00:00.000Z"); // 2026-01-01 00:00 Europe/Budapest
 
@@ -233,8 +235,9 @@ export async function loadBaseData(prisma: PrismaClient): Promise<BaseDataIds> {
       });
     }
   }
-  // the description's starting lists (leírás 18-19. o.; caparium-hibak-1)
+  // the description's starting lists (leírás 18-19. o.; caparium-hibak-1): the feeds everywhere, the animals only
+  // on the test system (src/lib/seed-switch.ts)
   await loadInitialFeeds(prisma, unitId, SINCE);
-  await loadInitialAnimals(prisma, poolId, SINCE);
+  if (initialAnimalsWanted()) await loadInitialAnimals(prisma, poolId, SINCE);
   return { unitId, paramId, poolId };
 }

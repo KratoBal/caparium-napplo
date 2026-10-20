@@ -7,3 +7,13 @@ export function syntheticWanted(env: Record<string, string | undefined> = proces
   if (v === "0") return false;
   return env.CI === "true";
 }
+
+// The description's starting ANIMALS (src/lib/initial-data.ts, caparium-hibak-1) go in only on the test system
+// (acrobot's decision 2026-10-20, msg 33316): a live system's admin records them with their real arrival, and a
+// made-up 2026-01-01 arrival would be false first data there. No new variable: the test system's existing mark,
+// CAPARIUM_SEED_SZINTETIKUS=1, set explicitly (docker-compose.yml: "1 on the stage only, never on a live
+// system"). Not the CI=true fallback of syntheticWanted, and anything else (missing, 0, unclear) means no.
+// The starting FEEDS have no date and load everywhere.
+export function initialAnimalsWanted(env: Record<string, string | undefined> = process.env): boolean {
+  return env.CAPARIUM_SEED_SZINTETIKUS?.trim() === "1";
+}

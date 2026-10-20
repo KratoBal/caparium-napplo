@@ -31,7 +31,7 @@ admin.pathname = "/postgres";
 // only ever beside a database named for testing (env.ts takes an outside OWNER_DATABASE_URL unchecked)
 const besideTestDatabase = owner.pathname.slice(1).endsWith("_test");
 
-// the test system's start: a seed password and the synthetic switch on
+// the test system's start: a seed password and the synthetic switch on (which also brings the starting animals)
 const env: NodeJS.ProcessEnv = { ...process.env, DATABASE_URL: target.toString(), SEED_TEST_PASSWORD: "kezdolista-proba-jelszo", CAPARIUM_SEED_SZINTETIKUS: "1" };
 delete (env as Record<string, string | undefined>).CI;
 

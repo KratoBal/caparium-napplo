@@ -1,8 +1,9 @@
 // THE STARTING LISTS of the customer's description (task caparium-hibak-1, Balázs 2026-10-20): the animals
 // by pool (leírás 18. o., "Adatok a medencékhez, állatokhoz és takarmányhoz", DN-04) and the feeds by type
-// (leírás 19. o., T-13). Loaded with the basic data at every start (src/lib/base-data.ts): an animal, a
-// group or a feed is created only where no row has ever carried its name, so an admin's rename, death,
-// release or deactivation stays.
+// (leírás 19. o., T-13). Loaded with the basic data at every start, the animals only on the test system
+// (src/lib/seed-switch.ts: a live system's admin records them with their real arrival): an animal, a group
+// or a feed is created only where no row has ever carried its name, so an admin's rename, death, release or
+// deactivation stays.
 //
 // Letter by letter from the description, with two kinds of reading and nothing else:
 // - "Elkülönítő" is the pool KARANTEN (DN-01); "♂", "1.0" (zoo notation: one male) and the names "Hím" /

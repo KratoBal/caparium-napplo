@@ -1,6 +1,7 @@
 -- Task caparium-hibak-1, items 2 and 3 (Balázs 2026-10-20 07:51-07:53 UTC, msg 1562010379683364927 and
 -- 1562010874733002755): the description's animals and feeds go onto the test system (src/lib/initial-data.ts,
--- loaded with the basic data), and the synthetic test master data the seed made there steps aside. DATA ONLY.
+-- loaded with the basic data, the animals only there), and the synthetic test master data the seed made there
+-- steps aside. DATA ONLY.
 --
 -- Nothing is deleted (feeding rows, exports and audit_entry name these rows):
 -- - the synthetic feeds become INACTIVE, as an admin's "Inaktiválás" does (src/lib/feeds.ts updateFeed), one
