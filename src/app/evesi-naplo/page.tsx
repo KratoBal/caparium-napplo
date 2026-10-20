@@ -1,12 +1,11 @@
 import { DayControls } from "@/components/DayControls";
 import { DayNav } from "@/components/DayNav";
-import { EatingForm } from "@/components/FeedingForms";
+import { EatingTable } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { feedingHelper } from "@/lib/helpers";
 import { moduleLevel } from "@/lib/master";
 import { prisma } from "@/lib/db";
 import { eatingDayView } from "@/lib/eating";
-import { EAT_LABEL } from "@/lib/eating-labels";
 import { feedingDayView } from "@/lib/feeding";
 import { dayStatus } from "@/lib/journal";
 import { requireModuleRead } from "@/lib/session";
@@ -38,48 +37,26 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
       {eat.reopened && <div className="banner banner-warn">Újranyitva: a koplalónapok a nap újbóli lezárásakor számolódnak újra.</div>}
       <div className="card">
         <h2>Evési állapotok</h2>
-        <p className="hint">A listán szereplő állat evett, nem evett meg mindent vagy nem evett; aki nincs a listán, koplalónapot kap (a kész lista lezárásakor magától).</p>
-        <div className="table-scroll">
-          <table className="log-table" data-testid="eating-table">
-            <thead>
-              <tr><th>Állat</th><th>Csoport</th><th>Medence</th><th>Állapot</th><th>Jelölés</th>{editable && <th></th>}</tr>
-            </thead>
-            <tbody>
-              {feed.animals.map((a) => {
-                const r = rows.get(a.id);
-                const s = r?.status ?? null;
-                return (
-                  <tr key={a.id}>
-                    <td>{a.name}</td>
-                    <td>{a.groupName ?? "–"}</td>
-                    <td>{a.poolName ?? "–"}</td>
-                    <td className="keep">
-                      {s ? (
-                        <span className={`badge eat-${s.state}`} data-testid={`state-${a.name}`}>
-                          {EAT_LABEL[s.state]}
-                          {s.source === "AUTOMATIC" ? " (automatikus)" : ""}
-                        </span>
-                      ) : r?.pendingFasting ? (
-                        <span className="badge eat-pending" data-testid={`state-${a.name}`}>koplal, még nem végleges</span>
-                      ) : (
-                        <span className="hint" data-testid={`state-${a.name}`}>{a.selected ? "nincs rögzítve" : "–"}</span>
-                      )}
-                    </td>
-                    <td>
-                      {s?.vitamin ? "V " : ""}
-                      {s?.medicine ? `Gy${s.medicineNote ? `: ${s.medicineNote}` : ""}` : ""}
-                    </td>
-                    {editable && (
-                      <td className="keep">
-                        <EatingForm day={day} animalId={a.id} name={a.name} selected={a.selected} status={s} />
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <p className="hint">
+          A listán szereplő állat evett, nem evett meg mindent vagy nem evett; aki nincs a listán, koplalónapot kap (a kész lista
+          lezárásakor magától). Töltsd ki a sorokat, és egyszer ments: a mentés minden kitöltött vagy megváltoztatott sort rögzít.
+        </p>
+        <EatingTable
+          day={day}
+          editable={editable}
+          rows={feed.animals.map((a) => {
+            const r = rows.get(a.id);
+            return {
+              animalId: a.id,
+              name: a.name,
+              groupName: a.groupName ?? null,
+              poolName: a.poolName ?? null,
+              selected: a.selected,
+              pendingFasting: !!r?.pendingFasting,
+              status: r?.status ?? null,
+            };
+          })}
+        />
       </div>
     </Shell>
   );

@@ -151,4 +151,18 @@ describe("feeds (DAT-02, TAK-07, T-08)", () => {
     await updateFeed(f.admin, r.id, { requestId: rid(), active: false });
     expect((await prisma.feed.findUniqueOrThrow({ where: { id: r.id } })).active).toBe(false);
   });
+
+  it("an aquarist who records feeding may add an Egyéb feed, no other type; a read-only one may not (caparium-hibak-4)", async () => {
+    const egyeb = await prisma.feedType.findUniqueOrThrow({ where: { code: "EGYEB" } });
+    const g = (await prisma.unit.findUniqueOrThrow({ where: { symbol: "g" } })).id;
+    const r = await createFeed(f.aq1, { requestId: rid(), typeId: egyeb.id, name: "Teszt egyéb tápláló", dimensions: ["MASS"], defaultUnitId: g });
+    const feed = await prisma.feed.findUniqueOrThrow({ where: { id: r.id }, include: { type: true } });
+    expect(feed.type.code).toBe("EGYEB");
+    expect(await prisma.auditEntry.count({ where: { entityType: "Feed", entityId: r.id, userId: f.aq1.id } })).toBe(1);
+    // the change of an existing feed stays the admin's
+    await expectCode(updateFeed(f.aq1, r.id, { requestId: rid(), active: false }), "ADMIN_ONLY");
+    const reader = await prisma.user.create({ data: { loginId: `olvaso-${rid()}`, fullName: "Olvasó Akvarista", role: "AQUARIST", passwordHash: "x" } });
+    await prisma.modulePermission.create({ data: { userId: reader.id, module: "FEEDING", level: "READ" } });
+    await expectCode(createFeed({ id: reader.id, role: "AQUARIST" }, { requestId: rid(), typeId: egyeb.id, name: "Teszt olvasó egyéb", dimensions: ["MASS"], defaultUnitId: g }), "READ_ONLY");
+  });
 });

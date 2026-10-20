@@ -43,14 +43,21 @@ async function requireAdmin(actor: Actor) {
 }
 
 export async function createFeed(actor: Actor, input: z.infer<typeof createFeedSchema>, now = new Date()) {
-  await requireAdmin(actor);
+  // caparium-hibak-4 (Balázs 2026-10-20 09:34 UTC, msg 1562036209449050256): an aquarist who records feeding may add
+  // an "Egyéb" feed to the list; every other type stays the admin's
+  const type = await prisma.feedType.findUnique({ where: { id: input.typeId } });
+  if (!type) throw new AppError(404, "TYPE_NOT_FOUND", "A takarmánytípus nem található.");
+  if (type.code === "EGYEB") {
+    const level = await moduleLevel(prisma, actor.id, actor.role, "FEEDING");
+    if (level !== "RECORD" && level !== "ADMIN") throw new AppError(403, "READ_ONLY", "Egyéb takarmányt rögzítési joggal lehet felvenni.");
+  } else {
+    await requireAdmin(actor);
+  }
   return prisma.$transaction(async (tx) => {
     const unit = await tx.unit.findUnique({ where: { id: input.defaultUnitId } });
     if (!unit || !input.dimensions.includes(unit.dimension as "MASS" | "COUNT" | "VOLUME")) {
       throw new AppError(422, "UNIT_DIMENSION", "Az alapértelmezett egység a megengedett dimenziók egyike legyen.");
     }
-    const type = await tx.feedType.findUnique({ where: { id: input.typeId } });
-    if (!type) throw new AppError(404, "TYPE_NOT_FOUND", "A takarmánytípus nem található.");
     const last = await tx.feed.findFirst({ where: { typeId: type.id }, orderBy: { sortOrder: "desc" } });
     const f = await tx.feed.create({
       data: {
