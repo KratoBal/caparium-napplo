@@ -77,8 +77,12 @@ describe("the recipient and the sending", () => {
       return { messageId: "teszt" };
     };
     const now = cest("2027-09-08T16:05");
-    const r = await sendWaterReport(f.aq1, { requestId: rid() }, now, fake);
+    const req = rid();
+    const r = await sendWaterReport(f.aq1, { requestId: req }, now, fake);
     expect(r).toMatchObject({ replayed: false, to: "vizmeres@example.test", day: "2027-09-08" });
+    expect(sent).toHaveLength(1);
+    // the same request again: nothing is sent, and the answer says what that sending did (review of #32)
+    expect(await sendWaterReport(f.aq1, { requestId: req }, now, fake)).toEqual({ replayed: true, to: "vizmeres@example.test", day: "2027-09-08", pools: r.pools });
     expect(sent).toHaveLength(1);
     expect([sent[0]!.to, sent[0]!.from, sent[0]!.subject]).toEqual(["vizmeres@example.test", "napplo@example.test", "Vízmérés – 2027-09-08"]);
     const pdf = sent[0]!.attachments[0]!;

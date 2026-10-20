@@ -1,4 +1,5 @@
-DejaVuSans.ttf -- a szamla- es munkalap-PDF betukeszlete
+DejaVuSans.ttf -- a vizmeres-PDF betukeszlete (Caparium nAPPlo); bajtra azonos az Acropora OS
+szamla- es munkalap-PDF betujevel (git blob 5789a29d), onnan a leirasa:
 
 SZARMAZAS (merve, nem feltetelezve):
   upstream            DejaVu fonts, https://dejavu-fonts.github.io/

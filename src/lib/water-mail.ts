@@ -49,13 +49,19 @@ export async function sendWaterReport(actor: Actor, input: z.infer<typeof sendSc
   const level = await moduleLevel(prisma, actor.id, actor.role, "EXPORT");
   if (level !== "RECORD" && level !== "ADMIN") throw new AppError(403, "READ_ONLY", "A vízmérés kiküldéséhez exportálási jog kell.");
   const prior = await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } });
-  if (prior) return { replayed: true };
+  if (prior) {
+    // what that sending said (review of #32): a replay must not read "Elküldve: undefined"
+    const c = prior.changes as { recipient?: { after?: string }; pools?: { after?: string[] } };
+    return { replayed: true, to: c.recipient?.after ?? null, day: prior.entityId, pools: c.pools?.after?.length ?? 0 };
+  }
   const to = await getSetting(prisma, "water_report_recipient", now);
   if (!to) throw new AppError(422, "NO_RECIPIENT", "Nincs megadva címzett: a Beállításokban add meg, hova menjen a vízmérés.");
   const day = businessDayOf(now);
   const report = await waterReport(day);
-  // the PDF before the SMTP check: where no SMTP is set (the e2e run) the button still builds it in the server, so a
-  // packaging fault of the PDF (pdfkit, the font) shows as a 500 there, not first on a configured system
+  // the PDF before the SMTP check: where no SMTP is set the button still builds it, so a packaging fault of the PDF
+  // (pdfkit, the font) is a 500 there, not first on a configured system. The e2e runs `next start` and measures the
+  // code; the image's packaging (copied assets/, pdfkit from its node_modules) is proved when the image is built
+  // (Dockerfile), and the CI compose job builds it.
   const pdf = await waterReportPdf(report);
   const config = mailConfig();
   const send = sender ?? smtpSender(config);
@@ -73,6 +79,8 @@ export async function sendWaterReport(actor: Actor, input: z.infer<typeof sendSc
     console.error("water report mail failed:", e instanceof Error ? e.message : e);
     throw new AppError(502, "MAIL_FAILED", "A levél küldése nem sikerült. Próbáld újra később; ha ismétlődik, szólj az üzemeltetőnek.");
   }
+  // AFTER the sending, said plainly (review of #32): a mail cannot be taken back, so there is no transaction to share
+  // with it. If this write fails, the mail went out without its audit row, and pressing again sends a second one.
   await writeAudit(prisma, {
     userId: actor.id,
     action: "EXPORT",
