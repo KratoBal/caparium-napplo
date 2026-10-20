@@ -102,9 +102,19 @@ test("weekly measurement: value with dilution and RO/SW, kept after a reload, sh
   await expect(page.getByRole("heading", { name: "Heti vízmérések" })).toBeVisible();
   await page.getByRole("button", { name: pool, exact: true }).click();
 
-  // the dilution and RO/SW pickers belong to the nitrate and the phosphate only (caparium-hibak-1)
-  await expect(page.getByTestId(`dilution-${pool}-KH`)).toHaveCount(0);
-  await expect(page.getByTestId(`dilution-${pool}-PO4`)).toBeVisible();
+  // the dilution and RO/SW pickers belong to the nitrate and the phosphate only (caparium-hibak-1), in EVERY
+  // pool's row, not only the active one (caparium-hibak-2: Balázs saw them under one pool at a time)
+  for (const p of ["Nagymedence", "Kismedence", "Karantén", "Korallos", "Inkubátor", "Ragadozós"]) {
+    for (const param of ["NO3", "PO4"]) {
+      await expect(page.getByTestId(`dilution-${p}-${param}`), `${p} ${param}`).toBeVisible();
+      await expect(page.getByTestId(`diluent-${p}-${param}`), `${p} ${param}`).toBeVisible();
+    }
+    await expect(page.getByTestId(`dilution-${p}-KH`)).toHaveCount(0);
+  }
+  // a pick in another pool's row makes that row the active one, so its value can be typed
+  await page.getByTestId("diluent-Ragadozós-PO4").selectOption("SW");
+  await expect(page.getByTestId("cell-Ragadozós-PO4")).toBeVisible();
+  await page.getByRole("button", { name: pool, exact: true }).click();
   const no3 = page.getByTestId(`cell-${pool}-NO3`);
   await no3.fill("8,4");
   await page.getByTestId(`dilution-${pool}-NO3`).selectOption("10");

@@ -77,6 +77,17 @@ export const INITIAL_FEEDS: InitialFeed[] = [
   { type: "APRO", name: "AF Power elixir", dims: ["VOLUME"], unit: "ml" },
 ];
 
+/**
+ * The test system's mark IN ITS DATA (caparium-hibak-2, acrobot 33337): the arrival the seed's synthetic data made
+ * (prisma/seed.ts, requestId "seed-arrival-1"). The stage has it: its synthetic animals came from the seed before
+ * the switch existed (#16), and the 20261020080100 migration found and released them there; its environment has
+ * no CAPARIUM_SEED_SZINTETIKUS, so the switch alone loaded nothing (measured on 588fe93). A live system never has
+ * synthetic data, so the mark is never there.
+ */
+export async function hasTestSystemData(prisma: PrismaClient): Promise<boolean> {
+  return (await prisma.lifecycleEvent.findUnique({ where: { requestId: "seed-arrival-1" }, select: { id: true } })) !== null;
+}
+
 /** The feeds of the list no feed name has ever carried, after the sort orders already used. */
 export async function loadInitialFeeds(prisma: PrismaClient, unitId: Map<string, string>, since: Date): Promise<void> {
   const have = new Set((await prisma.feedName.findMany()).map((n) => n.name));

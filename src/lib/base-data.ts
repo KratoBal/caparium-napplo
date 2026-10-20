@@ -12,7 +12,7 @@
 // the data model (DN-01, DN-02); the groups follow the NY-03 default.
 
 import type { Dimension, PrismaClient } from "@prisma/client";
-import { loadInitialAnimals, loadInitialFeeds } from "./initial-data";
+import { hasTestSystemData, loadInitialAnimals, loadInitialFeeds } from "./initial-data";
 import { initialAnimalsWanted } from "./seed-switch";
 
 export const SINCE = new Date("2025-12-31T23:00:00.000Z"); // 2026-01-01 00:00 Europe/Budapest
@@ -236,8 +236,8 @@ export async function loadBaseData(prisma: PrismaClient): Promise<BaseDataIds> {
     }
   }
   // the description's starting lists (leírás 18-19. o.; caparium-hibak-1): the feeds everywhere, the animals only
-  // on the test system (src/lib/seed-switch.ts)
+  // on the test system: its explicit switch (src/lib/seed-switch.ts) or its mark in the data (the stage)
   await loadInitialFeeds(prisma, unitId, SINCE);
-  if (initialAnimalsWanted()) await loadInitialAnimals(prisma, poolId, SINCE);
+  if (initialAnimalsWanted() || (await hasTestSystemData(prisma))) await loadInitialAnimals(prisma, poolId, SINCE);
   return { unitId, paramId, poolId };
 }

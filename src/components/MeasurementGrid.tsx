@@ -2,8 +2,8 @@
 
 // The measurement grid, daily and weekly (VIZ-03..VIZ-09, ÁLT-03, ÁLT-07, ÁLT-12, ÁLT-15, VIZ-02).
 // Weekly mode adds the dilution (1–100) and the diluent water (RO/SW) to the nitrate and phosphate cells of
-// every pool (src/lib/dilution.ts, caparium-hibak-1): supplementary data, nothing is recalculated from them
-// (VIZ-06, DN-07).
+// every pool (src/lib/dilution.ts, caparium-hibak-1), editable in every pool's row, not only the active one
+// (caparium-hibak-2): supplementary data, nothing is recalculated from them (VIZ-06, DN-07).
 // Autosave on leaving a cell; a "Mérés mentése" button as confirmation. A failed network
 // request goes to a local queue with the same request id, so a retry never saves twice.
 
@@ -551,8 +551,11 @@ export function MeasurementGrid({
                               label={`${pool.name} ${param.name}`}
                               testId={`${pool.name}-${param.name}`}
                               meta={metaOf(key)}
-                              editable={active}
+                              // in every pool's row, not only the active one (Balázs 2026-10-20 08:32 UTC, msg
+                              // 1562020634588876821): a pick there makes its row the active one for the value
+                              editable={!readOnly}
                               onChange={(m) => {
+                                if (pool.id !== activePool) setActivePool(pool.id);
                                 setMetaDrafts((d) => ({ ...d, [key]: m }));
                                 void saveCell(pool.id, param.id, m);
                               }}
