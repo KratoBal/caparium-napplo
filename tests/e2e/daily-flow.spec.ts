@@ -1,5 +1,6 @@
 // The first working flow (feladat-4, 4. pont): login -> pool group -> record -> saved in the DB -> log.
 import { expect, test, type Page } from "@playwright/test";
+import { PrismaClient } from "@prisma/client";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
 
@@ -362,28 +363,59 @@ test("withdrawal: an item for tomorrow, the day's total, taken against given, th
   expect(file.suggestedFilename()).toMatch(/^Takarmanykivetel_\d{4}-\d{2}-\d{2}/);
 });
 
-test("calculator: a body weight, a live result, saved as reference, shown on the feeding page", async ({ page }, info) => {
+test("calculator: general, no animal on top, saved as the reference of the animal picked next to the button", async ({ page }, info) => {
   const name = info.project.name === "tablet" ? "Teszt Három" : "Teszt Négy";
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Takarmánykalkulátor" }).click();
-  await page.getByRole("link", { name, exact: true }).click();
-  const weight = page.getByTestId("body-weight-form");
-  await weight.getByLabel("Mért testtömeg (kg)").fill("50");
-  await weight.getByRole("button", { name: "Testtömeg mentése" }).click();
-  await expect(weight.getByRole("status")).toHaveText("Testtömeg mentve.");
-  await expect(page.getByTestId("body-weights")).toContainText("50 kg");
+  await expect(page.getByRole("heading", { name: "Kalkulátor", exact: true })).toBeVisible();
+  // caparium-hibak-2: no animal tabs, no "Számítás mentése", and the body weight log is hidden (switched off)
+  await expect(page.getByRole("link", { name, exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Számítás mentése" })).toHaveCount(0);
+  await expect(page.getByTestId("body-weight-form")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Testtömeg-napló" })).toHaveCount(0);
   const calc = page.getByTestId("calculator");
   await calc.getByLabel("Testtömeg (kg)").fill("50");
   await calc.getByLabel("Heti FR (%)").selectOption("2");
   await calc.getByLabel("Heti etetésszám (N)").selectOption("4");
   await expect(page.getByTestId("calc-result")).toContainText("250 g");
   await expect(page.getByTestId("calc-result")).toContainText("1000 g");
-  await calc.getByRole("button", { name: "Mentés referenciaként" }).click();
+  const save = calc.getByRole("button", { name: "Mentés referenciaként" });
+  await expect(save, "nothing to save to before an animal is picked").toBeDisabled();
+  await calc.getByLabel("Állat", { exact: true }).selectOption({ label: name });
+  await save.click();
   await expect(calc.getByRole("status")).toHaveText("Mentve referenciaként.");
   await expect(page.getByTestId("current-reference")).toContainText("250 g");
+  await expect(page.getByTestId("saved-references").getByRole("row").filter({ hasText: name }).first()).toContainText("250 g");
   // EGY-08: the feeding page shows the reference in the animal's row
   await page.getByRole("link", { name: "Takarmánynapló" }).click();
   await expect(page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name })).toContainText("ref 250 g");
+});
+
+test("body weight log: hidden, not deleted; a setting row brings it back on the calculator page", async ({ page }, info) => {
+  const name = info.project.name === "tablet" ? "Teszt Három" : "Teszt Négy";
+  const db = new PrismaClient();
+  const flip = (value: "true" | "false") =>
+    db.setting.create({ data: { key: "body_weight_log_visible", value, changedById: "00000000-0000-0000-0000-000000000001" } });
+  try {
+    await flip("true");
+    await login(page, "teszt.akvarista1");
+    await page.getByRole("link", { name: "Takarmánykalkulátor" }).click();
+    await page.getByRole("link", { name, exact: true }).click();
+    const weight = page.getByTestId("body-weight-form");
+    await weight.getByLabel("Mért testtömeg (kg)").fill("50");
+    await weight.getByRole("button", { name: "Testtömeg mentése" }).click();
+    await expect(weight.getByRole("status")).toHaveText("Testtömeg mentve.");
+    await expect(page.getByTestId("body-weights")).toContainText("50 kg");
+    // the picked animal's last weight is the calculator's starting BW, and the animal is preselected
+    await page.reload();
+    await expect(page.getByTestId("calculator").getByLabel("Testtömeg (kg)")).toHaveValue("50");
+    await expect(page.getByTestId("calculator").getByLabel("Állat", { exact: true })).toHaveValue(/.+/);
+  } finally {
+    await flip("false");
+    await db.$disconnect();
+  }
+  await page.reload();
+  await expect(page.getByTestId("body-weight-form")).toHaveCount(0);
 });
 
 test("dosing: a dose in g, the log, the stock kept in kg, printable", async ({ page }) => {

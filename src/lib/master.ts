@@ -23,6 +23,10 @@ export const SETTING_DEFAULTS = {
   late_save_max_hours: "48",
   business_day_time_zone: "Europe/Budapest",
   show_reference_on_deviation: "true",
+  // JAV-06, the body weight log: our proposal, not the customer's request; hidden, not deleted (Balázs 2026-10-20
+  // 08:10 UTC, msg 1562015239485128707, caparium-hibak-2). Code, table and data stay; a setting row with "true"
+  // brings the calculator page's log back. There is no screen for it on purpose: it is not to be seen.
+  body_weight_log_visible: "false",
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
