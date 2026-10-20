@@ -4,7 +4,7 @@
 // every permission; a confirmation (R-3, an empty list) or a reason (admin, an earlier or closed day)
 // is asked only when the server says it is needed.
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EAT_LABEL } from "@/lib/eating-labels";
 
 function requestId(): string {
@@ -466,13 +466,28 @@ export function EatingTable({ day, rows, editable }: { day: string; rows: Eating
   const router = useRouter();
   const initial = (r: EatingRowView): RowDraft => {
     const manual = r.status?.source === "MANUAL" ? r.status : null;
-    return { state: manual?.state ?? "", vitamin: manual?.vitamin ?? false, medicine: manual?.medicine ?? false, note: manual?.medicineNote ?? "" };
+    // a manual state the row no longer offers (the animal left the list) is not carried into the draft
+    const states = r.selected ? ["EATEN", "PARTIAL", "NOT_EATEN"] : ["FASTING"];
+    return {
+      state: manual && states.includes(manual.state) ? manual.state : "",
+      vitamin: manual?.vitamin ?? false,
+      medicine: manual?.medicine ?? false,
+      note: manual?.medicineNote ?? "",
+    };
   };
+  // what the server says about a row: a change of it (a save, an invalidation, someone else) restarts that row's draft
+  const serverKey = (r: EatingRowView) => `${r.selected}|${r.status?.id ?? ""}|${r.status?.version ?? ""}|${r.status?.source ?? ""}`;
   const [drafts, setDrafts] = useState<Record<string, RowDraft>>(() => Object.fromEntries(rows.map((r) => [r.animalId, initial(r)])));
+  const seen = useRef<Record<string, string>>(Object.fromEntries(rows.map((r) => [r.animalId, serverKey(r)])));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  // after a save the server's rows come back: start the drafts from them again
-  useEffect(() => setDrafts(Object.fromEntries(rows.map((r) => [r.animalId, initial(r)]))), [rows]);
+  // after a refresh only the rows whose server state changed start again; every other filled-in row keeps its draft
+  // (review of #31: a refresh from an invalidation or a partly refused save must not drop the rest)
+  useEffect(() => {
+    const changedRows = rows.filter((r) => seen.current[r.animalId] !== serverKey(r));
+    seen.current = Object.fromEntries(rows.map((r) => [r.animalId, serverKey(r)]));
+    if (changedRows.length) setDrafts((d) => ({ ...d, ...Object.fromEntries(changedRows.map((r) => [r.animalId, initial(r)])) }));
+  }, [rows]);
   const set = (id: string, patch: Partial<RowDraft>) => setDrafts((d) => ({ ...d, [id]: { ...d[id]!, ...patch } }));
   const changed = (r: EatingRowView) => {
     const d = drafts[r.animalId];
@@ -486,10 +501,12 @@ export function EatingTable({ day, rows, editable }: { day: string; rows: Eating
     setBusy(true);
     setMsg(null);
     let reason: string | undefined;
+    let stopped = false;
     const failed: string[] = [];
     let saved = 0;
     try {
       for (const r of toSave) {
+        if (stopped) break;
         const d = drafts[r.animalId]!;
         const manual = r.status?.source === "MANUAL" ? r.status : null;
         const body = {
@@ -520,6 +537,8 @@ export function EatingTable({ day, rows, editable }: { day: string; rows: Eating
               reason = given.trim();
               continue;
             }
+            // no reason given: the rest is not asked again one by one, the save stops here
+            stopped = true;
           }
           failed.push(`${r.name}: ${message}`);
           break;
@@ -532,7 +551,7 @@ export function EatingTable({ day, rows, editable }: { day: string; rows: Eating
     }
     setMsg(
       failed.length
-        ? { ok: false, text: `${saved} sor mentve, ${failed.length} nem: ${failed.join("; ")}` }
+        ? { ok: false, text: `${saved} sor mentve, ${failed.length} nem: ${failed.join("; ")}${stopped ? " (a mentés indoklás nélkül megállt)" : ""}` }
         : { ok: true, text: `${saved} sor mentve.` },
     );
     if (saved) router.refresh();
