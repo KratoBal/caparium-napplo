@@ -12,6 +12,7 @@ import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
 import { dayBounds } from "./feeding";
 import { ensureJournalDay, moduleLevel, pickValid } from "./master";
+import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { closedAt } from "./measurements";
 import { canCreate, canModify, effectiveNow, type Decision, type Level } from "./permissions";
@@ -45,9 +46,9 @@ async function facts(tx: Tx, actor: Actor, d: string, serverNow: Date, clientTs:
   return { level, wd: ensured.wd, journal, today: businessDayOf(eff.now), closed: closedAt(journal, eff.now) };
 }
 
-function enforce(decision: Decision, why: string | undefined) {
+async function enforce(tx: Tx, decision: Decision, why: string | undefined) {
   if (decision.kind === "DENY") throw new AppError(403, decision.code, decision.message);
-  if (decision.reasonRequired && !why) throw new AppError(422, "REASON_REQUIRED", "Korábbi vagy lezárt nap módosításához indoklás kell.");
+  await requireReason(tx, decision.reasonRequired, why, "Korábbi vagy lezárt nap módosításához indoklás kell.");
 }
 
 export const withdrawalSchema = z.object({
@@ -63,7 +64,7 @@ export const withdrawalSchema = z.object({
   reason: reason.optional(),
 });
 export type WithdrawalInput = z.input<typeof withdrawalSchema>;
-export const withdrawalInvalidateSchema = z.object({ requestId, expectedVersion: z.number().int().min(1), reason });
+export const withdrawalInvalidateSchema = z.object({ requestId, expectedVersion: z.number().int().min(1), reason: reason.optional() });
 
 function snapshot(i: WithdrawalItem, q: { quantity: string; unitId: string }[]) {
   return { feedId: i.feedId, otherName: i.otherName, useDay: dateToDay(i.useDay), quantities: q, status: i.status };
@@ -86,9 +87,9 @@ export async function saveWithdrawalItem(actor: Actor, raw: WithdrawalInput, ser
         if (!prior || prior.withdrawalDayId !== f.wd.id) throw new AppError(404, "NOT_FOUND", "A tétel nem található.");
         if (prior.status !== "VALID") throw new AppError(409, "NOT_EDITABLE", "Ez a tétel már nem érvényes.");
         if (prior.version !== input.expectedVersion) throw new AppError(409, "VERSION_CONFLICT", "A tétel időközben megváltozott.");
-        enforce(canModify(f.level, { day: input.day, today: f.today, closed: f.closed, isOwn: prior.createdById === actor.id }), input.reason);
+        await enforce(tx, canModify(f.level, { day: input.day, today: f.today, closed: f.closed, isOwn: prior.createdById === actor.id }), input.reason);
       } else {
-        enforce(canCreate(f.level, { day: input.day, today: f.today, closed: f.closed }), input.reason);
+        await enforce(tx, canCreate(f.level, { day: input.day, today: f.today, closed: f.closed }), input.reason);
       }
       const feed = await tx.feed.findUnique({ where: { id: input.feedId }, include: { type: true } });
       if (!feed || !feed.active) throw new AppError(422, "FEED_NOT_FOUND", "A takarmány nem található vagy nem aktív.");
@@ -163,7 +164,8 @@ export async function invalidateWithdrawalItem(actor: Actor, id: string, raw: z.
     if (!it) throw new AppError(404, "NOT_FOUND", "A tétel nem található.");
     const d = dateToDay(it.withdrawalDay.businessDay);
     const f = await facts(tx, actor, d, serverNow, null);
-    enforce(canModify(f.level, { day: d, today: f.today, closed: f.closed, isOwn: it.createdById === actor.id }), input.reason);
+    await enforce(tx, canModify(f.level, { day: d, today: f.today, closed: f.closed, isOwn: it.createdById === actor.id }), input.reason);
+    await requireReason(tx, true, input.reason, "Az érvénytelenítéshez indoklás kell.");
     const res = await tx.withdrawalItem.updateMany({
       where: { id, version: input.expectedVersion, status: "VALID" },
       data: { status: "INVALIDATED", invalidationReason: input.reason, version: { increment: 1 }, updatedById: actor.id, updatedAt: serverNow },

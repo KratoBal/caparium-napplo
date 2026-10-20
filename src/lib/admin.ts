@@ -10,6 +10,7 @@ import { prisma, type Tx } from "./db";
 import { compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
 import { moduleLevel, validAt } from "./master";
+import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 
 const reason = z.string().trim().min(3, "Az indoklás legalább 3 karakter legyen.").max(500);
@@ -72,9 +73,7 @@ export async function setReference(actor: Actor, input: ReferenceInput, now = ne
   if (min !== null && max !== null && compareDecimal(min, max) > 0) {
     throw new AppError(422, "MIN_ABOVE_MAX", "A minimum nem lehet nagyobb a maximumnál.");
   }
-  if (input.mode === "correction" && !input.reason) {
-    throw new AppError(422, "REASON_REQUIRED", "A helyesbítés a múltbeli méréseket is érinti, ezért indoklás kell.");
-  }
+  await requireReason(prisma, input.mode === "correction", input.reason, "A helyesbítés a múltbeli méréseket is érinti, ezért indoklás kell.");
   if (await replayed(input.requestId)) return { replayed: true };
   return prisma.$transaction(async (tx) => {
     const param = await tx.parameter.findUnique({ where: { id: input.parameterId } });
@@ -175,9 +174,7 @@ async function assertUniquePoolName(tx: Tx, poolId: string, name: string, now: D
 
 export async function renamePool(actor: Actor, input: PoolNameInput, now = new Date()) {
   await requireSettingsAdmin(actor);
-  if (input.mode === "correction" && !input.reason) {
-    throw new AppError(422, "REASON_REQUIRED", "A helyesbítés a régi naplókban is átírja a nevet, ezért indoklás kell.");
-  }
+  await requireReason(prisma, input.mode === "correction", input.reason, "A helyesbítés a régi naplókban is átírja a nevet, ezért indoklás kell.");
   if (await replayed(input.requestId)) return { replayed: true };
   return prisma.$transaction(async (tx) => {
     const current = await tx.poolName.findFirst({ where: { poolId: input.poolId, ...validAt(now) } });

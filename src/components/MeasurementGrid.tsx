@@ -10,6 +10,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CellView, RangeView } from "@/lib/queries";
+import { useReasonsOn } from "./ReasonSwitch";
 
 type Grid = {
   group: { id: string; name: string };
@@ -130,6 +131,7 @@ export function MeasurementGrid({
   const queueKey = `napplo-queue-v1-${user.id}`;
   const isPastDay = grid.day !== today;
   const readOnly = !canWrite || (isPastDay && !isAdmin);
+  const reasonsOn = useReasonsOn();
 
   const readQueue = useCallback((): QueueItem[] => {
     try {
@@ -447,7 +449,9 @@ export function MeasurementGrid({
       {canWrite && isPastDay && (
         <div className="banner banner-warn" style={{ marginBottom: 16 }}>
           {isAdmin
-            ? "Korábbi nap: minden módosításhoz indoklás kell, és bekerül a módosítási naplóba."
+            ? reasonsOn
+              ? "Korábbi nap: minden módosításhoz indoklás kell, és bekerül a módosítási naplóba."
+              : "Korábbi nap: minden módosítás bekerül a módosítási naplóba."
             : "Korábbi nap: csak megtekintés. Módosítani adminisztrátor tud."}
         </div>
       )}

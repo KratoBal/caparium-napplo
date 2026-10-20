@@ -13,6 +13,7 @@ import { manualRowsOutsideLife, recomputeClosedDaysFrom } from "./feeding";
 import { prisma, type Tx } from "./db";
 import { AppError, isUniqueViolation } from "./errors";
 import { moduleLevel, pickValid, validAt } from "./master";
+import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { canCreate, canModify, effectiveNow } from "./permissions";
 import { businessDayOf, dateToDay, dayToDate, resolveLocalDateTime } from "./time";
@@ -42,7 +43,7 @@ export type LifecycleInput = z.infer<typeof lifecycleSchema>;
 export const lifecycleInvalidateSchema = z.object({
   requestId: z.string().min(8).max(100),
   expectedVersion: z.number().int().min(1),
-  reason,
+  reason: reason.optional(),
 });
 
 const TERMINAL: LifecycleType[] = ["DEATH", "RELEASE"];
@@ -118,11 +119,9 @@ async function refuseOrphanRows(tx: Tx, animalId: string) {
   }
 }
 
-function enforce(decision: ReturnType<typeof canCreate>, reasonText: string | undefined) {
+async function enforce(tx: Tx, decision: ReturnType<typeof canCreate>, reasonText: string | undefined) {
   if (decision.kind === "DENY") throw new AppError(403, decision.code, decision.message);
-  if (decision.reasonRequired && !reasonText) {
-    throw new AppError(422, "REASON_REQUIRED", "Korábbi napra rögzített eseményhez indoklás kell.");
-  }
+  await requireReason(tx, decision.reasonRequired, reasonText, "Korábbi napra rögzített eseményhez indoklás kell.");
 }
 
 /**
@@ -154,7 +153,7 @@ export async function createLifecycleEvent(actor: Actor, input: LifecycleInput, 
   if (!occurredAt) throw new AppError(422, "INVALID_TIME", "Az esemény időpontja érvénytelen.");
   if (occurredAt.getTime() > serverNow.getTime() + 5 * 60_000) throw new AppError(422, "FUTURE_TIME", "Jövőbeli eseményt nem lehet rögzíteni.");
   const day = businessDayOf(occurredAt);
-  enforce(canCreate(level, { day, today: businessDayOf(eff.now), closed: false }), input.reason);
+  await enforce(prisma, canCreate(level, { day, today: businessDayOf(eff.now), closed: false }), input.reason);
 
   try {
     return await prisma.$transaction(async (tx) => createInTx(tx, actor, input, { occurredAt, day, clientTs }));
@@ -237,6 +236,7 @@ export async function invalidateLifecycleEvent(
       isOwn: cur.createdById === actor.id,
     });
     if (d.kind === "DENY") throw new AppError(403, d.code, d.message);
+    await requireReason(tx, true, input.reason, "Az érvénytelenítéshez indoklás kell.");
     const res = await tx.lifecycleEvent.updateMany({
       where: { id, version: input.expectedVersion, status: "VALID" },
       data: { status: "INVALIDATED", invalidationReason: input.reason, version: { increment: 1 }, updatedById: actor.id, updatedAt: serverNow },
@@ -319,7 +319,7 @@ export const renameSchema = z.object({
 /** K3 for animal and group names: a change opens a new version, a correction fixes the current one. */
 export async function renameEntity(actor: Actor, kind: "animal" | "group", id: string, input: z.infer<typeof renameSchema>, now = new Date()) {
   await requireAdmin(actor);
-  if (input.mode === "correction" && !input.reason) throw new AppError(422, "REASON_REQUIRED", "A helyesbítéshez indoklás kell.");
+  await requireReason(prisma, input.mode === "correction", input.reason, "A helyesbítéshez indoklás kell.");
   return prisma.$transaction(async (tx) => {
     const rows =
       kind === "animal"
@@ -478,9 +478,7 @@ export async function editAnimal(actor: Actor, animalId: string, raw: EditAnimal
       }
 
       if (Object.keys(after).length === 0) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
-      if (corrects && !input.reason) {
-        throw new AppError(422, "REASON_REQUIRED", "A javítás a múltra is hat (név helyesbítése vagy az érkezés adatai), ezért indoklás kell.");
-      }
+      await requireReason(tx, corrects, input.reason, "A javítás a múltra is hat (név helyesbítése vagy az érkezés adatai), ezért indoklás kell.");
       // a moved arrival changes which closed, finalized days the animal was alive on: their fasting days follow
       if (fromDay) await recomputeClosedDaysFrom(tx, fromDay, actor.id, input.requestId);
       await writeAudit(tx, {

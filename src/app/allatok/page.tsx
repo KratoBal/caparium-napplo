@@ -82,7 +82,7 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
                     {e.toGroup ? ` ${pickValid(e.toGroup.names, e.occurredAt)?.name ?? ""}` : e.type === "GROUP_CHANGE" ? "nincs csoport" : ""}
                   </td>
                   <td>{e.note ?? ""}</td>
-                  <td className="keep">{e.status === "VALID" ? "érvényes" : `érvénytelenítve: ${e.invalidationReason ?? ""}`}</td>
+                  <td className="keep">{e.status === "VALID" ? "érvényes" : `érvénytelenítve${e.invalidationReason ? `: ${e.invalidationReason}` : ""}`}</td>
                   <td className="keep">{canRecord && e.status === "VALID" && <InvalidateEvent eventId={e.id} version={e.version} />}</td>
                 </tr>
               ))}

@@ -2,6 +2,9 @@ import Link from "next/link";
 import type { SessionUser } from "@/lib/auth";
 import type { HelperData } from "@/lib/helpers";
 import { Helper } from "./Helper";
+import { ReasonProvider } from "./ReasonSwitch";
+import { prisma } from "@/lib/db";
+import { reasonsRequired } from "@/lib/reasons";
 import { businessDayOf, formatDayLong } from "@/lib/time";
 
 type NavKey = "overview" | "daily" | "weekly" | "log" | "export" | "animals" | "feeds" | "feeding" | "eating" | "feedlog" | "withdrawal" | "calculator" | "dosing" | "reports" | "pending" | "settings";
@@ -23,7 +26,7 @@ const NAV: { key: NavKey | null; href: string | null; label: string; note?: stri
   { key: "reports", href: "/kimutatasok", label: "Kimutatások" },
 ];
 
-export function Shell({
+export async function Shell({
   title,
   active,
   user,
@@ -38,6 +41,7 @@ export function Shell({
   children: React.ReactNode;
 }) {
   const today = formatDayLong(businessDayOf(new Date()));
+  const reasons = await reasonsRequired(prisma);
   return (
     <div className="shell">
       <div className="brand">
@@ -82,7 +86,9 @@ export function Shell({
           )}
         <div className="nav-foot">CÁPASULI • TESZTKÖRNYEZET</div>
       </nav>
-      <main className="main">{children}</main>
+      <main className="main">
+        <ReasonProvider on={reasons}>{children}</ReasonProvider>
+      </main>
       {helper && <Helper data={helper} />}
     </div>
   );

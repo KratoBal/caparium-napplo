@@ -5,6 +5,7 @@ import { diffFields, writeAudit } from "./audit";
 import { prisma } from "./db";
 import { AppError, isUniqueViolation } from "./errors";
 import { moduleLevel } from "./master";
+import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 
 export const pendingDecisionSchema = z.object({
@@ -17,9 +18,7 @@ export type PendingDecision = z.infer<typeof pendingDecisionSchema>;
 export async function decidePending(actor: Actor, id: string, input: PendingDecision, now = new Date()) {
   const level = await moduleLevel(prisma, actor.id, actor.role, "WATER");
   if (level !== "ADMIN") throw new AppError(403, "ADMIN_ONLY", "Függő mentésről csak adminisztrátor dönt.");
-  if (input.decision === "reject" && !input.reason) {
-    throw new AppError(422, "REASON_REQUIRED", "Az elutasításhoz indoklás kell.");
-  }
+  await requireReason(prisma, input.decision === "reject", input.reason, "Az elutasításhoz indoklás kell.");
   if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId, entityId: id } })) return { replayed: true };
   try {
     return await prisma.$transaction(async (tx) => {

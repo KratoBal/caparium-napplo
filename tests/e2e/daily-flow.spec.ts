@@ -139,47 +139,57 @@ function budapestDay(offsetDays: number): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest" }).format(d);
 }
 
-test("admin corrects and invalidates an earlier day's measurement with a reason; an aquarist gets no form", async ({ page, browser }, info) => {
-  const pool = info.project.name === "tablet" ? "Inkubátor" : "Ragadozós";
-  const yesterday = budapestDay(-1);
-  page.on("dialog", (d) => void (d.type() === "prompt" ? d.accept("papírról utólag bevitt mérés") : d.accept()));
+test("admin corrects and invalidates an earlier day's measurement with a reason (the reasons on); an aquarist gets no form", async ({ page, browser }, info) => {
+  // caparium-indoklas-ki: the reasons are off by default; this test is the "on" branch, the forms as they were
+  const db = new PrismaClient();
+  const reasons = (value: "true" | "false") =>
+    db.setting.create({ data: { key: "reason_required", value, changedById: "00000000-0000-0000-0000-000000000001" } });
+  await reasons("true");
+  try {
+    const pool = info.project.name === "tablet" ? "Inkubátor" : "Ragadozós";
+    const yesterday = budapestDay(-1);
+    page.on("dialog", (d) => void (d.type() === "prompt" ? d.accept("papírról utólag bevitt mérés") : d.accept()));
 
-  await login(page, "teszt.admin");
-  await page.goto(`/vizmeres?csoport=NAPI_KIS&nap=${yesterday}`);
-  await expect(page.getByText("Korábbi nap: minden módosításhoz indoklás kell")).toBeVisible();
-  await page.getByRole("button", { name: pool, exact: true }).click();
-  const ph = page.getByTestId(`cell-${pool}-pH`);
-  await ph.fill("8,05");
-  await ph.press("Enter");
-  await expect(page.getByTestId(`cell-${pool}-pH`)).toHaveValue("8,05");
-  await page.waitForLoadState("networkidle");
+    await login(page, "teszt.admin");
+    await page.goto(`/vizmeres?csoport=NAPI_KIS&nap=${yesterday}`);
+    await expect(page.getByText("Korábbi nap: minden módosításhoz indoklás kell")).toBeVisible();
+    await page.getByRole("button", { name: pool, exact: true }).click();
+    const ph = page.getByTestId(`cell-${pool}-pH`);
+    await ph.fill("8,05");
+    await ph.press("Enter");
+    await expect(page.getByTestId(`cell-${pool}-pH`)).toHaveValue("8,05");
+    await page.waitForLoadState("networkidle");
 
-  await page.goto(`/naplo?tol=${yesterday}&ig=${yesterday}`);
-  const row = page.getByTestId("log-table").getByRole("row").filter({ hasText: pool }).filter({ hasText: "pH" }).first();
-  await row.getByRole("link").click();
-  await page.waitForURL(/\/naplo\/[0-9a-f-]{36}$/);
-  const historyUrl = page.url();
-  await expect(page.getByTestId("correction")).toContainText("Adminisztrátori művelet");
-  await page.getByLabel("Új érték").fill("8,07");
-  await page.getByLabel(/Indoklás/).fill("mérőműszer adatának helyesbítése");
-  await page.getByRole("button", { name: "Változtatás naplózása" }).click();
-  await expect(page.getByTestId("history-value")).toContainText("8,07");
-  const update = page.getByTestId("history-entry").filter({ hasText: "Módosítás" });
-  await expect(update).toContainText("8.05 → 8.07");
-  await expect(update).toContainText("mérőműszer adatának helyesbítése");
+    await page.goto(`/naplo?tol=${yesterday}&ig=${yesterday}`);
+    const row = page.getByTestId("log-table").getByRole("row").filter({ hasText: pool }).filter({ hasText: "pH" }).first();
+    await row.getByRole("link").click();
+    await page.waitForURL(/\/naplo\/[0-9a-f-]{36}$/);
+    const historyUrl = page.url();
+    await expect(page.getByTestId("correction")).toContainText("Adminisztrátori művelet");
+    await page.getByLabel("Új érték").fill("8,07");
+    await page.getByLabel(/Indoklás/).fill("mérőműszer adatának helyesbítése");
+    await page.getByRole("button", { name: "Változtatás naplózása" }).click();
+    await expect(page.getByTestId("history-value")).toContainText("8,07");
+    const update = page.getByTestId("history-entry").filter({ hasText: "Módosítás" });
+    await expect(update).toContainText("8.05 → 8.07");
+    await expect(update).toContainText("mérőműszer adatának helyesbítése");
 
-  // an aquarist sees the history, but no correction form for someone else's earlier entry
-  const other = await browser.newPage();
-  await login(other, "teszt.akvarista1");
-  await other.goto(historyUrl);
-  await expect(other.getByTestId("correction-denied")).toBeVisible();
-  await expect(other.getByTestId("correction")).toHaveCount(0);
-  await other.close();
+    // an aquarist sees the history, but no correction form for someone else's earlier entry
+    const other = await browser.newPage();
+    await login(other, "teszt.akvarista1");
+    await other.goto(historyUrl);
+    await expect(other.getByTestId("correction-denied")).toBeVisible();
+    await expect(other.getByTestId("correction")).toHaveCount(0);
+    await other.close();
 
-  await page.getByLabel("Az érvénytelenítés oka").fill("rossz medencébe került");
-  await page.getByRole("button", { name: "Érvénytelenítés" }).click();
-  await expect(page.getByTestId("history-status")).toHaveText("érvénytelenített");
-  await expect(page.getByTestId("history-entry").filter({ hasText: "Érvénytelenítés" })).toContainText("rossz medencébe került");
+    await page.getByLabel("Az érvénytelenítés oka").fill("rossz medencébe került");
+    await page.getByRole("button", { name: "Érvénytelenítés" }).click();
+    await expect(page.getByTestId("history-status")).toHaveText("érvénytelenített");
+    await expect(page.getByTestId("history-entry").filter({ hasText: "Érvénytelenítés" })).toContainText("rossz medencébe került");
+  } finally {
+    await reasons("false");
+    await db.$disconnect();
+  }
 });
 
 test("the pending list is for admins; an aquarist is sent to the no-access page", async ({ page }) => {
@@ -677,7 +687,7 @@ test("feeds: an aquarist adds an Egyéb feed, and only that type is offered (cap
   await expect(page.getByTestId("feeds-EGYEB")).toContainText(name);
 });
 
-test("animals: an admin edits an animal's data with a reason; an aquarist sees no edit form (caparium-hibak-5)", async ({ page }, info) => {
+test("animals: an admin edits an animal's data, with the reasons off no reason is asked; an aquarist sees no edit form (caparium-hibak-5)", async ({ page }, info) => {
   await login(page, "teszt.admin");
   await page.goto("/allatok");
   await page.getByTestId("animals-table").getByRole("link", { name: "Teszt Egy", exact: true }).click();
@@ -688,8 +698,9 @@ test("animals: an admin edits an animal's data with a reason; an aquarist sees n
   const note = `e2e megjegyzés ${info.project.name} ${Date.now()}`;
   await form.getByLabel("Érkezési megjegyzés (módosítás)").fill(note);
   const save = form.getByRole("button", { name: "Módosítás mentése" });
-  await expect(save, "the arrival is a past fact: no save without a reason").toBeDisabled();
-  await form.getByLabel("Indoklás a módosításhoz").fill("e2e: az érkezés megjegyzése pontosítva");
+  // caparium-indoklas-ki: the reasons are off by default, so the past fact is saved without one
+  await expect(form.getByLabel("Indoklás a módosításhoz")).toHaveCount(0);
+  await expect(save).toBeEnabled();
   await save.click();
   await expect(form.getByRole("status")).toHaveText("Az állat adatai mentve.");
   await expect(page.getByTestId("animal-detail")).toContainText(note);

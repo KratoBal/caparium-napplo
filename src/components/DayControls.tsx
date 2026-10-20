@@ -4,6 +4,7 @@
 // A feeding day can also be closed by hand before midnight (T-01/3), a water day only after a reopen.
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { askReason, useReasonsOn } from "./ReasonSwitch";
 
 type Status = { state: "OPEN" | "CLOSED"; closeMode: "MANUAL" | "AUTOMATIC" | null; reopened: boolean };
 
@@ -28,6 +29,7 @@ export function DayControls({
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const reasonsOn = useReasonsOn();
   const label = status.reopened
     ? "Újranyitva"
     : status.state === "CLOSED"
@@ -40,9 +42,9 @@ export function DayControls({
     setError(null);
     let reason: string | undefined;
     if (path === "reopen") {
-      const r = window.prompt("A nap újranyitásának oka:");
-      if (!r || r.trim().length < 3) return;
-      reason = r.trim();
+      const asked = askReason(reasonsOn, "A nap újranyitásának oka:", "Újranyitod ezt a napot?");
+      if (!asked) return;
+      reason = asked.reason;
     }
     const res = await fetch(`/api/journal-days/${path}`, {
       method: "POST",

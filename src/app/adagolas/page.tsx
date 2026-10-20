@@ -120,7 +120,7 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
                   </td>
                   <td>{r.by}</td>
                   <td className="keep no-print">
-                    {r.status === "VALID" ? canRecord && <InvalidateButton url={`/api/dosings/${r.id}/invalidate`} version={r.version} /> : `érvénytelenítve: ${r.invalidationReason ?? ""}`}
+                    {r.status === "VALID" ? canRecord && <InvalidateButton url={`/api/dosings/${r.id}/invalidate`} version={r.version} /> : `érvénytelenítve${r.invalidationReason ? `: ${r.invalidationReason}` : ""}`}
                   </td>
                 </tr>
               ))}

@@ -10,6 +10,7 @@ import { diffFields, writeAudit } from "./audit";
 import { prisma } from "./db";
 import { AppError, isUniqueViolation } from "./errors";
 import { aliveOnDay, enforce, facts, fastingEligible, selectedOn } from "./feeding";
+import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { canCreate, canModify } from "./permissions";
 import { dateToDay, dayToDate } from "./time";
@@ -32,7 +33,7 @@ export const eatingSchema = z.object({
 });
 export type EatingInput = z.input<typeof eatingSchema>;
 
-export const eatingInvalidateSchema = z.object({ requestId, expectedVersion: z.number().int().min(1), reason });
+export const eatingInvalidateSchema = z.object({ requestId, expectedVersion: z.number().int().min(1), reason: reason.optional() });
 
 function snapshot(s: Pick<EatingStatus, "state" | "source" | "vitamin" | "medicine" | "medicineNote" | "status">) {
   return { state: s.state, source: s.source, vitamin: s.vitamin, medicine: s.medicine, medicineNote: s.medicineNote, status: s.status };
@@ -68,7 +69,7 @@ export async function setEatingStatus(actor: Actor, raw: EatingInput, serverNow 
 
       const data = { state: input.state, vitamin: input.vitamin, medicine: input.medicine, medicineNote: note };
       if (current?.source === "MANUAL") {
-        enforce(canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: current.createdById === actor.id }), input.reason);
+        await enforce(tx, canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: current.createdById === actor.id }), input.reason);
         const res = await tx.eatingStatus.updateMany({
           where: { id: current.id, version: current.version, status: "VALID" },
           data: { ...data, version: { increment: 1 }, updatedById: actor.id, updatedAt: serverNow },
@@ -87,7 +88,7 @@ export async function setEatingStatus(actor: Actor, raw: EatingInput, serverNow 
         return { replayed: false, statusId: current.id, version: current.version + 1 };
       }
 
-      enforce(canCreate(f.level, { day: f.d, today: f.today, closed: f.closed }), input.reason);
+      await enforce(tx, canCreate(f.level, { day: f.d, today: f.today, closed: f.closed }), input.reason);
       if (current) {
         // an automatic fasting day: the manual status takes its place (and keeps it at a recompute)
         const why = "kézi evési állapot váltja";
@@ -126,7 +127,8 @@ export async function invalidateEatingStatus(actor: Actor, id: string, raw: z.in
       throw new AppError(409, "AUTOMATIC", "Az automatikus koplalónap a listát követi: az állatot a listára véve vagy kézi állapottal lehet felülírni.");
     }
     const { f } = await facts(tx, actor, dateToDay(st.feedingDay.businessDay), serverNow, null);
-    enforce(canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: st.createdById === actor.id }), input.reason);
+    await enforce(tx, canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: st.createdById === actor.id }), input.reason);
+    await requireReason(tx, true, input.reason, "Az érvénytelenítéshez indoklás kell.");
     const res = await tx.eatingStatus.updateMany({
       where: { id, version: input.expectedVersion, status: "VALID" },
       data: { status: "INVALIDATED", invalidationReason: input.reason, version: { increment: 1 }, updatedById: actor.id, updatedAt: serverNow },

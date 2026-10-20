@@ -9,6 +9,7 @@ import { prisma, SYSTEM_USER_ID } from "./db";
 import { AppError } from "./errors";
 import { ensureFeedingDay, recomputeFasting } from "./feeding";
 import { ensureJournalDay, moduleLevel } from "./master";
+import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { addDays, businessDayOf, dateToDay, dayToDate, resolveLocalDateTime } from "./time";
 
@@ -101,7 +102,7 @@ async function replayed(requestId: string) {
 
 export async function reopenDay(actor: Actor, input: DayActionInput) {
   await requireAdmin(actor, input.kind ?? "WATER");
-  if (!input.reason) throw new AppError(422, "REASON_REQUIRED", "Az újranyitáshoz indoklás kell.");
+  await requireReason(prisma, true, input.reason, "Az újranyitáshoz indoklás kell.");
   if (await replayed(input.requestId)) return { replayed: true };
   return prisma.$transaction(async (tx) => {
     const j = await tx.journalDay.findFirst({ where: dayWhere(input) });
@@ -111,7 +112,7 @@ export async function reopenDay(actor: Actor, input: DayActionInput) {
       data: { state: "OPEN", closeMode: null, closedById: null, closedAt: null, closeRanAt: null },
     });
     if (res.count !== 1) throw new AppError(409, "NOT_CLOSED", "Ez a nap nincs lezárva.");
-    await tx.journalReopen.create({ data: { journalDayId: j.id, reopenedById: actor.id, reason: input.reason! } });
+    await tx.journalReopen.create({ data: { journalDayId: j.id, reopenedById: actor.id, reason: input.reason ?? null } });
     await writeAudit(tx, {
       userId: actor.id,
       action: "REOPEN",

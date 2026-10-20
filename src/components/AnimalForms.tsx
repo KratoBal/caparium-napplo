@@ -4,6 +4,7 @@
 // permission; these only send what the user picked.
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { askReason, useReasonsOn } from "./ReasonSwitch";
 
 type Opt = { id: string; name: string };
 
@@ -70,6 +71,7 @@ export function AnimalActions({ animalId, pools, groups }: { animalId: string; p
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const { msg, busy, call } = useApi();
+  const reasonsOn = useReasonsOn();
   return (
     <div className="toolbar" data-testid="animal-actions">
       <label className="field">
@@ -115,10 +117,12 @@ export function AnimalActions({ animalId, pools, groups }: { animalId: string; p
         Megjegyzés
         <input className="input" value={note} onChange={(e) => setNote(e.target.value)} aria-label="Megjegyzés" />
       </label>
-      <label className="field">
-        Indoklás (korábbi napnál)
-        <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Indoklás" />
-      </label>
+      {reasonsOn && (
+        <label className="field">
+          Indoklás (korábbi napnál)
+          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Indoklás" />
+        </label>
+      )}
       <button
         className="btn"
         type="button"
@@ -144,6 +148,7 @@ export function AnimalActions({ animalId, pools, groups }: { animalId: string; p
 
 export function InvalidateEvent({ eventId, version }: { eventId: string; version: number }) {
   const { msg, busy, call } = useApi();
+  const reasonsOn = useReasonsOn();
   return (
     <>
       <button
@@ -151,8 +156,8 @@ export function InvalidateEvent({ eventId, version }: { eventId: string; version
         type="button"
         disabled={busy}
         onClick={() => {
-          const r = window.prompt("Az érvénytelenítés oka:");
-          if (r && r.trim().length >= 3) void call(`/api/animals/events/${eventId}/invalidate`, "POST", { expectedVersion: version, reason: r.trim() }, "Érvénytelenítve.");
+          const asked = askReason(reasonsOn, "Az érvénytelenítés oka:", "Érvényteleníted ezt az eseményt?");
+          if (asked) void call(`/api/animals/events/${eventId}/invalidate`, "POST", { expectedVersion: version, ...asked }, "Érvénytelenítve.");
         }}
       >
         Érvénytelenítés
@@ -166,6 +171,7 @@ export function InvalidateEvent({ eventId, version }: { eventId: string; version
 export function NewArrival({ species, pools, groups }: { species: Opt[]; pools: Opt[]; groups: Opt[] }) {
   const [f, setF] = useState({ name: "", speciesId: species[0]?.id ?? "", sex: "UNKNOWN", pool: pools[0]?.id ?? "", group: "", time: nowLocal(), reason: "" });
   const { msg, busy, call } = useApi();
+  const reasonsOn = useReasonsOn();
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   return (
     <div className="toolbar" data-testid="new-arrival">
@@ -198,7 +204,9 @@ export function NewArrival({ species, pools, groups }: { species: Opt[]; pools: 
         ))}
       </select>
       <input className="input" type="datetime-local" aria-label="Érkezés időpontja" value={f.time} onChange={set("time")} />
-      <input className="input" placeholder="indoklás (korábbi napnál)" aria-label="Indoklás az érkezéshez" value={f.reason} onChange={set("reason")} />
+      {reasonsOn && (
+        <input className="input" placeholder="indoklás (korábbi napnál)" aria-label="Indoklás az érkezéshez" value={f.reason} onChange={set("reason")} />
+      )}
       <button
         className="btn"
         type="button"
@@ -379,7 +387,8 @@ export function AnimalEditForm({ a, species, pools, groups }: { a: AnimalEditVie
   const arrivalChanged = !!a.arrival && (f.time !== init.time || f.pool !== init.pool || f.group !== init.group || f.note !== init.note);
   const nameChanged = f.name.trim() !== a.name;
   const changed = nameChanged || f.speciesId !== a.speciesId || f.sex !== a.sex || arrivalChanged;
-  const needsReason = arrivalChanged || (nameChanged && f.nameMode === "correction");
+  const reasonsOn = useReasonsOn();
+  const needsReason = reasonsOn && (arrivalChanged || (nameChanged && f.nameMode === "correction"));
   function save() {
     const body: Record<string, unknown> = {};
     if (nameChanged) {
@@ -470,17 +479,21 @@ export function AnimalEditForm({ a, species, pools, groups }: { a: AnimalEditVie
         </div>
       )}
       <p className="hint">
-        Az érkezés adatai és a név helyesbítése a múltra is hatnak, ezért indoklás kell. Ahol az állat most van, azt áthelyezéssel
-        vagy csoportváltással rögzítsd, nem az érkezés javításával.
+        {reasonsOn
+          ? "Az érkezés adatai és a név helyesbítése a múltra is hatnak, ezért indoklás kell. "
+          : "Az érkezés adatai és a név helyesbítése a múltra is hatnak. "}
+        Ahol az állat most van, azt áthelyezéssel vagy csoportváltással rögzítsd, nem az érkezés javításával.
       </p>
       <div className="toolbar">
-        <input
-          className="input"
-          aria-label="Indoklás a módosításhoz"
-          placeholder={needsReason ? "indoklás (kötelező)" : "indoklás"}
-          value={f.reason}
-          onChange={set("reason")}
-        />
+        {reasonsOn && (
+          <input
+            className="input"
+            aria-label="Indoklás a módosításhoz"
+            placeholder={needsReason ? "indoklás (kötelező)" : "indoklás"}
+            value={f.reason}
+            onChange={set("reason")}
+          />
+        )}
         <button className="btn" type="button" disabled={busy || !changed || (needsReason && f.reason.trim().length < 3)} onClick={save}>
           Módosítás mentése
         </button>

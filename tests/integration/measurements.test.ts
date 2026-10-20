@@ -11,7 +11,7 @@ import {
   type Actor,
 } from "@/lib/measurements";
 import { getGrid } from "@/lib/queries";
-import { cest, fixtures, ownerPrisma, rid } from "./fixtures";
+import { cest, fixtures, ownerPrisma, rid, withReasons } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
 beforeAll(async () => {
@@ -97,7 +97,7 @@ describe("day rules (DN-09, ÁLT-16)", () => {
   it("an aquarist cannot record on an earlier day; an admin can, with a reason", async () => {
     const nextMorning = cest("2026-06-07T09:00");
     await expectAppError(create(f.aq1, "2026-06-06", "08:00", {}, nextMorning), 403, "NOT_TODAY");
-    await expectAppError(create(f.admin, "2026-06-06", "08:00", {}, nextMorning), 422, "REASON_REQUIRED");
+    await withReasons(() => expectAppError(create(f.admin, "2026-06-06", "08:00", {}, nextMorning), 422, "REASON_REQUIRED"));
     const ok = await create(f.admin, "2026-06-06", "08:00", { reason: "papírról utólag bevitt mérés" }, nextMorning);
     const audit = await prisma.auditEntry.findFirstOrThrow({ where: { entityId: ok.measurement.id } });
     expect(audit.reason).toBe("papírról utólag bevitt mérés");

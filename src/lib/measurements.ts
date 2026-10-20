@@ -9,6 +9,7 @@ import { prisma, type Tx } from "./db";
 import { compareDecimal, parseDecimalInput, canonicalDecimal } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
 import { ensureJournalDay, getSetting, groupLayout, moduleLevel, referenceAt } from "./master";
+import { requireReason } from "./reasons";
 import { canCreate, canModify, effectiveNow, type Decision, type Role } from "./permissions";
 import { businessDayOf, dateToDay, dayToDate, resolveLocalDateTime } from "./time";
 
@@ -50,7 +51,7 @@ export const invalidateSchema = z.object({
   requestId: z.string().min(8).max(100),
   clientTimestamp: z.iso.datetime({ offset: true }).optional(),
   expectedVersion: z.number().int().min(1),
-  reason: reasonSchema,
+  reason: reasonSchema.optional(),
 });
 
 export const newRoundSchema = z.object({
@@ -218,11 +219,9 @@ export function closedAt(journal: { state: string; closedAt: Date | null; closeR
   return since === null || since <= at;
 }
 
-function enforce(decision: Decision, reason: string | undefined): void {
+async function enforce(tx: Tx, decision: Decision, reason: string | undefined): Promise<void> {
   if (decision.kind === "DENY") throw new AppError(403, decision.code, decision.message);
-  if (decision.reasonRequired && !reason) {
-    throw new AppError(422, "REASON_REQUIRED", "Korábbi vagy lezárt nap módosításához indoklás kell.");
-  }
+  await requireReason(tx, decision.reasonRequired, reason, "Korábbi vagy lezárt nap módosításához indoklás kell.");
 }
 
 async function findOrCreateRound(
@@ -326,7 +325,7 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
         clientTs,
         grace,
       );
-      enforce(decision, input.reason);
+      await enforce(tx, decision, input.reason);
 
       const round = await findOrCreateRound(tx, actor, group.id, day, { roundId: input.roundId, newRound: input.newRound });
       cell = { roundId: round.id };
@@ -437,7 +436,7 @@ export async function updateMeasurement(
       );
       // A late edit is not turned into a pending row: the original value stays valid,
       // and the user gets the denial (only creations queue as PENDING, K9).
-      enforce(decision, input.reason);
+      await enforce(tx, decision, input.reason);
 
       const layout = await groupLayout(tx, cur.round.groupId, measuredAt);
       const param = layout.parameters.find((p) => p.id === cur.parameterId);
@@ -538,7 +537,8 @@ export async function invalidateMeasurement(
       clientTs,
       grace,
     );
-    enforce(decision, input.reason);
+    await enforce(tx, decision, input.reason);
+    await requireReason(tx, true, input.reason, "Az érvénytelenítéshez indoklás kell.");
     const res = await tx.measurement.updateMany({
       where: { id, version: input.expectedVersion, status: "VALID" },
       data: {
@@ -585,7 +585,7 @@ export async function openNewRound(actor: Actor, input: NewRoundInput, serverNow
       clientTs,
       grace,
     );
-    enforce(decision, input.reason);
+    await enforce(tx, decision, input.reason);
     const round = await findOrCreateRound(tx, actor, group.id, input.day, { newRound: true });
     await writeAudit(tx, {
       userId: actor.id,

@@ -30,6 +30,9 @@ export const SETTING_DEFAULTS = {
   body_weight_log_visible: "false",
   // caparium-hibak-4 (Balázs 2026-10-20 09:45 UTC): where "Vízmérés kiküldése" sends; empty = not set yet
   water_report_recipient: "",
+  // caparium-indoklas-ki (Balázs 2026-10-20 19:21 UTC, msg 1562184077489209436): the reasons are off; a setting row
+  // "true" brings every reason rule back as it was (src/lib/reasons.ts).
+  reason_required: "false",
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

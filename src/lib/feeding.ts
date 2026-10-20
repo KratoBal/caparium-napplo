@@ -12,6 +12,7 @@ import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
 import { ensureJournalDay, moduleLevel, pickValid } from "./master";
+import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { closedAt } from "./measurements";
 import { canCreate, canModify, effectiveNow, type Decision, type Level } from "./permissions";
@@ -84,9 +85,9 @@ export async function facts(tx: Tx, actor: Actor, d: string, serverNow: Date, cl
   return { f, fd, journal };
 }
 
-export function enforce(decision: Decision, why: string | undefined) {
+export async function enforce(tx: Tx, decision: Decision, why: string | undefined) {
   if (decision.kind === "DENY") throw new AppError(403, decision.code, decision.message);
-  if (decision.reasonRequired && !why) throw new AppError(422, "REASON_REQUIRED", "Korábbi vagy lezárt nap módosításához indoklás kell.");
+  await requireReason(tx, decision.reasonRequired, why, "Korábbi vagy lezárt nap módosításához indoklás kell.");
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +114,7 @@ export async function setSelection(actor: Actor, input: z.infer<typeof selection
   const clientTs = input.clientTimestamp ? new Date(input.clientTimestamp) : null;
   return prisma.$transaction(async (tx) => {
     const { f, fd } = await facts(tx, actor, input.day, serverNow, clientTs);
-    enforce(canCreate(f.level, { day: f.d, today: f.today, closed: f.closed }), input.reason);
+    await enforce(tx, canCreate(f.level, { day: f.d, today: f.today, closed: f.closed }), input.reason);
     const alive = await aliveOnDay(tx, input.day, input.animalIds);
     const dead = input.animalIds.filter((id) => !alive.has(id));
     if (dead.length) throw new AppError(422, "NOT_ALIVE", "Ezen a napon nem élő vagy még nem érkezett állat nem választható ki.");
@@ -328,7 +329,7 @@ export async function finalizeList(actor: Actor, input: z.infer<typeof finalizeS
   const clientTs = input.clientTimestamp ? new Date(input.clientTimestamp) : null;
   return prisma.$transaction(async (tx) => {
     const { f, fd } = await facts(tx, actor, input.day, serverNow, clientTs);
-    enforce(canCreate(f.level, { day: f.d, today: f.today, closed: f.closed }), input.reason);
+    await enforce(tx, canCreate(f.level, { day: f.d, today: f.today, closed: f.closed }), input.reason);
     if (fd.listState === "FINALIZED") return { replayed: false, already: true };
     const count = await tx.feedingSelection.count({ where: { feedingDayId: fd.id, status: "VALID" } });
     if (count === 0 && !input.confirmEmpty) {
@@ -367,7 +368,7 @@ export const itemSchema = z.object({
   reason: reason.optional(),
 });
 
-export const itemInvalidateSchema = z.object({ requestId, expectedVersion: z.number().int().min(1), reason });
+export const itemInvalidateSchema = z.object({ requestId, expectedVersion: z.number().int().min(1), reason: reason.optional() });
 
 export async function selectedOn(tx: Tx, feedingDayId: string) {
   return new Set(
@@ -400,9 +401,9 @@ export async function saveFeedingItem(actor: Actor, input: z.infer<typeof itemSc
         if (!prior || prior.feedingDayId !== fd.id) throw new AppError(404, "NOT_FOUND", "A tétel nem található.");
         if (prior.status !== "VALID") throw new AppError(409, "NOT_EDITABLE", "Ez a tétel már nem érvényes.");
         if (prior.version !== input.expectedVersion) throw new AppError(409, "VERSION_CONFLICT", "A tétel időközben megváltozott.");
-        enforce(canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: prior.createdById === actor.id }), input.reason);
+        await enforce(tx, canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: prior.createdById === actor.id }), input.reason);
       } else {
-        enforce(canCreate(f.level, { day: f.d, today: f.today, closed: f.closed }), input.reason);
+        await enforce(tx, canCreate(f.level, { day: f.d, today: f.today, closed: f.closed }), input.reason);
       }
 
       const feed = await tx.feed.findUnique({ where: { id: input.feedId }, include: { type: true } });
@@ -497,7 +498,8 @@ export async function invalidateFeedingItem(actor: Actor, id: string, input: z.i
     const it = await tx.feedingItem.findUnique({ where: { id }, include: { feedingDay: true } });
     if (!it) throw new AppError(404, "NOT_FOUND", "A tétel nem található.");
     const { f } = await facts(tx, actor, dateToDay(it.feedingDay.businessDay), serverNow, null);
-    enforce(canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: it.createdById === actor.id }), input.reason);
+    await enforce(tx, canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: it.createdById === actor.id }), input.reason);
+    await requireReason(tx, true, input.reason, "Az érvénytelenítéshez indoklás kell.");
     const res = await tx.feedingItem.updateMany({
       where: { id, version: input.expectedVersion, status: "VALID" },
       data: { status: "INVALIDATED", invalidationReason: input.reason, version: { increment: 1 }, updatedById: actor.id, updatedAt: serverNow },

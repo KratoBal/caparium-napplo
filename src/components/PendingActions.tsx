@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { askReason, useReasonsOn } from "./ReasonSwitch";
 
 function requestId(): string {
   const b = new Uint8Array(16);
@@ -13,14 +14,15 @@ function requestId(): string {
 export function PendingActions({ id }: { id: string }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const reasonsOn = useReasonsOn();
 
   async function decide(decision: "approve" | "reject") {
     setError(null);
     let reason: string | undefined;
     if (decision === "reject") {
-      const r = window.prompt("Az elutasítás oka:");
-      if (!r || r.trim().length < 3) return;
-      reason = r.trim();
+      const asked = askReason(reasonsOn, "Az elutasítás oka:", "Elutasítod ezt a mentést?");
+      if (!asked) return;
+      reason = asked.reason;
     }
     const res = await fetch(`/api/measurements/${id}/pending`, {
       method: "POST",

@@ -9,6 +9,7 @@ import { diffFields, writeAudit } from "./audit";
 import { prisma } from "./db";
 import { AppError } from "./errors";
 import { moduleLevel, pickValid, validAt } from "./master";
+import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 
 const name = z
@@ -82,9 +83,7 @@ export async function createFeed(actor: Actor, input: z.infer<typeof createFeedS
 
 export async function updateFeed(actor: Actor, id: string, input: z.infer<typeof updateFeedSchema>, now = new Date()) {
   await requireAdmin(actor);
-  if (input.name && input.mode === "correction" && !input.reason) {
-    throw new AppError(422, "REASON_REQUIRED", "A helyesbítés a régi naplókban is átírja a nevet, ezért indoklás kell.");
-  }
+  await requireReason(prisma, Boolean(input.name) && input.mode === "correction", input.reason, "A helyesbítés a régi naplókban is átírja a nevet, ezért indoklás kell.");
   return prisma.$transaction(async (tx) => {
     const f = await tx.feed.findUnique({ where: { id } });
     if (!f) throw new AppError(404, "NOT_FOUND", "A takarmány nem található.");

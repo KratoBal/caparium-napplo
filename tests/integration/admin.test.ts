@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { createMeasurement } from "@/lib/measurements";
 import { measurementHistory, searchLog } from "@/lib/queries";
-import { cest, fixtures, rid } from "./fixtures";
+import { cest, fixtures, rid, withReasons } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
 beforeAll(async () => {
@@ -45,7 +45,7 @@ describe("reference ranges (DN-08, K3)", () => {
 
   it("a correction fixes the current version in place, needs a reason, and is audited as a correction", async () => {
     const kh = f.param("KH");
-    await expectCode(setReference(f.admin, { requestId: rid(), parameterId: kh, min: "7", max: "12", mode: "correction" }), "REASON_REQUIRED");
+    await withReasons(() => expectCode(setReference(f.admin, { requestId: rid(), parameterId: kh, min: "7", max: "12", mode: "correction" }), "REASON_REQUIRED"));
     const before = await prisma.referenceRange.count({ where: { parameterId: kh } });
     await setReference(f.admin, { requestId: rid(), parameterId: kh, min: "7", max: "12", mode: "correction", reason: "elírás a maximumban" });
     expect(await prisma.referenceRange.count({ where: { parameterId: kh } })).toBe(before);

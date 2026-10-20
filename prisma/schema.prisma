@@ -483,7 +483,8 @@ model JournalReopen {
   journalDayId String     @db.Uuid
   reopenedById String     @db.Uuid
   at           DateTime   @default(now()) @db.Timestamptz(3)
-  reason       String
+  /// null when the reasons are off (src/lib/reasons.ts); the reasons given before stay
+  reason       String?
   reclosedAt   DateTime?  @db.Timestamptz(3)
   journalDay   JournalDay @relation(fields: [journalDayId], references: [id])
 
