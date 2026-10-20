@@ -108,15 +108,38 @@ describe("the basic data, without a password", () => {
     }
   }, 120_000);
 
-  it("CAPARIUM_SEED_SZINTETIKUS=1 (the test system): the starting animals in their pools and groups from 2026-01-01", async () => {
+  it("the test system's mark in its data (the seed's synthetic arrival, the stage without the variable): the starting animals in their pools and groups from 2026-01-01", async () => {
+    // what the stage holds from its seed: a synthetic animal arrived with the seed's request id (no placement
+    // needed here: the mark is the event)
+    const species = await db.species.create({ data: { scientificName: "Teszt faj A" } });
+    const synthetic = await db.animal.create({ data: { speciesId: species.id, names: { create: { name: "Teszt Egy", validFrom: new Date("2025-12-31T23:00:00.000Z") } } } });
+    const nagy = await db.pool.findUniqueOrThrow({ where: { code: "NAGY" } });
+    await db.lifecycleEvent.create({
+      data: {
+        animalId: synthetic.id,
+        type: "ARRIVAL",
+        occurredAt: new Date("2025-12-31T23:00:00.000Z"),
+        businessDay: new Date("2026-01-01T00:00:00.000Z"),
+        toPoolId: nagy.id,
+        requestId: "seed-arrival-1",
+        createdById: "00000000-0000-0000-0000-000000000001",
+        updatedById: "00000000-0000-0000-0000-000000000001",
+      },
+    });
+    // the stage's case (acrobot 33344): an admin recorded an animal of their own under a list name before the list
+    // loaded ("Margit", Capus capus). It is another animal: the list's Margit still comes.
+    const capus = await db.species.create({ data: { scientificName: "Capus capus" } });
+    await db.animal.create({ data: { speciesId: capus.id, sex: "FEMALE", names: { create: { name: "Margit", validFrom: new Date("2026-10-20T08:00:00.000Z") } } } });
     const before = await counts();
-    execFileSync("npx", ["tsx", "prisma/base-data.ts"], { stdio: "pipe", env: { ...env, CAPARIUM_SEED_SZINTETIKUS: "1" } });
+    execFileSync("npx", ["tsx", "prisma/base-data.ts"], { stdio: "pipe", env });
+    const margits = await db.animal.findMany({ where: { names: { some: { name: "Margit" } } }, include: { species: true } });
+    expect(margits.map((m) => m.species.scientificName).sort()).toEqual(["Capus capus", "Giglymostoma cirratum"]);
     expect(await counts()).toEqual({
       ...before,
-      species: new Set(INITIAL_ANIMALS.map((a) => a.species)).size,
-      animals: INITIAL_ANIMALS.length,
-      events: INITIAL_ANIMALS.length, // one arrival each
-      placements: INITIAL_ANIMALS.length,
+      species: before.species + new Set(INITIAL_ANIMALS.map((a) => a.species)).size,
+      animals: before.animals + INITIAL_ANIMALS.length,
+      events: before.events + INITIAL_ANIMALS.length, // one arrival each
+      placements: before.placements + INITIAL_ANIMALS.length,
     });
     const where = async (name: string) => {
       const animal = await db.animal.findFirstOrThrow({

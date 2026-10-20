@@ -13,7 +13,8 @@ export function syntheticWanted(env: Record<string, string | undefined> = proces
 // made-up 2026-01-01 arrival would be false first data there. No new variable: the test system's existing mark,
 // CAPARIUM_SEED_SZINTETIKUS=1, set explicitly (docker-compose.yml: "1 on the stage only, never on a live
 // system"). Not the CI=true fallback of syntheticWanted, and anything else (missing, 0, unclear) means no.
-// The starting FEEDS have no date and load everywhere.
+// The starting FEEDS have no date and load everywhere. The stage has no such variable: there the test system's
+// mark in its data decides (src/lib/initial-data.ts hasTestSystemData).
 export function initialAnimalsWanted(env: Record<string, string | undefined> = process.env): boolean {
   return env.CAPARIUM_SEED_SZINTETIKUS?.trim() === "1";
 }
