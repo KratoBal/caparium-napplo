@@ -27,7 +27,7 @@ test("login, record a daily measurement, it survives a reload and shows in the l
   const p = plan(info.project.name);
   await login(page, "teszt.akvarista1");
 
-  await page.getByRole("link", { name: "Napi vízmérés" }).first().click();
+  await page.getByRole("link", { name: "Napi vízmérés", exact: true }).first().click();
   await page.getByRole("tab", { name: p.tab }).click();
   await expect(page.getByRole("heading", { name: /Napi paraméterek/ })).toBeVisible();
 
@@ -304,7 +304,7 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   // each layout feeds its own animal: the day is shared, the cells are not
   const name = info.project.name === "tablet" ? "Teszt Egy" : "Teszt Kettő";
   await login(page, "teszt.akvarista1");
-  await page.getByRole("link", { name: "Takarmánynapló" }).click();
+  await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
   const box = page.getByLabel(`${name} a mai listán`);
   await box.check();
   await expect(box).toBeChecked();
@@ -418,7 +418,7 @@ test("calculator: general, no animal on top, saved as the reference of the anima
   await expect(page.getByTestId("current-reference")).toContainText("250 g");
   await expect(page.getByTestId("saved-references").getByRole("row").filter({ hasText: name }).first()).toContainText("250 g");
   // EGY-08: the feeding page shows the reference in the animal's row
-  await page.getByRole("link", { name: "Takarmánynapló" }).click();
+  await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
   await expect(page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name })).toContainText("ref 250 g");
 });
 
@@ -516,7 +516,54 @@ test("reports: the tables and the Excel; no daily report menu any more", async (
   await page.getByRole("link", { name: "Export" }).click();
   await expect(page.getByTestId("monthly-package")).toContainText("Havi ZIMS-csomag");
   await page.getByRole("link", { name: "Áttekintés" }).click();
-  await expect(page.getByTestId("tile-feeding")).toBeVisible();
+  await expect(page.getByTestId("home-evesi")).toBeVisible();
+});
+
+test("home: the customer's illustrated cards, 3-2-3, each to its module, only with access; one column on a phone", async ({ page }) => {
+  // caparium-hibak-5 (Balázs 2026-10-20 11:37 UTC)
+  await login(page, "teszt.akvarista1");
+  const rows = page.locator(".home-row");
+  await expect(rows).toHaveCount(3);
+  const captions = async (i: number) => (await rows.nth(i).locator(".home-caption").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(await captions(0)).toEqual(["Nagy medencék NAPI VÍZMÉRÉS", "Kis medencék NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS"]);
+  expect(await captions(1)).toEqual(["Nyomelem és megkötő adagolás", "Takarmány kalkulátor"]);
+  expect(await captions(2)).toEqual(["Takarmány kivételi napló", "Egyedi takarmánynapló", "Evési napló"]);
+  // every picture is the web-sized one and loads
+  for (const img of await page.locator(".home-card img").all()) {
+    await img.scrollIntoViewIfNeeded();
+    await expect.poll(() => img.evaluate((e) => (e as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+    expect(await img.getAttribute("src")).toMatch(/^\/kezdolap\/[a-z]+\.webp$/);
+  }
+  // the middle row is centred: its two cards sit between the first row's outer cards
+  const box = async (row: number, i: number) => (await rows.nth(row).locator(".home-card").nth(i).boundingBox())!;
+  const [a, b, c] = [await box(0, 0), await box(1, 0), await box(1, 1)];
+  expect(b.x).toBeGreaterThan(a.x + a.width / 4);
+  expect(Math.abs(a.x + (await box(0, 2)).x + (await box(0, 2)).width - (b.x + c.x + c.width))).toBeLessThan(4);
+  await page.getByTestId("home-kismedencek").click();
+  await expect(page).toHaveURL(/\/vizmeres\?csoport=NAPI_KIS/);
+  await expect(page.getByRole("tab", { name: "Kismedencék" })).toHaveAttribute("aria-selected", "true");
+
+  // phone width: one column
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const xs = await page.locator(".home-card").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().x)));
+  expect(new Set(xs).size).toBe(1);
+
+  // no access to a module: its cards are gone (the dosing module set to NONE for a fresh aquarist)
+  const db = new PrismaClient();
+  try {
+    const u = await db.user.findUniqueOrThrow({ where: { loginId: "teszt.akvarista2" } });
+    await db.modulePermission.upsert({ where: { userId_module: { userId: u.id, module: "DOSING" } }, update: { level: "NONE" }, create: { userId: u.id, module: "DOSING", level: "NONE" } });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.context().clearCookies(); // a new login, not the first user's session
+    await login(page, "teszt.akvarista2");
+    await expect(page.getByTestId("home-kalkulator")).toBeVisible();
+    await expect(page.getByTestId("home-adagolas")).toHaveCount(0);
+  } finally {
+    const u = await db.user.findUniqueOrThrow({ where: { loginId: "teszt.akvarista2" } });
+    await db.modulePermission.deleteMany({ where: { userId: u.id, module: "DOSING" } });
+    await db.$disconnect();
+  }
 });
 
 test("conveniences: a feeding plan, the list from it, the feed type icons", async ({ page }) => {
@@ -528,7 +575,7 @@ test("conveniences: a feeding plan, the list from it, the feed type icons", asyn
   for (const d of ["H", "K", "Sze", "Cs", "P", "Szo", "V"]) await plan.getByLabel(`Etetési nap: ${d}`).check();
   await plan.getByRole("button", { name: "Terv mentése" }).click();
   await expect(plan.getByRole("status")).toHaveText("Terv mentve.");
-  await page.getByRole("link", { name: "Takarmánynapló" }).click();
+  await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
   await page.getByRole("button", { name: "Lista a terv szerint" }).click();
   await expect(page.getByLabel("Teszt Három a mai listán")).toBeChecked();
   await page.getByRole("link", { name: "Takarmánylista" }).click();
@@ -556,7 +603,7 @@ test("the helper: a quick question about the page, switched off and on", async (
   await expect(first).toHaveAttribute("data-ready", "1");
   await expect(first.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "true");
   await expect(first.getByTestId("helper-answer")).toContainText("Teszt só");
-  await page.getByRole("link", { name: "Napi vízmérés" }).click();
+  await page.getByRole("link", { name: "Napi vízmérés", exact: true }).click();
   // the overview has a helper too: wait for the new page, or the clicks below land on the old one
   await expect(page).toHaveURL(/\/vizmeres/);
   await expect(page.getByRole("heading", { name: "Napi vízmérések" })).toBeVisible();

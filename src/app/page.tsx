@@ -25,6 +25,25 @@ async function dailyProgress(day: string) {
   return { done, total: pools.size };
 }
 
+type HomeCard = { id: string; href: string; caption: string[]; module: "water" | "feeding" | "dosing" };
+// the captions and the order of the customer's sample (exchange/caparium/kezdolap-csempek-minta-2026-10-20.jpg)
+const HOME_ROWS: HomeCard[][] = [
+  [
+    { id: "nagymedencek", href: "/vizmeres?csoport=NAPI_NAGY", caption: ["Nagy medencék", "NAPI VÍZMÉRÉS"], module: "water" },
+    { id: "kismedencek", href: "/vizmeres?csoport=NAPI_KIS", caption: ["Kis medencék", "NAPI VÍZMÉRÉS"], module: "water" },
+    { id: "heti", href: "/heti", caption: ["HETI VÍZMÉRÉS"], module: "water" },
+  ],
+  [
+    { id: "adagolas", href: "/adagolas", caption: ["Nyomelem és megkötő adagolás"], module: "dosing" },
+    { id: "kalkulator", href: "/kalkulator", caption: ["Takarmány", "kalkulátor"], module: "feeding" },
+  ],
+  [
+    { id: "kivetel", href: "/kivetel", caption: ["Takarmány kivételi napló"], module: "feeding" },
+    { id: "egyedi", href: "/etetes", caption: ["Egyedi takarmánynapló"], module: "feeding" },
+    { id: "evesi", href: "/evesi-naplo", caption: ["Evési napló"], module: "feeding" },
+  ],
+];
+
 export default async function OverviewPage() {
   const user = await requireUser();
   const today = businessDayOf(new Date());
@@ -49,6 +68,12 @@ export default async function OverviewPage() {
     <Shell title="Mai áttekintés" active="overview" user={user} helper={water ? await waterHelper(dosing) : feeding ? await feedingHelper(dosing) : null}>
       <h2 style={{ fontSize: 40 }}>Jó munkát!</h2>
       <p className="hint" style={{ fontSize: 17 }}>A mai feladatok és a naplók állapota egy helyen.</p>
+      {/* the daily count the old tile carried */}
+      {water && (
+        <p className="hint" data-testid="daily-progress">
+          Napi mérés ma: {done} / {total} medence{total - done > 0 ? `, ${total - done} még vár` : ", mind mérve"}.
+        </p>
+      )}
       {reopened.length > 0 && (
         <div className="banner banner-warn" style={{ marginTop: 20 }} data-testid="reopened-days">
           Újranyitva hagyott napok:{" "}
@@ -79,50 +104,28 @@ export default async function OverviewPage() {
           )}
         </div>
       )}
-      <div className="cards">
-        {water && (
-          <Link className="tile" href="/vizmeres" data-testid="tile-daily">
-            <span className="tag">Víz</span>
-            <h3>Napi mérések</h3>
-            <div className="big">
-              {done} / {total} medence
+      {/* caparium-hibak-5 (Balázs 2026-10-20 11:37 UTC, the customer's layout): illustrated cards, 3-2-3, the picture
+          above, the caption below, each to its module; a card shows only with access to its module, as the tiles did */}
+      <nav className="home-cards" aria-label="Modulok">
+        {HOME_ROWS.map((row, i) => {
+          const visible = row.filter((c) => ({ water, feeding, dosing })[c.module]);
+          return visible.length ? (
+            <div className="home-row" key={i}>
+              {visible.map((c) => (
+                <Link key={c.href} className="home-card" href={c.href} data-testid={`home-${c.id}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- static webp, already sized for the web */}
+                  <img src={`/kezdolap/${c.id}.webp`} alt="" width={960} height={640} loading={i === 0 ? "eager" : "lazy"} />
+                  <span className="home-caption">
+                    {c.caption.map((line) => (
+                      <span key={line}>{line}</span>
+                    ))}
+                  </span>
+                </Link>
+              ))}
             </div>
-            <p className="hint">{total - done > 0 ? `${total - done} medence még vár` : "Minden medence mérve"}</p>
-          </Link>
-        )}
-        {water && (
-          <Link className="tile" href="/naplo">
-            <span className="tag">Napló</span>
-            <h3>Vízmérési napló</h3>
-            <div className="big">Keresés és előzmények</div>
-            <p className="hint">Dátum és medence szerint</p>
-          </Link>
-        )}
-        {water && (
-          <Link className="tile" href="/heti" data-testid="tile-weekly">
-            <span className="tag">KH · Ca · Mg</span>
-            <h3>Heti vízmérés</h3>
-            <div className="big">Titrálás és Hanna-checker</div>
-            <p className="hint">Hígítás és RO/SW cellánként</p>
-          </Link>
-        )}
-        {feeding && (
-          <Link className="tile" href="/etetes" data-testid="tile-feeding">
-            <span className="tag">Etetés</span>
-            <h3>Mai etetés</h3>
-            <div className="big">Napi lista és tételek</div>
-            <p className="hint">Evés, kivétel és kalkulátor a menüben</p>
-          </Link>
-        )}
-        {dosing && (
-          <Link className="tile" href="/adagolas" data-testid="tile-dosing">
-            <span className="tag">Vegyszer</span>
-            <h3>Vegyszerek</h3>
-            <div className="big">Adagolás és készlet</div>
-            <p className="hint">Medencénként, a készletből levonva</p>
-          </Link>
-        )}
-      </div>
+          ) : null;
+        })}
+      </nav>
       <div className="quick">
         <h3 style={{ fontSize: 21 }}>A mai nap gyorsindítója</h3>
         <p>Mérés rögzítése és a napló megnyitása.</p>
