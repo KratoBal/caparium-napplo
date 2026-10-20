@@ -100,7 +100,7 @@ export default async function MeasurementHistoryPage({ params }: { params: Promi
             traineePerformed: m.traineePerformed,
             dilution: m.dilution,
             diluentWater: m.diluentWater,
-            weekly: m.weekly,
+            dilutable: m.dilutable,
           }}
           people={people}
           reasonRequired={decision.reasonRequired}

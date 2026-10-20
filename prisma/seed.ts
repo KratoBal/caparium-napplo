@@ -14,14 +14,15 @@ const prisma = new PrismaClient();
 const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 // The synthetic test feeds (feladat-4, 7. pont): no real animal, name or zoo record. Litopenaeus
-// vannamei is the data model's own example of a feed counted in pieces AND grams (DN-16).
+// vannamei is the data model's own example of a feed counted in pieces AND grams (DN-16); the basic data's
+// starting list has it too, so by name it is made once. The test system's synthetic feeds are inactive
+// since migration 20261020080100_synthetic_feeds_off (caparium-hibak-1): the real list replaced them there.
 const FEEDS = [
   { type: "KAGYLO", name: "Teszt kagyló", dims: ["MASS"], unit: "g" },
   { type: "RAK", name: "Litopenaeus vannamei", dims: ["MASS", "COUNT"], unit: "g" },
   { type: "HAL", name: "Teszt hal", dims: ["MASS"], unit: "g" },
   { type: "LABASFEJU", name: "Teszt tintahal", dims: ["MASS"], unit: "g" },
   { type: "APRO", name: "Teszt plankton", dims: ["VOLUME"], unit: "ml" },
-  { type: "KORALL", name: "Teszt koralltáp", dims: ["MASS"], unit: "g" },
 ] as const;
 const CHEMICALS = [
   { name: "Teszt só", unit: "kg" },
@@ -76,7 +77,8 @@ async function main() {
   // the synthetic test feeds, by name (the basic data put "Egyéb" first)
   if (synthetic) {
     const have = new Set((await prisma.feedName.findMany()).map((n) => n.name));
-    for (const [i, f] of FEEDS.entries()) {
+    let sortOrder = (await prisma.feed.aggregate({ _max: { sortOrder: true } }))._max.sortOrder ?? BASE_FEEDS.length;
+    for (const f of FEEDS) {
       if (have.has(f.name)) continue;
       const type = await prisma.feedType.findUniqueOrThrow({ where: { code: f.type } });
       await prisma.feed.create({
@@ -84,7 +86,7 @@ async function main() {
           typeId: type.id,
           allowedDimensions: [...f.dims],
           defaultUnitId: unitId.get(f.unit)!,
-          sortOrder: BASE_FEEDS.length + i + 1,
+          sortOrder: (sortOrder += 1),
           names: { create: { name: f.name, validFrom: SINCE } },
         },
       });
@@ -98,7 +100,8 @@ async function main() {
       await prisma.chemical.create({ data: { stockUnitId: unitId.get(c.unit)!, names: { create: { name: c.name, validFrom: SINCE } } } });
     }
   }
-  if (synthetic && (await prisma.species.count()) === 0) {
+  // by the first synthetic animal's name, not "no species yet": the basic data's starting list brings species
+  if (synthetic && !(await prisma.animalName.findFirst({ where: { name: ANIMALS[0].name } }))) {
     const species: { id: string }[] = [];
     for (const name of SPECIES) species.push(await prisma.species.create({ data: { scientificName: name } }));
     const group = await prisma.animalGroup.create({ data: { names: { create: { name: "Teszt csoport", validFrom: SINCE } } } });

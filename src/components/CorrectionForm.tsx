@@ -17,7 +17,8 @@ type Props = {
     traineePerformed: boolean;
     dilution: number | null;
     diluentWater: "RO" | "SW" | null;
-    weekly: boolean;
+    /** a weekly nitrate or phosphate value: the dilution and RO/SW fields belong to it */
+    dilutable: boolean;
   };
   people: { id: string; fullName: string }[];
   reasonRequired: boolean;
@@ -79,8 +80,8 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
     if (time !== m.measuredAtLocal) body.measuredAtLocal = time;
     if (responsible !== m.responsibleUserId) body.responsibleUserId = responsible;
     if (trainee !== m.traineePerformed) body.traineePerformed = trainee;
-    if (m.weekly && dilution !== m.dilution) body.dilution = dilution;
-    if (m.weekly && diluent !== m.diluentWater) body.diluentWater = diluent;
+    if (m.dilutable && dilution !== m.dilution) body.dilution = dilution;
+    if (m.dilutable && diluent !== m.diluentWater) body.diluentWater = diluent;
     if (Object.keys(body).length === 0) {
       setMessage({ kind: "error", text: "Nincs változás." });
       return;
@@ -124,7 +125,7 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
             <input type="checkbox" checked={trainee} onChange={(e) => setTrainee(e.target.checked)} />
             Gyakornok végezte
           </label>
-          {m.weekly && (
+          {m.dilutable && (
             <>
               <label className="form-label" htmlFor="corr-dil">Hígítás</label>
               <select
