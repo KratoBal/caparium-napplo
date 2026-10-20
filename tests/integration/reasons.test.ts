@@ -1,11 +1,17 @@
 // The reason switch (caparium-indoklas-ki, src/lib/reasons.ts). Off (the default): every rule that asked for a
 // reason lets the change through without one, and the change is still audited, with an empty reason. On: the
 // same calls are refused as before (the other files check the rest of the "on" branch, each at its own rule).
-// Days from 17 to 27 November 2026: no other file uses them, no test's journal job reaches them (the latest runs
-// on 15 September), and every row is made inside its own test.
+// Days from 17 to 27 November 2026 and 4 to 7 October 2027: no other file uses them, no test's journal job reaches
+// them (the latest runs on 15 September 2026), and every row is made inside its own test.
 import { beforeAll, describe, expect, it } from "vitest";
 import { createLifecycleEvent, editAnimal, invalidateLifecycleEvent } from "@/lib/animals";
 import { invalidateBodyWeight, recordBodyWeight } from "@/lib/calculator";
+import { invalidateDosing, saveDosing } from "@/lib/dosing";
+import { invalidateEatingStatus, setEatingStatus } from "@/lib/eating";
+import { createZimsExport, setSubmissionState } from "@/lib/exports/zims";
+import { invalidateFeedingItem, saveFeedingItem, setSelection } from "@/lib/feeding";
+import { createFeed, updateFeed } from "@/lib/feeds";
+import { invalidateWithdrawalItem, saveWithdrawalItem } from "@/lib/withdrawal";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { reopenDay } from "@/lib/journal";
@@ -14,7 +20,7 @@ import { createMeasurement, invalidateMeasurement, type Actor } from "@/lib/meas
 import { decidePending } from "@/lib/pending";
 import { reasonsRequired } from "@/lib/reasons";
 import { dayToDate } from "@/lib/time";
-import { fixtures, ownerPrisma, rid, withReasons } from "./fixtures";
+import { cest, fixtures, ownerPrisma, rid, withReasons } from "./fixtures";
 
 /** A Budapest wall-clock time in November (CET, +01:00; the fixtures' cest() is the summer offset). */
 const cet = (local: string) => new Date(`${local}:00+01:00`);
@@ -163,3 +169,93 @@ describe("off: no reason is required, the change is still audited", () => {
     expect(await prisma.bodyWeight.findUniqueOrThrow({ where: { id: w.id } })).toMatchObject({ status: "INVALIDATED", invalidationReason: null });
   });
 });
+
+// barracuda's review of #37: every invalidation schema whose reason became optional, and the other two rules, are
+// run off without a reason too, so a NOT NULL column on one of these paths would be a red test here, not a
+// database error after the deployment. (Every reason column in prisma/schema.prisma is nullable today.)
+describe("off: the other invalidations and rules, without a reason", () => {
+  const ids = async () => {
+    const unit: Record<string, string> = {};
+    for (const u of await prisma.unit.findMany()) unit[u.symbol] = u.id;
+    const feed = (await prisma.feedName.findFirstOrThrow({ where: { name: "Litopenaeus vannamei" } })).feedId;
+    const animal = (await prisma.animalName.findFirstOrThrow({ where: { name: "Teszt Négy" } })).animalId;
+    return { unit, feed, animal };
+  };
+
+  it("a dosing and its stock movement", async () => {
+    const { unit } = await ids();
+    const chemical = (await prisma.chemicalName.findFirstOrThrow({ where: { name: "Teszt kalcium" } })).chemicalId;
+    const d = "2027-10-04";
+    const r = (await saveDosing(
+      f.aq1,
+      { requestId: rid(), performedAtLocal: `${d}T09:00`, poolId: f.pool("SOZO"), chemicalId: chemical, quantity: "100", unitId: unit.ml },
+      cest(`${d}T09:00`),
+    )) as { dosingId: string };
+    const now = cest(`${d}T09:30`);
+    await withReasons(() => expectCode(invalidateDosing(f.aq1, r.dosingId, { requestId: rid(), expectedVersion: 1 }, now), "REASON_REQUIRED"));
+    await invalidateDosing(f.aq1, r.dosingId, { requestId: rid(), expectedVersion: 1 }, now);
+    expect(await prisma.dosing.findUniqueOrThrow({ where: { id: r.dosingId } })).toMatchObject({ status: "INVALIDATED", invalidationReason: null });
+    expect(await prisma.stockMovement.findUniqueOrThrow({ where: { dosingId: r.dosingId } })).toMatchObject({ status: "INVALIDATED", invalidationReason: null });
+  });
+
+  it("a withdrawal item", async () => {
+    const { unit, feed } = await ids();
+    const d = "2027-10-05";
+    const r = (await saveWithdrawalItem(
+      f.aq1,
+      { requestId: rid(), day: d, feedId: feed, quantities: [{ value: "2", unitId: unit.db }] } as Parameters<typeof saveWithdrawalItem>[1],
+      cest(`${d}T08:00`),
+    )) as { itemId: string };
+    const now = cest(`${d}T09:00`);
+    await withReasons(() => expectCode(invalidateWithdrawalItem(f.aq1, r.itemId, { requestId: rid(), expectedVersion: 1 }, now), "REASON_REQUIRED"));
+    await invalidateWithdrawalItem(f.aq1, r.itemId, { requestId: rid(), expectedVersion: 1 }, now);
+    expect(await prisma.withdrawalItem.findUniqueOrThrow({ where: { id: r.itemId } })).toMatchObject({ status: "INVALIDATED", invalidationReason: null });
+  });
+
+  it("a feeding item and an eating status", async () => {
+    const { unit, feed, animal } = await ids();
+    const d = "2027-10-06";
+    await setSelection(f.aq1, { requestId: rid(), day: d, animalIds: [animal], selected: true }, cest(`${d}T08:00`));
+    const item = (await saveFeedingItem(
+      f.aq1,
+      { requestId: rid(), day: d, animalId: animal, feedId: feed, quantities: [{ value: "3", unitId: unit.db }] } as Parameters<typeof saveFeedingItem>[1],
+      cest(`${d}T09:00`),
+    )) as { itemId: string };
+    const now = cest(`${d}T09:30`);
+    await withReasons(() => expectCode(invalidateFeedingItem(f.aq1, item.itemId, { requestId: rid(), expectedVersion: 1 }, now), "REASON_REQUIRED"));
+    await invalidateFeedingItem(f.aq1, item.itemId, { requestId: rid(), expectedVersion: 1 }, now);
+    expect(await prisma.feedingItem.findUniqueOrThrow({ where: { id: item.itemId } })).toMatchObject({ status: "INVALIDATED", invalidationReason: null });
+
+    await setEatingStatus(f.aq1, { requestId: rid(), day: d, animalId: animal, state: "EATEN" }, cest(`${d}T10:00`));
+    const fd = await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: dayToDate(d) } });
+    const st = await prisma.eatingStatus.findFirstOrThrow({ where: { feedingDayId: fd.id, animalId: animal, status: "VALID", source: "MANUAL" } });
+    const later = cest(`${d}T10:30`);
+    await withReasons(() => expectCode(invalidateEatingStatus(f.aq1, st.id, { requestId: rid(), expectedVersion: st.version }, later), "REASON_REQUIRED"));
+    await invalidateEatingStatus(f.aq1, st.id, { requestId: rid(), expectedVersion: st.version }, later);
+    expect(await prisma.eatingStatus.findUniqueOrThrow({ where: { id: st.id } })).toMatchObject({ status: "INVALIDATED", invalidationReason: null });
+  });
+
+  it("a feed name correction", async () => {
+    const { unit } = await ids();
+    const type = await prisma.feedType.findUniqueOrThrow({ where: { code: "RAK" } });
+    const r = await createFeed(f.admin, { requestId: rid(), typeId: type.id, name: "Indoklás nélküli takarmány", dimensions: ["MASS"], defaultUnitId: unit.g });
+    const fix = { name: "Indoklás nélküli takarmány javítva", mode: "correction" as const };
+    await withReasons(() => expectCode(updateFeed(f.admin, r.id, { requestId: rid(), ...fix }), "REASON_REQUIRED"));
+    const req = rid();
+    await updateFeed(f.admin, r.id, { requestId: req, ...fix });
+    expect((await prisma.feedName.findMany({ where: { feedId: r.id } })).map((n) => n.name)).toEqual([fix.name]);
+    expect(await auditOf(req)).toMatchObject({ reason: null });
+    await updateFeed(f.admin, r.id, { requestId: rid(), active: false });
+  });
+
+  it("a ZIMS submission marked as rejected", async () => {
+    const d = "2027-10-07";
+    await measure(f.aq1, d, "08:00", cest(`${d}T08:00`));
+    const run = await createZimsExport(f.aq1, { requestId: rid(), from: d, to: d, poolIds: null, purpose: "SUBMISSION" });
+    await withReasons(() => expectCode(setSubmissionState(f.admin, run.runId, { requestId: rid(), state: "REJECTED" }), "REASON_REQUIRED"));
+    const req = rid();
+    await setSubmissionState(f.admin, run.runId, { requestId: req, state: "REJECTED" });
+    expect(await auditOf(req)).toMatchObject({ userId: f.admin.id, reason: null });
+  });
+});
+
