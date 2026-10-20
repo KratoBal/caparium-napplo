@@ -51,10 +51,11 @@ async function main() {
 
   const { unitId, paramId, poolId } = await loadBaseData(prisma);
 
-  // the placeholder reference ranges, only where a parameter has none (an admin's range stays)
+  // the placeholder reference ranges, only where a parameter has no COMMON one (an admin's range stays; a pool's own
+  // range is not the common one every pool starts from, caparium-hibak-3)
   for (const p of PARAMETERS) {
     const parameterId = paramId.get(p.code)!;
-    if (await prisma.referenceRange.findFirst({ where: { parameterId } })) continue;
+    if (await prisma.referenceRange.findFirst({ where: { parameterId, poolId: null } })) continue;
     await prisma.referenceRange.create({
       data: { parameterId, min: p.ref[0], max: p.ref[1], unitId: unitId.get(p.unit)!, validFrom: SINCE, createdById: SYSTEM_USER_ID },
     });
