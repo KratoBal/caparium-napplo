@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AnimalActions, InitialAnimalsLoader, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
+import { AnimalActions, AnimalEditForm, InitialAnimalsLoader, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
 import { PlanForm } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { currentPlans } from "@/lib/feeding-plan";
@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db";
 import { initialAnimalsStatus } from "@/lib/initial-animals";
 import { pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
-import { businessDayOf, localTimeOf } from "@/lib/time";
+import { businessDayOf, localDateTimeOf, localTimeOf } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +31,9 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
   const poolOpts = pools.map((p) => ({ id: p.id, name: pickValid(p.names, now)?.displayName ?? p.code }));
   const selected = animals.find((a) => a.id === sp.allat);
   const events = selected ? await animalEvents(selected.id) : [];
+  // caparium-hibak-5: the edit form needs the animal's species and its valid arrival
+  const editable = selected && level === "ADMIN" ? await prisma.animal.findUnique({ where: { id: selected.id }, select: { speciesId: true } }) : null;
+  const arrival = events.find((e) => e.type === "ARRIVAL" && e.status === "VALID");
   const plans = await currentPlans();
   const canRecord = level === "RECORD" || level === "ADMIN";
   const isAdmin = user.role === "ADMIN";
@@ -86,6 +89,24 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
             </tbody>
           </table>
           {canRecord && selected.alive && <AnimalActions animalId={selected.id} pools={poolOpts} groups={groups} />}
+          {editable && (
+            <AnimalEditForm
+              // per animal only: a save's refresh must not remount the form (its result message stays readable)
+              key={selected.id}
+              a={{
+                id: selected.id,
+                name: selected.name,
+                speciesId: editable.speciesId,
+                sex: selected.sex,
+                arrival: arrival
+                  ? { version: arrival.version, local: localDateTimeOf(arrival.occurredAt), poolId: arrival.toPoolId, groupId: arrival.toGroupId, note: arrival.note ?? "" }
+                  : null,
+              }}
+              species={species.map((s) => ({ id: s.id, name: s.hungarianName ? `${s.scientificName} (${s.hungarianName})` : s.scientificName }))}
+              pools={poolOpts}
+              groups={groups}
+            />
+          )}
           {canRecord && selected.alive && <PlanForm animalId={selected.id} weekdays={plans[selected.id] ?? []} />}
         </div>
       )}

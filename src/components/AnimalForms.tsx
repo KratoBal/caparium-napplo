@@ -347,3 +347,145 @@ export function InitialAnimalsLoader(p: { total: number; loaded: number; switchO
     </div>
   );
 }
+
+export type AnimalEditView = {
+  id: string;
+  name: string;
+  speciesId: string;
+  sex: string;
+  arrival: { version: number; local: string; poolId: string | null; groupId: string | null; note: string } | null;
+};
+
+/**
+ * Editing an animal (caparium-hibak-5): every field given at the arrival. The name as a CHANGE (from now on) or a
+ * CORRECTION (a typo, the past too); species and sex in place; the arrival (time, pool, group, note) corrected as a
+ * past fact. A correction needs a reason. Where the animal is NOW stays a transfer or a group change.
+ */
+export function AnimalEditForm({ a, species, pools, groups }: { a: AnimalEditView; species: Opt[]; pools: Opt[]; groups: Opt[] }) {
+  const init = {
+    name: a.name,
+    nameMode: "correction",
+    speciesId: a.speciesId,
+    sex: a.sex,
+    time: a.arrival?.local ?? "",
+    pool: a.arrival?.poolId ?? "",
+    group: a.arrival?.groupId ?? "",
+    note: a.arrival?.note ?? "",
+    reason: "",
+  };
+  const [f, setF] = useState(init);
+  const { msg, busy, call } = useApi();
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const arrivalChanged = !!a.arrival && (f.time !== init.time || f.pool !== init.pool || f.group !== init.group || f.note !== init.note);
+  const nameChanged = f.name.trim() !== a.name;
+  const changed = nameChanged || f.speciesId !== a.speciesId || f.sex !== a.sex || arrivalChanged;
+  const needsReason = arrivalChanged || (nameChanged && f.nameMode === "correction");
+  function save() {
+    const body: Record<string, unknown> = {};
+    if (nameChanged) {
+      body.name = f.name.trim();
+      body.nameMode = f.nameMode;
+    }
+    if (f.speciesId !== a.speciesId) body.speciesId = f.speciesId;
+    if (f.sex !== a.sex) body.sex = f.sex;
+    if (arrivalChanged && a.arrival) {
+      body.arrival = {
+        expectedVersion: a.arrival.version,
+        ...(f.time !== init.time ? { occurredAtLocal: f.time } : {}),
+        ...(f.pool !== init.pool ? { toPoolId: f.pool } : {}),
+        ...(f.group !== init.group ? { toGroupId: f.group || null } : {}),
+        ...(f.note !== init.note ? { note: f.note.trim() || null } : {}),
+      };
+    }
+    if (f.reason.trim()) body.reason = f.reason.trim();
+    void call(`/api/animals/${a.id}`, "PATCH", body, "Az állat adatai mentve.").then((ok) => ok && setF((x) => ({ ...x, reason: "" })));
+  }
+  return (
+    <div data-testid="animal-edit">
+      <h3 style={{ marginTop: 20 }}>Adatok módosítása</h3>
+      <div className="toolbar">
+        <label className="field">
+          Név
+          <input className="input" aria-label="Név (módosítás)" value={f.name} onChange={set("name")} />
+        </label>
+        {nameChanged && (
+          <label className="field">
+            A névváltozás
+            <select className="input" aria-label="A névváltozás fajtája" value={f.nameMode} onChange={set("nameMode")}>
+              <option value="correction">Helyesbítés (elírás, visszamenőleg)</option>
+              <option value="change">Változás (mostantól)</option>
+            </select>
+          </label>
+        )}
+        <label className="field">
+          Faj
+          <select className="input" aria-label="Faj (módosítás)" value={f.speciesId} onChange={set("speciesId")}>
+            {species.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          Nem
+          <select className="input" aria-label="Nem (módosítás)" value={f.sex} onChange={set("sex")}>
+            <option value="UNKNOWN">ismeretlen</option>
+            <option value="MALE">hím</option>
+            <option value="FEMALE">nőstény</option>
+          </select>
+        </label>
+      </div>
+      {a.arrival && (
+        <div className="toolbar">
+          <label className="field">
+            Érkezés időpontja
+            <input className="input" type="datetime-local" aria-label="Érkezés időpontja (módosítás)" value={f.time} onChange={set("time")} />
+          </label>
+          <label className="field">
+            Érkezési medence
+            <select className="input" aria-label="Érkezési medence (módosítás)" value={f.pool} onChange={set("pool")}>
+              {pools.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            Érkezési csoport
+            <select className="input" aria-label="Érkezési csoport (módosítás)" value={f.group} onChange={set("group")}>
+              <option value="">nincs csoport</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            Megjegyzés
+            <input className="input" aria-label="Érkezési megjegyzés (módosítás)" value={f.note} onChange={set("note")} />
+          </label>
+        </div>
+      )}
+      <p className="hint">
+        Az érkezés adatai és a név helyesbítése a múltra is hatnak, ezért indoklás kell. Ahol az állat most van, azt áthelyezéssel
+        vagy csoportváltással rögzítsd, nem az érkezés javításával.
+      </p>
+      <div className="toolbar">
+        <input
+          className="input"
+          aria-label="Indoklás a módosításhoz"
+          placeholder={needsReason ? "indoklás (kötelező)" : "indoklás"}
+          value={f.reason}
+          onChange={set("reason")}
+        />
+        <button className="btn" type="button" disabled={busy || !changed || (needsReason && f.reason.trim().length < 3)} onClick={save}>
+          Módosítás mentése
+        </button>
+        <Msg msg={msg} />
+      </div>
+    </div>
+  );
+}
