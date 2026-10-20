@@ -72,8 +72,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .toolbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 18px 0; }
 .toolbar .spacer { flex: 1; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--c-muted); font-weight: 600; }
-.input { min-height: var(--touch); border: 1px solid transparent; background: var(--c-field); border-radius: var(--radius-sm); padding: 0 14px; font-size: 16px; color: var(--c-ink); }
+.input { height: var(--touch); border: 1px solid transparent; background: var(--c-field); border-radius: var(--radius-sm); padding: 0 14px; font-size: 16px; color: var(--c-ink); }
 .input:focus { outline: 2px solid var(--c-primary); }
+/* One height for every field, button and dropdown (2026-10-20): WebKit (Safari, the iPad) keeps a native
+   <select> at its own platform height whatever height says, so selects draw their own arrow instead. */
+select.input, .meta-select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23112f3e' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; background-size: 12px 8px; padding-right: 38px; }
 .check { display: inline-flex; align-items: center; gap: 10px; min-height: var(--touch); font-size: 15px; }
 .check input { width: 24px; height: 24px; }
 .banner { border-radius: var(--radius-sm); padding: 12px 18px; font-weight: 600; font-size: 15px; }
@@ -97,7 +100,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .cell-value.empty { color: var(--c-muted); }
 .cell-value.out { background: var(--c-error-soft); color: var(--c-error); }
 .meta-row { display: flex; gap: 6px; margin-top: 6px; max-width: 160px; }
-.meta-select { min-height: 40px; flex: 1; min-width: 0; border-radius: 8px; border: 1px solid var(--c-line); background: var(--c-white); font-size: 14px; padding: 0 4px; }
+.meta-select { height: 40px; flex: 1; min-width: 0; border-radius: 8px; border: 1px solid var(--c-line); background-color: var(--c-white); font-size: 14px; padding: 0 20px 0 6px; background-position: right 6px center; background-size: 10px 7px; }
 .cell-meta { font-size: 12px; color: var(--c-muted); margin-top: 4px; min-height: 16px; }
 .cell-meta .ref { color: var(--c-error); }
 .cell-meta .err { color: var(--c-error); font-weight: 600; }
