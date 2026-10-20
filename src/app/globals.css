@@ -184,3 +184,15 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .helper-answer { margin: 12px 0 0; font-size: 15px; }
 .helper-off { margin-top: 10px; background: none; border: 0; color: var(--c-muted); font-size: 13px; text-decoration: underline; cursor: pointer; }
 .helper-on { position: fixed; right: 16px; bottom: 16px; z-index: 20; background: var(--c-field); border: 0; border-radius: 999px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+
+/* caparium-hibak-5: the home page's illustrated cards, 3-2-3, centred rows; one column on a phone */
+.home-cards { display: flex; flex-direction: column; gap: 28px; margin-top: 28px; }
+.home-row { display: flex; justify-content: center; gap: 28px; }
+.home-card { flex: 0 1 calc((100% - 56px) / 3); display: flex; flex-direction: column; align-items: center; gap: 12px; text-decoration: none; color: var(--c-ink); }
+.home-card img { width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--c-line); display: block; }
+.home-card:hover img, .home-card:focus-visible img { outline: 3px solid var(--c-primary); outline-offset: 2px; }
+.home-caption { display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 18px; line-height: 1.3; }
+@media (max-width: 720px) {
+  .home-row { flex-direction: column; gap: 20px; }
+  .home-card { flex-basis: auto; }
+}
