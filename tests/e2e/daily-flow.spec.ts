@@ -229,7 +229,17 @@ test("settings: an admin changes a reference range and creates a user who can lo
   await nu.getByLabel("Monogram").fill(tablet ? "UT" : "UD");
   await nu.getByLabel("ZIMS-név").fill("New Aquarist");
   await nu.getByLabel("Kezdő jelszó").fill("uj-akvarista-jelszo");
+  // #36 CI, tablet WebKit, both attempts: the server answered that the login id was not "3-40 lowercase" although
+  // the test typed "uj.akvarista.t". Not reproduced locally (two fills without a re-render, and a fill before
+  // hydration on a 30x slowed CPU, both kept the value). So the fields' actual values are asserted here, by name,
+  // before the save: a failure names what WebKit really held.
+  await expect(nu.getByLabel("Új felhasználónév"), "login id as typed").toHaveValue(login1);
+  await expect(nu.getByLabel("Teljes név"), "full name as typed").toHaveValue("Új Akvarista");
+  // ... and what the request carried (the login id only, never the password)
+  const sent = page.waitForRequest((r) => r.url().endsWith("/api/admin/users") && r.method() === "POST");
   await nu.getByRole("button", { name: "Felhasználó létrehozása" }).click();
+  const loginSent = (JSON.parse((await sent).postData() ?? "{}") as { loginId?: string }).loginId;
+  expect(loginSent, "the login id in the request").toBe(login1);
   await expect(nu.getByRole("status")).toHaveText("Felhasználó létrehozva.");
   await expect(page.getByTestId(`user-${login1}`)).toBeVisible();
 
