@@ -119,12 +119,12 @@ export const initialArrivalRequestId = (a: Pick<InitialAnimal, "pool" | "name">)
  * correction, death or release of a list animal does not bring it back. A group of the list is looked up among the
  * list's own arrivals, so an admin's group of the same name is not joined either.
  */
-export async function loadInitialAnimals(prisma: PrismaClient, poolId: Map<string, string>, since: Date): Promise<void> {
+export async function loadInitialAnimals(prisma: PrismaClient, poolId: Map<string, string>, since: Date): Promise<number> {
   const done = new Set(
     (await prisma.lifecycleEvent.findMany({ where: { requestId: { startsWith: "kezdo-allat:" } }, select: { requestId: true } })).map((e) => e.requestId),
   );
   const missing = INITIAL_ANIMALS.filter((a) => !done.has(initialArrivalRequestId(a)));
-  if (missing.length === 0) return;
+  if (missing.length === 0) return 0;
   const businessDay = dayToDate(businessDayOf(since));
   for (const a of missing) {
     await prisma.$transaction(async (tx) => {
@@ -161,4 +161,10 @@ export async function loadInitialAnimals(prisma: PrismaClient, poolId: Map<strin
       await rebuildAnimal(tx, animal.id);
     });
   }
+  return missing.length;
+}
+
+/** How many of the list's animals are in: those whose own arrival exists. */
+export async function initialAnimalsLoaded(prisma: Pick<PrismaClient, "lifecycleEvent">): Promise<number> {
+  return prisma.lifecycleEvent.count({ where: { requestId: { in: INITIAL_ANIMALS.map(initialArrivalRequestId) } } });
 }

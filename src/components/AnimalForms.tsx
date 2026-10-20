@@ -298,3 +298,37 @@ export function FeedActive({ id, active }: { id: string; active: boolean }) {
     </>
   );
 }
+
+/**
+ * The description's starting animals by one admin click (acrobot 33380). The status line says how many are in and,
+ * when the start did not load them, which condition was false, so the next fault is visible, not guessed.
+ */
+export function InitialAnimalsLoader(p: { total: number; loaded: number; switchOn: boolean; markOn: boolean }) {
+  const { msg, busy, call } = useApi();
+  const why =
+    p.loaded >= p.total
+      ? "mind bent van."
+      : p.switchOn || p.markOn
+        ? `az induláskori betöltés feltétele igaz (${p.switchOn ? "CAPARIUM_SEED_SZINTETIKUS=1" : "van szintetikus seed-érkezés"}), mégis hiányzik ${p.total - p.loaded}.`
+        : "induláskor nem töltött be magától, mert a CAPARIUM_SEED_SZINTETIKUS nem 1, és az adatbázisban nincs szintetikus seed-érkezés (seed-arrival-1).";
+  return (
+    <div data-testid="initial-animals">
+      <p className="hint" data-testid="initial-animals-status">
+        A leírás kezdő állatlistájából {p.loaded} / {p.total} állat van bent; {why}
+      </p>
+      {p.loaded < p.total && (
+        <p className="toolbar">
+          <button className="btn" type="button" disabled={busy} onClick={() => void call("/api/admin/initial-animals", "POST", {}, "Kezdő állatlista betöltve.")}>
+            Kezdő állatlista betöltése a leírásból
+          </button>{" "}
+          <Msg msg={msg} />
+        </p>
+      )}
+      <p className="hint">
+        A hiányzókat a medencéjükbe és csoportjukba veszi fel, 2026-01-01-i érkezéssel (a leírás kezdőállapota). Kétszer
+        nem tölt be semmit; egy azonos nevű, kézzel felvett állat másik állatnak számít. Éles rendszerben az állatokat a
+        valódi érkezéssel kell felvenni.
+      </p>
+    </div>
+  );
+}
