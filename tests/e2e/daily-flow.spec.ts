@@ -565,3 +565,31 @@ test("the helper: a quick question about the page, switched off and on", async (
   await expect(page.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId("helper-answer")).toContainText("Teszt só");
 });
+
+// Last in the file: it loads the description's 25 animals into the shared e2e database (acrobot 33380). The tablet
+// run meets 0 of 25 (no switch and no synthetic seed arrival before the basic data on this database) and clicks;
+// the desktop run meets them in.
+test("animals: the starting list's status line, and an admin loads it with one click", async ({ page }) => {
+  await login(page, "teszt.admin");
+  await page.goto("/allatok");
+  const box = page.getByTestId("initial-animals");
+  const status = page.getByTestId("initial-animals-status");
+  const button = box.getByRole("button", { name: "Kezdő állatlista betöltése a leírásból" });
+  if (await button.isVisible()) {
+    // the reason depends on this database's history (the CI fallback seeds the synthetic data after the basic data)
+    await expect(status).toContainText("0 / 25");
+    // the arrival day is the admin's, today by default (acrobot 33395), and a question confirms it
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest" }).format(new Date());
+    await expect(box.getByLabel("Érkezés napja")).toHaveValue(today);
+    page.once("dialog", (d) => {
+      expect(d.message()).toContain(`25 állatot veszel fel a leírás kezdő listájából, ${today} napi érkezéssel`);
+      void d.accept();
+    });
+    await button.click();
+    await expect(box.getByRole("status")).toHaveText("Kezdő állatlista betöltve.");
+  }
+  await expect(status).toContainText("25 / 25 állat van bent; mind bent van.");
+  await expect(button).toHaveCount(0);
+  await expect(page.getByTestId("animals-table")).toContainText("Nokedli");
+  await expect(page.getByTestId("animals-table")).toContainText("Ráják");
+});

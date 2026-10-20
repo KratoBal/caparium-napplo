@@ -298,3 +298,52 @@ export function FeedActive({ id, active }: { id: string; active: boolean }) {
     </>
   );
 }
+
+/**
+ * The description's starting animals by one admin click (acrobot 33380). The status line says how many are in and,
+ * when the start did not load them, which condition was false, so the next fault is visible, not guessed.
+ */
+export function InitialAnimalsLoader(p: { total: number; loaded: number; switchOn: boolean; markOn: boolean }) {
+  const { msg, busy, call } = useApi();
+  // the arrival day is the admin's (acrobot 33395): today by default, never a made-up date
+  const [day, setDay] = useState(() => nowLocal().slice(0, 10));
+  const missing = p.total - p.loaded;
+  const load = () => {
+    if (!day) return;
+    if (!window.confirm(`${missing} állatot veszel fel a leírás kezdő listájából, ${day} napi érkezéssel, a medencéjükbe és csoportjukba. Folytatod?`)) return;
+    void call("/api/admin/initial-animals", "POST", { arrivalDay: day }, "Kezdő állatlista betöltve.");
+  };
+  const why =
+    p.loaded >= p.total
+      ? "mind bent van."
+      : p.switchOn || p.markOn
+        ? `az induláskori betöltés feltétele most igaz (${p.switchOn ? "CAPARIUM_SEED_SZINTETIKUS=1" : "van szintetikus seed-érkezés"}), de a legutóbbi indulás óta nem futott le: a következő induláskor magától betöltődik, a gomb most tölti be.`
+        : "induláskor nem töltött be magától, mert a CAPARIUM_SEED_SZINTETIKUS nem 1, és az adatbázisban nincs szintetikus seed-érkezés (seed-arrival-1).";
+  return (
+    <div data-testid="initial-animals">
+      <p className="hint" data-testid="initial-animals-status">
+        A leírás kezdő állatlistájából {p.loaded} / {p.total} állat van bent; {why}
+      </p>
+      <p className="toolbar">
+        {p.loaded < p.total && (
+          <>
+            <label className="field">
+              Érkezés napja
+              <input className="input" type="date" required aria-label="Érkezés napja" value={day} onChange={(e) => setDay(e.target.value)} />
+            </label>
+            <button className="btn" type="button" disabled={busy || !day} onClick={load}>
+              Kezdő állatlista betöltése a leírásból
+            </button>
+          </>
+        )}{" "}
+        {/* outside the button's condition: after the refresh the button is gone, the result stays readable */}
+        <Msg msg={msg} />
+      </p>
+      <p className="hint">
+        A hiányzókat a medencéjükbe és csoportjukba veszi fel, a megadott napi érkezéssel: azt a napot add meg, amikor az
+        állatok valóban megérkeztek (vagy amikortól a nyilvántartás indul). Kétszer nem tölt be semmit; egy azonos nevű,
+        kézzel felvett állat másik állatnak számít.
+      </p>
+    </div>
+  );
+}

@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { AnimalActions, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
+import { AnimalActions, InitialAnimalsLoader, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
 import { PlanForm } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { currentPlans } from "@/lib/feeding-plan";
 import { withIcon } from "@/lib/icons";
 import { animalEvents, listAnimals, listGroupsWithNames } from "@/lib/animals";
 import { prisma } from "@/lib/db";
+import { initialAnimalsStatus } from "@/lib/initial-animals";
 import { pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
 import { businessDayOf, localTimeOf } from "@/lib/time";
@@ -86,6 +87,13 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
           </table>
           {canRecord && selected.alive && <AnimalActions animalId={selected.id} pools={poolOpts} groups={groups} />}
           {canRecord && selected.alive && <PlanForm animalId={selected.id} weekdays={plans[selected.id] ?? []} />}
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="card">
+          <h2>Kezdő állatlista</h2>
+          <InitialAnimalsLoader {...(await initialAnimalsStatus())} />
         </div>
       )}
 
