@@ -334,8 +334,12 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   await expect(page.getByTestId("list-state")).toHaveText("Lista kész");
 
   await page.getByRole("link", { name: "Evési napló" }).click();
+  // caparium-hibak-5: the log lists who is on today's list; the others are folded away as fasting days
+  await expect(page.getByTestId("eating-table")).toContainText(name);
+  await expect(page.getByTestId("eating-table")).not.toContainText("Teszt Négy");
+  await page.getByTestId("eating-fasting").locator("summary").click();
   // not on the list: a fasting day once the finalized list is closed, shown as pending until then
-  await expect(page.getByTestId("state-Teszt Négy")).toHaveText("koplal, még nem végleges");
+  await expect(page.getByTestId("eating-fasting-table").getByTestId("state-Teszt Négy")).toHaveText("koplal, még nem végleges");
   const eat = page.getByTestId(`eating-${name}`);
   await eat.getByLabel(`${name} evési állapota`).selectOption({ label: "nem evett meg mindent" });
   await eat.getByLabel(`${name} vitamin`).check();
