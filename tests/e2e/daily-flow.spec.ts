@@ -578,6 +578,13 @@ test("animals: the starting list's status line, and an admin loads it with one c
   if (await button.isVisible()) {
     // the reason depends on this database's history (the CI fallback seeds the synthetic data after the basic data)
     await expect(status).toContainText("0 / 25");
+    // the arrival day is the admin's, today by default (acrobot 33395), and a question confirms it
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest" }).format(new Date());
+    await expect(box.getByLabel("Érkezés napja")).toHaveValue(today);
+    page.once("dialog", (d) => {
+      expect(d.message()).toContain(`25 állatot veszel fel a leírás kezdő listájából, ${today} napi érkezéssel`);
+      void d.accept();
+    });
     await button.click();
     await expect(box.getByRole("status")).toHaveText("Kezdő állatlista betöltve.");
   }

@@ -57,24 +57,39 @@ describe("the starting animals by an admin's click", () => {
   });
 
   it("an aquarist is refused, nothing changes", async () => {
-    const e = await loadInitialAnimalsByAdmin(AQUARIST, "gomb-proba-aquarist", db).catch((err: unknown) => err);
+    const e = await loadInitialAnimalsByAdmin(AQUARIST, { requestId: "gomb-proba-aquarist", arrivalDay: "2026-10-20" }, db).catch((err: unknown) => err);
     expect((e as AppError).code).toBe("ADMIN_ROLE_ONLY");
     expect(await db.animal.count()).toBe(0);
   });
 
+  it("the arrival day is the admin's: required, a real day, not in the future (acrobot 33395)", async () => {
+    const now = new Date("2026-10-20T10:00:00.000Z");
+    const code = (arrivalDay: string) =>
+      loadInitialAnimalsByAdmin(ADMIN, { requestId: `gomb-proba-nap-${arrivalDay}`, arrivalDay }, db, now).then(
+        () => null,
+        (err: unknown) => (err as AppError).code,
+      );
+    expect(await code("")).toBe("ARRIVAL_DAY");
+    expect(await code("2026-02-30")).toBe("ARRIVAL_DAY");
+    expect(await code("2026-10-21")).toBe("FUTURE_DAY");
+    expect(await db.animal.count()).toBe(0);
+  });
+
   it("the click loads the list into its pools and groups, with one audit row; a repeat and the next start make nothing twice", async () => {
-    const r = await loadInitialAnimalsByAdmin(ADMIN, "gomb-proba-1", db);
+    const r = await loadInitialAnimalsByAdmin(ADMIN, { requestId: "gomb-proba-1", arrivalDay: "2026-10-20" }, db, new Date("2026-10-20T10:00:00.000Z"));
     expect(r).toMatchObject({ replayed: false, created: INITIAL_ANIMALS.length, loaded: INITIAL_ANIMALS.length });
     const seaflap = await db.animal.findFirstOrThrow({
       where: { names: { some: { name: "SeaFlap" } } },
       include: { placements: { include: { pool: true } }, memberships: { include: { group: { include: { names: true } } } } },
     });
     expect([seaflap.placements[0]!.pool.code, seaflap.memberships[0]!.group.names[0]!.name]).toEqual(["KARANTEN", "Ráják"]);
+    // the arrival is the start of the admin's day, Budapest time (not the made-up 2026-01-01)
+    expect(seaflap.placements[0]!.validFrom.toISOString()).toBe("2026-10-19T22:00:00.000Z");
     const audit = await db.auditEntry.findMany({ where: { entityType: "InitialAnimalList" } });
-    expect(audit.map((a) => a.changes)).toEqual([{ loaded: { before: 0, after: INITIAL_ANIMALS.length } }]);
+    expect(audit.map((a) => a.changes)).toEqual([{ loaded: { before: 0, after: INITIAL_ANIMALS.length }, arrivalDay: { before: null, after: "2026-10-20" } }]);
 
-    expect(await loadInitialAnimalsByAdmin(ADMIN, "gomb-proba-1", db)).toMatchObject({ replayed: true, created: 0 });
-    expect(await loadInitialAnimalsByAdmin(ADMIN, "gomb-proba-2", db)).toMatchObject({ replayed: false, created: 0 });
+    expect(await loadInitialAnimalsByAdmin(ADMIN, { requestId: "gomb-proba-1", arrivalDay: "2026-10-20" }, db)).toMatchObject({ replayed: true, created: 0 });
+    expect(await loadInitialAnimalsByAdmin(ADMIN, { requestId: "gomb-proba-2", arrivalDay: "2026-10-20" }, db)).toMatchObject({ replayed: false, created: 0 });
     execFileSync("npx", ["tsx", "prisma/base-data.ts"], { stdio: "pipe", env });
     expect(await db.animal.count()).toBe(INITIAL_ANIMALS.length);
   }, 60_000);

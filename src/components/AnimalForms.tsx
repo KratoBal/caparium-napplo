@@ -305,6 +305,14 @@ export function FeedActive({ id, active }: { id: string; active: boolean }) {
  */
 export function InitialAnimalsLoader(p: { total: number; loaded: number; switchOn: boolean; markOn: boolean }) {
   const { msg, busy, call } = useApi();
+  // the arrival day is the admin's (acrobot 33395): today by default, never a made-up date
+  const [day, setDay] = useState(() => nowLocal().slice(0, 10));
+  const missing = p.total - p.loaded;
+  const load = () => {
+    if (!day) return;
+    if (!window.confirm(`${missing} állatot veszel fel a leírás kezdő listájából, ${day} napi érkezéssel, a medencéjükbe és csoportjukba. Folytatod?`)) return;
+    void call("/api/admin/initial-animals", "POST", { arrivalDay: day }, "Kezdő állatlista betöltve.");
+  };
   const why =
     p.loaded >= p.total
       ? "mind bent van."
@@ -318,17 +326,23 @@ export function InitialAnimalsLoader(p: { total: number; loaded: number; switchO
       </p>
       <p className="toolbar">
         {p.loaded < p.total && (
-          <button className="btn" type="button" disabled={busy} onClick={() => void call("/api/admin/initial-animals", "POST", {}, "Kezdő állatlista betöltve.")}>
-            Kezdő állatlista betöltése a leírásból
-          </button>
+          <>
+            <label className="field">
+              Érkezés napja
+              <input className="input" type="date" required aria-label="Érkezés napja" value={day} onChange={(e) => setDay(e.target.value)} />
+            </label>
+            <button className="btn" type="button" disabled={busy || !day} onClick={load}>
+              Kezdő állatlista betöltése a leírásból
+            </button>
+          </>
         )}{" "}
         {/* outside the button's condition: after the refresh the button is gone, the result stays readable */}
         <Msg msg={msg} />
       </p>
       <p className="hint">
-        A hiányzókat a medencéjükbe és csoportjukba veszi fel, 2026-01-01-i érkezéssel (a leírás kezdőállapota). Kétszer
-        nem tölt be semmit; egy azonos nevű, kézzel felvett állat másik állatnak számít. Éles rendszerben az állatokat a
-        valódi érkezéssel kell felvenni.
+        A hiányzókat a medencéjükbe és csoportjukba veszi fel, a megadott napi érkezéssel: azt a napot add meg, amikor az
+        állatok valóban megérkeztek (vagy amikortól a nyilvántartás indul). Kétszer nem tölt be semmit; egy azonos nevű,
+        kézzel felvett állat másik állatnak számít.
       </p>
     </div>
   );
