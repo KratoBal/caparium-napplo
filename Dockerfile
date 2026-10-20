@@ -20,6 +20,12 @@ ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 NEXT_TELEMETRY_DISABLED=1
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
+# the static files of public/ (the home page's pictures, caparium-hibak-5): the standalone output does not carry
+# them, and without this line every /kezdolap/*.webp was a 404 on the stage (#34)
+COPY --from=build --chown=node:node /app/public ./public
+# ... and the image proves it: the pictures are where the server serves public/ from. The e2e runs `next start`,
+# which serves public/ from the source tree, so it could not see this; a missing picture stops the build.
+RUN for f in nagymedencek kismedencek heti adagolas kalkulator kivetel egyedi evesi; do test -s "public/kezdolap/$f.webp" || { echo "missing public/kezdolap/$f.webp in the image" >&2; exit 1; }; done
 COPY --from=build --chown=node:node /app/prisma ./prisma
 COPY --from=build --chown=node:node /app/dist ./dist
 # the PDF typeface with its licence (src/lib/pdf-font.ts reads it from the working directory)
