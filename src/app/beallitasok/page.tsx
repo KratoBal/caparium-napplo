@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { NewUserForm, PoolRow, ReferenceRow, UserRow } from "@/components/SettingsForms";
+import { NewUserForm, PoolRow, PoolVolumeForm, ReferenceRow, UserRow } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
@@ -23,7 +23,11 @@ export default async function SettingsPage() {
     prisma.pool.findMany({
       where: { active: true },
       orderBy: { code: "asc" },
-      include: { names: true, memberships: { where: validAt(now), include: { group: true } } },
+      include: {
+        names: true,
+        // a pool's measured parameters are its measurement groups' parameters
+        memberships: { where: validAt(now), include: { group: { include: { parameters: { where: validAt(now), orderBy: { sortOrder: "asc" } } } } } },
+      },
     }),
     // user management is for the admin role only (review of #2), not for a SETTINGS override
     user.role === "ADMIN"
@@ -37,11 +41,57 @@ export default async function SettingsPage() {
   ]);
   return (
     <Shell title="Beállítások" active="settings" user={user}>
-      <div className="card">
-        <h2>Vízparaméterek és referenciaértékek</h2>
+      <div className="card" data-testid="pool-references">
+        <h2>Vízparaméterek és referenciaértékek medencénként</h2>
         <p className="hint">
-          Az összes medencére érvényes referenciaértékek (paraméterenként). A „változás” mostantól érvényes, a korábbi mérések
-          a régi értékhez mérődnek; a „helyesbítés” elírást javít, és a múltra is hat.
+          Minden medence a saját mért paramétereit látja (a mérési csoportjaiból). Ahol a medencének nincs saját értéke, a lenti
+          közös érték érvényes rá; az első mentés a medence saját értékét hozza létre, mostantól. A korábbi mérések a régi
+          értékhez mérődnek; a „helyesbítés” elírást javít, és a múltra is hat.
+        </p>
+        {pools
+          .filter((pool) => pool.memberships.length > 0)
+          .map((pool) => {
+            const poolName = pickValid(pool.names, now)?.displayName ?? pool.code;
+            const measured = new Set(pool.memberships.flatMap((m) => m.group.parameters.map((gp) => gp.parameterId)));
+            return (
+              <details key={pool.id} data-testid={`pool-ref-${poolName}`}>
+                <summary>{poolName}</summary>
+                <div className="table-scroll">
+                  <table className="log-table">
+                    <thead>
+                      <tr><th>Paraméter</th><th>Mértékegység</th><th>Minimum</th><th>Maximum</th><th>Fajta</th><th>Indoklás</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {params
+                        .filter((p) => measured.has(p.id))
+                        .map((p) => {
+                          const own = p.referenceRanges.find((r) => r.poolId === pool.id);
+                          const r = own ?? p.referenceRanges.find((x) => x.poolId === null);
+                          return (
+                            <ReferenceRow
+                              key={`${pool.id}:${p.id}`}
+                              parameterId={p.id}
+                              name={pickValid(p.names, now)?.displayName ?? p.code}
+                              unit={p.unit.symbol}
+                              min={r?.min ? canonicalDecimal(r.min) : null}
+                              max={r?.max ? canonicalDecimal(r.max) : null}
+                              pool={{ id: pool.id, name: poolName, inherited: !own }}
+                            />
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            );
+          })}
+      </div>
+
+      <div className="card">
+        <h2>Közös referenciaértékek</h2>
+        <p className="hint">
+          Az az érték, amiből minden saját érték nélküli medence indul (paraméterenként). A „változás” mostantól érvényes, a
+          korábbi mérések a régi értékhez mérődnek; a „helyesbítés” elírást javít, és a múltra is hat.
         </p>
         <div className="table-scroll">
           <table className="log-table">
@@ -50,7 +100,7 @@ export default async function SettingsPage() {
             </thead>
             <tbody>
               {params.map((p) => {
-                const r = p.referenceRanges[0];
+                const r = p.referenceRanges.find((x) => x.poolId === null);
                 return (
                   <ReferenceRow
                     key={p.id}
@@ -86,6 +136,23 @@ export default async function SettingsPage() {
             </tbody>
           </table>
         </div>
+        <h3 style={{ marginTop: 20 }}>Űrtartalom</h3>
+        <p className="hint">Literben. A vegyszer-kalkulátor ezzel számol, amikor a medencét kiválasztod.</p>
+        <table className="log-table" data-testid="pool-volumes">
+          <tbody>
+            {pools.map((p) => {
+              const name = pickValid(p.names, now)?.displayName ?? p.code;
+              return (
+                <tr key={p.id}>
+                  <td>{name}</td>
+                  <td className="keep">
+                    <PoolVolumeForm poolId={p.id} name={name} volumeLiters={p.volumeLiters ? canonicalDecimal(p.volumeLiters) : null} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       {/* the page is for a SETTINGS admin already; the icon is master data of the same kind */}

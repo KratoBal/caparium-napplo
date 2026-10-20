@@ -447,6 +447,44 @@ test("dosing: a dose in g, the log, the stock kept in kg, printable", async ({ p
   await expect(page.getByTestId("print")).toBeVisible();
 });
 
+test("a pool's own band and volume in the settings; the chemical calculator under dosing works with them", async ({ page }, info) => {
+  // caparium-hibak-3; each project its own pool, so the second run does not meet the first one's values
+  const pool = info.project.name === "tablet" ? "Ragadozós" : "Inkubátor";
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Beállítások" }).click();
+  const volumes = page.getByTestId("pool-volumes");
+  await volumes.getByLabel(`${pool} űrtartalma (liter)`).fill("1000");
+  await volumes.getByRole("row").filter({ hasText: pool }).getByRole("button", { name: "Mentés" }).click();
+  await expect(volumes.getByRole("row").filter({ hasText: pool }).getByRole("status")).toHaveText("Mentve.");
+  await page.waitForLoadState("networkidle");
+
+  const block = page.getByTestId(`pool-ref-${pool}`);
+  await block.locator("summary").click();
+  const ca = block.getByTestId(`ref-${pool}-Ca`);
+  await expect(ca, "a pool without its own range shows the common one").toContainText("a közös érték");
+  await ca.getByLabel(`${pool} Ca minimum`).fill("400");
+  await ca.getByLabel(`${pool} Ca maximum`).fill("440");
+  await ca.getByRole("button", { name: "Mentés" }).click();
+  await expect(ca.getByRole("status")).toHaveText("Mentve.");
+  await page.waitForLoadState("networkidle");
+  await page.reload();
+  await page.getByTestId(`pool-ref-${pool}`).locator("summary").click();
+  await expect(page.getByTestId(`ref-${pool}-Ca`)).not.toContainText("a közös érték");
+
+  await page.getByRole("link", { name: "Vegyszeradagolás" }).click();
+  const calc = page.getByTestId("chemistry-calculator");
+  await calc.getByLabel("Medence", { exact: true }).selectOption({ label: pool });
+  await expect(calc.getByLabel("Térfogat (liter)")).toHaveValue("1000");
+  const card = calc.getByTestId("chem-CA");
+  await expect(card).toContainText("A medence célsávja: 400 … 440 ppm"); // the range is stored in the parameter unit
+  await card.getByLabel("Kalcium emelése: jelenlegi érték").fill("380");
+  await card.getByLabel("Kalcium emelése: célérték").fill("420");
+  // the OS module's own hand-computed case: 1000 l, 380 -> 420 mg/l is about 146,7 g CaCl2·2H2O
+  await expect(calc.getByTestId("chem-CA-result")).toHaveText("Szükséges mennyiség: 146,7 g");
+  await card.getByLabel("Kalcium emelése: célérték").fill("370");
+  await expect(calc.getByTestId("chem-CA-result")).toHaveText("A célérték nem magasabb a jelenlegi értéknél, nincs szükség adagolásra.");
+});
+
 test("reports and the daily water report: the tables, the Excel, a printable page", async ({ page }) => {
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Kimutatások" }).click();

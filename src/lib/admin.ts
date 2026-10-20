@@ -42,12 +42,14 @@ async function replayed(id: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Reference ranges (DN-08: per parameter)
+// Reference ranges (DN-08: per parameter; caparium-hibak-3: and per pool). Without poolId the COMMON range, which
+// every pool without its own starts from; with poolId that pool's own range.
 // ---------------------------------------------------------------------------
 
 export const referenceSchema = z.object({
   requestId,
   parameterId: z.uuid(),
+  poolId: z.uuid().nullable().optional(),
   min: z.string().max(32).nullable(),
   max: z.string().max(32).nullable(),
   mode: z.enum(["change", "correction"]),
@@ -77,7 +79,10 @@ export async function setReference(actor: Actor, input: ReferenceInput, now = ne
   return prisma.$transaction(async (tx) => {
     const param = await tx.parameter.findUnique({ where: { id: input.parameterId } });
     if (!param) throw new AppError(404, "NOT_FOUND", "A paraméter nem található.");
-    const current = await tx.referenceRange.findFirst({ where: { parameterId: param.id, ...validAt(now) } });
+    const poolId = input.poolId ?? null;
+    if (poolId && !(await tx.pool.findUnique({ where: { id: poolId } }))) throw new AppError(404, "POOL_NOT_FOUND", "A medence nem található.");
+    // a pool's correction fixes its OWN range: the common one is corrected without poolId
+    const current = await tx.referenceRange.findFirst({ where: { parameterId: param.id, poolId, ...validAt(now) } });
     const before = current ? { min: current.min?.toString() ?? null, max: current.max?.toString() ?? null } : null;
     if (input.mode === "correction") {
       if (!current) throw new AppError(409, "NO_CURRENT", "Nincs érvényes referencia, amit helyesbíteni lehetne.");
@@ -87,7 +92,7 @@ export async function setReference(actor: Actor, input: ReferenceInput, now = ne
         action: "MASTER_CORRECTION",
         entityType: "ReferenceRange",
         entityId: current.id,
-        changes: diffFields(before, { min, max }),
+        changes: diffFields(before ? { poolId, ...before } : null, { poolId, min, max }),
         reason: input.reason,
         requestId: input.requestId,
       });
@@ -95,18 +100,56 @@ export async function setReference(actor: Actor, input: ReferenceInput, now = ne
     }
     if (current) await tx.referenceRange.update({ where: { id: current.id }, data: { validTo: now } });
     const created = await tx.referenceRange.create({
-      data: { parameterId: param.id, min, max, unitId: param.unitId, validFrom: now, createdById: actor.id },
+      data: { parameterId: param.id, poolId, min, max, unitId: param.unitId, validFrom: now, createdById: actor.id },
     });
     await writeAudit(tx, {
       userId: actor.id,
       action: "MASTER_CHANGE",
       entityType: "ReferenceRange",
       entityId: created.id,
-      changes: diffFields(before, { min, max }),
+      changes: diffFields(before ? { poolId, ...before } : null, { poolId, min, max }),
       reason: input.reason ?? null,
       requestId: input.requestId,
     });
     return { replayed: false, id: created.id };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Pool volume (caparium-hibak-3, Balázs 2026-10-20 08:44 UTC): litres, the chemical calculator works with it.
+// A plain value, not versioned: the calculator always uses today's, and nothing past is judged by it.
+// ---------------------------------------------------------------------------
+
+export const poolVolumeSchema = z.object({
+  requestId,
+  poolId: z.uuid(),
+  volumeLiters: z.string().max(32).nullable(),
+});
+
+export async function setPoolVolume(actor: Actor, input: z.infer<typeof poolVolumeSchema>) {
+  await requireSettingsAdmin(actor);
+  const raw = input.volumeLiters?.trim() ?? "";
+  const volume = raw === "" ? null : parseDecimalInput(raw);
+  if (raw !== "" && (volume === null || compareDecimal(volume, "0") <= 0)) {
+    throw new AppError(422, "INVALID_VOLUME", "Az űrtartalom pozitív szám legyen (liter).");
+  }
+  if (await replayed(input.requestId)) return { replayed: true };
+  return prisma.$transaction(async (tx) => {
+    const pool = await tx.pool.findUnique({ where: { id: input.poolId } });
+    if (!pool) throw new AppError(404, "POOL_NOT_FOUND", "A medence nem található.");
+    const before = pool.volumeLiters?.toString() ?? null;
+    const same = before === null ? volume === null : volume !== null && compareDecimal(before, volume) === 0;
+    if (same) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
+    await tx.pool.update({ where: { id: pool.id }, data: { volumeLiters: volume } });
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: "MASTER_CHANGE",
+      entityType: "Pool",
+      entityId: pool.id,
+      changes: { volumeLiters: { before, after: volume } },
+      requestId: input.requestId,
+    });
+    return { replayed: false };
   });
 }
 

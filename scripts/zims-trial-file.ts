@@ -37,7 +37,8 @@ async function main() {
       const name = pickValid(p.zimsNames, at)?.zimsName;
       const unit = p.unit.zimsUnitNames.find((u) => u.parameterId === null && u.validFrom <= at && (u.validTo === null || u.validTo > at))?.zimsUnit;
       if (!name || !unit) throw new Error(`missing ZIMS mapping for ${p.code}`);
-      const r = pickValid(p.referenceRanges, at);
+      // the pool's own range, else the common one (caparium-hibak-3): an unfiltered pick could be another pool's
+      const r = pickValid(p.referenceRanges.filter((x) => x.poolId === pool.id), at) ?? pickValid(p.referenceRanges.filter((x) => x.poolId === null), at);
       // the middle of the reference range, or the upper bound's half: a plausible, in-range value
       const min = r?.min ? Number(r.min) : 0;
       const max = r?.max ? Number(r.max) : min * 2 || 1;
