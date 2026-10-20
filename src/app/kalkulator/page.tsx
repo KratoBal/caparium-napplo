@@ -92,7 +92,7 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
                 <tr key={w.id} className={w.status === "VALID" ? undefined : "invalid"}>
                   <td>{dateToDay(w.measuredOn)}</td>
                   <td>{num(w.weightKg.toString())} kg</td>
-                  <td className="keep">{w.status === "VALID" ? "érvényes" : `érvénytelenítve: ${w.invalidationReason ?? ""}`}</td>
+                  <td className="keep">{w.status === "VALID" ? "érvényes" : `érvénytelenítve${w.invalidationReason ? `: ${w.invalidationReason}` : ""}`}</td>
                   <td className="keep">{canRecord && w.status === "VALID" && <InvalidateButton url={`/api/body-weights/${w.id}/invalidate`} version={w.version} />}</td>
                 </tr>
               ))}

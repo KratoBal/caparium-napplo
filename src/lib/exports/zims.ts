@@ -11,6 +11,7 @@ import { prisma, SYSTEM_USER_ID } from "../db";
 import { canonicalDecimal } from "../decimal";
 import { AppError } from "../errors";
 import { moduleLevel, pickValid } from "../master";
+import { requireReason } from "../reasons";
 import type { Actor } from "../measurements";
 import { businessDayOf, dayToDate, isValidDay, resolveLocalDateTime, wallClock } from "../time";
 
@@ -245,7 +246,7 @@ export const submissionSchema = z.object({
 /** Records that a submission run was uploaded into ZIMS (or refused there). Admin only. */
 export async function setSubmissionState(actor: Actor, runId: string, input: z.infer<typeof submissionSchema>, now = new Date()) {
   await requireLevel(actor, true);
-  if (input.state === "REJECTED" && !input.reason) throw new AppError(422, "REASON_REQUIRED", "Az elutasításhoz indoklás kell.");
+  await requireReason(prisma, input.state === "REJECTED", input.reason, "Az elutasításhoz indoklás kell.");
   if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId, entityId: runId } })) return { replayed: true };
   return prisma.$transaction(async (tx) => {
     const run = await tx.exportRun.findUnique({ where: { id: runId } });

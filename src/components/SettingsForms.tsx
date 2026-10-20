@@ -4,6 +4,7 @@
 // the old value) or a CORRECTION (a typo, acts on the past too, reason required) — adatmodell K3.
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useReasonsOn } from "./ReasonSwitch";
 
 function requestId(): string {
   const b = new Uint8Array(16);
@@ -68,6 +69,7 @@ export function ReferenceRow(p: {
   const [mode, setMode] = useState<"change" | "correction">("change");
   const [reason, setReason] = useState("");
   const { msg, busy, save } = useSave();
+  const reasonsOn = useReasonsOn();
   const label = p.pool ? `${p.pool.name} ${p.name}` : p.name;
   // an inherited range has no own version to correct: the first save of a pool is always a change
   const inherited = p.pool?.inherited ?? false;
@@ -81,7 +83,7 @@ export function ReferenceRow(p: {
       <td><input className="input small" aria-label={`${label} minimum`} inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} /></td>
       <td><input className="input small" aria-label={`${label} maximum`} inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} /></td>
       <td>{inherited ? <span className="hint">Változás (mostantól)</span> : <ModeSelect id={label} value={mode} onChange={setMode} />}</td>
-      <td><input className="input" aria-label={`${label} indoklás`} placeholder={mode === "correction" && !inherited ? "indoklás (kötelező)" : "indoklás"} value={reason} onChange={(e) => setReason(e.target.value)} /></td>
+      {reasonsOn && <td><input className="input" aria-label={`${label} indoklás`} placeholder={mode === "correction" && !inherited ? "indoklás (kötelező)" : "indoklás"} value={reason} onChange={(e) => setReason(e.target.value)} /></td>}
       <td>
         <button className="btn" type="button" disabled={busy} onClick={() => void save("/api/admin/reference", "POST", { parameterId: p.parameterId, ...(p.pool ? { poolId: p.pool.id } : {}), min: min || null, max: max || null, mode: inherited ? "change" : mode, ...(reason.trim() ? { reason: reason.trim() } : {}) })}>
           Mentés
@@ -113,12 +115,13 @@ export function PoolRow(p: { poolId: string; name: string; groups: string }) {
   const [mode, setMode] = useState<"change" | "correction">("change");
   const [reason, setReason] = useState("");
   const { msg, busy, save } = useSave();
+  const reasonsOn = useReasonsOn();
   return (
     <tr data-testid={`pool-${p.name}`}>
       <td><input className="input" aria-label={`${p.name} új neve`} value={name} onChange={(e) => setName(e.target.value)} /></td>
       <td className="hint">{p.groups || "nincs vízmérés"}</td>
       <td><ModeSelect id={p.name} value={mode} onChange={setMode} /></td>
-      <td><input className="input" aria-label={`${p.name} indoklás`} placeholder={mode === "correction" ? "indoklás (kötelező)" : "indoklás"} value={reason} onChange={(e) => setReason(e.target.value)} /></td>
+      {reasonsOn && <td><input className="input" aria-label={`${p.name} indoklás`} placeholder={mode === "correction" ? "indoklás (kötelező)" : "indoklás"} value={reason} onChange={(e) => setReason(e.target.value)} /></td>}
       <td>
         <button className="btn" type="button" disabled={busy || name.trim() === p.name} onClick={() => void save("/api/admin/pool-name", "POST", { poolId: p.poolId, name: name.trim(), mode, ...(reason.trim() ? { reason: reason.trim() } : {}) })}>
           Mentés

@@ -6,6 +6,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { EAT_LABEL } from "@/lib/eating-labels";
+import { askReason, useReasonsOn } from "./ReasonSwitch";
 
 function requestId(): string {
   const b = new Uint8Array(16);
@@ -271,6 +272,7 @@ export function ItemForm({
 
 export function InvalidateButton({ url, version, label = "Érvénytelenítés" }: { url: string; version: number; label?: string }) {
   const { msg, busy, run } = useSend();
+  const reasonsOn = useReasonsOn();
   return (
     <span>
       <button
@@ -278,8 +280,8 @@ export function InvalidateButton({ url, version, label = "Érvénytelenítés" }
         type="button"
         disabled={busy}
         onClick={() => {
-          const reason = window.prompt("Az érvénytelenítés oka:");
-          if (reason && reason.trim().length >= 3) void run(url, { expectedVersion: version, reason: reason.trim() }, "Érvénytelenítve.");
+          const asked = askReason(reasonsOn, "Az érvénytelenítés oka:", "Érvényteleníted ezt a tételt?");
+          if (asked) void run(url, { expectedVersion: version, ...asked }, "Érvénytelenítve.");
         }}
       >
         {label}

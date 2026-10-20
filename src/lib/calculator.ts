@@ -13,6 +13,7 @@ import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError } from "./errors";
 import { dayBounds } from "./feeding";
 import { moduleLevel } from "./master";
+import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { canCreate, canModify, effectiveNow } from "./permissions";
 import { businessDayOf, dateToDay, dayToDate } from "./time";
@@ -49,7 +50,7 @@ export async function recordBodyWeight(actor: Actor, raw: z.input<typeof bodyWei
   const level = await moduleLevel(prisma, actor.id, actor.role, "FEEDING");
   const d = canCreate(level, { day, today, closed: false });
   if (d.kind === "DENY") throw new AppError(403, d.code, d.message);
-  if (d.reasonRequired && !input.reason) throw new AppError(422, "REASON_REQUIRED", "Korábbi napra rögzített méréshez indoklás kell.");
+  await requireReason(prisma, d.reasonRequired, input.reason, "Korábbi napra rögzített méréshez indoklás kell.");
   const w = parseDecimalInput(input.weightKg);
   if (w === null || compareDecimal(w, "0") <= 0) throw new AppError(422, "INVALID_VALUE", "A testtömeg pozitív szám legyen (kg).");
   return prisma.$transaction(async (tx) => {
@@ -71,7 +72,7 @@ export async function recordBodyWeight(actor: Actor, raw: z.input<typeof bodyWei
   });
 }
 
-export const bodyWeightInvalidateSchema = z.object({ requestId, expectedVersion: z.number().int().min(1), reason });
+export const bodyWeightInvalidateSchema = z.object({ requestId, expectedVersion: z.number().int().min(1), reason: reason.optional() });
 
 export async function invalidateBodyWeight(actor: Actor, id: string, raw: z.input<typeof bodyWeightInvalidateSchema>, serverNow = new Date()) {
   const input = bodyWeightInvalidateSchema.parse(raw);
@@ -82,6 +83,7 @@ export async function invalidateBodyWeight(actor: Actor, id: string, raw: z.inpu
     if (!cur) throw new AppError(404, "NOT_FOUND", "A mérés nem található.");
     const d = canModify(level, { day: dateToDay(cur.measuredOn), today: businessDayOf(serverNow), closed: false, isOwn: cur.createdById === actor.id });
     if (d.kind === "DENY") throw new AppError(403, d.code, d.message);
+    await requireReason(tx, true, input.reason, "Az érvénytelenítéshez indoklás kell.");
     const res = await tx.bodyWeight.updateMany({
       where: { id, version: input.expectedVersion, status: "VALID" },
       data: { status: "INVALIDATED", invalidationReason: input.reason, version: { increment: 1 }, updatedById: actor.id, updatedAt: serverNow },

@@ -7,7 +7,7 @@ import { plannedClose, recloseDay, reopenDay, runJournalJob } from "@/lib/journa
 import { createMeasurement } from "@/lib/measurements";
 import { decidePending } from "@/lib/pending";
 import { addDays, dayToDate } from "@/lib/time";
-import { cest, fixtures, rid } from "./fixtures";
+import { cest, fixtures, rid, withReasons } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
 beforeAll(async () => {
@@ -89,7 +89,7 @@ describe("reopen and close again (ÁLT-16)", () => {
     await runJournalJob(cest("2026-05-09T00:05"));
     const input = { requestId: rid(), groupId: f.group("NAPI_NAGY"), day: "2026-05-08", reason: "papírról pótolt mérések" };
     await expectCode(reopenDay(f.aq1, input), "ADMIN_ONLY");
-    await expectCode(reopenDay(f.admin, { ...input, reason: undefined }), "REASON_REQUIRED");
+    await withReasons(() => expectCode(reopenDay(f.admin, { ...input, reason: undefined }), "REASON_REQUIRED"));
     await reopenDay(f.admin, input);
     expect((await journal("2026-05-08")).state).toBe("OPEN");
     await runJournalJob(cest("2026-05-10T00:05"));
@@ -122,7 +122,7 @@ describe("pending saves (K9)", () => {
     await expectCode(decidePending(f.aq1, a, { requestId: rid(), decision: "approve" }), "ADMIN_ONLY");
     await decidePending(f.admin, a, { requestId: rid(), decision: "approve" });
     expect((await prisma.measurement.findUniqueOrThrow({ where: { id: a } })).status).toBe("VALID");
-    await expectCode(decidePending(f.admin, b, { requestId: rid(), decision: "reject" }), "REASON_REQUIRED");
+    await withReasons(() => expectCode(decidePending(f.admin, b, { requestId: rid(), decision: "reject" }), "REASON_REQUIRED"));
     await decidePending(f.admin, b, { requestId: rid(), decision: "reject", reason: "a mérést nem így végezték" });
     const rb = await prisma.measurement.findUniqueOrThrow({ where: { id: b } });
     expect(rb).toMatchObject({ status: "INVALIDATED", invalidationReason: "a mérést nem így végezték" });

@@ -6,6 +6,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useReasonsOn } from "./ReasonSwitch";
 
 type Props = {
   measurement: {
@@ -43,6 +44,9 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
   const [invalidReason, setInvalidReason] = useState("");
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  // the reason switch (src/lib/reasons.ts): off, no reason field and no reason asked
+  const reasonsOn = useReasonsOn();
+  const needReason = reasonsOn && reasonRequired;
 
   async function call(url: string, method: string, body: Record<string, unknown>) {
     setBusy(true);
@@ -91,12 +95,12 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
   }
 
   function invalidate() {
-    if (invalidReason.trim().length < 3) {
+    if (reasonsOn && invalidReason.trim().length < 3) {
       setMessage({ kind: "error", text: "Az érvénytelenítéshez indoklás kell." });
       return;
     }
     if (!window.confirm("Biztosan érvényteleníted ezt a mérést? A bejegyzés megmarad, áthúzva.")) return;
-    void call(`/api/measurements/${m.id}/invalidate`, "POST", { reason: invalidReason.trim() });
+    void call(`/api/measurements/${m.id}/invalidate`, "POST", reasonsOn ? { reason: invalidReason.trim() } : {});
   }
 
   return (
@@ -154,20 +158,24 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
               </select>
             </>
           )}
-          <label className="form-label" htmlFor="corr-reason">
-            Indoklás{reasonRequired ? " (kötelező)" : ""}
-          </label>
-          <input
-            id="corr-reason"
-            className="input"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder={reasonRequired ? "pl. Mérőműszer adatának helyesbítése" : "nem kötelező"}
-          />
+          {reasonsOn && (
+            <>
+              <label className="form-label" htmlFor="corr-reason">
+                Indoklás{needReason ? " (kötelező)" : ""}
+              </label>
+              <input
+                id="corr-reason"
+                className="input"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder={needReason ? "pl. Mérőműszer adatának helyesbítése" : "nem kötelező"}
+              />
+            </>
+          )}
         </div>
         <div className="toolbar">
           <span className="spacer" />
-          <button className="btn" type="button" onClick={save} disabled={busy || (reasonRequired && reason.trim().length < 3)}>
+          <button className="btn" type="button" onClick={save} disabled={busy || (needReason && reason.trim().length < 3)}>
             Változtatás naplózása
           </button>
         </div>
@@ -179,22 +187,24 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
       </div>
       <div className="card">
         <h2>Érvénytelenítés</h2>
-        <p className="hint">Törlés nincs: az érvénytelenített mérés a naplóban áthúzva megmarad, okkal együtt.</p>
+        <p className="hint">Törlés nincs: az érvénytelenített mérés a naplóban áthúzva megmarad{reasonsOn ? ", okkal együtt" : ""}.</p>
         <div className="toolbar">
-          <input
-            className="input"
-            style={{ flex: 1, minWidth: 220 }}
-            aria-label="Az érvénytelenítés oka"
-            placeholder="Az érvénytelenítés oka (kötelező)"
-            value={invalidReason}
-            onChange={(e) => setInvalidReason(e.target.value)}
-          />
+          {reasonsOn && (
+            <input
+              className="input"
+              style={{ flex: 1, minWidth: 220 }}
+              aria-label="Az érvénytelenítés oka"
+              placeholder="Az érvénytelenítés oka (kötelező)"
+              value={invalidReason}
+              onChange={(e) => setInvalidReason(e.target.value)}
+            />
+          )}
           <button className="btn btn-dark" type="button" onClick={invalidate} disabled={busy}>
             Érvénytelenítés
           </button>
         </div>
       </div>
-      <div className="banner banner-ok">Audit: régi érték • új érték • módosító • időpont • indoklás</div>
+      <div className="banner banner-ok">Audit: régi érték • új érték • módosító • időpont{reasonsOn ? " • indoklás" : ""}</div>
     </>
   );
 }

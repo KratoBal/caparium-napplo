@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { askReason, useReasonsOn } from "./ReasonSwitch";
 
 function requestId(): string {
   const b = new Uint8Array(16);
@@ -61,12 +62,13 @@ export function ZimsCreate({ from, to, poolIds }: { from: string; to: string; po
 export function SubmissionButtons({ runId }: { runId: string }) {
   const router = useRouter();
   const [err, setErr] = useState<string | null>(null);
+  const reasonsOn = useReasonsOn();
   async function mark(state: "SUBMITTED" | "REJECTED") {
     let reason: string | undefined;
     if (state === "REJECTED") {
-      const r = window.prompt("Miért utasította el a ZIMS?");
-      if (!r || r.trim().length < 3) return;
-      reason = r.trim();
+      const asked = askReason(reasonsOn, "Miért utasította el a ZIMS?", "Elutasítottként jelölöd a ZIMS-beküldést?");
+      if (!asked) return;
+      reason = asked.reason;
     }
     const res = await fetch(`/api/exports/runs/${runId}/state`, {
       method: "POST",

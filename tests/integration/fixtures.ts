@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { prisma } from "@/lib/db";
+import { prisma, SYSTEM_USER_ID } from "@/lib/db";
 
 /** The table owner: for fixture changes the application role may not make (DELETE). */
 export const ownerPrisma = new PrismaClient({ datasources: { db: { url: process.env.OWNER_DATABASE_URL } } });
@@ -39,4 +39,20 @@ export function rid(prefix = "req"): string {
 /** Budapest local "YYYY-MM-DDTHH:mm" in summer time -> instant */
 export function cest(local: string): Date {
   return new Date(`${local}:00+02:00`);
+}
+
+/**
+ * The reason switch (src/lib/reasons.ts) on while `fn` runs: the reason rules as they were before
+ * caparium-indoklas-ki. The row is the owner's, a minute in the past (the setting is read at the real now), and is
+ * removed afterwards, so the other files run with the default (off).
+ */
+export async function withReasons<T>(fn: () => Promise<T>): Promise<T> {
+  const row = await ownerPrisma.setting.create({
+    data: { key: "reason_required", value: "true", validFrom: new Date(Date.now() - 60_000), changedById: SYSTEM_USER_ID },
+  });
+  try {
+    return await fn();
+  } finally {
+    await ownerPrisma.setting.delete({ where: { id: row.id } });
+  }
 }

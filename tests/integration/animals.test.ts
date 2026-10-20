@@ -5,7 +5,7 @@ import { createLifecycleEvent, editAnimal, invalidateLifecycleEvent, listAnimals
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { createFeed, updateFeed } from "@/lib/feeds";
-import { fixtures, rid } from "./fixtures";
+import { fixtures, rid, withReasons } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
 let speciesId: string;
@@ -57,9 +57,11 @@ describe("lifecycle (DAT-05, T-09)", () => {
       createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("NAGY"), occurredAtLocal: "2026-02-03T20:00" }, at("2026-02-04", "08:00")),
       "NOT_TODAY",
     );
-    await expectCode(
-      createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("NAGY"), occurredAtLocal: "2026-02-03T20:00" }, at("2026-02-04", "08:00")),
-      "REASON_REQUIRED",
+    await withReasons(() =>
+      expectCode(
+        createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("NAGY"), occurredAtLocal: "2026-02-03T20:00" }, at("2026-02-04", "08:00")),
+        "REASON_REQUIRED",
+      ),
     );
   });
 
@@ -160,7 +162,7 @@ describe("editing an animal (caparium-hibak-5)", () => {
 
   it("the name: a correction (reason needed) fixes the current one; a change opens a new one from now", async () => {
     const id = await arrive("Elgépelt", "2026-02-20");
-    await expectCode(editAnimal(f.admin, id, { requestId: rid(), name: "Elgépelt2", nameMode: "correction" }, now), "REASON_REQUIRED");
+    await withReasons(() => expectCode(editAnimal(f.admin, id, { requestId: rid(), name: "Elgépelt2", nameMode: "correction" }, now), "REASON_REQUIRED"));
     await editAnimal(f.admin, id, { requestId: rid(), name: "Javított", nameMode: "correction", reason: "elírás a felvételkor" }, now);
     expect((await prisma.animalName.findMany({ where: { animalId: id } })).map((n) => [n.name, n.validTo])).toEqual([["Javított", null]]);
     await editAnimal(f.admin, id, { requestId: rid(), name: "Új név", nameMode: "change" }, now);
@@ -171,7 +173,7 @@ describe("editing an animal (caparium-hibak-5)", () => {
   it("the arrival: pool, group, time and note corrected as a past fact; the placement follows; a reason is needed", async () => {
     const id = await arrive("Rossz medence", "2026-02-20");
     const arr = await arrivalOf(id);
-    await expectCode(editAnimal(f.admin, id, { requestId: rid(), arrival: { expectedVersion: arr.version, toPoolId: f.pool("KIS") } }, now), "REASON_REQUIRED");
+    await withReasons(() => expectCode(editAnimal(f.admin, id, { requestId: rid(), arrival: { expectedVersion: arr.version, toPoolId: f.pool("KIS") } }, now), "REASON_REQUIRED"));
     const group = await prisma.animalGroup.create({ data: { names: { create: { name: "Szerkesztési csoport", validFrom: at("2026-01-01", "00:00") } } } });
     await editAnimal(
       f.admin,

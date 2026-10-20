@@ -12,6 +12,7 @@ import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError } from "./errors";
 import { ensureJournalDay, moduleLevel, monogramResolver, pickValid } from "./master";
+import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { closedAt } from "./measurements";
 import { canCreate, canModify, effectiveNow } from "./permissions";
@@ -74,11 +75,11 @@ export async function saveDosing(actor: Actor, raw: z.input<typeof dosingSchema>
       if (prior.version !== input.expectedVersion) throw new AppError(409, "VERSION_CONFLICT", "Az adagolás időközben megváltozott.");
       const d = canModify(level, { day: dateToDay(prior.businessDay), today, closed, isOwn: prior.createdById === actor.id, targetDay: day });
       if (d.kind === "DENY") throw new AppError(403, d.code, d.message);
-      if (d.reasonRequired && !input.reason) throw new AppError(422, "REASON_REQUIRED", "Korábbi vagy lezárt nap módosításához indoklás kell.");
+      await requireReason(tx, d.reasonRequired, input.reason, "Korábbi vagy lezárt nap módosításához indoklás kell.");
     } else {
       const d = canCreate(level, { day, today, closed });
       if (d.kind === "DENY") throw new AppError(403, d.code, d.message);
-      if (d.reasonRequired && !input.reason) throw new AppError(422, "REASON_REQUIRED", "Korábbi vagy lezárt nap módosításához indoklás kell.");
+      await requireReason(tx, d.reasonRequired, input.reason, "Korábbi vagy lezárt nap módosításához indoklás kell.");
     }
     const pool = await tx.pool.findUnique({ where: { id: input.poolId } });
     if (!pool || !pool.active) throw new AppError(422, "POOL_NOT_FOUND", "A medence nem található.");
@@ -133,7 +134,7 @@ export async function saveDosing(actor: Actor, raw: z.input<typeof dosingSchema>
   });
 }
 
-export const dosingInvalidateSchema = z.object({ requestId, expectedVersion: z.number().int().min(1), reason });
+export const dosingInvalidateSchema = z.object({ requestId, expectedVersion: z.number().int().min(1), reason: reason.optional() });
 
 /** Invalidates a dosing and its movement together (R-16). */
 export async function invalidateDosing(actor: Actor, id: string, raw: z.input<typeof dosingInvalidateSchema>, serverNow = new Date()) {
@@ -146,6 +147,7 @@ export async function invalidateDosing(actor: Actor, id: string, raw: z.input<ty
     const journal = await ensureJournalDay(tx, "DOSING", null, dateToDay(cur.businessDay));
     const d = canModify(level, { day: dateToDay(cur.businessDay), today: businessDayOf(serverNow), closed: closedAt(journal, serverNow), isOwn: cur.createdById === actor.id });
     if (d.kind === "DENY") throw new AppError(403, d.code, d.message);
+    await requireReason(tx, true, input.reason, "Az érvénytelenítéshez indoklás kell.");
     const res = await tx.dosing.updateMany({
       where: { id, version: input.expectedVersion, status: "VALID" },
       data: { status: "INVALIDATED", invalidationReason: input.reason, version: { increment: 1 }, updatedById: actor.id, updatedAt: serverNow },

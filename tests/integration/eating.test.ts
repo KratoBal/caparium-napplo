@@ -9,7 +9,7 @@ import { AppError } from "@/lib/errors";
 import { finalizeList, recomputeFasting, setSelection } from "@/lib/feeding";
 import { recloseDay, reopenDay } from "@/lib/journal";
 import { dayToDate } from "@/lib/time";
-import { fixtures, rid } from "./fixtures";
+import { fixtures, rid, withReasons } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
 const a: Record<string, string> = {};
@@ -118,7 +118,7 @@ describe("a closed day changes later (T-01/6, R-1, R-2)", () => {
     await finalize(d);
     await close(d);
     await expectCode(select(d, ["Teszt Kettő"], true, f.aq1, next), "NOT_TODAY");
-    await expectCode(select(d, ["Teszt Kettő"], true, f.admin, next), "REASON_REQUIRED");
+    await withReasons(() => expectCode(select(d, ["Teszt Kettő"], true, f.admin, next), "REASON_REQUIRED"));
     const req = rid();
     await setSelection(f.admin, { requestId: req, day: d, animalIds: [a["Teszt Kettő"]], selected: true, reason: "utólag derült ki" }, next);
     expect(await fasting(d, "Teszt Kettő")).toEqual([]);

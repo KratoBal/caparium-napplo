@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { invalidateBodyWeight, lastBodyWeight, recordBodyWeight, referencesOn, runCalculator } from "@/lib/calculator";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { fixtures, rid } from "./fixtures";
+import { fixtures, rid, withReasons } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
 const a: Record<string, string> = {};
@@ -29,7 +29,7 @@ describe("body weight (JAV-06)", () => {
     const id = a["Teszt Három"];
     await recordBodyWeight(f.aq1, { requestId: rid(), animalId: id, weightKg: "48,5" }, at("2026-08-03", "09:00"));
     await expectCode(recordBodyWeight(f.aq1, { requestId: rid(), animalId: id, measuredOn: "2026-08-01", weightKg: "47" }, at("2026-08-03", "09:05")), "NOT_TODAY");
-    await expectCode(recordBodyWeight(f.admin, { requestId: rid(), animalId: id, measuredOn: "2026-08-01", weightKg: "47" }, at("2026-08-03", "09:05")), "REASON_REQUIRED");
+    await withReasons(() => expectCode(recordBodyWeight(f.admin, { requestId: rid(), animalId: id, measuredOn: "2026-08-01", weightKg: "47" }, at("2026-08-03", "09:05")), "REASON_REQUIRED"));
     await recordBodyWeight(f.admin, { requestId: rid(), animalId: id, measuredOn: "2026-08-01", weightKg: "47", reason: "papírról" }, at("2026-08-03", "09:06"));
     const later = (await recordBodyWeight(f.aq1, { requestId: rid(), animalId: id, weightKg: "50" }, at("2026-08-05", "09:00"))) as { id: string };
     expect(await lastBodyWeight(id)).toEqual({ day: "2026-08-05", weightKg: "50" });

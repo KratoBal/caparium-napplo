@@ -5,6 +5,7 @@ import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { canonicalDecimal } from "@/lib/decimal";
 import { getSetting, moduleLevel, pickValid, validAt } from "@/lib/master";
+import { reasonsRequired } from "@/lib/reasons";
 import { requireUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,7 @@ export default async function SettingsPage() {
   const user = await requireUser();
   if ((await moduleLevel(prisma, user.id, user.role, "SETTINGS")) !== "ADMIN") redirect("/nincs-jogosultsag");
   const now = new Date();
+  const reasons = await reasonsRequired(prisma);
   const [params, pools, users, feedTypes] = await Promise.all([
     prisma.parameter.findMany({
       where: { active: true },
@@ -59,7 +61,7 @@ export default async function SettingsPage() {
                 <div className="table-scroll">
                   <table className="log-table">
                     <thead>
-                      <tr><th>Paraméter</th><th>Mértékegység</th><th>Minimum</th><th>Maximum</th><th>Fajta</th><th>Indoklás</th><th></th></tr>
+                      <tr><th>Paraméter</th><th>Mértékegység</th><th>Minimum</th><th>Maximum</th><th>Fajta</th>{reasons && <th>Indoklás</th>}<th></th></tr>
                     </thead>
                     <tbody>
                       {params
@@ -96,7 +98,7 @@ export default async function SettingsPage() {
         <div className="table-scroll">
           <table className="log-table">
             <thead>
-              <tr><th>Paraméter</th><th>Mértékegység</th><th>Minimum</th><th>Maximum</th><th>Fajta</th><th>Indoklás</th><th></th></tr>
+              <tr><th>Paraméter</th><th>Mértékegység</th><th>Minimum</th><th>Maximum</th><th>Fajta</th>{reasons && <th>Indoklás</th>}<th></th></tr>
             </thead>
             <tbody>
               {params.map((p) => {
@@ -123,7 +125,7 @@ export default async function SettingsPage() {
         <p className="hint">Minden medencének állandó azonosítója van; a név változása a korábbi mérések hozzárendelését nem érinti.</p>
         <div className="table-scroll">
           <table className="log-table">
-            <thead><tr><th>Név</th><th>Mérési csoport</th><th>Fajta</th><th>Indoklás</th><th></th></tr></thead>
+            <thead><tr><th>Név</th><th>Mérési csoport</th><th>Fajta</th>{reasons && <th>Indoklás</th>}<th></th></tr></thead>
             <tbody>
               {pools.map((p) => (
                 <PoolRow
