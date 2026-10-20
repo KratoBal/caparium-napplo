@@ -557,70 +557,91 @@ export function EatingTable({ day, rows, editable }: { day: string; rows: Eating
     if (saved) router.refresh();
   }
 
+  const fed = rows.filter((r) => r.selected);
+  const fasting = rows.filter((r) => !r.selected);
+  const head = (
+    <thead>
+      <tr><th>Állat</th><th>Csoport</th><th>Medence</th><th>Állapot</th><th>Jelölés</th>{editable && <th>Rögzítés</th>}</tr>
+    </thead>
+  );
+  const row = (r: EatingRowView) => {
+    const s = r.status;
+    const d = drafts[r.animalId] ?? initial(r);
+    const states = r.selected ? ["EATEN", "PARTIAL", "NOT_EATEN"] : ["FASTING"];
+    const manual = s?.source === "MANUAL" ? s : null;
+    return (
+      <tr key={r.animalId} className={changed(r) ? "active-row" : undefined}>
+        <td>{r.name}</td>
+        <td>{r.groupName ?? "–"}</td>
+        <td>{r.poolName ?? "–"}</td>
+        <td className="keep">
+          {s ? (
+            <span className={`badge eat-${s.state}`} data-testid={`state-${r.name}`}>
+              {EAT_LABEL[s.state]}
+              {s.source === "AUTOMATIC" ? " (automatikus)" : ""}
+            </span>
+          ) : r.pendingFasting ? (
+            <span className="badge eat-pending" data-testid={`state-${r.name}`}>koplal, még nem végleges</span>
+          ) : (
+            <span className="hint" data-testid={`state-${r.name}`}>{r.selected ? "nincs rögzítve" : "–"}</span>
+          )}
+        </td>
+        <td>
+          {s?.vitamin ? "V " : ""}
+          {s?.medicine ? `Gy${s.medicineNote ? `: ${s.medicineNote}` : ""}` : ""}
+        </td>
+        {editable && (
+          <td className="keep">
+            <div className="toolbar" style={{ margin: 0 }} data-testid={`eating-${r.name}`}>
+              <select className="input" value={d.state} onChange={(e) => set(r.animalId, { state: e.target.value })} aria-label={`${r.name} evési állapota`}>
+                <option value="">– válassz –</option>
+                {states.map((x) => (
+                  <option key={x} value={x}>
+                    {EAT_LABEL[x]}
+                  </option>
+                ))}
+              </select>
+              <label className="check">
+                <input type="checkbox" checked={d.vitamin} onChange={(e) => set(r.animalId, { vitamin: e.target.checked })} aria-label={`${r.name} vitamin`} />V
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={d.medicine} onChange={(e) => set(r.animalId, { medicine: e.target.checked })} aria-label={`${r.name} gyógyszer`} />Gy
+              </label>
+              {d.medicine && (
+                <input className="input" value={d.note} onChange={(e) => set(r.animalId, { note: e.target.value })} placeholder="Gyógyszer megjegyzés" aria-label={`${r.name} gyógyszer megjegyzés`} />
+              )}
+              {manual && <InvalidateButton url={`/api/feeding/eating/${manual.id}/invalidate`} version={manual.version} label="Törlés (érvénytelenítés)" />}
+            </div>
+          </td>
+        )}
+      </tr>
+    );
+  };
+  // caparium-hibak-5 (Balázs 2026-10-20 11:32 UTC, msg 1562065965305298957): the log is about who was fed (today's
+  // list); everyone else gets the automatic fasting day at the close, nothing to fill in. They stay one click away,
+  // folded, for a vitamin or medicine mark on a fasting day.
   return (
     <>
       <div className="table-scroll">
         <table className="log-table" data-testid="eating-table">
-          <thead>
-            <tr><th>Állat</th><th>Csoport</th><th>Medence</th><th>Állapot</th><th>Jelölés</th>{editable && <th>Rögzítés</th>}</tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const s = r.status;
-              const d = drafts[r.animalId] ?? initial(r);
-              const states = r.selected ? ["EATEN", "PARTIAL", "NOT_EATEN"] : ["FASTING"];
-              const manual = s?.source === "MANUAL" ? s : null;
-              return (
-                <tr key={r.animalId} className={changed(r) ? "active-row" : undefined}>
-                  <td>{r.name}</td>
-                  <td>{r.groupName ?? "–"}</td>
-                  <td>{r.poolName ?? "–"}</td>
-                  <td className="keep">
-                    {s ? (
-                      <span className={`badge eat-${s.state}`} data-testid={`state-${r.name}`}>
-                        {EAT_LABEL[s.state]}
-                        {s.source === "AUTOMATIC" ? " (automatikus)" : ""}
-                      </span>
-                    ) : r.pendingFasting ? (
-                      <span className="badge eat-pending" data-testid={`state-${r.name}`}>koplal, még nem végleges</span>
-                    ) : (
-                      <span className="hint" data-testid={`state-${r.name}`}>{r.selected ? "nincs rögzítve" : "–"}</span>
-                    )}
-                  </td>
-                  <td>
-                    {s?.vitamin ? "V " : ""}
-                    {s?.medicine ? `Gy${s.medicineNote ? `: ${s.medicineNote}` : ""}` : ""}
-                  </td>
-                  {editable && (
-                    <td className="keep">
-                      <div className="toolbar" style={{ margin: 0 }} data-testid={`eating-${r.name}`}>
-                        <select className="input" value={d.state} onChange={(e) => set(r.animalId, { state: e.target.value })} aria-label={`${r.name} evési állapota`}>
-                          <option value="">– válassz –</option>
-                          {states.map((x) => (
-                            <option key={x} value={x}>
-                              {EAT_LABEL[x]}
-                            </option>
-                          ))}
-                        </select>
-                        <label className="check">
-                          <input type="checkbox" checked={d.vitamin} onChange={(e) => set(r.animalId, { vitamin: e.target.checked })} aria-label={`${r.name} vitamin`} />V
-                        </label>
-                        <label className="check">
-                          <input type="checkbox" checked={d.medicine} onChange={(e) => set(r.animalId, { medicine: e.target.checked })} aria-label={`${r.name} gyógyszer`} />Gy
-                        </label>
-                        {d.medicine && (
-                          <input className="input" value={d.note} onChange={(e) => set(r.animalId, { note: e.target.value })} placeholder="Gyógyszer megjegyzés" aria-label={`${r.name} gyógyszer megjegyzés`} />
-                        )}
-                        {manual && <InvalidateButton url={`/api/feeding/eating/${manual.id}/invalidate`} version={manual.version} label="Törlés (érvénytelenítés)" />}
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
+          {head}
+          <tbody>{fed.map(row)}</tbody>
         </table>
       </div>
+      {fed.length === 0 && <p className="hint">Ma még senki nincs a napi etetési listán.</p>}
+      {fasting.length > 0 && (
+        <details style={{ marginTop: 12 }} data-testid="eating-fasting">
+          <summary>
+            Koplalónapos állatok ({fasting.length}): nincsenek a napi listán, a lista lezárásakor automatikusan koplalónapot kapnak
+          </summary>
+          <div className="table-scroll">
+            <table className="log-table" data-testid="eating-fasting-table">
+              {head}
+              <tbody>{fasting.map(row)}</tbody>
+            </table>
+          </div>
+        </details>
+      )}
       {editable && (
         <div className="toolbar" style={{ marginTop: 12 }}>
           <button className="btn" type="button" disabled={busy || toSave.length === 0} onClick={() => void saveAll()} data-testid="eating-save-all">

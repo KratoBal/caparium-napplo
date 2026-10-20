@@ -38,8 +38,9 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
       <div className="card">
         <h2>Evési állapotok</h2>
         <p className="hint">
-          A listán szereplő állat evett, nem evett meg mindent vagy nem evett; aki nincs a listán, koplalónapot kap (a kész lista
-          lezárásakor magától). Töltsd ki a sorokat, és egyszer ments: a mentés minden kitöltött vagy megváltoztatott sort rögzít.
+          Csak a napi etetési listán szereplő állatokat kell kitölteni: evett, nem evett meg mindent vagy nem evett. Aki nincs a
+          listán, arra nem kell semmit beírni: a kész lista lezárásakor magától koplalónapot kap. Töltsd ki a sorokat, és egyszer
+          ments: a mentés csak a kitöltött vagy megváltoztatott sorokat rögzíti.
         </p>
         <EatingTable
           day={day}
