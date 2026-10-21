@@ -42,7 +42,10 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
           listán, arra nem kell semmit beírni: a kész lista lezárásakor magától koplalónapot kap. Töltsd ki a sorokat, és egyszer
           ments: a mentés csak a kitöltött vagy megváltoztatott sorokat rögzíti.
         </p>
+        {/* keyed by the day: DayNav changes ?nap= on the same route, which keeps a client component's state, so an
+            unsaved draft (and an opened fasting row) would move to the other day (barracuda on #50, the #45 lesson) */}
         <EatingTable
+          key={day}
           day={day}
           editable={editable}
           rows={feed.animals.map((a) => {
