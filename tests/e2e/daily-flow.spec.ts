@@ -59,6 +59,50 @@ test("login, record a daily measurement, it survives a reload and shows in the l
   await expect(page.getByTestId("history-entry").first()).toContainText("Teszt Akvarista Egy");
 });
 
+// Balázs 2026-10-21 (Caparium thread): one date on the page, and nothing is saved until the Mentés button; an
+// autosave on leaving a field mixed things up when a wrong value was corrected. MI PIROSÍT: a value saved on
+// Enter or on leaving the field; leaving the page with an unsaved value without a question; a date-and-time
+// field next to the day.
+test("a value is saved only by the Mentés button, leaving with it asks first, and the time is a time of day", async ({ browser }, info) => {
+  const p = plan(info.project.name);
+  const page = await browser.newPage();
+  await login(page, "teszt.akvarista1");
+  await page.goto("/vizmeres");
+  await page.getByRole("tab", { name: p.tab }).click();
+  await page.getByRole("button", { name: p.pool, exact: true }).click();
+  await expect(page.getByTestId("measured-at")).toHaveAttribute("type", "time");
+
+  const temp = page.getByTestId(`cell-${p.pool}-Hőmérséklet`);
+  await temp.fill("24,6");
+  await temp.press("Enter");
+  await page.getByTestId(`cell-${p.pool}-pH`).focus(); // leaving the field saves nothing either
+
+  // another session sees nothing yet: no autosave
+  const other = await browser.newPage();
+  await login(other, "teszt.akvarista2");
+  await other.goto("/vizmeres");
+  await other.getByRole("tab", { name: p.tab }).click();
+  await expect(other.getByTestId(`cell-${p.pool}-Hőmérséklet`)).toHaveValue("");
+
+  // leaving through an in-app link asks; declining keeps the page and the typed value
+  let asked = "";
+  page.once("dialog", (d) => {
+    asked = d.message();
+    void d.dismiss();
+  });
+  await page.getByRole("link", { name: "Vízmérési napló" }).first().click();
+  expect(asked).toContain("nem mentett mérési érték");
+  await expect(page.getByTestId(`cell-${p.pool}-Hőmérséklet`)).toHaveValue("24,6");
+
+  await page.getByTestId("save-all").click();
+  await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
+  await other.reload();
+  await other.getByRole("tab", { name: p.tab }).click();
+  await expect(other.getByTestId(`cell-${p.pool}-Hőmérséklet`)).toHaveValue("24,6");
+  await other.close();
+  await page.close();
+});
+
 test("an aquarist sees an earlier day read-only", async ({ page }) => {
   await login(page, "teszt.akvarista2");
   await page.goto("/vizmeres?nap=2026-01-05");
@@ -81,12 +125,12 @@ test("a second editor of the same cell gets a conflict, not a silent overwrite",
   // a writes ORP first; b's page still shows the empty cell and writes too
   const orpA = a.getByTestId(`cell-${p.pool}-ORP`);
   await orpA.fill("305");
-  await orpA.press("Enter");
+  await a.getByTestId("save-all").click();
+  await expect(a.getByTestId("banner")).toHaveText("Minden érték mentve.");
   await expect(a.getByTestId(`cell-${p.pool}-ORP`)).toHaveValue("305");
-  await a.waitForLoadState("networkidle");
   const orpB = b.getByTestId(`cell-${p.pool}-ORP`);
   await orpB.fill("310");
-  await orpB.press("Enter");
+  await b.getByTestId("save-all").click();
   await expect(b.getByTestId("conflict")).toBeVisible();
   await expect(b.getByTestId("conflict")).toContainText("305");
   await b.getByRole("button", { name: "Friss adat betöltése" }).click();
@@ -156,9 +200,9 @@ test("admin corrects and invalidates an earlier day's measurement with a reason 
     await page.getByRole("button", { name: pool, exact: true }).click();
     const ph = page.getByTestId(`cell-${pool}-pH`);
     await ph.fill("8,05");
-    await ph.press("Enter");
+    await page.getByTestId("save-all").click();
+    await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
     await expect(page.getByTestId(`cell-${pool}-pH`)).toHaveValue("8,05");
-    await page.waitForLoadState("networkidle");
 
     await page.goto(`/naplo?tol=${yesterday}&ig=${yesterday}`);
     const row = page.getByTestId("log-table").getByRole("row").filter({ hasText: pool }).filter({ hasText: "pH" }).first();
@@ -229,7 +273,8 @@ test("settings: an admin changes a reference range and creates a user who can lo
   await page.getByRole("button", { name: pool, exact: true }).click();
   const no3 = page.getByTestId(`cell-${pool}-NO3`);
   await no3.fill("12");
-  await no3.press("Enter");
+  await page.getByTestId("save-all").click();
+  await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
   await expect(page.getByTestId(`cell-${pool}-NO3`)).toHaveClass(/out/);
 
   await page.goto("/beallitasok");
@@ -271,7 +316,8 @@ test("export: a real .xlsx download and a ZIMS CSV run whose file can be downloa
   const orp = page.getByTestId(`cell-${pool}-ORP`);
   if ((await orp.inputValue()) === "") {
     await orp.fill(tablet ? "301" : "302");
-    await orp.press("Enter");
+    await page.getByTestId("save-all").click();
+    await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
     await expect(page.getByTestId(`cell-${pool}-ORP`)).not.toHaveValue("");
   }
   await page.waitForLoadState("networkidle");
