@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { setEatingStatus } from "@/lib/eating";
 import { feedingDayView } from "@/lib/feeding";
-import { applyPlan, currentPlans, setFeedingPlan } from "@/lib/feeding-plan";
+import { applyPlan, currentPlans, setFeedingPlan, setFeedingPlans } from "@/lib/feeding-plan";
 import { knownOtherNames } from "@/lib/feeds";
 import { setIcon } from "@/lib/icons";
 import { saveWithdrawalItem } from "@/lib/withdrawal";
@@ -90,3 +90,45 @@ describe("icons (DAT-03)", () => {
     expect((await prisma.pool.findUniqueOrThrow({ where: { id: pool } })).emoji).toBeNull();
   });
 });
+
+/*
+  THE FEEDING TIMETABLE (6fe63c9b, item 4): every animal's days saved together. WHAT TURNS RED: an unchanged row
+  writes a version; a row with no plan and no day creates an empty plan; a replay or the same save writes again;
+  one animal twice is accepted.
+*/
+describe("the feeding timetable (6fe63c9b, item 4)", () => {
+  it("one save, a version per changed animal, nothing for the unchanged or the empty row; replayed by its id", async () => {
+    const one = a["Teszt Egy"];
+    const two = a["Teszt Kettő"];
+    const before = await prisma.feedingPlan.count();
+    const open = await currentPlans();
+    // an animal that has no plan at all: its empty row must write nothing (the branch must run every time)
+    const planless = (await prisma.animal.findMany({ select: { id: true }, orderBy: { id: "asc" } })).find((x) => !open[x.id] && x.id !== one && x.id !== two);
+    expect(planless, "an animal without a plan").toBeDefined();
+    const req = rid();
+    const r = await setFeedingPlans(
+      f.aq1,
+      {
+        requestId: req,
+        plans: [
+          { animalId: one, weekdays: [2, 3, 5, 6, 7] },
+          { animalId: two, weekdays: [7, 2, 2] },
+          // no plan and no day: nothing to record
+          { animalId: planless!.id, weekdays: [] },
+        ],
+      },
+      at("2026-12-20", "08:00"),
+    );
+    expect(r).toEqual({ replayed: false, changed: 2 });
+    expect((await currentPlans())[two]).toEqual([2, 7]);
+    expect(await prisma.feedingPlan.count()).toBe(before + 2);
+    expect(await setFeedingPlans(f.aq1, { requestId: req, plans: [{ animalId: one, weekdays: [1] }] }, at("2026-12-20", "08:01"))).toEqual({ replayed: true, changed: 0 });
+    // the same days again: no new version
+    expect((await setFeedingPlans(f.aq1, { requestId: rid(), plans: [{ animalId: one, weekdays: [7, 6, 5, 3, 2] }] }, at("2026-12-20", "08:02"))).changed).toBe(0);
+    await expectCode(
+      setFeedingPlans(f.aq1, { requestId: rid(), plans: [{ animalId: one, weekdays: [1] }, { animalId: one, weekdays: [2] }] }, at("2026-12-20", "08:03")),
+      "DUPLICATE_ANIMAL",
+    );
+  });
+});
+

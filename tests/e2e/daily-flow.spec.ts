@@ -671,6 +671,23 @@ test("home: the customer's illustrated cards, 3-2-3, each to its module, only wi
   }
 });
 
+// 6fe63c9b, item 4: the timetable. The starting data is intentionally empty (acrobot 34526), so the first run shows
+// the empty-state line; each layout ticks its own day for one animal of the starting list.
+test("the feeding timetable: every animal's days on one screen, saved together, from an empty start", async ({ page }, info) => {
+  const day = info.project.name === "tablet" ? "H" : "K";
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
+  await page.getByRole("link", { name: "Etetési rend" }).click();
+  const table = page.getByTestId("timetable");
+  if (info.project.name === "tablet") await expect(page.getByTestId("timetable-empty")).toContainText("Még nincs etetési terv");
+  await table.getByLabel(`Philleas: ${day}`).check();
+  await table.getByRole("button", { name: /Etetési rend mentése/ }).click();
+  await expect(table.getByRole("status")).toHaveText("Mentve: 1 állat terve.");
+  await page.reload();
+  await expect(page.getByTestId("timetable").getByLabel(`Philleas: ${day}`)).toBeChecked();
+  await expect(page.getByTestId("timetable-empty")).toHaveCount(0);
+});
+
 test("conveniences: a feeding plan, the list from it, the feed type icons", async ({ page }) => {
   // Teszt Három: the feeding test expects Teszt Négy OFF today's list, and the plan adds to it
   await login(page, "teszt.akvarista1");

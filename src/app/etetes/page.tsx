@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DayControls } from "@/components/DayControls";
 import { DayNav } from "@/components/DayNav";
 import { FeedingDay } from "@/components/FeedingDay";
@@ -78,6 +79,9 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
           {view.listState === "FINALIZED" ? "Lista kész" : "Lista nincs kész"}
         </span>
         {editable && <ApplyPlan day={day} />}
+        <Link className="btn btn-soft" href="/etetes/rend">
+          Etetési rend
+        </Link>
         <DayControls kind="FEEDING" day={day} status={lock} isAdmin={isAdmin} />
       </div>
 
