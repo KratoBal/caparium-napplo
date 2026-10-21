@@ -100,6 +100,26 @@ describe("the recipient and the sending", () => {
     expect(sent).toHaveLength(1);
   });
 
+  it("several recipients: stored once and normalized, the mail goes to all of them, the log names them (card c2e15128)", async () => {
+    Object.assign(process.env, SMTP);
+    await setWaterReportRecipient(f.admin, { requestId: rid(), email: "vizmeres@example.test; masik@example.test, VIZMERES@example.test" }, cest("2027-09-08T16:20"));
+    const sent: (OutgoingMail & { from: string })[] = [];
+    const fake: MailSender = async (m) => {
+      sent.push(m);
+      return { messageId: "teszt" };
+    };
+    const r = await sendWaterReport(f.aq1, { requestId: rid() }, cest("2027-09-08T16:21"), fake);
+    expect(r.to).toBe("vizmeres@example.test, masik@example.test");
+    expect(sent.map((m) => m.to)).toEqual(["vizmeres@example.test, masik@example.test"]);
+    const bad = await setWaterReportRecipient(f.admin, { requestId: rid(), email: "jo@example.test, nem-cim" }, cest("2027-09-08T16:22")).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect((bad as Error).name, "one bad address: nothing saved").toBe("ZodError");
+    // back to the one address the next test sends to
+    await setWaterReportRecipient(f.admin, { requestId: rid(), email: "vizmeres@example.test" }, cest("2027-09-08T16:23"));
+  });
+
   it("an export-read-only aquarist cannot send; a failing SMTP is a 502 without the server's words", async () => {
     Object.assign(process.env, SMTP);
     const reader = await prisma.user.create({ data: { loginId: `export-olvaso-${rid()}`, fullName: "Export Olvasó", role: "AQUARIST", passwordHash: "x" } });

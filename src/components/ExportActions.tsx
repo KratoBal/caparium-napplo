@@ -135,7 +135,7 @@ export function WaterMailButton({ recipient }: { recipient: string }) {
       <button className="btn" type="button" disabled={busy || !recipient} onClick={() => void send()}>
         Vízmérés kiküldése
       </button>
-      <span className="hint">{recipient ? `Címzett: ${recipient}` : "Nincs megadva címzett: a Beállításokban állítható be."}</span>
+      <span className="hint">{recipient ? `${recipient.includes(",") ? "Címzettek" : "Címzett"}: ${recipient}` : "Nincs megadva címzett: a Beállításokban állítható be."}</span>
       {msg && (
         <span className={msg.ok ? "hint" : "err"} role="status">
           {msg.text}

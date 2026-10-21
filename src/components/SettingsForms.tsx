@@ -223,11 +223,21 @@ export function WaterReportRecipient({ email }: { email: string }) {
   const { msg, busy, save } = useSave();
   return (
     <div className="toolbar" data-testid="water-report-recipient">
-      <input className="input" type="email" aria-label="A vízmérés címzettje" placeholder="nev@pelda.hu" value={v} onChange={(e) => setV(e.target.value)} />
+      {/* several recipients (Lili, card c2e15128): separated by commas; the server checks each one */}
+      <input
+        className="input"
+        type="text"
+        inputMode="email"
+        aria-label="A vízmérés címzettjei"
+        placeholder="nev@pelda.hu, masik@pelda.hu"
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+      />
       <button className="btn" type="button" disabled={busy || v.trim() === email} onClick={() => void save("/api/admin/water-report-recipient", "POST", { email: v.trim() })}>
         Mentés
       </button>
       <Msg msg={msg} />
+      <span className="hint">Több címzett vesszővel elválasztva (legfeljebb 10).</span>
     </div>
   );
 }
