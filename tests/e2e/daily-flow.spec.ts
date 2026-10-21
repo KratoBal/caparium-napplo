@@ -449,8 +449,9 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
 
 // 6fe63c9b (Lili's request; Balázs 2026-10-21 "mehet"): the list in two steps and the feeding sheet. Each layout
 // fills its own animal's row; the day's feeds are shared, so the second run finds them saved already.
-test("feeding sheet: a group selected from its header, the day's feeds, a row saved on the sheet, the totals", async ({ page }, info) => {
+test("feeding sheet: a group selected from its header, the day's feeds, drafts kept on leaving a row, one save, corrections", async ({ page }, info) => {
   const name = info.project.name === "tablet" ? "Teszt Egy" : "Teszt Kettő";
+  const other = info.project.name === "tablet" ? "Teszt Kettő" : "Teszt Egy";
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
   // step 1: the group's header row selects every member at once
@@ -465,22 +466,32 @@ test("feeding sheet: a group selected from its header, the day's feeds, a row sa
     await saveFeeds.click();
     await expect(dayFeeds.getByRole("status")).toHaveText("A nap takarmányai mentve.");
   }
-  // the item form offers the day's feeds (and Egyéb), not the whole list
   await expect(page.getByTestId("item-form").getByLabel("Takarmány", { exact: true }).locator("option", { hasText: "Mytilus sp." })).toHaveCount(0);
-  // step 3: the sheet's columns are the day's feeds; the clicked row takes the amounts
+  // step 3. Lili 2026-10-21 11:44 UTC (a): a feed weighed AND counted takes both units
   const sheet = page.getByTestId("feeding-sheet");
-  await expect(sheet.getByRole("columnheader", { name: "Mysis (g)" })).toBeVisible();
+  await expect(sheet.getByRole("columnheader", { name: "Litopenaeus vannamei (g + db)" })).toBeVisible();
   const row = sheet.getByRole("row").filter({ hasText: name });
+  const otherRow = sheet.getByRole("row").filter({ hasText: other });
   await row.getByRole("cell", { name, exact: true }).click();
-  const cell = row.getByLabel(`${name}: Mysis (g)`);
-  // barracuda #41: a cell that is not an amount is marked, and the row is not reported as saved
-  await cell.fill("sok");
-  await sheet.getByRole("button", { name: "Sor mentése" }).click();
-  await expect(sheet.getByRole("status")).toHaveText("1 cella nem menthető: érvénytelen mennyiség (Mysis).");
-  await expect(cell).toHaveAttribute("aria-invalid", "true");
-  // barracuda #41: the first save reaches the server but its answer is lost; the second one replays the same
-  // request, so the item is recorded once (12,5 g, not 25 g)
-  await cell.fill("12,5");
+  const mysis = row.getByLabel(`${name}: Mysis (g)`);
+  // a cell that is not an amount is marked, and nothing is sent (#42)
+  await mysis.fill("sok");
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText(`1 cella nem menthető: érvénytelen mennyiség (${name}: Mysis).`);
+  await expect(mysis).toHaveAttribute("aria-invalid", "true");
+  // (b): what is typed stays when the row is left, and can be changed again before the save
+  await mysis.fill("12,5");
+  await row.getByLabel(`${name}: Litopenaeus vannamei (g)`).fill("40");
+  await row.getByLabel(`${name}: Litopenaeus vannamei (db)`).fill("5");
+  await otherRow.getByRole("cell", { name: other, exact: true }).click();
+  await expect(sheet.getByTestId(`sheet-cell-${name}-Mysis`)).toHaveText("12,5 g");
+  await row.getByRole("cell", { name, exact: true }).click();
+  await expect(mysis).toHaveValue("12,5");
+  await mysis.fill("15");
+  // (c): an empty cell is 0. The other animal's Litopenaeus cell is empty in both runs: on the tablet run nothing was
+  // recorded for it yet, and on the desktop run the tablet run emptied it (its item invalidated, below)
+  await expect(sheet.getByTestId(`sheet-cell-${other}-Litopenaeus vannamei`)).toHaveText("0");
+  // one save for everything; the first request reaches the server and its answer is lost, the second click replays it
   await page.route(
     "**/api/feeding/items",
     async (route) => {
@@ -489,16 +500,82 @@ test("feeding sheet: a group selected from its header, the day's feeds, a row sa
     },
     { times: 1 },
   );
-  await sheet.getByRole("button", { name: "Sor mentése" }).click();
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
   await expect(sheet.getByRole("status")).toHaveText("Nincs kapcsolat a szerverrel.");
-  await sheet.getByRole("button", { name: "Sor mentése" }).click();
-  await expect(sheet.getByRole("status")).toHaveText("Sor mentve.");
-  await expect(row).toContainText("12,5 g");
-  await expect(row).not.toContainText("25 g");
-  // the same item the list shows, and it is in the column's total
-  await expect(page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name })).toContainText("Mysis 12,5 g");
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Takarmánylap mentve.");
+  await otherRow.getByRole("cell", { name: other, exact: true }).click();
+  await expect(sheet.getByTestId(`sheet-cell-${name}-Mysis`)).toHaveText("15 g");
+  await expect(sheet.getByTestId(`sheet-cell-${name}-Litopenaeus vannamei`)).toHaveText("40 g, 5 db");
+  const listRow = page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name });
+  await expect(listRow).toContainText("Mysis 15 g");
+  // a saved cell is corrected in place (its item is updated, not a second one)
+  await row.getByRole("cell", { name, exact: true }).click();
+  await mysis.fill("20");
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Takarmánylap mentve.");
+  await expect(listRow).toContainText("Mysis 20 g");
+  await expect(listRow).not.toContainText("Mysis 15 g");
+  // barracuda #45 (1): a draft is saved on the version it was TYPED on. Meanwhile the same cell is changed on another
+  // sheet (another aquarist); this draft's save is refused, the other value stays, and the cell is marked
+  await mysis.fill("25");
+  const page2 = await page.context().newPage();
+  await page2.goto(page.url());
+  const sheet2 = page2.getByTestId("feeding-sheet");
+  const row2 = sheet2.getByRole("row").filter({ hasText: name });
+  await row2.getByRole("cell", { name, exact: true }).click();
+  await row2.getByLabel(`${name}: Mysis (g)`).fill("30");
+  await sheet2.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet2.getByRole("status")).toHaveText("Takarmánylap mentve.");
+  await page2.close();
+  // the first try is lost on the way; the sheet reloads, so it now holds the other value's version, the draft is kept.
+  // A save sending the version read at the save would overwrite 30 now: the draft's own base must go
+  await page.route("**/api/feeding/items", (route) => route.abort("failed"), { times: 1 });
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Nincs kapcsolat a szerverrel.");
+  await expect(listRow).toContainText("Mysis 30 g");
+  await expect(mysis).toHaveValue("25");
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText("A tétel időközben megváltozott.");
+  await expect(sheet.getByTestId(`sheet-cell-${name}-Mysis`)).toHaveAttribute("data-failed", "true");
+  await expect(listRow).toContainText("Mysis 30 g");
+  await expect(listRow).not.toContainText("Mysis 25 g");
+  page.once("dialog", (d) => void d.accept());
+  await sheet.getByRole("button", { name: "Piszkozat elvetése" }).click();
+  await expect(mysis).toHaveValue("30");
+  // an emptied saved cell: its item is invalidated after a confirmation
+  await row.getByLabel(`${name}: Litopenaeus vannamei (g)`).fill("");
+  await row.getByLabel(`${name}: Litopenaeus vannamei (db)`).fill("");
+  page.once("dialog", (d) => void d.accept("teszt: kiürített cella"));
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Takarmánylap mentve.");
+  await expect(listRow).not.toContainText("Litopenaeus vannamei 40 g");
   await expect(sheet.getByTestId("sheet-grand-total")).toContainText("g");
   await expect(sheet.getByRole("button", { name: "Takarmánylap nyomtatása" })).toBeVisible();
+  // barracuda #45 (3): a draft belongs to its day. The day navigation stays on the same route; after it, accepted,
+  // the draft is gone, also when coming back to the day
+  await mysis.fill("35");
+  page.once("dialog", (d) => void d.accept());
+  await page.getByRole("link", { name: "‹ előző nap" }).click();
+  await expect(sheet.getByRole("button", { name: /Takarmánylap mentése \(/ })).toHaveCount(0);
+  await page.getByRole("link", { name: "következő nap ›" }).click();
+  await row.getByRole("cell", { name, exact: true }).click();
+  await expect(mysis).toHaveValue("30");
+  // barracuda #45 (2): leaving with a draft asks first; declined, the draft is still there; accepted, the page goes
+  await mysis.fill("35");
+  const leave = page.getByRole("link", { name: "Takarmánykivétel" });
+  const asked: string[] = [];
+  page.once("dialog", (d) => {
+    asked.push(d.message());
+    void d.dismiss();
+  });
+  await leave.click();
+  await expect.poll(() => asked.length).toBe(1);
+  expect(asked[0]).toContain("Van még nem mentett érték a takarmánylapon.");
+  await expect(mysis).toHaveValue("35");
+  page.once("dialog", (d) => void d.accept());
+  await leave.click();
+  await expect(page.getByTestId("withdrawal-form")).toBeVisible();
 });
 
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
