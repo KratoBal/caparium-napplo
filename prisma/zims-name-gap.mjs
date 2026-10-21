@@ -6,7 +6,9 @@
 //   node prisma/zims-name-gap.mjs
 //
 // It uses the container's own DATABASE_URL and the image's Prisma client, runs three SELECTs and prints JSON lines.
-// Staff are named by login id only. Nothing is written.
+// Staff are named by login id only, and a ZIMS name only by its length (barracuda #38: the name is likely the
+// person's real name, and the output lands in the deploy log; the gap needs the periods, not the text). Nothing
+// is written.
 //
 // The export (src/lib/exports/zims.ts) takes the user_zims_name row whose [validFrom, validTo) covers the
 // measurement's measuredAt; a measurement with no such row is the refused one.
@@ -44,7 +46,7 @@ try {
   out(
     "nev_sorok",
     await prisma.$queryRawUnsafe(`
-      SELECT u."loginId", z."zimsName", z."validFrom", z."validTo"
+      SELECT u."loginId", length(z."zimsName") AS nev_hossz, z."validFrom", z."validTo"
       FROM user_zims_name z JOIN app_user u ON u.id = z."userId"
       WHERE z."userId" IN (SELECT m."responsibleUserId" FROM measurement m WHERE m.status = 'VALID' AND ${NO_NAME})
       ORDER BY u."loginId", z."validFrom"`),
@@ -54,13 +56,13 @@ try {
   out(
     "nevet_talalo_meresek",
     await prisma.$queryRawUnsafe(`
-      SELECT u."loginId", z."zimsName", z."validFrom", z."validTo", count(m.id) AS meres
+      SELECT u."loginId", length(z."zimsName") AS nev_hossz, z."validFrom", z."validTo", count(m.id) AS meres
       FROM measurement m
       JOIN app_user u ON u.id = m."responsibleUserId"
       JOIN user_zims_name z ON z."userId" = m."responsibleUserId"
         AND z."validFrom" <= m."measuredAt" AND (z."validTo" IS NULL OR z."validTo" > m."measuredAt")
       WHERE m.status = 'VALID'
-      GROUP BY u."loginId", z."zimsName", z."validFrom", z."validTo"
+      GROUP BY u."loginId", z.id, z."zimsName", z."validFrom", z."validTo"
       ORDER BY u."loginId", z."validFrom"`),
   );
 } catch (error) {
