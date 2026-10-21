@@ -472,10 +472,29 @@ test("feeding sheet: a group selected from its header, the day's feeds, a row sa
   await expect(sheet.getByRole("columnheader", { name: "Mysis (g)" })).toBeVisible();
   const row = sheet.getByRole("row").filter({ hasText: name });
   await row.getByRole("cell", { name, exact: true }).click();
-  await row.getByLabel(`${name}: Mysis (g)`).fill("12,5");
+  const cell = row.getByLabel(`${name}: Mysis (g)`);
+  // barracuda #41: a cell that is not an amount is marked, and the row is not reported as saved
+  await cell.fill("sok");
+  await sheet.getByRole("button", { name: "Sor mentése" }).click();
+  await expect(sheet.getByRole("status")).toHaveText("1 cella nem menthető: érvénytelen mennyiség (Mysis).");
+  await expect(cell).toHaveAttribute("aria-invalid", "true");
+  // barracuda #41: the first save reaches the server but its answer is lost; the second one replays the same
+  // request, so the item is recorded once (12,5 g, not 25 g)
+  await cell.fill("12,5");
+  await page.route(
+    "**/api/feeding/items",
+    async (route) => {
+      await route.fetch();
+      await route.abort("failed");
+    },
+    { times: 1 },
+  );
+  await sheet.getByRole("button", { name: "Sor mentése" }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Nincs kapcsolat a szerverrel.");
   await sheet.getByRole("button", { name: "Sor mentése" }).click();
   await expect(sheet.getByRole("status")).toHaveText("Sor mentve.");
   await expect(row).toContainText("12,5 g");
+  await expect(row).not.toContainText("25 g");
   // the same item the list shows, and it is in the column's total
   await expect(page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name })).toContainText("Mysis 12,5 g");
   await expect(sheet.getByTestId("sheet-grand-total")).toContainText("g");

@@ -7,6 +7,12 @@
 // so the eating log and the exports read the same data. Totals per row and per column, per unit (g, ml and db are
 // never added together). Printable alone.
 import { useState } from "react";
+
+function newRequestId(): string {
+  const b = new Uint8Array(16);
+  crypto.getRandomValues(b);
+  return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+}
 import { Msg, parseAmount, useSend, type FeedOpt, type Recipient } from "./FeedingForms";
 
 type SheetItem = {
@@ -53,6 +59,11 @@ export function FeedingSheet({
   onActive: (key: string) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
+  // barracuda #41: a cell keeps ONE request id until it is saved, so a lost answer and a second "Sor mentése" replay
+  // the same item instead of recording it twice (the measurement grid's rule); a new value is a new request
+  const [requestIds, setRequestIds] = useState<Record<string, string>>({});
+  const [bad, setBad] = useState<string[]>([]);
+  const [localMsg, setLocalMsg] = useState<string | null>(null);
   const { msg, busy, run } = useSend();
   const keyOf = (i: SheetItem) => i.animalId ?? `g:${i.groupId}`;
   const cell = (rec: string, feedId: string) => {
@@ -76,18 +87,37 @@ export function FeedingSheet({
   async function saveRow() {
     const r = recipients.find((x) => x.key === active);
     if (!r) return;
+    // a filled cell that is not a number is never skipped silently (barracuda #41): it is marked, and nothing of the
+    // row is sent until it is fixed
+    const invalid = feeds.filter((f) => {
+      const raw = (values[f.id] ?? "").trim();
+      return raw !== "" && (!cellUnit(f) || parseAmount(raw) === null);
+    });
+    setBad(invalid.map((f) => f.id));
+    if (invalid.length) {
+      setLocalMsg(`${invalid.length} cella nem menthető: érvénytelen mennyiség (${invalid.map((f) => f.name).join(", ")}).`);
+      return;
+    }
+    setLocalMsg(null);
     for (const f of feeds) {
       const raw = (values[f.id] ?? "").trim();
       if (!raw) continue;
-      const unit = cellUnit(f);
-      if (!unit || parseAmount(raw) === null) continue;
+      const unit = cellUnit(f)!;
+      const key = `${r.key}|${f.id}|${raw}`;
+      const id = requestIds[key] ?? newRequestId();
+      if (!requestIds[key]) setRequestIds((m) => ({ ...m, [key]: id }));
       const ok = await run(
         "/api/feeding/items",
-        { day, feedId: f.id, quantities: [{ value: raw, unitId: unit.id }], ...(r.animalId ? { animalId: r.animalId } : { groupId: r.groupId }) },
+        { requestId: id, day, feedId: f.id, quantities: [{ value: raw, unitId: unit.id }], ...(r.animalId ? { animalId: r.animalId } : { groupId: r.groupId }) },
         "Sor mentve.",
       );
       if (!ok) return;
       setValues((v) => ({ ...v, [f.id]: "" }));
+      setRequestIds((m) => {
+        const next = { ...m };
+        delete next[key];
+        return next;
+      });
     }
   }
   function printSheet() {
@@ -143,7 +173,8 @@ export function FeedingSheet({
                           {fmt(cell(r.key, f.id))}
                           {isActive && cellUnit(f) && (
                             <input
-                              className="input small no-print"
+                              className={`input small no-print${bad.includes(f.id) ? " input-invalid" : ""}`}
+                              aria-invalid={bad.includes(f.id)}
                               inputMode="decimal"
                               value={values[f.id] ?? ""}
                               onClick={(e) => e.stopPropagation()}
@@ -176,7 +207,13 @@ export function FeedingSheet({
               <button className="btn" type="button" disabled={busy || !filled} onClick={() => void saveRow()}>
                 Sor mentése
               </button>
-              <Msg msg={msg} />
+              {localMsg ? (
+                <span className="err" role="status">
+                  {localMsg}
+                </span>
+              ) : (
+                <Msg msg={msg} />
+              )}
             </div>
           )}
         </>
