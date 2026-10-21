@@ -10,13 +10,14 @@ function requestId(): string {
   return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
 
-type ApiError = { error?: { message?: string; problems?: { problem: string }[] } };
+type Problem = { problem: string; count?: number; link?: string };
+type ApiError = { error?: { message?: string; problems?: Problem[] } };
 
 /** Creates a ZIMS CSV run for the filter shown on the page (T-20: preview, trial or submission). */
 export function ZimsCreate({ from, to, poolIds }: { from: string; to: string; poolIds: string[] }) {
   const router = useRouter();
   const [purpose, setPurpose] = useState<"PREVIEW" | "TRIAL" | "SUBMISSION">("SUBMISSION");
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string; problems?: Problem[] } | null>(null);
   const [busy, setBusy] = useState(false);
   async function run() {
     setBusy(true);
@@ -30,8 +31,8 @@ export function ZimsCreate({ from, to, poolIds }: { from: string; to: string; po
     if (!res) return setMsg({ ok: false, text: "Nincs kapcsolat a szerverrel." });
     const b = (await res.json().catch(() => ({}))) as ApiError & { files?: unknown[]; warnings?: string[] };
     if (!res.ok) {
-      const details = b.error?.problems?.slice(0, 5).map((p) => p.problem).join("; ");
-      return setMsg({ ok: false, text: `${b.error?.message ?? "Az export nem készült el."}${details ? ` (${details})` : ""}` });
+      // a szerver az azonos hibákat egy sorba vonja, a mérések számával (a lili-eset: 136 azonos sor helyett egy)
+      return setMsg({ ok: false, text: b.error?.message ?? "Az export nem készült el.", problems: b.error?.problems?.slice(0, 10) });
     }
     setMsg({ ok: true, text: `Elkészült: ${b.files?.length ?? 0} fájl.${b.warnings?.length ? ` Figyelmeztetés: ${b.warnings.join(" ")}` : ""}` });
     router.refresh();
@@ -52,6 +53,22 @@ export function ZimsCreate({ from, to, poolIds }: { from: string; to: string; po
       {msg && (
         <span className={msg.ok ? "hint" : "err"} role="status" data-testid="zims-message">
           {msg.text}
+          {msg.problems?.length ? (
+            <ul data-testid="zims-problems">
+              {msg.problems.map((p) => (
+                <li key={p.problem}>
+                  {p.problem}
+                  {p.count && p.count > 1 ? ` (${p.count} mérés)` : ""}
+                  {p.link ? (
+                    <>
+                      {" "}
+                      <a href={p.link}>Beállítások › Felhasználók</a>
+                    </>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </span>
       )}
     </div>
