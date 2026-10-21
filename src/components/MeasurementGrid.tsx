@@ -447,7 +447,14 @@ export function MeasurementGrid({
     await refresh();
   }, [conflict, refresh]);
 
-  const anyOut = useMemo(() => Object.values(grid.cells).some((c) => c.reference === "LOW" || c.reference === "HIGH"), [grid.cells]);
+  // the warning follows what the cells show: a typed, not yet saved value too (it is useful at the moment of typing)
+  const anyOut = useMemo(
+    () =>
+      Object.entries(grid.cells).some(
+        ([key, c]) => drafts[key] === undefined && (c.reference === "LOW" || c.reference === "HIGH"),
+      ) || Object.entries(drafts).some(([key, draft]) => draftOutOfRange(draft, grid.currentRanges[key])),
+    [grid.cells, grid.currentRanges, drafts],
+  );
   const unsaved = new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)]).size;
 
   return (
