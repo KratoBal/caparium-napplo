@@ -537,6 +537,8 @@ type RowDraft = { state: string; vitamin: boolean; medicine: boolean; note: stri
  * version check and request id), so one refused row does not undo the others, and it is named in the result.
  * A new row has no preselected state: the save records only what someone actually filled in.
  */
+const EATING_LEAVE_WARNING = "Van még nem mentett sor az evési naplóban. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?";
+
 export function EatingTable({ day, rows, editable }: { day: string; rows: EatingRowView[]; editable: boolean }) {
   const router = useRouter();
   const initial = (r: EatingRowView): RowDraft => {
@@ -574,6 +576,32 @@ export function EatingTable({ day, rows, editable }: { day: string; rows: Eating
   // Lili (acrobot 34629, 2026-10-21): the fasting rows invited a click on every row, although the close makes them
   // fasting days by itself. There a row shows its state only; the recording controls open per row on request
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+  // acrobot 34710 (barracuda on #50): unsaved rows ask before the page or an in-app link (the day navigation too) is
+  // left, as the feeding sheet and the measurement page do; the browser's back button is neither, so it is not asked
+  const unsavedRef = useRef(0);
+  unsavedRef.current = editable ? toSave.length : 0;
+  useEffect(() => {
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (unsavedRef.current === 0) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    const click = (e: MouseEvent) => {
+      if (unsavedRef.current === 0 || e.defaultPrevented || e.button !== 0) return;
+      const link = (e.target as Element | null)?.closest?.("a[href]");
+      if (!link || (link as HTMLAnchorElement).target === "_blank") return;
+      if (!window.confirm(EATING_LEAVE_WARNING)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("click", click, true);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      document.removeEventListener("click", click, true);
+    };
+  }, []);
 
   async function saveAll() {
     setBusy(true);
