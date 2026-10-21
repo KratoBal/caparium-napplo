@@ -43,6 +43,8 @@ describe("ZIMS CSV (VIZ-16..VIZ-19)", () => {
   it("one file per system, the sample's header, CRLF, quoted date, every row filled", async () => {
     ph = (await measure("NAGY", "PH", "8,12", "08:06")).measurement.id;
     sal = (await measure("NAGY", "SAL", "35", "08:07")).measurement.id;
+    // ORP's unit is "millivolt" in ZIMS, as the sample file writes it (the zoo's answer, 2026-10-21), not "mV"
+    await measure("NAGY", "ORP", "320", "08:08");
     await measure("KIS", "PH", "7,88", "08:09");
     const r = await createZimsExport(f.aq1, { requestId: rid(), from: DAY, to: DAY, poolIds: null, purpose: "SUBMISSION" });
     runId = r.runId;
@@ -51,10 +53,11 @@ describe("ZIMS CSV (VIZ-16..VIZ-19)", () => {
     expect(files[1].content).toBe(
       "Date,Time,Measurement,MeasurementValue,UnitofMeasure,MeasuredBy\r\n" +
         '"Mar 10, 2026",08:06,pH,8.12,pH,Test Aquarist One\r\n' +
-        '"Mar 10, 2026",08:07,Salinity,35.0,parts per thousand,Test Aquarist One\r\n',
+        '"Mar 10, 2026",08:07,Salinity,35.0,parts per thousand,Test Aquarist One\r\n' +
+        '"Mar 10, 2026",08:08,ORP,320,millivolt,Test Aquarist One\r\n',
     );
-    expect(files[1].rowCount).toBe(2);
-    expect(await prisma.exportItem.count({ where: { exportRunId: runId } })).toBe(3);
+    expect(files[1].rowCount).toBe(3);
+    expect(await prisma.exportItem.count({ where: { exportRunId: runId } })).toBe(4);
     expect(await prisma.auditEntry.count({ where: { entityId: runId, action: "EXPORT" } })).toBe(1);
   });
 
