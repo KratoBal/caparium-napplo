@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CellView, RangeView } from "@/lib/queries";
 import { useReasonsOn } from "./ReasonSwitch";
+import { useLeaveWarning } from "./useLeaveWarning";
 
 type Grid = {
   group: { id: string; name: string };
@@ -135,31 +136,7 @@ export function MeasurementGrid({
   metaRef.current = metaDrafts;
   // the drafts not yet saved: leaving the page with them asks first (the reverse of the old autosave mix-up
   // would be a silently lost measurement)
-  const unsavedRef = useRef(0);
-  unsavedRef.current = new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)]).size;
-  useEffect(() => {
-    const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (unsavedRef.current === 0) return;
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    // in-app links (the group tabs, the rounds, the menu) do not fire beforeunload: catch their click first
-    const click = (e: MouseEvent) => {
-      if (unsavedRef.current === 0 || e.defaultPrevented || e.button !== 0) return;
-      const link = (e.target as Element | null)?.closest?.("a[href]");
-      if (!link || (link as HTMLAnchorElement).target === "_blank") return;
-      if (!window.confirm(LEAVE_WARNING)) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    };
-    window.addEventListener("beforeunload", beforeUnload);
-    document.addEventListener("click", click, true);
-    return () => {
-      window.removeEventListener("beforeunload", beforeUnload);
-      document.removeEventListener("click", click, true);
-    };
-  }, []);
+  const unsavedRef = useLeaveWarning(new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)]).size, LEAVE_WARNING);
   const chains = useRef(new Map<string, Promise<void>>());
 
   const queueKey = `napplo-queue-v1-${user.id}`;

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { EAT_LABEL } from "@/lib/eating-labels";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
+import { useLeaveWarning } from "./useLeaveWarning";
 
 function requestId(): string {
   const b = new Uint8Array(16);
@@ -578,30 +579,7 @@ export function EatingTable({ day, rows, editable }: { day: string; rows: Eating
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
   // acrobot 34710 (barracuda on #50): unsaved rows ask before the page or an in-app link (the day navigation too) is
   // left, as the feeding sheet and the measurement page do; the browser's back button is neither, so it is not asked
-  const unsavedRef = useRef(0);
-  unsavedRef.current = editable ? toSave.length : 0;
-  useEffect(() => {
-    const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (unsavedRef.current === 0) return;
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    const click = (e: MouseEvent) => {
-      if (unsavedRef.current === 0 || e.defaultPrevented || e.button !== 0) return;
-      const link = (e.target as Element | null)?.closest?.("a[href]");
-      if (!link || (link as HTMLAnchorElement).target === "_blank") return;
-      if (!window.confirm(EATING_LEAVE_WARNING)) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    };
-    window.addEventListener("beforeunload", beforeUnload);
-    document.addEventListener("click", click, true);
-    return () => {
-      window.removeEventListener("beforeunload", beforeUnload);
-      document.removeEventListener("click", click, true);
-    };
-  }, []);
+  useLeaveWarning(editable ? toSave.length : 0, EATING_LEAVE_WARNING);
 
   async function saveAll() {
     setBusy(true);
