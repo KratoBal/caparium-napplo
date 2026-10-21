@@ -186,7 +186,7 @@ export default async function SettingsPage() {
       </div>
 
       {user.role === "ADMIN" && (
-      <div className="card">
+      <div className="card" id="felhasznalok">
         <h2>Felhasználók</h2>
         <p className="hint">Törlés nincs, csak inaktiválás: a régi naplók és az auditnapló a felhasználóra hivatkoznak.</p>
         <div className="table-scroll">

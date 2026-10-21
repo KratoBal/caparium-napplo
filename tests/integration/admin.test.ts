@@ -134,4 +134,35 @@ describe("users (ÁLT-04, ÁLT-06, ÁLT-17)", () => {
   it("an aquarist cannot manage users", async () => {
     await expectCode(createUser(f.aq1, { requestId: rid(), loginId: "proba.harmadik", monogram: "P3", ...base }), "ADMIN_ROLE_ONLY");
   });
+
+  /*
+    A ZIMS-NÉV ÉRVÉNYESSÉGE (acrobot 34448, a lili-eset 2026-10-21: az első név a létrehozástól élt, a mérések
+    visszadátumozva készültek, 136 mérés nem kapott nevet). MI PIROSÍT: ha az első név a beírás pillanatától él;
+    ha egy meglévő név átírása választás nélkül átmegy; ha az elírás-javítás új sort nyit, vagy a névváltozás a
+    régi sort írja át.
+  */
+  it("the first ZIMS name is valid from the beginning; a change asks: typo fix (in place) or rename (from now)", async () => {
+    const r = (await createUser(f.admin, { requestId: rid(), loginId: "zims.proba", monogram: "ZP", ...base, zimsName: "Tset Worker" })) as { id: string };
+    const rows = () => prisma.userZimsName.findMany({ where: { userId: r.id }, orderBy: { validFrom: "asc" } });
+    expect((await rows()).map((z) => [z.zimsName, z.validFrom.toISOString(), z.validTo])).toEqual([
+      ["Tset Worker", "1970-01-01T00:00:00.000Z", null],
+    ]);
+    await expectCode(updateUser(f.admin, r.id, { requestId: rid(), zimsName: "Test Worker" }), "ZIMS_NAME_MODE");
+    await updateUser(f.admin, r.id, { requestId: rid(), zimsName: "Test Worker", zimsNameMode: "CORRECTION" });
+    expect((await rows()).map((z) => [z.zimsName, z.validFrom.toISOString(), z.validTo])).toEqual([
+      ["Test Worker", "1970-01-01T00:00:00.000Z", null],
+    ]);
+    const now = new Date("2026-10-21T08:00:00Z");
+    await updateUser(f.admin, r.id, { requestId: rid(), zimsName: "Test Married Name", zimsNameMode: "RENAME" }, now);
+    expect((await rows()).map((z) => [z.zimsName, z.validFrom.toISOString(), z.validTo?.toISOString() ?? null])).toEqual([
+      ["Test Worker", "1970-01-01T00:00:00.000Z", now.toISOString()],
+      ["Test Married Name", now.toISOString(), null],
+    ]);
+    const audits = await prisma.auditEntry.findMany({ where: { entityType: "User", entityId: r.id, action: "MASTER_CHANGE" }, orderBy: { at: "asc" } });
+    expect(audits.map((a) => (a.changes as { zimsNameMode?: { after: string } }).zimsNameMode?.after ?? null)).toEqual([
+      null,
+      "elírás javítása (a korábbi mérésekre is)",
+      "névváltozás (mostantól)",
+    ]);
+  });
 });

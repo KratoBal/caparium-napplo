@@ -74,9 +74,28 @@ type MeasurementFull = Prisma.MeasurementGetPayload<{
 type Mapping = {
   unitNames: { unitId: string; parameterId: string | null; zimsUnit: string; validFrom: Date; validTo: Date | null }[];
   userZims: Map<string, { zimsName: string; validFrom: Date; validTo: Date | null }[]>;
+  /** A dolgozók neve a hibaüzenethez: a felhasználó a beállításokban név szerint keresi. */
+  users?: Map<string, { fullName: string; loginId: string }>;
 };
 
-export type RowProblem = { measurementId: string; problem: string };
+/** Ahol a hiányzó adat pótolható; a felület linkként mutatja. */
+export const USERS_SETTINGS_LINK = "/beallitasok#felhasznalok";
+
+export type RowProblem = { measurementId: string; problem: string; link?: string };
+
+/**
+ * A HIBÁK EGYSZER, NEM MÉRÉSENKÉNT (acrobot 34387, a lili-eset 2026-10-21: 136 mérés ugyanazzal a mondattal).
+ * Az azonos mondatú hibák egy sorba kerülnek, a mérések számával; a sorrend az első előfordulásé.
+ */
+export function groupProblems(problems: readonly RowProblem[]): { problem: string; count: number; link?: string; measurementId: string }[] {
+  const groups = new Map<string, { problem: string; count: number; link?: string; measurementId: string }>();
+  for (const p of problems) {
+    const g = groups.get(p.problem);
+    if (g) g.count++;
+    else groups.set(p.problem, { problem: p.problem, count: 1, measurementId: p.measurementId, ...(p.link ? { link: p.link } : {}) });
+  }
+  return [...groups.values()];
+}
 
 /** The ZIMS row of one measurement, or the reason why there is none (never an empty field, T-14). */
 export function zimsRow(m: MeasurementFull, map: Mapping, tz: string): ZimsRow | RowProblem {
@@ -88,7 +107,11 @@ export function zimsRow(m: MeasurementFull, map: Mapping, tz: string): ZimsRow |
   const unit = (units.find((u) => u.parameterId === m.parameterId) ?? units.find((u) => u.parameterId === null))?.zimsUnit;
   if (!unit) return { measurementId: m.id, problem: `nincs ZIMS-egység a(z) ${m.unit.symbol} egységhez` };
   const who = pickValid(map.userZims.get(m.responsibleUserId) ?? [], at)?.zimsName;
-  if (!who) return { measurementId: m.id, problem: "a mérést végző dolgozónak nincs ZIMS-neve" };
+  if (!who) {
+    const user = map.users?.get(m.responsibleUserId);
+    const name = user ? `${user.fullName} (${user.loginId})` : "a mérést végző dolgozó";
+    return { measurementId: m.id, problem: `${name}: nincs ZIMS-neve a mérés idejére`, link: USERS_SETTINGS_LINK };
+  }
   return [zimsDate(at, tz), zimsTime(at, tz), pName, zimsValue(canonicalDecimal(m.value), m.parameter.decimals), unit, who];
 }
 
@@ -100,10 +123,14 @@ export function inRepeatedHour(at: Date, tz: string): boolean {
 }
 
 async function loadMapping(): Promise<Mapping> {
-  const [unitNames, userZims] = await Promise.all([prisma.zimsUnitName.findMany(), prisma.userZimsName.findMany()]);
+  const [unitNames, userZims, users] = await Promise.all([
+    prisma.zimsUnitName.findMany(),
+    prisma.userZimsName.findMany(),
+    prisma.user.findMany({ select: { id: true, fullName: true, loginId: true } }),
+  ]);
   const byUser = new Map<string, Mapping["userZims"] extends Map<string, infer V> ? V : never>();
   for (const z of userZims) byUser.set(z.userId, [...(byUser.get(z.userId) ?? []), z]);
-  return { unitNames, userZims: byUser };
+  return { unitNames, userZims: byUser, users: new Map(users.map((u) => [u.id, { fullName: u.fullName, loginId: u.loginId }])) };
 }
 
 async function loadMeasurements(from: string, to: string, poolIds: string[] | null) {
@@ -188,7 +215,7 @@ export async function createZimsExport(actor: Actor, input: ZimsExportInput, opt
   }
   if (problems.length) {
     throw new AppError(422, "MAPPING_MISSING", "Néhány méréshez hiányzik a ZIMS-megfeleltetés; az export nem készült el.", {
-      problems: problems.slice(0, 50),
+      problems: groupProblems(problems).slice(0, 50),
     });
   }
   if (perPool.size === 0) throw new AppError(422, "NOTHING_TO_EXPORT", "Ebben az időszakban nincs érvényes mérés.");

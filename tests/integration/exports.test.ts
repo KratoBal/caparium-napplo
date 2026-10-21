@@ -109,6 +109,30 @@ describe("ZIMS CSV (VIZ-16..VIZ-19)", () => {
     expect(JSON.stringify(e.details)).toContain("nincs ZIMS-neve");
     expect(await prisma.exportRun.count()).toBe(runs);
   });
+
+  /*
+    A HIBA EGYSZER, NÉV SZERINT, LINKKEL (acrobot 34387, a lili-eset: 136 mérés ugyanazzal a mondattal). MI PIROSÍT:
+    ha mérésenként ismétlődik; ha nem nevezi meg a dolgozót; ha nincs mellette, hol pótolható.
+  */
+  it("a person's missing ZIMS name is one problem with the person's name, the count and the settings link", async () => {
+    const u = await prisma.user.create({ data: { loginId: `zims-ketszer-${Date.now()}`, fullName: "Kétszer Mérő", role: "AQUARIST" } });
+    // two cells (one value per cell and day), the same person
+    for (const [param, value] of [["PH", "8.1"], ["SAL", "35"]] as const)
+      await createMeasurement(
+        { id: u.id, role: "AQUARIST" },
+        { requestId: rid(), groupId: f.group("NAPI_NAGY"), poolId: f.pool("NAGY"), parameterId: f.param(param), value, measuredAtLocal: "2026-03-12T08:00" },
+        new Date("2026-03-12T08:00:00+01:00"),
+      );
+    const e = await expectCode(
+      createZimsExport(f.aq1, { requestId: rid(), from: "2026-03-12", to: "2026-03-12", poolIds: null, purpose: "TRIAL" }),
+      "MAPPING_MISSING",
+    );
+    const problems = (e.details as { problems: { problem: string; count: number; link?: string }[] }).problems;
+    const mine = problems.filter((p) => p.problem.includes(u.loginId));
+    expect(mine.map((p) => [p.problem, p.count, p.link])).toEqual([
+      [`Kétszer Mérő (${u.loginId}): nincs ZIMS-neve a mérés idejére`, 2, "/beallitasok#felhasznalok"],
+    ]);
+  });
 });
 
 describe("Excel (VIZ-11)", () => {

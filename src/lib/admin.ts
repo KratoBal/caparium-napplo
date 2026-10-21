@@ -9,7 +9,7 @@ import { hashPassword } from "./auth";
 import { prisma, type Tx } from "./db";
 import { compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
-import { moduleLevel, validAt } from "./master";
+import { FIRST_NAME_FROM, moduleLevel, validAt } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 
@@ -227,6 +227,12 @@ export const updateUserSchema = z.object({
   active: z.boolean().optional(),
   monogram: monogram.optional(),
   zimsName: exportSafe(z.string().trim().min(2).max(100)).optional(),
+  /**
+   * A ZIMS-NÉV MÓDOSÍTÁSÁNAK FAJTÁJA (acrobot 34388/34448, a lili-eset 2026-10-21): CORRECTION, ha elírás volt,
+   * és a javított név a korábbi mérésekre is áll (a meglévő sort írja át); RENAME, ha a dolgozó neve változott
+   * (a régi név a korábbi mérésekre marad, az új mostantól él). Ha van érvényes név, kötelező.
+   */
+  zimsNameMode: z.enum(["CORRECTION", "RENAME"]).optional(),
   password: password.optional(),
   reason: reason.optional(),
 });
@@ -254,7 +260,8 @@ export async function createUser(actor: Actor, input: CreateUserInput, now = new
           role: input.role,
           passwordHash,
           monograms: { create: { monogram: input.monogram, validFrom: now } },
-          zimsNames: { create: { zimsName: input.zimsName, validFrom: now } },
+          // az első név az idők kezdetétől él: egy visszadátumozott mérés is megtalálja (a lili-eset)
+          zimsNames: { create: { zimsName: input.zimsName, validFrom: FIRST_NAME_FROM } },
         },
       });
       await writeAudit(tx, {
@@ -315,8 +322,24 @@ export async function updateUser(actor: Actor, id: string, input: UpdateUserInpu
       after.monogram = input.monogram;
     }
     if (input.zimsName && input.zimsName !== curZims?.zimsName) {
-      if (curZims) await tx.userZimsName.update({ where: { id: curZims.id }, data: { validTo: now } });
-      await tx.userZimsName.create({ data: { userId: id, zimsName: input.zimsName, validFrom: now } });
+      if (!curZims) {
+        // még soha nem volt neve: az idők kezdetétől; volt, de lezárult: mostantól
+        const first = u.zimsNames.length === 0;
+        await tx.userZimsName.create({ data: { userId: id, zimsName: input.zimsName, validFrom: first ? FIRST_NAME_FROM : now } });
+      } else if (input.zimsNameMode === "CORRECTION") {
+        await tx.userZimsName.update({ where: { id: curZims.id }, data: { zimsName: input.zimsName } });
+        after.zimsNameMode = "elírás javítása (a korábbi mérésekre is)";
+      } else if (input.zimsNameMode === "RENAME") {
+        await tx.userZimsName.update({ where: { id: curZims.id }, data: { validTo: now } });
+        await tx.userZimsName.create({ data: { userId: id, zimsName: input.zimsName, validFrom: now } });
+        after.zimsNameMode = "névváltozás (mostantól)";
+      } else {
+        throw new AppError(
+          422,
+          "ZIMS_NAME_MODE",
+          "Add meg, hogy a ZIMS-név elírását javítod (a korábbi mérésekre is), vagy a dolgozó neve változott (mostantól).",
+        );
+      }
       after.zimsName = input.zimsName;
     }
     // a deactivated user, or one with a new password, is logged out everywhere

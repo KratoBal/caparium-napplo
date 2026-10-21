@@ -15,6 +15,13 @@ export function validAt(at: Date) {
 
 type Versioned = { validFrom: Date; validTo: Date | null };
 
+/**
+ * A DOLGOZÓ ELSŐ ZIMS-NEVÉNEK KEZDETE: az idők kezdete, nem a beírás pillanata (acrobot 34448, a lili-eset
+ * 2026-10-21). A méréseket visszadátumozva is rögzítik, és egy csak a beírástól élő név az előtte lévő napokra
+ * nem ad nevet: a ZIMS-export ott „nincs ZIMS-neve” hibával megáll.
+ */
+export const FIRST_NAME_FROM = new Date("1970-01-01T00:00:00.000Z");
+
 export function pickValid<T extends Versioned>(rows: T[], at: Date): T | undefined {
   return rows.find((r) => r.validFrom <= at && (r.validTo === null || r.validTo > at));
 }

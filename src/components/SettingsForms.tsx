@@ -136,12 +136,17 @@ export function UserRow(p: { id: string; loginId: string; fullName: string; role
   const [role, setRole] = useState(p.role);
   const [monogram, setMonogram] = useState(p.monogram);
   const [zimsName, setZimsName] = useState(p.zimsName);
+  const [zimsNameMode, setZimsNameMode] = useState<"" | "CORRECTION" | "RENAME">("");
   const [password, setPassword] = useState("");
   const { msg, busy, save } = useSave();
   const body: Record<string, unknown> = {};
   if (role !== p.role) body.role = role;
   if (monogram.trim() !== p.monogram) body.monogram = monogram.trim();
-  if (zimsName.trim() !== p.zimsName) body.zimsName = zimsName.trim();
+  const zimsChanged = zimsName.trim() !== p.zimsName;
+  // a meglévő név átírásakor el kell dönteni: elírás (visszamenőleg) vagy névváltozás (mostantól)
+  const modeNeeded = zimsChanged && p.zimsName !== "";
+  if (zimsChanged) body.zimsName = zimsName.trim();
+  if (modeNeeded && zimsNameMode) body.zimsNameMode = zimsNameMode;
   if (password) body.password = password;
   return (
     <tr data-testid={`user-${p.loginId}`} className={p.active ? undefined : "invalid"}>
@@ -153,10 +158,29 @@ export function UserRow(p: { id: string; loginId: string; fullName: string; role
         </select>
       </td>
       <td className="keep"><input className="input small" aria-label={`${p.loginId} monogram`} value={monogram} onChange={(e) => setMonogram(e.target.value)} /></td>
-      <td className="keep"><input className="input" aria-label={`${p.loginId} ZIMS-név`} value={zimsName} onChange={(e) => setZimsName(e.target.value)} /></td>
+      <td className="keep">
+        <input className="input" aria-label={`${p.loginId} ZIMS-név`} value={zimsName} onChange={(e) => setZimsName(e.target.value)} />
+        {modeNeeded && (
+          <select
+            className="input"
+            aria-label={`${p.loginId} ZIMS-név módosításának fajtája`}
+            value={zimsNameMode}
+            onChange={(e) => setZimsNameMode(e.target.value as "" | "CORRECTION" | "RENAME")}
+          >
+            <option value="">Elírás vagy névváltozás?</option>
+            <option value="CORRECTION">Elírást javítok (a korábbi mérésekre is)</option>
+            <option value="RENAME">A neve megváltozott (mostantól)</option>
+          </select>
+        )}
+      </td>
       <td className="keep"><input className="input" type="password" autoComplete="new-password" aria-label={`${p.loginId} új jelszó`} placeholder="új jelszó" value={password} onChange={(e) => setPassword(e.target.value)} /></td>
       <td className="keep">
-        <button className="btn" type="button" disabled={busy || Object.keys(body).length === 0} onClick={() => void save(`/api/admin/users/${p.id}`, "PATCH", body).then(() => setPassword(""))}>
+        <button
+          className="btn"
+          type="button"
+          disabled={busy || Object.keys(body).length === 0 || (modeNeeded && !zimsNameMode)}
+          onClick={() => void save(`/api/admin/users/${p.id}`, "PATCH", body).then(() => setPassword(""))}
+        >
           Mentés
         </button>{" "}
         {!p.self && (
