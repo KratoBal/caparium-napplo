@@ -15,10 +15,12 @@
 // Dry by default: prints the rows and the plan, writes nothing. `--apply` writes. Run from /app in the app container:
 //
 //   node prisma/zims-name-lili-fix.mjs                                  # dry
+//   node prisma/zims-name-lili-fix.mjs --apply                          # recorded under the system user
 //   node prisma/zims-name-lili-fix.mjs --apply --vegrehajto <admin-loginId>
 //
-// The audit entry's userId is the ACTOR (admin.ts writes actor.id there; barracuda #39): `--vegrehajto` names the active
-// ADMIN account the correction is recorded under (the decision was Balázs's), lili stands only in entityId.
+// The audit entry's userId is the ACTOR (admin.ts writes actor.id there; barracuda #39). By default it is the system
+// user (role SYSTEM, the non-login actor of automatic operations, R-12): a script ran it, on Balázs's decision, which the
+// reason names. `--vegrehajto` records it under an active ADMIN account instead. lili stands only in entityId.
 //
 // Idempotent: a second run finds the open row already at the beginning and every other row empty, and changes nothing.
 // It refuses (exit 3) unless exactly one active-or-not user has the login id and exactly one of her rows is open.
@@ -31,6 +33,7 @@ const APPLY = process.argv.includes("--apply");
 const ACTOR_AT = process.argv.indexOf("--vegrehajto");
 const ACTOR_LOGIN = ACTOR_AT >= 0 ? process.argv[ACTOR_AT + 1] : undefined;
 
+const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001"; // src/lib/db.ts
 const prisma = new PrismaClient();
 const out = (value) =>
   console.log(JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? Number(v) : v)));
@@ -58,10 +61,12 @@ try {
   const userId = users[0].id;
   let actorId = null;
   if (APPLY) {
-    if (!ACTOR_LOGIN) throw new Refused("--apply mellé kell a --vegrehajto <admin-loginId>");
-    const actor = await prisma.user.findUnique({ where: { loginId: ACTOR_LOGIN }, select: { id: true, role: true, active: true } });
-    if (!actor || actor.role !== "ADMIN" || !actor.active)
+    const actor = ACTOR_LOGIN
+      ? await prisma.user.findUnique({ where: { loginId: ACTOR_LOGIN }, select: { id: true, role: true, active: true } })
+      : await prisma.user.findUnique({ where: { id: SYSTEM_USER_ID }, select: { id: true, role: true, active: true } });
+    if (ACTOR_LOGIN && (!actor || actor.role !== "ADMIN" || !actor.active))
       throw new Refused(`a végrehajtó (${ACTOR_LOGIN}) nem aktív admin`);
+    if (!ACTOR_LOGIN && actor?.role !== "SYSTEM") throw new Refused("nincs rendszer-felhasználó; add meg: --vegrehajto <admin-loginId>");
     if (actor.id === userId) throw new Refused("a végrehajtó nem lehet maga az érintett dolgozó");
     actorId = actor.id;
   }
