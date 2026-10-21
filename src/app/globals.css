@@ -118,6 +118,7 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .feeding-sheet .log-table tr.active-row td { background: var(--c-ink); color: var(--c-white); }
 .feeding-sheet .log-table tr.active-row td .input { background: var(--c-white); color: var(--c-ink); }
 .feeding-sheet tfoot td { font-weight: 600; }
+.input.input-invalid { border-color: var(--c-error); box-shadow: 0 0 0 2px var(--c-error); }
 .log-table tr.invalid td.keep { text-decoration: none; }
 .value-out { color: var(--c-error); font-weight: 600; }
 .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
