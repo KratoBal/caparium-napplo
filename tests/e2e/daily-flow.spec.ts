@@ -552,6 +552,15 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   await expect(listRow).not.toContainText("Litopenaeus vannamei 40 g");
   await expect(sheet.getByTestId("sheet-grand-total")).toContainText("g");
   await expect(sheet.getByRole("button", { name: "Takarmánylap nyomtatása" })).toBeVisible();
+  // barracuda #45 (3): a draft belongs to its day. The day navigation stays on the same route; after it, accepted,
+  // the draft is gone, also when coming back to the day
+  await mysis.fill("35");
+  page.once("dialog", (d) => void d.accept());
+  await page.getByRole("link", { name: "‹ előző nap" }).click();
+  await expect(sheet.getByRole("button", { name: /Takarmánylap mentése \(/ })).toHaveCount(0);
+  await page.getByRole("link", { name: "következő nap ›" }).click();
+  await row.getByRole("cell", { name, exact: true }).click();
+  await expect(mysis).toHaveValue("30");
   // barracuda #45 (2): leaving with a draft asks first; declined, the draft is still there; accepted, the page goes
   await mysis.fill("35");
   const leave = page.getByRole("link", { name: "Takarmánykivétel" });

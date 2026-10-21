@@ -159,7 +159,9 @@ export function FeedingDay(props: {
           <DayFeeds day={day} types={props.feedTypes} chosen={props.dayFeedIds ?? []} editable={editable} />
         </div>
       )}
-      <FeedingSheet day={day} editable={editable} recipients={recipients} feeds={props.sheetFeeds ?? []} items={items} active={active} onActive={setActive} />
+      {/* keyed by the day: DayNav changes ?nap= on the same route, which keeps a client component's state, so a
+          draft typed on one day would show (and save) on the next; a new day is a new sheet (barracuda #45) */}
+      <FeedingSheet key={day} day={day} editable={editable} recipients={recipients} feeds={props.sheetFeeds ?? []} items={items} active={active} onActive={setActive} />
       {editable && (
         <div className="card">
           <h2>Új tétel</h2>

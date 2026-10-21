@@ -143,7 +143,8 @@ export function FeedingSheet({
   // a total that counts a value not saved yet is marked like the draft cell itself (barracuda #45)
   const totalMark = (dirty: boolean, text: string) => (dirty ? <span className="badge badge-pending" title="Nem mentett értéket is tartalmaz">{text}*</span> : text);
 
-  // leaving with drafts asks first: the page itself, and every in-app link (#38's rule)
+  // leaving with drafts asks first: the page itself, and every in-app link (#38's rule). The browser's back button
+  // is neither a click nor an unload in the App Router, so it is not asked, as on the measurement page
   const unsavedRef = useRef(0);
   unsavedRef.current = changed.length;
   useEffect(() => {
