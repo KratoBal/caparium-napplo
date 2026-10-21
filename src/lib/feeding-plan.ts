@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 import { writeAudit } from "./audit";
-import { prisma } from "./db";
+import { prisma, type Tx } from "./db";
 import { AppError } from "./errors";
 import { aliveOnDay, selectedOn, setSelection, ensureFeedingDay } from "./feeding";
 import { moduleLevel, pickValid } from "./master";
@@ -27,24 +27,55 @@ export async function setFeedingPlan(actor: Actor, raw: z.input<typeof planSchem
   if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true };
   const level = await moduleLevel(prisma, actor.id, actor.role, "FEEDING");
   if (level === "NONE" || level === "READ") throw new AppError(403, "READ_ONLY", "A tervet rögzítési joggal lehet módosítani.");
-  const weekdays = [...new Set(input.weekdays)].sort();
+  return prisma.$transaction(async (tx) => ({ replayed: false, changed: await planInTx(tx, actor, input.animalId, input.weekdays, input.requestId, serverNow) }));
+}
+
+/** One animal's new plan version inside a transaction; false when it is the same as the open one. */
+async function planInTx(tx: Tx, actor: Actor, animalId: string, days: number[], requestId: string, serverNow: Date): Promise<boolean> {
+  const weekdays = [...new Set(days)].sort();
+  // the animal's row first, so two saves cannot both leave an open plan (as the reference, #14)
+  const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "animal" WHERE "id" = ${animalId}::uuid FOR NO KEY UPDATE`;
+  if (rows.length !== 1) throw new AppError(404, "ANIMAL_NOT_FOUND", "Az állat nem található.");
+  const open = await tx.feedingPlan.findFirst({ where: { animalId, validTo: null } });
+  if (open && open.weekdays.join(",") === weekdays.join(",")) return false;
+  // no plan yet and no day ticked: nothing to record (the overview sends every row it shows)
+  if (!open && weekdays.length === 0) return false;
+  if (open) await tx.feedingPlan.update({ where: { id: open.id }, data: { validTo: serverNow } });
+  const plan = await tx.feedingPlan.create({ data: { animalId, weekdays, validFrom: serverNow, createdById: actor.id } });
+  await writeAudit(tx, {
+    userId: actor.id,
+    action: "UPDATE",
+    entityType: "FeedingPlan",
+    entityId: plan.id,
+    changes: { weekdays: { before: open?.weekdays ?? null, after: weekdays } },
+    requestId,
+  });
+  return true;
+}
+
+export const plansSchema = z.object({
+  requestId,
+  plans: z.array(z.object({ animalId: z.uuid(), weekdays: z.array(z.number().int().min(1).max(7)).max(7) })).min(1).max(500),
+});
+
+/**
+ * THE FEEDING TIMETABLE (6fe63c9b, item 4; Lili: "az admin létrehoz egy heti órarendet"): every animal's days on
+ * one screen, saved together in one transaction. Each changed row is a new plan version, exactly as the single
+ * animal's form (setFeedingPlan); an unchanged row writes nothing. The same permission: recording or admin.
+ */
+export async function setFeedingPlans(actor: Actor, raw: z.input<typeof plansSchema>, serverNow = new Date()) {
+  const input = plansSchema.parse(raw);
+  if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true, changed: 0 };
+  const level = await moduleLevel(prisma, actor.id, actor.role, "FEEDING");
+  if (level === "NONE" || level === "READ") throw new AppError(403, "READ_ONLY", "A tervet rögzítési joggal lehet módosítani.");
+  const ids = input.plans.map((p) => p.animalId);
+  if (new Set(ids).size !== ids.length) throw new AppError(422, "DUPLICATE_ANIMAL", "Egy állat egyszer szerepelhet.");
+  // a stable lock order: two overlapping saves cannot wait on each other
+  const plans = [...input.plans].sort((a, b) => a.animalId.localeCompare(b.animalId));
   return prisma.$transaction(async (tx) => {
-    // the animal's row first, so two saves cannot both leave an open plan (as the reference, #14)
-    const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "animal" WHERE "id" = ${input.animalId}::uuid FOR NO KEY UPDATE`;
-    if (rows.length !== 1) throw new AppError(404, "ANIMAL_NOT_FOUND", "Az állat nem található.");
-    const open = await tx.feedingPlan.findFirst({ where: { animalId: input.animalId, validTo: null } });
-    if (open && open.weekdays.join(",") === weekdays.join(",")) return { replayed: false, changed: false };
-    if (open) await tx.feedingPlan.update({ where: { id: open.id }, data: { validTo: serverNow } });
-    const plan = await tx.feedingPlan.create({ data: { animalId: input.animalId, weekdays, validFrom: serverNow, createdById: actor.id } });
-    await writeAudit(tx, {
-      userId: actor.id,
-      action: "UPDATE",
-      entityType: "FeedingPlan",
-      entityId: plan.id,
-      changes: { weekdays: { before: open?.weekdays ?? null, after: weekdays } },
-      requestId: input.requestId,
-    });
-    return { replayed: false, changed: true };
+    let changed = 0;
+    for (const p of plans) if (await planInTx(tx, actor, p.animalId, p.weekdays, input.requestId, serverNow)) changed++;
+    return { replayed: false, changed };
   });
 }
 
