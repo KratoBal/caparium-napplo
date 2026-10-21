@@ -14,8 +14,11 @@
 //
 // Dry by default: prints the rows and the plan, writes nothing. `--apply` writes. Run from /app in the app container:
 //
-//   node prisma/zims-name-lili-fix.mjs            # dry
-//   node prisma/zims-name-lili-fix.mjs --apply
+//   node prisma/zims-name-lili-fix.mjs                                  # dry
+//   node prisma/zims-name-lili-fix.mjs --apply --vegrehajto <admin-loginId>
+//
+// The audit entry's userId is the ACTOR (admin.ts writes actor.id there; barracuda #39): `--vegrehajto` names the active
+// ADMIN account the correction is recorded under (the decision was Balázs's), lili stands only in entityId.
 //
 // Idempotent: a second run finds the open row already at the beginning and every other row empty, and changes nothing.
 // It refuses (exit 3) unless exactly one active-or-not user has the login id and exactly one of her rows is open.
@@ -25,6 +28,8 @@ import { PrismaClient } from "@prisma/client";
 const LOGIN_ID = "lili";
 const BEGINNING = new Date("1970-01-01T00:00:00.000Z");
 const APPLY = process.argv.includes("--apply");
+const ACTOR_AT = process.argv.indexOf("--vegrehajto");
+const ACTOR_LOGIN = ACTOR_AT >= 0 ? process.argv[ACTOR_AT + 1] : undefined;
 
 const prisma = new PrismaClient();
 const out = (value) =>
@@ -51,6 +56,15 @@ try {
   const users = await prisma.user.findMany({ where: { loginId: LOGIN_ID }, select: { id: true } });
   if (users.length !== 1) throw new Refused(`${users.length} felhasználó a(z) ${LOGIN_ID} azonosítóval, nem 1`);
   const userId = users[0].id;
+  let actorId = null;
+  if (APPLY) {
+    if (!ACTOR_LOGIN) throw new Refused("--apply mellé kell a --vegrehajto <admin-loginId>");
+    const actor = await prisma.user.findUnique({ where: { loginId: ACTOR_LOGIN }, select: { id: true, role: true, active: true } });
+    if (!actor || actor.role !== "ADMIN" || !actor.active)
+      throw new Refused(`a végrehajtó (${ACTOR_LOGIN}) nem aktív admin`);
+    if (actor.id === userId) throw new Refused("a végrehajtó nem lehet maga az érintett dolgozó");
+    actorId = actor.id;
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     const rows = await tx.userZimsName.findMany({ where: { userId }, orderBy: { validFrom: "asc" } });
@@ -83,7 +97,7 @@ try {
     for (const { row, data } of changes) await tx.userZimsName.update({ where: { id: row.id }, data });
     await tx.auditEntry.create({
       data: {
-        userId,
+        userId: actorId,
         action: "MASTER_CORRECTION",
         entityType: "User",
         entityId: userId,
