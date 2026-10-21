@@ -11,7 +11,7 @@ import ExcelJS from "exceljs";
 import { prisma } from "../db";
 import { AppError } from "../errors";
 import { dayBounds } from "../feeding";
-import { isDerivedFasting, selectedKeys } from "../eating-pattern";
+import { isDerivedFasting, listFacts } from "../eating-pattern";
 import { pickValid } from "../master";
 import { feedingLog } from "../feeding-log";
 import { breakdown, type ReportLine } from "../reports";
@@ -262,7 +262,7 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
       where: { status: "VALID", feedingDay: { businessDay: { gte: dayToDate(f.from), lte: dayToDate(f.to) } } },
       include: { feedingDay: true },
     }),
-    selectedKeys(f.from, f.to),
+    listFacts(f.from, f.to),
   ]);
   const life = new Map<string, { arrived?: Date; ended?: Date }>();
   for (const e of events) {

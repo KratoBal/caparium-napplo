@@ -5,7 +5,7 @@
 
 import { prisma } from "./db";
 import { AppError } from "./errors";
-import { isDerivedFasting, selectedKeys } from "./eating-pattern";
+import { isDerivedFasting, listFacts } from "./eating-pattern";
 import { dayBounds } from "./feeding";
 import { pickValid } from "./master";
 import { addDays, businessDayOf, dateToDay, dayToDate } from "./time";
@@ -51,7 +51,7 @@ export async function feedingLog(f: LogFilter) {
     prisma.unit.findMany({ where: { isBase: true } }),
     prisma.placement.findMany({ include: { pool: { include: { names: true } } }, orderBy: { validFrom: "asc" } }),
     prisma.lifecycleEvent.findMany({ where: { status: "VALID" }, select: { animalId: true, type: true, occurredAt: true } }),
-    selectedKeys(f.from, f.to),
+    listFacts(f.from, f.to),
   ]);
   const baseOf = new Map(baseUnits.map((u) => [u.dimension, u.symbol]));
 
