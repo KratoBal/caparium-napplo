@@ -10,13 +10,19 @@
 //   - every cell has one input per dimension of its feed (g, ml, db), prefilled with what is saved;
 //   - what is typed stays as a draft when the row is left, shown on the row, and can be changed again;
 //   - ONE "Takarmánylap mentése" saves every changed cell: a new cell is a new item, a changed saved cell updates
-//     its item (its version), a saved cell emptied is invalidated; each through the existing endpoints, so the list,
-//     the eating log and the exports read the same data;
+//     its item, a saved cell emptied is invalidated; each through the existing endpoints, so the list, the eating
+//     log and the exports read the same data;
 //   - an empty cell shows 0 and records nothing.
-// A cell keeps one request id per change until it is saved (#42): a lost answer is replayed, never a second item.
-import { useState } from "react";
+// The list is common (any aquarist may change it), so a draft remembers WHAT IT WAS TYPED ON (the item and its
+// version, or "no item") and the save sends that, never the version read at the save: a change made meanwhile by
+// someone else is a conflict on that cell, never silently overwritten (barracuda #45). Unsaved drafts ask before the
+// page is left, as the measurement page does (#38). A cell keeps one request id per change until it is saved (#42).
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { Msg, parseAmount, useSend, type FeedOpt, type Recipient } from "./FeedingForms";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
+
+const LEAVE_WARNING = "Van még nem mentett érték a takarmánylapon. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?";
 
 function newRequestId(): string {
   const b = new Uint8Array(16);
@@ -51,8 +57,8 @@ function cellUnits(feed: FeedOpt) {
   });
 }
 
-/** A draft cell: the typed text per dimension. */
-type Draft = Record<string, string>;
+/** A draft cell: the typed text per dimension, and what it was typed on (the item and version, or none). */
+type Draft = { values: Record<string, string>; baseId: string | null; baseVersion: number | null };
 
 export function FeedingSheet({
   day,
@@ -75,32 +81,43 @@ export function FeedingSheet({
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [requestIds, setRequestIds] = useState<Record<string, string>>({});
   const [bad, setBad] = useState<string[]>([]);
+  const [failed, setFailed] = useState<string[]>([]);
   const [localMsg, setLocalMsg] = useState<string | null>(null);
   const { msg, busy, run } = useSend();
+  const router = useRouter();
   const reasonsOn = useReasonsOn();
   const keyOf = (i: SheetItem) => i.animalId ?? `g:${i.groupId}`;
   const cellKey = (rec: string, feedId: string) => `${rec}|${feedId}`;
-  // one item per recipient and feed a day (the server's rule): the cell's saved item
-  const savedItem = (rec: string, feedId: string) => items.find((i) => keyOf(i) === rec && i.feedId === feedId) ?? null;
-  const savedText = (rec: string, f: FeedOpt): Draft => {
+  const cellItems = (rec: string, feedId: string) => items.filter((i) => keyOf(i) === rec && i.feedId === feedId);
+  // one item per recipient and feed a day is the server's rule; two would make the cell read-only (barracuda #45)
+  const savedItem = (rec: string, feedId: string) => {
+    const list = cellItems(rec, feedId);
+    return list.length === 1 ? list[0]! : null;
+  };
+  const multi = (rec: string, feedId: string) => cellItems(rec, feedId).length > 1;
+  const savedText = (rec: string, f: FeedOpt): Record<string, string> => {
     const item = savedItem(rec, f.id);
-    const out: Draft = {};
+    const out: Record<string, string> = {};
     for (const u of cellUnits(f)) {
       const v = item?.baseQuantities.filter((q) => q.unit === u.symbol).reduce((s, q) => s + q.value, 0) ?? 0;
       out[u.dimension] = v ? num(v) : "";
     }
     return out;
   };
-  const shown = (rec: string, f: FeedOpt): Draft => drafts[cellKey(rec, f.id)] ?? savedText(rec, f);
+  const shown = (rec: string, f: FeedOpt): Record<string, string> => drafts[cellKey(rec, f.id)]?.values ?? savedText(rec, f);
   const isDirty = (rec: string, f: FeedOpt) => {
     const d = drafts[cellKey(rec, f.id)];
     if (!d) return false;
     const s = savedText(rec, f);
-    return cellUnits(f).some((u) => (d[u.dimension] ?? "").trim() !== (s[u.dimension] ?? "").trim());
+    return cellUnits(f).some((u) => (d.values[u.dimension] ?? "").trim() !== (s[u.dimension] ?? "").trim());
   };
-  // the totals read what the sheet shows: saved values, or the draft where one was typed
+  // the totals read what the sheet shows: saved values (every item of the cell), or the draft where one was typed
   const cellTotals = (rec: string, f: FeedOpt): Record<string, number> => {
     const t: Record<string, number> = {};
+    if (!drafts[cellKey(rec, f.id)]) {
+      for (const i of cellItems(rec, f.id)) for (const q of i.baseQuantities) add(t, q.unit, q.value);
+      return t;
+    }
     const d = shown(rec, f);
     for (const u of cellUnits(f)) {
       const v = parseAmount(d[u.dimension] ?? "");
@@ -121,10 +138,47 @@ export function FeedingSheet({
   const grand: Record<string, number> = {};
   for (const f of feeds) for (const [u, v] of Object.entries(colTotal(f))) add(grand, u, v);
   const changed = recipients.flatMap((r) => feeds.filter((f) => isDirty(r.key, f)).map((f) => ({ r, f })));
+  const rowDirty = (rec: string) => feeds.some((f) => isDirty(rec, f));
+  const colDirty = (f: FeedOpt) => recipients.some((r) => isDirty(r.key, f));
+  // a total that counts a value not saved yet is marked like the draft cell itself (barracuda #45)
+  const totalMark = (dirty: boolean, text: string) => (dirty ? <span className="badge badge-pending" title="Nem mentett értéket is tartalmaz">{text}*</span> : text);
 
+  // leaving with drafts asks first: the page itself, and every in-app link (#38's rule)
+  const unsavedRef = useRef(0);
+  unsavedRef.current = changed.length;
+  useEffect(() => {
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (unsavedRef.current === 0) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    const click = (e: MouseEvent) => {
+      if (unsavedRef.current === 0 || e.defaultPrevented || e.button !== 0) return;
+      const link = (e.target as Element | null)?.closest?.("a[href]");
+      if (!link || (link as HTMLAnchorElement).target === "_blank") return;
+      if (!window.confirm(LEAVE_WARNING)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("click", click, true);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      document.removeEventListener("click", click, true);
+    };
+  }, []);
+
+  const drop = <T,>(list: T[], key: T) => list.filter((x) => x !== key);
   function type(rec: string, f: FeedOpt, dimension: string, value: string) {
     const key = cellKey(rec, f.id);
-    setDrafts((cur) => ({ ...cur, [key]: { ...(cur[key] ?? savedText(rec, f)), [dimension]: value } }));
+    setDrafts((cur) => {
+      // the first keystroke fixes what the draft is typed on
+      const base = cur[key] ?? { values: savedText(rec, f), baseId: savedItem(rec, f.id)?.id ?? null, baseVersion: savedItem(rec, f.id)?.version ?? null };
+      return { ...cur, [key]: { ...base, values: { ...base.values, [dimension]: value } } };
+    });
+    setBad((cur) => drop(cur, key));
+    setFailed((cur) => drop(cur, key));
     // a new value is a new request
     setRequestIds((cur) => {
       const next = { ...cur };
@@ -132,41 +186,57 @@ export function FeedingSheet({
       return next;
     });
   }
+  function discard() {
+    if (!window.confirm("A takarmánylap nem mentett értékei elvesznek. Elveted őket?")) return;
+    setDrafts({});
+    setBad([]);
+    setFailed([]);
+    setLocalMsg(null);
+  }
 
   async function saveAll() {
     // a typed cell that is not an amount is never skipped silently (#42): marked, and nothing is sent
-    const invalid = changed.filter(({ r, f }) => cellUnits(f).some((u) => {
-      const raw = (shown(r.key, f)[u.dimension] ?? "").trim();
-      return raw !== "" && parseAmount(raw) === null;
-    }));
+    const invalid = changed.filter(({ r, f }) =>
+      cellUnits(f).some((u) => {
+        const raw = (shown(r.key, f)[u.dimension] ?? "").trim();
+        return raw !== "" && parseAmount(raw) === null;
+      }),
+    );
     setBad(invalid.map(({ r, f }) => cellKey(r.key, f.id)));
     if (invalid.length) {
       setLocalMsg(`${invalid.length} cella nem menthető: érvénytelen mennyiség (${invalid.map(({ r, f }) => `${r.label}: ${f.name}`).join("; ")}).`);
       return;
     }
-    const clearing = changed.filter(({ r, f }) => savedItem(r.key, f.id) && cellUnits(f).every((u) => !parseAmount(shown(r.key, f)[u.dimension] ?? "")));
+    // a cell that got a second item since its draft began is read-only: the item form corrects it. A change made
+    // meanwhile to the draft's own item is the SERVER's to judge (VERSION_CONFLICT, CELL_TAKEN): this sheet's own
+    // request whose answer was lost looks the same from here, and only the server knows it is a replay (#42)
+    const stale = changed.filter(({ r, f }) => multi(r.key, f.id));
+    setFailed(stale.map(({ r, f }) => cellKey(r.key, f.id)));
+    if (stale.length) {
+      setLocalMsg(`${stale.length} cellában közben több tétel lett: ${stale.map(({ r, f }) => `${r.label}: ${f.name}`).join("; ")}. A tétel-űrlapon javítsd, a piszkozatát vesd el.`);
+      return;
+    }
+    const clearing = changed.filter(({ r, f }) => drafts[cellKey(r.key, f.id)]!.baseId && cellUnits(f).every((u) => !parseAmount(shown(r.key, f)[u.dimension] ?? "")));
     let why: { reason?: string } | null = {};
     if (clearing.length) {
       why = askReason(reasonsOn, "A kiürített cellák tételeinek érvénytelenítési oka:", `${clearing.length} kiürített cella tétele érvénytelenítődik. Folytatod?`);
       if (!why) return;
     }
     setLocalMsg(null);
-    let saved = 0;
     for (const { r, f } of changed) {
       const key = cellKey(r.key, f.id);
-      const d = shown(r.key, f);
-      const item = savedItem(r.key, f.id);
+      const d = drafts[key]!;
       const quantities = cellUnits(f)
-        .map((u) => ({ raw: (d[u.dimension] ?? "").trim(), unitId: u.id }))
+        .map((u) => ({ raw: (d.values[u.dimension] ?? "").trim(), unitId: u.id }))
         .filter((q) => q.raw !== "" && parseAmount(q.raw))
         .map((q) => ({ value: q.raw, unitId: q.unitId }));
       const id = requestIds[key] ?? newRequestId();
       if (!requestIds[key]) setRequestIds((m) => ({ ...m, [key]: id }));
       let ok: boolean;
       if (quantities.length === 0) {
-        // an emptied saved cell: its item is invalidated (an empty cell is 0, nothing to keep)
-        if (!item) ok = true;
-        else ok = await run(`/api/feeding/items/${item.id}/invalidate`, { requestId: id, expectedVersion: item.version, ...why }, "Takarmánylap mentve.");
+        // an emptied saved cell: its item is invalidated, on the version the draft was typed on
+        if (!d.baseId) ok = true;
+        else ok = await run(`/api/feeding/items/${d.baseId}/invalidate`, { requestId: id, expectedVersion: d.baseVersion, ...why }, "Takarmánylap mentve.");
       } else {
         ok = await run(
           "/api/feeding/items",
@@ -175,14 +245,19 @@ export function FeedingSheet({
             day,
             feedId: f.id,
             quantities,
-            ...(item ? { itemId: item.id, expectedVersion: item.version } : {}),
+            // the version the draft began on: a change made since is the server's VERSION_CONFLICT, not an overwrite
+            ...(d.baseId ? { itemId: d.baseId, expectedVersion: d.baseVersion } : {}),
             ...(r.animalId ? { animalId: r.animalId } : { groupId: r.groupId }),
           },
           "Takarmánylap mentve.",
         );
       }
-      if (!ok) return;
-      saved++;
+      if (!ok) {
+        // the cell stays a draft, marked; the sheet reloads, so after discarding the draft the current value shows
+        setFailed([key]);
+        router.refresh();
+        return;
+      }
       setDrafts((cur) => {
         const next = { ...cur };
         delete next[key];
@@ -194,9 +269,11 @@ export function FeedingSheet({
         return next;
       });
     }
-    if (saved) setLocalMsg(null);
+    setFailed([]);
   }
   function printSheet() {
+    // the paper should not carry a value that is not saved, unasked (barracuda #45)
+    if (changed.length && !window.confirm("A takarmánylapon nem mentett érték is van, a nyomtatás azt is mutatja. Nyomtatod így?")) return;
     document.body.classList.add("print-sheet");
     window.print();
     document.body.classList.remove("print-sheet");
@@ -250,14 +327,19 @@ export function FeedingSheet({
                         const key = cellKey(r.key, f.id);
                         const d = shown(r.key, f);
                         const dirty = isDirty(r.key, f);
+                        const conflict = failed.includes(key);
                         return (
-                          <td key={f.id} className="keep" data-testid={`sheet-cell-${r.label}-${f.name}`}>
-                            {isActive ? (
+                          <td key={f.id} className="keep" data-testid={`sheet-cell-${r.label}-${f.name}`} data-failed={conflict || undefined}>
+                            {multi(r.key, f.id) ? (
+                              <span className="hint" title="Egy cellában több tétel: a tétel-űrlapon javítsd">
+                                {fmt(cellTotals(r.key, f))} (több tétel)
+                              </span>
+                            ) : isActive ? (
                               cellUnits(f).map((u) => (
                                 <input
                                   key={u.dimension}
-                                  className={`input small no-print${bad.includes(key) ? " input-invalid" : ""}`}
-                                  aria-invalid={bad.includes(key)}
+                                  className={`input small no-print${bad.includes(key) || conflict ? " input-invalid" : ""}`}
+                                  aria-invalid={bad.includes(key) || conflict}
                                   inputMode="decimal"
                                   value={d[u.dimension] ?? ""}
                                   onClick={(e) => e.stopPropagation()}
@@ -266,14 +348,14 @@ export function FeedingSheet({
                                 />
                               ))
                             ) : (
-                              <span className={dirty ? "badge badge-pending" : undefined} title={dirty ? "Nincs még mentve" : undefined}>
+                              <span className={dirty || conflict ? "badge badge-pending" : undefined} title={conflict ? "Nem mentődött: lásd az üzenetet" : dirty ? "Nincs még mentve" : undefined}>
                                 {fmt(cellTotals(r.key, f)) || "0"}
                               </span>
                             )}
                           </td>
                         );
                       })}
-                      <td>{fmt(rowTotal(r.key)) || "0"}</td>
+                      <td>{totalMark(rowDirty(r.key), fmt(rowTotal(r.key)) || "0")}</td>
                     </tr>
                   );
                 })}
@@ -283,10 +365,10 @@ export function FeedingSheet({
                   <td>Összesen</td>
                   {feeds.map((f) => (
                     <td key={f.id} data-testid={`sheet-total-${f.id}`}>
-                      {fmt(colTotal(f)) || "0"}
+                      {totalMark(colDirty(f), fmt(colTotal(f)) || "0")}
                     </td>
                   ))}
-                  <td data-testid="sheet-grand-total">{fmt(grand) || "0"}</td>
+                  <td data-testid="sheet-grand-total">{totalMark(changed.length > 0, fmt(grand) || "0")}</td>
                 </tr>
               </tfoot>
             </table>
@@ -296,6 +378,11 @@ export function FeedingSheet({
               <button className="btn" type="button" disabled={busy || changed.length === 0} onClick={() => void saveAll()}>
                 Takarmánylap mentése{changed.length ? ` (${changed.length} cella)` : ""}
               </button>
+              {Object.keys(drafts).length > 0 && (
+                <button className="btn btn-soft" type="button" disabled={busy} onClick={discard}>
+                  Piszkozat elvetése
+                </button>
+              )}
               {localMsg ? (
                 <span className="err" role="status">
                   {localMsg}

@@ -516,6 +516,33 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   await expect(sheet.getByRole("status")).toHaveText("Takarmánylap mentve.");
   await expect(listRow).toContainText("Mysis 20 g");
   await expect(listRow).not.toContainText("Mysis 15 g");
+  // barracuda #45 (1): a draft is saved on the version it was TYPED on. Meanwhile the same cell is changed on another
+  // sheet (another aquarist); this draft's save is refused, the other value stays, and the cell is marked
+  await mysis.fill("25");
+  const page2 = await page.context().newPage();
+  await page2.goto(page.url());
+  const sheet2 = page2.getByTestId("feeding-sheet");
+  const row2 = sheet2.getByRole("row").filter({ hasText: name });
+  await row2.getByRole("cell", { name, exact: true }).click();
+  await row2.getByLabel(`${name}: Mysis (g)`).fill("30");
+  await sheet2.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet2.getByRole("status")).toHaveText("Takarmánylap mentve.");
+  await page2.close();
+  // the first try is lost on the way; the sheet reloads, so it now holds the other value's version, the draft is kept.
+  // A save sending the version read at the save would overwrite 30 now: the draft's own base must go
+  await page.route("**/api/feeding/items", (route) => route.abort("failed"), { times: 1 });
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Nincs kapcsolat a szerverrel.");
+  await expect(listRow).toContainText("Mysis 30 g");
+  await expect(mysis).toHaveValue("25");
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText("A tétel időközben megváltozott.");
+  await expect(sheet.getByTestId(`sheet-cell-${name}-Mysis`)).toHaveAttribute("data-failed", "true");
+  await expect(listRow).toContainText("Mysis 30 g");
+  await expect(listRow).not.toContainText("Mysis 25 g");
+  page.once("dialog", (d) => void d.accept());
+  await sheet.getByRole("button", { name: "Piszkozat elvetése" }).click();
+  await expect(mysis).toHaveValue("30");
   // an emptied saved cell: its item is invalidated after a confirmation
   await row.getByLabel(`${name}: Litopenaeus vannamei (g)`).fill("");
   await row.getByLabel(`${name}: Litopenaeus vannamei (db)`).fill("");
@@ -525,6 +552,21 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   await expect(listRow).not.toContainText("Litopenaeus vannamei 40 g");
   await expect(sheet.getByTestId("sheet-grand-total")).toContainText("g");
   await expect(sheet.getByRole("button", { name: "Takarmánylap nyomtatása" })).toBeVisible();
+  // barracuda #45 (2): leaving with a draft asks first; declined, the draft is still there; accepted, the page goes
+  await mysis.fill("35");
+  const leave = page.getByRole("link", { name: "Takarmánykivétel" });
+  const asked: string[] = [];
+  page.once("dialog", (d) => {
+    asked.push(d.message());
+    void d.dismiss();
+  });
+  await leave.click();
+  await expect.poll(() => asked.length).toBe(1);
+  expect(asked[0]).toContain("Van még nem mentett érték a takarmánylapon.");
+  await expect(mysis).toHaveValue("35");
+  page.once("dialog", (d) => void d.accept());
+  await leave.click();
+  await expect(page.getByTestId("withdrawal-form")).toBeVisible();
 });
 
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
