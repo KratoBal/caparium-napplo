@@ -4,8 +4,11 @@
 // Weekly mode adds the dilution (1–100) and the diluent water (RO/SW) to the nitrate and phosphate cells of
 // every pool (src/lib/dilution.ts, caparium-hibak-1), editable in every pool's row, not only the active one
 // (caparium-hibak-2): supplementary data, nothing is recalculated from them (VIZ-06, DN-07).
-// Autosave on leaving a cell; a "Mérés mentése" button as confirmation. A failed network
-// request goes to a local queue with the same request id, so a retry never saves twice.
+// The values are saved by the "Mentés" button only, not on leaving a cell (Balázs 2026-10-21 09:13 UTC, Caparium
+// thread: an autosave on leaving a field mixed things up when a wrong value was corrected). Until then the typed
+// values are drafts, freely corrected; leaving the page with drafts asks first. The measurement time is a time of
+// day only: its date is the day chosen above (one date on the page, Balázs 2026-10-21). A failed network request
+// goes to a local queue with the same request id, so a retry never saves twice.
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -48,11 +51,14 @@ function requestId(): string {
   return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
 
-function nowLocal(): string {
+/** the current time of day, HH:MM, for the measurement time field */
+function nowTime(): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
+
+const LEAVE_WARNING = "Van még nem mentett mérési érték. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?";
 
 function huNumber(v: string): string {
   return v.replace(".", ",");
@@ -107,7 +113,8 @@ export function MeasurementGrid({
   const [cellState, setCellState] = useState<Record<string, CellState>>({});
   const [responsibleId, setResponsibleId] = useState(user.id);
   const [trainee, setTrainee] = useState(false);
-  const [timeLocal, setTimeLocal] = useState(initial.day === today ? nowLocal() : `${initial.day}T12:00`);
+  // the time of day only; the date is the chosen day (`grid.day`)
+  const [time, setTime] = useState(initial.day === today ? nowTime() : "12:00");
   const [timeTouched, setTimeTouched] = useState(false);
   const [conflict, setConflict] = useState<Conflict | null>(null);
   const [banner, setBanner] = useState<{ kind: "ok" | "error" | "warn"; text: string } | null>(null);
@@ -126,6 +133,33 @@ export function MeasurementGrid({
   draftsRef.current = drafts;
   const metaRef = useRef(metaDrafts);
   metaRef.current = metaDrafts;
+  // the drafts not yet saved: leaving the page with them asks first (the reverse of the old autosave mix-up
+  // would be a silently lost measurement)
+  const unsavedRef = useRef(0);
+  unsavedRef.current = new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)]).size;
+  useEffect(() => {
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (unsavedRef.current === 0) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    // in-app links (the group tabs, the rounds, the menu) do not fire beforeunload: catch their click first
+    const click = (e: MouseEvent) => {
+      if (unsavedRef.current === 0 || e.defaultPrevented || e.button !== 0) return;
+      const link = (e.target as Element | null)?.closest?.("a[href]");
+      if (!link || (link as HTMLAnchorElement).target === "_blank") return;
+      if (!window.confirm(LEAVE_WARNING)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("click", click, true);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      document.removeEventListener("click", click, true);
+    };
+  }, []);
   const chains = useRef(new Map<string, Promise<void>>());
 
   const queueKey = `napplo-queue-v1-${user.id}`;
@@ -155,9 +189,10 @@ export function MeasurementGrid({
   // keep the offered time current until the user changes it (ÁLT-07)
   useEffect(() => {
     if (timeTouched || isPastDay) return;
-    const t = setInterval(() => setTimeLocal(nowLocal()), 30_000);
+    const t = setInterval(() => setTime(nowTime()), 30_000);
     return () => clearInterval(t);
   }, [timeTouched, isPastDay]);
+  const timeLocal = `${grid.day}T${time}`;
 
   const refresh = useCallback(async () => {
     const seq = grid.selectedRound?.seq;
@@ -375,6 +410,7 @@ export function MeasurementGrid({
   }, [drafts, metaDrafts, saveCell, flushQueue, readQueue]);
 
   const openNewRound = useCallback(async () => {
+    if (unsavedRef.current > 0 && !window.confirm(LEAVE_WARNING)) return;
     const res = await fetch("/api/rounds", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -411,7 +447,14 @@ export function MeasurementGrid({
     await refresh();
   }, [conflict, refresh]);
 
-  const anyOut = useMemo(() => Object.values(grid.cells).some((c) => c.reference === "LOW" || c.reference === "HIGH"), [grid.cells]);
+  // the warning follows what the cells show: a typed, not yet saved value too (it is useful at the moment of typing)
+  const anyOut = useMemo(
+    () =>
+      Object.entries(grid.cells).some(
+        ([key, c]) => drafts[key] === undefined && (c.reference === "LOW" || c.reference === "HIGH"),
+      ) || Object.entries(drafts).some(([key, draft]) => draftOutOfRange(draft, grid.currentRanges[key])),
+    [grid.cells, grid.currentRanges, drafts],
+  );
   const unsaved = new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)]).size;
 
   return (
@@ -436,7 +479,7 @@ export function MeasurementGrid({
         <span className="spacer" />
         {!readOnly && (
           <button className="btn" type="button" onClick={saveAll} data-testid="save-all">
-            Mérés mentése
+            Mentés
           </button>
         )}
       </div>
@@ -459,7 +502,7 @@ export function MeasurementGrid({
       <div className="card">
         <h2>Napi paraméterek{grid.selectedRound ? ` · ${grid.selectedRound.seq}. mérés` : ""}</h2>
         <p className="hint">
-          A beírt érték automatikusan ellenőrződik és mentődik. Egy új mérés nem írja felül a korábbit.
+          A beírt értékek a Mentés gombbal rögzülnek, addig szabadon javíthatók. Egy új mérés nem írja felül a korábbit.
         </p>
         {!readOnly && (
           <div className="toolbar">
@@ -467,10 +510,10 @@ export function MeasurementGrid({
               Mérés időpontja
               <input
                 className="input"
-                type="datetime-local"
-                value={timeLocal}
+                type="time"
+                value={time}
                 onChange={(e) => {
-                  setTimeLocal(e.target.value);
+                  setTime(e.target.value);
                   setTimeTouched(true);
                 }}
                 data-testid="measured-at"
@@ -537,7 +580,6 @@ export function MeasurementGrid({
                               data-testid={`cell-${pool.name}-${param.name}`}
                               value={shown}
                               onChange={(e) => setDrafts((d) => ({ ...d, [key]: e.target.value }))}
-                              onBlur={() => void saveCell(pool.id, param.id)}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                               }}
@@ -561,8 +603,8 @@ export function MeasurementGrid({
                               editable={!readOnly}
                               onChange={(m) => {
                                 if (pool.id !== activePool) setActivePool(pool.id);
+                                // a draft like the value: saved by the Mentés button, with the value
                                 setMetaDrafts((d) => ({ ...d, [key]: m }));
-                                void saveCell(pool.id, param.id, m);
                               }}
                             />
                           )}
@@ -625,7 +667,7 @@ export function MeasurementGrid({
         ) : (
           <div className="banner banner-ok">
             <span className="dot" />
-            {unsaved > 0 ? `${unsaved} érték még nincs elküldve` : "Automatikus mentés aktív"}
+            {unsaved > 0 ? `${unsaved} érték még nincs mentve: a Mentés gombbal rögzül` : "Nincs mentetlen érték"}
           </div>
         )}
         {anyOut && <div className="banner banner-error">↗ Eltérés a referenciaértéktől</div>}
