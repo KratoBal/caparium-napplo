@@ -443,6 +443,19 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   await page.getByTestId("eating-fasting").locator("summary").click();
   await page.getByRole("button", { name: "Teszt Négy: kivétel rögzítése" }).click();
   await page.getByTestId("eating-Teszt Négy").getByLabel("Teszt Négy evési állapota").selectOption("FASTING");
+  // acrobot 34710: with an unsaved row, leaving (the day navigation too) asks first; declined, the day and the
+  // draft stay; accepted, the page goes
+  const asked: string[] = [];
+  page.once("dialog", (d) => {
+    asked.push(d.message());
+    void d.dismiss();
+  });
+  await page.getByRole("link", { name: "‹ előző nap" }).click();
+  await expect.poll(() => asked.length).toBe(1);
+  expect(asked[0]).toContain("Van még nem mentett sor az evési naplóban.");
+  await expect(page.getByTestId("shown-day")).toHaveText(today ?? "");
+  await expect(page.getByTestId("eating-Teszt Négy").getByLabel("Teszt Négy evési állapota")).toHaveValue("FASTING");
+  page.once("dialog", (d) => void d.accept());
   await page.getByRole("link", { name: "‹ előző nap" }).click();
   await expect(page.getByTestId("shown-day")).not.toHaveText(today ?? "");
   await page.getByRole("link", { name: "következő nap ›" }).click();
