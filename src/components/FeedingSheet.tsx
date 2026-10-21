@@ -18,9 +18,10 @@
 // someone else is a conflict on that cell, never silently overwritten (barracuda #45). Unsaved drafts ask before the
 // page is left, as the measurement page does (#38). A cell keeps one request id per change until it is saved (#42).
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Msg, parseAmount, useSend, type FeedOpt, type Recipient } from "./FeedingForms";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
+import { useLeaveWarning } from "./useLeaveWarning";
 
 const LEAVE_WARNING = "Van még nem mentett érték a takarmánylapon. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?";
 
@@ -156,30 +157,7 @@ export function FeedingSheet({
 
   // leaving with drafts asks first: the page itself, and every in-app link (#38's rule). The browser's back button
   // is neither a click nor an unload in the App Router, so it is not asked, as on the measurement page
-  const unsavedRef = useRef(0);
-  unsavedRef.current = changed.length;
-  useEffect(() => {
-    const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (unsavedRef.current === 0) return;
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    const click = (e: MouseEvent) => {
-      if (unsavedRef.current === 0 || e.defaultPrevented || e.button !== 0) return;
-      const link = (e.target as Element | null)?.closest?.("a[href]");
-      if (!link || (link as HTMLAnchorElement).target === "_blank") return;
-      if (!window.confirm(LEAVE_WARNING)) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    };
-    window.addEventListener("beforeunload", beforeUnload);
-    document.addEventListener("click", click, true);
-    return () => {
-      window.removeEventListener("beforeunload", beforeUnload);
-      document.removeEventListener("click", click, true);
-    };
-  }, []);
+  useLeaveWarning(changed.length, LEAVE_WARNING);
 
   const drop = <T,>(list: T[], key: T) => list.filter((x) => x !== key);
   function type(rec: string, f: FeedOpt, dimension: string, value: string) {
