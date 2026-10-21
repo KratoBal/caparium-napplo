@@ -5,6 +5,7 @@
 // what is typed (not saved yet) to the row's saved total, per base unit, never pieces to grams.
 import { useCallback, useState } from "react";
 import { deviates } from "@/lib/calc-math";
+import { GIVEN } from "@/lib/eating-labels";
 import type { DayAnimal } from "@/lib/feeding";
 import { DayFeeds, FinalizeList, GroupSelect, InvalidateButton, ItemForm, SelectBox, type FeedOpt, type FeedTypeOpt, type Recipient } from "./FeedingForms";
 import { FeedingSheet } from "./FeedingSheet";
@@ -79,7 +80,7 @@ export function FeedingDay(props: {
       </span>
     );
   };
-  const line = (i: Item) => `${i.otherName ? `${i.feed}: ${i.otherName}` : i.feed} ${i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")}`;
+  const line = (i: Item) => `${i.otherName ? `${i.feed}: ${i.otherName}` : i.feed} ${i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ") || GIVEN}`;
 
   return (
     <>

@@ -135,6 +135,7 @@ export async function listFeeds(at = new Date()) {
       defaultUnit: f.defaultUnit.symbol,
       active: f.active,
       temporary: f.temporary,
+      sheetTick: f.sheetTick,
     })),
   }));
 }

@@ -407,7 +407,8 @@ export const itemSchema = z.object({
   feedId: z.uuid(),
   // it goes to the Excel and may go to a CSV: no formula start (as the names, review of #3 and #10)
   otherName: z.string().trim().min(1).max(60).refine((v) => !/^[=+\-@\t\r]/.test(v), "A név nem kezdődhet =, +, -, @ jellel.").optional(),
-  quantities: z.array(z.object({ value: z.string().min(1).max(32), unitId: z.uuid() })).min(1).max(3),
+  // empty only for a feed with a tick on the sheet (feed.sheetTick, 6fe63c9b item 7): checked below
+  quantities: z.array(z.object({ value: z.string().min(1).max(32), unitId: z.uuid() })).max(3),
   reason: reason.optional(),
 });
 
@@ -453,6 +454,7 @@ export async function saveFeedingItem(actor: Actor, input: z.infer<typeof itemSc
       if (!feed || !feed.active) throw new AppError(422, "FEED_NOT_FOUND", "A takarmány nem található vagy nem aktív.");
       if (feed.type.code === "EGYEB" && !input.otherName) throw new AppError(422, "OTHER_NAME", "Az „Egyéb” takarmányhoz a nevét is meg kell adni (EGY-12).");
 
+      if (input.quantities.length === 0 && !feed.sheetTick) throw new AppError(422, "QUANTITY_REQUIRED", "Adj meg mennyiséget.");
       // quantities: one per dimension, only the feed's dimensions (T-08)
       const units = await tx.unit.findMany({ where: { id: { in: input.quantities.map((q) => q.unitId) } } });
       const seen = new Set<Dimension>();

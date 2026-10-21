@@ -53,6 +53,7 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         id: f.id,
         name: f.name,
         isOther: t.code === "EGYEB",
+        ...(f.sheetTick ? { tick: true as const } : {}),
         dims: f.dimensions.map((d) => ({
           dimension: d,
           base: units.find((u) => u.dimension === d && u.isBase)?.symbol ?? "?",

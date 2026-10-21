@@ -460,7 +460,7 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   await expect(page.getByLabel(`${name} a mai listán`)).toBeChecked();
   // step 2: the day's feeds
   const dayFeeds = page.getByTestId("day-feeds");
-  for (const feed of ["Litopenaeus vannamei", "Mysis"]) await dayFeeds.getByLabel(`A nap takarmánya: ${feed}`).check();
+  for (const feed of ["Litopenaeus vannamei", "Mysis", "AF Power elixir"]) await dayFeeds.getByLabel(`A nap takarmánya: ${feed}`).check();
   const saveFeeds = dayFeeds.getByRole("button", { name: "A nap takarmányainak mentése" });
   if (await saveFeeds.isEnabled()) {
     await saveFeeds.click();
@@ -516,6 +516,22 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   await expect(sheet.getByRole("status")).toHaveText("Takarmánylap mentve.");
   await expect(listRow).toContainText("Mysis 20 g");
   await expect(listRow).not.toContainText("Mysis 15 g");
+  // 6fe63c9b item 7: the coral feed is a tick, given or not, without a quantity
+  await expect(sheet.getByRole("columnheader", { name: "AF Power elixir (adva)" })).toBeVisible();
+  const coral = row.getByLabel(`${name}: AF Power elixir (adva)`);
+  await coral.check();
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Takarmánylap mentve.");
+  await expect(listRow).toContainText("AF Power elixir adva");
+  await expect(coral).toBeChecked();
+  page.once("dialog", (d) => void d.accept("teszt: nem kapott koralltápot"));
+  await coral.uncheck();
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Takarmánylap mentve.");
+  await expect(listRow).not.toContainText("AF Power elixir");
+  await otherRow.getByRole("cell", { name: other, exact: true }).click();
+  await expect(sheet.getByTestId(`sheet-cell-${name}-AF Power elixir`)).toHaveText("nem");
+  await row.getByRole("cell", { name, exact: true }).click();
   // barracuda #45 (1): a draft is saved on the version it was TYPED on. Meanwhile the same cell is changed on another
   // sheet (another aquarist); this draft's save is refused, the other value stays, and the cell is marked
   await mysis.fill("25");

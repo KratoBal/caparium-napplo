@@ -4,6 +4,7 @@
 // and for a pool if any participant was there that day. Names are the ones valid on the day (K3).
 
 import { prisma } from "./db";
+import { GIVEN } from "./eating-labels";
 import { AppError } from "./errors";
 import { dayBounds } from "./feeding";
 import { pickValid } from "./master";
@@ -100,7 +101,7 @@ export async function feedingLog(f: LogFilter) {
         : `${pickValid(it.group!.names, at)?.name ?? "?"} (csoport)`,
       pools: [...new Set(pools.map((p) => p.name))].join(", "),
       feed: it.otherName ? `${feed}: ${it.otherName}` : feed,
-      quantities: it.quantities.map((q) => `${Number(q.quantity).toString().replace(".", ",")} ${q.unit.symbol}`).join(" + "),
+      quantities: it.quantities.map((q) => `${Number(q.quantity).toString().replace(".", ",")} ${q.unit.symbol}`).join(" + ") || GIVEN,
     });
   }
 
