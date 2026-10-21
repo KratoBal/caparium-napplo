@@ -114,6 +114,10 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 /* EGY-07: the clicked recipient's row is the active one */
 .log-table tr.clickable { cursor: pointer; }
 .log-table tr.active-row td { background: var(--c-primary-soft); }
+/* 6fe63c9b: the feeding sheet's active row, dark as in Lili's layout sample */
+.feeding-sheet .log-table tr.active-row td { background: var(--c-ink); color: var(--c-white); }
+.feeding-sheet .log-table tr.active-row td .input { background: var(--c-white); color: var(--c-ink); }
+.feeding-sheet tfoot td { font-weight: 600; }
 .log-table tr.invalid td.keep { text-decoration: none; }
 .value-out { color: var(--c-error); font-weight: 600; }
 .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
@@ -168,6 +172,8 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 /* TAK-05: the page as PDF through the print dialog; navigation and forms stay out */
 @media print {
   .nav, .brand, .userbox, .no-print, .day-controls { display: none !important; }
+  /* 6fe63c9b: the feeding sheet's print button prints the sheet alone */
+  body.print-sheet .main > *:not(.feeding-sheet) { display: none !important; }
   .shell { display: block; }
   .main { padding: 0; }
   .card { border: 0; padding: 0 0 12px; }

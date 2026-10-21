@@ -16,7 +16,7 @@ function requestId(): string {
 
 type ErrorBody = { error?: { code?: string; message?: string; issues?: { message: string }[] } };
 
-function useSend() {
+export function useSend() {
   const router = useRouter();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -68,7 +68,7 @@ function useSend() {
   return { msg, busy, run };
 }
 
-function Msg({ msg }: { msg: { ok: boolean; text: string } | null }) {
+export function Msg({ msg }: { msg: { ok: boolean; text: string } | null }) {
   if (!msg) return null;
   return (
     <span className={msg.ok ? "hint" : "err"} role="status">
@@ -103,16 +103,87 @@ export function SelectBox({ day, animalId, name, selected, disabled }: { day: st
   );
 }
 
-/** Selecting a group selects its members of the day one by one; a member can be taken out later. */
+/**
+ * A group's "select all" and "none" (6fe63c9b, Lili: grouped checkboxes with a select-all per group). Selecting
+ * selects the members of the day one by one; "none" takes them off, with the usual confirmation if an animal
+ * already has an item or a status that day.
+ */
 export function GroupSelect({ day, name, memberIds }: { day: string; name: string; memberIds: string[] }) {
   const { msg, busy, run } = useSend();
   return (
     <span>
-      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void run("/api/feeding/selection", { day, animalIds: memberIds, selected: true }, "Csoport kiválasztva.")}>
-        {name}: mind a listára
+      <button
+        className="btn btn-soft"
+        type="button"
+        disabled={busy}
+        aria-label={`${name}: összes kijelölése`}
+        onClick={() => void run("/api/feeding/selection", { day, animalIds: memberIds, selected: true }, "Csoport kiválasztva.")}
+      >
+        Összes kijelölése
+      </button>{" "}
+      <button
+        className="btn btn-soft"
+        type="button"
+        disabled={busy}
+        aria-label={`${name}: egyik sem`}
+        onClick={() => void run("/api/feeding/selection", { day, animalIds: memberIds, selected: false }, "Csoport kivéve.")}
+      >
+        Egyik sem
       </button>
       <Msg msg={msg} />
     </span>
+  );
+}
+
+export type FeedTypeOpt = { code: string; name: string; emoji: string | null; feeds: { id: string; name: string }[] };
+
+/**
+ * The list's second step (6fe63c9b): the feeds given that day, by type. Saved for the day; the item form and the
+ * feeding sheet then offer only these (and "Egyéb"). Nothing chosen offers every feed, as before.
+ */
+export function DayFeeds({ day, types, chosen, editable }: { day: string; types: FeedTypeOpt[]; chosen: string[]; editable: boolean }) {
+  const [picked, setPicked] = useState<string[]>(chosen);
+  // reset only when the SAVED choice changes: a refresh after another action brings a new array with the same
+  // content, and resetting on it dropped a tick not saved yet (measured in the e2e)
+  const chosenKey = [...chosen].sort().join();
+  useEffect(() => setPicked(chosenKey ? chosenKey.split(",") : []), [chosenKey]);
+  const { msg, busy, run } = useSend();
+  const changed = [...picked].sort().join() !== [...chosen].sort().join();
+  return (
+    <div data-testid="day-feeds">
+      {types.map((t) => (
+        <div key={t.code} className="toolbar">
+          <span className="hint" style={{ minWidth: 160 }}>
+            {t.emoji ? `${t.emoji} ` : ""}
+            {t.name}
+          </span>
+          {t.feeds.map((f) => (
+            <label key={f.id} className="check">
+              <input
+                type="checkbox"
+                checked={picked.includes(f.id)}
+                disabled={!editable || busy}
+                aria-label={`A nap takarmánya: ${f.name}`}
+                onChange={(e) => {
+                  // functional: two quick ticks before a re-render must not overwrite each other (seen in the e2e)
+                  const on = e.target.checked;
+                  setPicked((cur) => (on ? [...new Set([...cur, f.id])] : cur.filter((x) => x !== f.id)));
+                }}
+              />
+              {f.name}
+            </label>
+          ))}
+        </div>
+      ))}
+      {editable && (
+        <div className="toolbar">
+          <button className="btn" type="button" disabled={busy || !changed} onClick={() => void run("/api/feeding/day-feeds", { day, feedIds: picked }, "A nap takarmányai mentve.")}>
+            A nap takarmányainak mentése
+          </button>
+          <Msg msg={msg} />
+        </div>
+      )}
+    </div>
   );
 }
 
