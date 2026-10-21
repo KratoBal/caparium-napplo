@@ -1,7 +1,8 @@
 // Runs before every request (Next 16 proxy, formerly middleware). The only job: the basic-auth gate
 // of the public test site (src/lib/basic-auth.ts). No matcher, so pages, /api and /_next are all
-// behind it. The one exception is the exact path /api/health, which answers only {ok} and is what
-// the container healthcheck calls from inside; the raw request URL is checked, not nextUrl, which
+// behind it. The one exception is the exact path /api/health, which answers only {ok, commit} (the
+// deployed commit, src/lib/release.ts: no data, no secret) and is what the container healthcheck calls
+// from inside; the raw request URL is checked, not nextUrl, which
 // rewrites some internal paths.
 import { NextResponse, type NextRequest } from "next/server";
 import { checkCredentials, clientIp, effectiveGate, FailureLimiter } from "@/lib/basic-auth";
