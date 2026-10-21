@@ -99,6 +99,9 @@ export async function sendWaterReport(actor: Actor, input: z.infer<typeof sendSc
   try {
     await send({
       from: config.from,
+      // one mail to all: the recipients see each other, which is fine for the zoo's own staff. If an outside address
+      // (a partner, an authority) ever joins the list, sharing the addresses is a privacy question: then bcc, or one
+      // mail per address (barracuda on #53)
       to: recipients.list.join(", "),
       subject: `Vízmérés – ${day}`,
       text: `A Cápárium nAPPló vízmérési eredményei medencénként: napi értékek ${day}, heti értékek ${report.weekFrom} – ${day}. A részletek a csatolt PDF-ben.`,
