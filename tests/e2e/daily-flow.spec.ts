@@ -672,7 +672,8 @@ test("home: the customer's illustrated cards, 3-2-3, each to its module, only wi
 });
 
 // 6fe63c9b, item 4: the timetable. The starting data is intentionally empty (acrobot 34526), so the first run shows
-// the empty-state line; each layout ticks its own day for one animal of the starting list.
+// the empty-state line; each layout ticks its own day for a seeded animal. Not one of the starting list (Philleas):
+// that list is loaded only by a later test, so the first (tablet) run did not have it in CI (#43 v2, red there).
 test("the feeding timetable: every animal's days on one screen, saved together, from an empty start", async ({ page }, info) => {
   // never today's weekday (barracuda #43): a later "Lista a terv szerint" must not pull this animal onto today's list,
   // whatever day the suite runs; each layout its own day
@@ -691,11 +692,11 @@ test("the feeding timetable: every animal's days on one screen, saved together, 
   } else {
     await expect(page.getByTestId("timetable-empty")).toHaveCount(0);
   }
-  await table.getByLabel(`Philleas: ${day}`).check();
+  await table.getByLabel(`Teszt Négy: ${day}`).check();
   await table.getByRole("button", { name: /Etetési rend mentése/ }).click();
   await expect(table.getByRole("status")).toHaveText("Mentve: 1 állat terve.");
   await page.reload();
-  await expect(page.getByTestId("timetable").getByLabel(`Philleas: ${day}`)).toBeChecked();
+  await expect(page.getByTestId("timetable").getByLabel(`Teszt Négy: ${day}`)).toBeChecked();
   await expect(page.getByTestId("timetable-empty")).toHaveCount(0);
 });
 
