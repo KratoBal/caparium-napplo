@@ -12,10 +12,11 @@ import { prisma } from "../db";
 import { AppError } from "../errors";
 import { GIVEN } from "../eating-labels";
 import { dayBounds } from "../feeding";
+import { isDerivedFasting, listFacts } from "../eating-pattern";
 import { pickValid } from "../master";
 import { feedingLog } from "../feeding-log";
 import { breakdown, type ReportLine } from "../reports";
-import { addDays, dateToDay, dayToDate, resolveLocalDateTime } from "../time";
+import { addDays, businessDayOf, dateToDay, dayToDate, resolveLocalDateTime } from "../time";
 
 // the template's theme fills, resolved (theme_note of the extracts): Excel tints in HSL lightness
 const FILL = {
@@ -262,12 +263,14 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
   const days = daysOf(f.from, f.to);
   const start = dayBounds(f.from).start;
   const end = dayBounds(f.to).end;
-  const [events, statuses] = await Promise.all([
+  const today = businessDayOf(new Date());
+  const [events, statuses, selected] = await Promise.all([
     prisma.lifecycleEvent.findMany({ where: { status: "VALID" }, select: { animalId: true, type: true, occurredAt: true } }),
     prisma.eatingStatus.findMany({
       where: { status: "VALID", feedingDay: { businessDay: { gte: dayToDate(f.from), lte: dayToDate(f.to) } } },
       include: { feedingDay: true },
     }),
+    listFacts(f.from, f.to),
   ]);
   const life = new Map<string, { arrived?: Date; ended?: Date }>();
   for (const e of events) {
@@ -338,7 +341,8 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
       if (a.arrived >= b.end) return fill(cell, NOT_YET);
       if (a.ended && a.ended < b.start) return fill(cell, GONE);
       const s = byCell.get(`${a.id}|${d}`);
-      if (!s) return;
+      // no stored status: a fasting day when the animal was not on the day's list (DN-03, eating-pattern.ts)
+      if (!s) return isDerivedFasting(selected, a.id, d, today) ? fill(cell, STATE_FILL.FASTING) : undefined;
       fill(cell, STATE_FILL[s.state]);
       cell.value = [s.vitamin ? "V" : "", s.medicine ? "Gy" : ""].filter(Boolean).join(" ") || null;
       cell.alignment = { horizontal: "center" };

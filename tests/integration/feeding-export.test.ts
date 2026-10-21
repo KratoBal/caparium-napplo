@@ -137,6 +137,8 @@ describe("the eating Excel (EVE-07)", () => {
     await finalizeList(f.aq1, { requestId: rid(), day: d }, now);
     await recloseDay(f.admin, { requestId: rid(), kind: "FEEDING", day: d }, at(d, "20:00"));
     await createLifecycleEvent(f.admin, { requestId: rid(), type: "DEATH", animalId: dies, occurredAtLocal: "2026-04-08T10:00", reason: "teszt" }, at("2026-04-08", "11:00"));
+    // 04-08 stays open, its list not finalized: Teszt Egy is on it, without an eating status
+    await setSelection(f.aq1, { requestId: rid(), day: "2026-04-08", animalIds: [a["Teszt Egy"]], selected: true }, at("2026-04-08", "09:00"));
 
     const ws = await sheet((await buildEatingWorkbook({ from: d, to: "2026-04-09" })).buffer);
     expect([ws.getCell("D1").value, ws.getCell("A2").value, ws.getCell("B2").value, ws.getCell("C2").value]).toEqual(["Dátum", "Állatfaj", "Név", "Csoport"]);
@@ -151,8 +153,11 @@ describe("the eating Excel (EVE-07)", () => {
     // EVE-10: listed while alive in the period; dark after the death and struck through; not yet here: grey
     const dead = rowOf(ws, 2, "Április Kettő");
     expect(dead.getCell(2).font?.strike).toBe(true);
-    expect([fillOf(dead.getCell("F")), fillOf(dead.getCell("G"))]).toEqual([null, "FF262626"]);
-    expect(fillOf(rowOf(ws, 2, "Április Egy").getCell("E"))).toBe("FFD9D9D9");
+    // Lili 2026-10-21, DN-03: a day the animal lived, without data and not on the list, is a fasting day, also the
+    // day of its death or arrival and a day not closed yet; an animal ON the list without a status stays empty
+    expect([fillOf(dead.getCell("F")), fillOf(dead.getCell("G"))]).toEqual(["FFBDD7EE", "FF262626"]);
+    expect([fillOf(rowOf(ws, 2, "Április Egy").getCell("E")), fillOf(rowOf(ws, 2, "Április Egy").getCell("F"))]).toEqual(["FFD9D9D9", "FFBDD7EE"]);
+    expect([fillOf(egy.getCell("F")), fillOf(ketto.getCell("F"))]).toEqual([null, "FFBDD7EE"]);
     expect(() => rowOf(ws, 2, "Április Régi")).toThrow();
     expect(comes).toBeTruthy();
     // EVE-05, EVE-09: the note row is the last, the medicine note under its day

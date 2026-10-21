@@ -6,9 +6,10 @@
 import { prisma } from "./db";
 import { GIVEN } from "./eating-labels";
 import { AppError } from "./errors";
+import { isDerivedFasting, listFacts } from "./eating-pattern";
 import { dayBounds } from "./feeding";
 import { pickValid } from "./master";
-import { addDays, dateToDay, dayToDate } from "./time";
+import { addDays, businessDayOf, dateToDay, dayToDate } from "./time";
 
 export const LOG_MAX_DAYS = 92; // a screen, not an export: about a quarter
 
@@ -34,7 +35,7 @@ export async function feedingLog(f: LogFilter) {
     if (days.length > LOG_MAX_DAYS) throw new AppError(422, "PERIOD_TOO_LONG", `A naplóban legfeljebb ${LOG_MAX_DAYS} nap kérhető le egyszerre; hosszabb időszakra az Excel való.`);
   }
   const range = { gte: dayToDate(f.from), lte: dayToDate(f.to) };
-  const [items, statuses, baseUnits, placements] = await Promise.all([
+  const [items, statuses, baseUnits, placements, events, selected] = await Promise.all([
     prisma.feedingItem.findMany({
       where: { status: "VALID", feedingDay: { businessDay: range } },
       include: {
@@ -50,6 +51,8 @@ export async function feedingLog(f: LogFilter) {
     prisma.eatingStatus.findMany({ where: { status: "VALID", feedingDay: { businessDay: range } }, include: { feedingDay: true } }),
     prisma.unit.findMany({ where: { isBase: true } }),
     prisma.placement.findMany({ include: { pool: { include: { names: true } } }, orderBy: { validFrom: "asc" } }),
+    prisma.lifecycleEvent.findMany({ where: { status: "VALID" }, select: { animalId: true, type: true, occurredAt: true } }),
+    listFacts(f.from, f.to),
   ]);
   const baseOf = new Map(baseUnits.map((u) => [u.dimension, u.symbol]));
 
@@ -105,24 +108,47 @@ export async function feedingLog(f: LogFilter) {
     });
   }
 
-  // the eating pattern of the same filter: one row per animal, one cell per day
+  // the eating pattern of the same filter: one row per animal, one cell per day. A day the animal lived without a
+  // stored status is a fasting day when it was not on the day's list (DN-03, eating-pattern.ts), as in the Excel
   const animalIds = new Set<string>();
+  const inFilter = (animalId: string, day: string) =>
+    (!f.animalId || animalId === f.animalId) && (!f.poolId || poolOn(animalId, day)?.id === f.poolId);
   for (const s of statuses) {
     const day = dateToDay(s.feedingDay.businessDay);
-    if (f.animalId && s.animalId !== f.animalId) continue;
-    if (f.poolId && poolOn(s.animalId, day)?.id !== f.poolId) continue;
-    animalIds.add(s.animalId);
+    if (inFilter(s.animalId, day)) animalIds.add(s.animalId);
   }
+  const life = new Map<string, { arrived?: Date; ended?: Date }>();
+  for (const e of events) {
+    const r = life.get(e.animalId) ?? {};
+    if (e.type === "ARRIVAL") r.arrived = e.occurredAt;
+    if (e.type === "DEATH" || e.type === "RELEASE") r.ended = e.occurredAt;
+    life.set(e.animalId, r);
+  }
+  const lived = (animalId: string, day: string) => {
+    const r = life.get(animalId);
+    const b = dayBounds(day);
+    return !!r?.arrived && r.arrived < b.end && (!r.ended || r.ended >= b.start);
+  };
+  const stored = new Set(statuses.map((s) => `${s.animalId}|${dateToDay(s.feedingDay.businessDay)}`));
+  const today = businessDayOf(new Date());
+  const derived = new Map<string, string[]>();
+  for (const animalId of life.keys())
+    for (const day of days)
+      if (lived(animalId, day) && !stored.has(`${animalId}|${day}`) && isDerivedFasting(selected, animalId, day, today) && inFilter(animalId, day)) {
+        animalIds.add(animalId);
+        derived.set(animalId, [...(derived.get(animalId) ?? []), day]);
+      }
   const names = await prisma.animalName.findMany({ where: { animalId: { in: [...animalIds] } } });
   const end = dayBounds(f.to).end;
   const pattern = [...animalIds]
     .map((id) => {
       const own = names.filter((n) => n.animalId === id);
-      const cells = Object.fromEntries(
-        statuses
+      const cells = Object.fromEntries([
+        ...(derived.get(id) ?? []).map((day) => [day, { state: "FASTING", vitamin: false, medicine: false }] as const),
+        ...statuses
           .filter((s) => s.animalId === id)
-          .map((s) => [dateToDay(s.feedingDay.businessDay), { state: s.state, vitamin: s.vitamin, medicine: s.medicine }]),
-      );
+          .map((s) => [dateToDay(s.feedingDay.businessDay), { state: s.state as string, vitamin: s.vitamin, medicine: s.medicine }] as const),
+      ]);
       return { id, name: pickValid(own, new Date(end.getTime() - 1))?.name ?? own.at(-1)?.name ?? "?", cells };
     })
     .sort((a, b) => a.name.localeCompare(b.name, "hu"));

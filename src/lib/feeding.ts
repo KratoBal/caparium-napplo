@@ -212,8 +212,9 @@ export async function setSelection(actor: Actor, input: z.infer<typeof selection
             409,
             "HAS_RECORDS",
             groupItems && !items.length && !manual.length
-              ? "Ez az állat ma egy csoportos etetésben részt vett. A csoportos tétel megmarad (a résztvevők listája az etetéskori), csak ő kerül le a mai listáról. Megerősíted?"
-              : "Ennek az állatnak ma már van etetési tétele vagy evési állapota. Megerősítés után ezek is érvénytelenítődnek; egy csoportos tétel megmarad.",
+              ? "Ez az állat ma részt vett egy csoportos etetésben. Ha kiveszed, a csoportos etetés megmarad, csak ő kerül le a mai listáról. Kiveszed?"
+              : // Lili did not understand the earlier wording (acrobot 34618, 2026-10-21): her words now
+                `Ennek az állatnak ma már van beírt etetése. Ha kiveszed, az ő saját beírásai törlődnek${groupItems ? "; a csoportos etetés, amiben részt vett, megmarad" : ""}.`,
             { items: items.length, statuses: manual.length, groupItems },
           );
         }

@@ -5,9 +5,10 @@ import { renamePool } from "@/lib/admin";
 import { createLifecycleEvent } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { setEatingStatus } from "@/lib/eating";
-import { saveFeedingItem, setSelection } from "@/lib/feeding";
+import { finalizeList, saveFeedingItem, setSelection } from "@/lib/feeding";
 import { feedingLog } from "@/lib/feeding-log";
 import { pickValid } from "@/lib/master";
+import { businessDayOf } from "@/lib/time";
 import { fixtures, rid } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -86,5 +87,28 @@ describe("the feeding log (TAK-04)", () => {
     const log = await feedingLog({ ...period, poolId: null, animalId: a["Teszt Egy"] });
     expect(log.pattern.map((p) => [p.name, p.cells["2026-06-02"]])).toEqual([["Teszt Egy", { state: "EATEN", vitamin: true, medicine: false }]]);
     await expect(feedingLog({ from: "2026-01-01", to: "2026-12-31", poolId: null, animalId: null })).rejects.toMatchObject({ code: "PERIOD_TOO_LONG" });
+  });
+
+  it("a day without data and not on the list is a fasting day on screen too; on the list without a status stays empty (DN-03)", async () => {
+    const fasting = { state: "FASTING", vitamin: false, medicine: false };
+    const negy = await feedingLog({ ...period, poolId: null, animalId: a["Teszt Négy"] });
+    // 06-01 on the list, fed, no eating status: empty; 06-02 not on the list: fasting, without a stored row
+    expect(negy.pattern.map((p) => [p.name, p.cells["2026-06-01"], p.cells["2026-06-02"]])).toEqual([["Teszt Négy", undefined, fasting]]);
+    // an animal with no status in the whole period is listed at all, both days fasting
+    const ketto = await feedingLog({ ...period, poolId: null, animalId: a["Teszt Kettő"] });
+    expect(ketto.pattern.map((p) => [p.name, p.cells["2026-06-01"], p.cells["2026-06-02"]])).toEqual([["Teszt Kettő", fasting, fasting]]);
+    const egy = await feedingLog({ ...period, poolId: null, animalId: a["Teszt Egy"] });
+    expect(egy.pattern[0]!.cells["2026-06-01"]).toBeUndefined();
+  });
+
+  it("TODAY: no derived fasting day before the list is finalized, then there is (barracuda #48, acrobot 34622)", async () => {
+    const today = businessDayOf(new Date());
+    const day = { from: today, to: today, poolId: null };
+    await setSelection(f.aq1, { requestId: rid(), day: today, animalIds: [a["Teszt Egy"]], selected: true });
+    // the morning: Teszt Kettő is not on the list yet, which does not mean it does not eat
+    expect((await feedingLog({ ...day, animalId: a["Teszt Kettő"] })).pattern).toEqual([]);
+    await finalizeList(f.aq1, { requestId: rid(), day: today });
+    const after = await feedingLog({ ...day, animalId: a["Teszt Kettő"] });
+    expect(after.pattern.map((p) => p.cells[today])).toEqual([{ state: "FASTING", vitamin: false, medicine: false }]);
   });
 });

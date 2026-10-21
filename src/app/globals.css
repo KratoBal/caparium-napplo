@@ -126,10 +126,13 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .badge-invalid { background: var(--c-error-soft); color: var(--c-error); }
 .badge-pending { background: var(--c-warn-soft); color: var(--c-warn-ink); }
 /* EVE-02: the colour of an eating state is display, not data (DN-03) */
-.eat-EATEN { background: #dff3e4; color: #1f7a3a; }
-.eat-PARTIAL { background: #fff3c4; color: #7a5d00; }
-.eat-NOT_EATEN { background: var(--c-error-soft); color: var(--c-error); }
-.eat-FASTING { background: #e2f0fb; color: #1d6694; }
+/* Lili, 2026-10-21: one shade stronger, less pastel; the green is hers (#bdd3bb), the others take the same step
+   (lightness distance from white x2.55, saturation x0.47, hue kept), the text darkened back to 4.5:1. The Excel's
+   own fills are not these and did not change. */
+.eat-EATEN { background: #bdd3bb; color: #19642f; }
+.eat-PARTIAL { background: #d7c991; color: #6b5100; }
+.eat-NOT_EATEN { background: #e9d3d3; color: #b62323; }
+.eat-FASTING { background: #c6d7e4; color: #1b608b; }
 .eat-pending { background: var(--c-field); color: #1d6694; border: 1px dashed #8fbfdf; }
 .table-scroll { overflow-x: auto; }
 .filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 20px; }
