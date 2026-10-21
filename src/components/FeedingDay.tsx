@@ -3,7 +3,7 @@
 // The feeding day as one workspace (EGY-01, EGY-06, EGY-07, EGY-08): the common list, the items, and
 // the item form. A click on a recipient's row makes it active and the form follows; the live line adds
 // what is typed (not saved yet) to the row's saved total, per base unit, never pieces to grams.
-import { Fragment, useCallback, useState } from "react";
+import { useCallback, useState } from "react";
 import { deviates } from "@/lib/calc-math";
 import type { DayAnimal } from "@/lib/feeding";
 import { DayFeeds, FinalizeList, GroupSelect, InvalidateButton, ItemForm, SelectBox, type FeedOpt, type FeedTypeOpt, type Recipient } from "./FeedingForms";
@@ -50,6 +50,13 @@ export function FeedingDay(props: {
   const [draft, setDraft] = useState<Record<string, number>>({});
   const onDraft = useCallback((d: Record<string, number>) => setDraft(d), []);
   const names = new Map(animals.map((a) => [a.id, a.name]));
+  // the chooser's lines: the animals arrive sorted by group, then by name
+  const chooserGroups: { key: string; groupId: string | null; name: string | null; animals: DayAnimal[] }[] = [];
+  for (const a of animals) {
+    const last = chooserGroups.at(-1);
+    if (last && last.groupId === a.groupId) last.animals.push(a);
+    else chooserGroups.push({ key: a.groupId ?? "nincs", groupId: a.groupId, name: a.groupName, animals: [a] });
+  }
   const itemsFor = (key: string) => items.filter((i) => (i.animalId ?? `g:${i.groupId}`) === key);
   const isRecipient = (key: string) => recipients.some((r) => r.key === key);
   const rowProps = (key: string) =>
@@ -76,33 +83,48 @@ export function FeedingDay(props: {
 
   return (
     <>
+      {/* 6fe63c9b, step 1, in the shape of the feeds chooser (Lili 2026-10-21 11:31 UTC: "az állatok is legyenek
+          olyanok, mint a takarmány kiválasztás", without the pool and group details): one line per group, names
+          with a tick, "select all" and "none" per group */}
       <div className="card">
-        <h2>Napi lista ({animals.filter((a) => a.selected).length} állat)</h2>
+        <h2>Ki eszik ma ({animals.filter((a) => a.selected).length} állat)</h2>
         <p className="hint">Közös lista: bármelyik akvarista módosíthatja. Akit a kész listán nem választottak ki, a nap lezárásakor koplalónapot kap.</p>
+        <div data-testid="animal-chooser">
+          {chooserGroups.map((g) => (
+            <div key={g.key} className="toolbar" data-testid={`group-head-${g.name ?? "nincs"}`}>
+              <span className="hint" style={{ minWidth: 160 }}>
+                {g.name ?? "Csoport nélkül"}
+              </span>
+              {g.animals.map((a) => (
+                <label key={a.id} className="check">
+                  <SelectBox day={day} animalId={a.id} name={a.name} selected={a.selected} disabled={!editable} />
+                  {a.name}
+                </label>
+              ))}
+              {editable && g.groupId && <GroupSelect day={day} name={g.name ?? "?"} memberIds={g.animals.map((a) => a.id)} />}
+            </div>
+          ))}
+        </div>
+        {editable && !props.finalized && (
+          <div className="toolbar">
+            <FinalizeList day={day} />
+          </div>
+        )}
+      </div>
+      <div className="card">
+        <h2>Mai tételek</h2>
+        <p className="hint">Az aznapi állatok tételei, összege és referenciája. Kattints egy sorra: az új tétel annak szól.</p>
         <div className="table-scroll">
           <table className="log-table" data-testid="feeding-list">
             <thead>
-              <tr><th>Listán</th><th>Állat</th><th>Medence</th><th>Csoport</th><th>Tételek</th><th>Összesen</th></tr>
+              <tr><th>Állat</th><th>Tételek</th><th>Összesen</th></tr>
             </thead>
             <tbody>
-              {animals.map((a, i) => (
-                <Fragment key={a.id}>
-                {/* 6fe63c9b, step 1: the animals by group, with "select all" and "none" in the group's header */}
-                {(i === 0 || animals[i - 1]!.groupId !== a.groupId) && (
-                  <tr className="group-head" data-testid={`group-head-${a.groupName ?? "nincs"}`}>
-                    <td colSpan={6}>
-                      <b>{a.groupName ?? "Csoport nélkül"}</b>{" "}
-                      {editable && a.groupId && (
-                        <GroupSelect day={day} name={a.groupName ?? "?"} memberIds={groups.find((g) => g.id === a.groupId)?.members ?? []} />
-                      )}
-                    </td>
-                  </tr>
-                )}
-                <tr {...rowProps(a.id)}>
-                  <td className="keep"><SelectBox day={day} animalId={a.id} name={a.name} selected={a.selected} disabled={!editable} /></td>
+              {animals
+                .filter((a) => a.selected || itemsFor(a.id).length > 0)
+                .map((a) => (
+                <tr key={a.id} {...rowProps(a.id)}>
                   <td>{a.name}</td>
-                  <td>{a.poolName ?? "–"}</td>
-                  <td>{a.groupName ?? "–"}</td>
                   <td className="keep">
                     {itemsFor(a.id).map((i) => (
                       <div key={i.id}>
@@ -115,13 +137,11 @@ export function FeedingDay(props: {
                     {refCell(a.id)}
                   </td>
                 </tr>
-                </Fragment>
               ))}
               {groups.map((g) =>
                 itemsFor(`g:${g.id}`).length || isRecipient(`g:${g.id}`) ? (
                   <tr key={g.id} {...rowProps(`g:${g.id}`)}>
-                    <td></td>
-                    <td colSpan={3}>{g.name} (csoport)</td>
+                    <td>{g.name} (csoport)</td>
                     <td className="keep">
                       {itemsFor(`g:${g.id}`).map((i) => (
                         <div key={i.id}>
@@ -145,11 +165,6 @@ export function FeedingDay(props: {
             </tbody>
           </table>
         </div>
-        {editable && !props.finalized && (
-          <div className="toolbar">
-            <FinalizeList day={day} />
-          </div>
-        )}
       </div>
 
       {props.feedTypes && (

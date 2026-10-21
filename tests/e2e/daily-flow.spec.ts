@@ -541,8 +541,10 @@ test("calculator: general, no animal on top, saved as the reference of the anima
   await expect(calc.getByRole("status")).toHaveText("Mentve referenciaként.");
   await expect(page.getByTestId("current-reference")).toContainText("250 g");
   await expect(page.getByTestId("saved-references").getByRole("row").filter({ hasText: name }).first()).toContainText("250 g");
-  // EGY-08: the feeding page shows the reference in the animal's row
+  // EGY-08: the feeding page shows the reference in the animal's row. Since Lili's simpler chooser (2026-10-21) the
+  // items table lists only the day's animals, so the animal goes on today's list first
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
+  await page.getByLabel(`${name} a mai listán`).check();
   await expect(page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name })).toContainText("ref 250 g");
 });
 
