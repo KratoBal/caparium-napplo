@@ -57,6 +57,14 @@ function cellUnits(feed: FeedOpt) {
   });
 }
 
+/**
+ * A coral feed (feed.tick, 6fe63c9b item 7) is a tick, not an amount: its draft holds TICK "1" (given) or "" (not),
+ * a tick is saved as an item without a quantity, and an untick invalidates the cell's item. The item form still
+ * takes a quantity; a cell whose item has one shows it.
+ */
+const TICK = "TICK";
+const fieldsOf = (feed: FeedOpt) => (feed.tick ? [TICK] : cellUnits(feed).map((u) => u.dimension));
+
 /** A draft cell: the typed text per dimension, and what it was typed on (the item and version, or none). */
 type Draft = { values: Record<string, string>; baseId: string | null; baseVersion: number | null };
 
@@ -97,6 +105,7 @@ export function FeedingSheet({
   const multi = (rec: string, feedId: string) => cellItems(rec, feedId).length > 1;
   const savedText = (rec: string, f: FeedOpt): Record<string, string> => {
     const item = savedItem(rec, f.id);
+    if (f.tick) return { [TICK]: item ? "1" : "" };
     const out: Record<string, string> = {};
     for (const u of cellUnits(f)) {
       const v = item?.baseQuantities.filter((q) => q.unit === u.symbol).reduce((s, q) => s + q.value, 0) ?? 0;
@@ -109,12 +118,14 @@ export function FeedingSheet({
     const d = drafts[cellKey(rec, f.id)];
     if (!d) return false;
     const s = savedText(rec, f);
-    return cellUnits(f).some((u) => (d.values[u.dimension] ?? "").trim() !== (s[u.dimension] ?? "").trim());
+    return fieldsOf(f).some((k) => (d.values[k] ?? "").trim() !== (s[k] ?? "").trim());
   };
   // the totals read what the sheet shows: saved values (every item of the cell), or the draft where one was typed
   const cellTotals = (rec: string, f: FeedOpt): Record<string, number> => {
     const t: Record<string, number> = {};
-    if (!drafts[cellKey(rec, f.id)]) {
+    // a tick adds no amount; a ticked cell shows what its saved item(s) carry, an unticked draft nothing
+    if (f.tick && drafts[cellKey(rec, f.id)]?.values[TICK] === "") return t;
+    if (!drafts[cellKey(rec, f.id)] || f.tick) {
       for (const i of cellItems(rec, f.id)) for (const q of i.baseQuantities) add(t, q.unit, q.value);
       return t;
     }
@@ -217,7 +228,8 @@ export function FeedingSheet({
       setLocalMsg(`${stale.length} cellában közben több tétel lett: ${stale.map(({ r, f }) => `${r.label}: ${f.name}`).join("; ")}. A tétel-űrlapon javítsd, a piszkozatát vesd el.`);
       return;
     }
-    const clearing = changed.filter(({ r, f }) => drafts[cellKey(r.key, f.id)]!.baseId && cellUnits(f).every((u) => !parseAmount(shown(r.key, f)[u.dimension] ?? "")));
+    const emptied = (f: FeedOpt, v: Record<string, string>) => (f.tick ? v[TICK] !== "1" : cellUnits(f).every((u) => !parseAmount(v[u.dimension] ?? "")));
+    const clearing = changed.filter(({ r, f }) => drafts[cellKey(r.key, f.id)]!.baseId && emptied(f, shown(r.key, f)));
     let why: { reason?: string } | null = {};
     if (clearing.length) {
       why = askReason(reasonsOn, "A kiürített cellák tételeinek érvénytelenítési oka:", `${clearing.length} kiürített cella tétele érvénytelenítődik. Folytatod?`);
@@ -227,15 +239,15 @@ export function FeedingSheet({
     for (const { r, f } of changed) {
       const key = cellKey(r.key, f.id);
       const d = drafts[key]!;
-      const quantities = cellUnits(f)
+      const quantities = (f.tick ? [] : cellUnits(f))
         .map((u) => ({ raw: (d.values[u.dimension] ?? "").trim(), unitId: u.id }))
         .filter((q) => q.raw !== "" && parseAmount(q.raw))
         .map((q) => ({ value: q.raw, unitId: q.unitId }));
       const id = requestIds[key] ?? newRequestId();
       if (!requestIds[key]) setRequestIds((m) => ({ ...m, [key]: id }));
       let ok: boolean;
-      if (quantities.length === 0) {
-        // an emptied saved cell: its item is invalidated, on the version the draft was typed on
+      if (emptied(f, d.values)) {
+        // an emptied (or unticked) saved cell: its item is invalidated, on the version the draft was typed on
         if (!d.baseId) ok = true;
         else ok = await run(`/api/feeding/items/${d.baseId}/invalidate`, { requestId: id, expectedVersion: d.baseVersion, ...why }, "Takarmánylap mentve.");
       } else {
@@ -297,7 +309,7 @@ export function FeedingSheet({
         <>
           {editable && (
             <p className="hint no-print">
-              Kattints egy sorra, és írd be a mennyiségeket: amit beírsz, a sor elhagyása után is megmarad és átírható. A végén a „Takarmánylap mentése” ment mindent. Az üres cella 0, nem kerül tételként rögzítésre; egy mentett cella kiürítése a tételét érvényteleníti.
+              Kattints egy sorra, és írd be a mennyiségeket: amit beírsz, a sor elhagyása után is megmarad és átírható. A végén a „Takarmánylap mentése” ment mindent. Az üres cella 0, nem kerül tételként rögzítésre; egy mentett cella kiürítése a tételét érvényteleníti.{feeds.some((f) => f.tick) ? " A koralltáp oszlopában pipa: adva vagy nem, mennyiség nélkül (a mennyiség a tétel-űrlapon írható be)." : ""}
             </p>
           )}
           <div className="table-scroll">
@@ -307,7 +319,7 @@ export function FeedingSheet({
                   <th>Állat</th>
                   {feeds.map((f) => (
                     <th key={f.id}>
-                      {f.name} ({cellUnits(f).map((u) => u.symbol).join(" + ")})
+                      {f.name} ({f.tick ? "adva" : cellUnits(f).map((u) => u.symbol).join(" + ")})
                     </th>
                   ))}
                   <th>Összesen</th>
@@ -335,6 +347,15 @@ export function FeedingSheet({
                               <span className="hint" title="Egy cellában több tétel: a tétel-űrlapon javítsd">
                                 {fmt(cellTotals(r.key, f))} (több tétel)
                               </span>
+                            ) : isActive && f.tick ? (
+                              <input
+                                type="checkbox"
+                                className="no-print"
+                                checked={d[TICK] === "1"}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => type(r.key, f, TICK, e.target.checked ? "1" : "")}
+                                aria-label={`${r.label}: ${f.name} (adva)`}
+                              />
                             ) : isActive ? (
                               cellUnits(f).map((u) => (
                                 <input
@@ -350,7 +371,7 @@ export function FeedingSheet({
                               ))
                             ) : (
                               <span className={dirty || conflict ? "badge badge-pending" : undefined} title={conflict ? "Nem mentődött: lásd az üzenetet" : dirty ? "Nincs még mentve" : undefined}>
-                                {fmt(cellTotals(r.key, f)) || "0"}
+                                {f.tick ? (d[TICK] === "1" ? fmt(cellTotals(r.key, f)) || "adva" : "nem") : fmt(cellTotals(r.key, f)) || "0"}
                               </span>
                             )}
                           </td>

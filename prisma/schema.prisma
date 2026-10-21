@@ -804,6 +804,9 @@ model Feed {
   defaultUnitId     String      @db.Uuid
   temporary         Boolean     @default(false)
   active            Boolean     @default(true)
+  // 6fe63c9b item 7 (the coral feeds, until the zoo decides on a dose): the feeding sheet shows a tick (given or
+  // not), and an item of this feed may have no quantity; the item form still takes one
+  sheetTick         Boolean     @default(false)
   sortOrder         Int
   createdAt         DateTime    @default(now()) @db.Timestamptz(3)
 

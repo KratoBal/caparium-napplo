@@ -3,7 +3,7 @@
 // default: simple icons, no AI-generated figures. AST-03: they speak up when a chemical runs out.
 
 import { eatingDayView } from "./eating";
-import { EAT_LABEL } from "./eating-labels";
+import { EAT_LABEL, GIVEN } from "./eating-labels";
 import { feedingDayView } from "./feeding";
 import { missedMeasurements, runningOut } from "./notices";
 import { getGrid, listGroups } from "./queries";
@@ -73,7 +73,7 @@ export async function feedingHelper(stock: boolean, now = new Date()): Promise<H
   const perAnimal = feed.animals.map((a) => {
     const items = feed.items.filter((i) => i.animalId === a.id || i.participants.includes(a.id));
     const status = eat.rows.find((r) => r.animalId === a.id)?.status;
-    const got = items.map((i) => `${i.otherName ? `${i.feed}: ${i.otherName}` : i.feed} ${i.quantities.map((q) => `${num(q.value)} ${q.unit}`).join(" + ")}${i.animalId ? "" : " (a csoportjával)"}`);
+    const got = items.map((i) => `${i.otherName ? `${i.feed}: ${i.otherName}` : i.feed} ${i.quantities.map((q) => `${num(q.value)} ${q.unit}`).join(" + ") || GIVEN}${i.animalId ? "" : " (a csoportjával)"}`);
     const said = status ? ` Evés: ${EAT_LABEL[status.state]}.` : "";
     return { name: a.name, a: got.length ? `Ma kapott: ${got.join("; ")}.${said}` : `Ma még nem kapott semmit.${said}` };
   });

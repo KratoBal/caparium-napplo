@@ -51,7 +51,7 @@ export const INITIAL_ANIMALS: InitialAnimal[] = [
   { pool: "KORALLOS", species: "Korallos – korallok", name: "Korallos – korallok", sex: "UNKNOWN" },
 ];
 
-type InitialFeed = { type: string; name: string; dims: Dimension[]; unit: string };
+type InitialFeed = { type: string; name: string; dims: Dimension[]; unit: string; sheetTick?: true };
 const mass = (type: string, name: string): InitialFeed => ({ type, name, dims: ["MASS"], unit: "g" });
 
 export const INITIAL_FEEDS: InitialFeed[] = [
@@ -73,8 +73,9 @@ export const INITIAL_FEEDS: InitialFeed[] = [
   mass("APRO", "Mysis"),
   mass("APRO", "Krill"),
   mass("APRO", "Homárikra"),
-  { type: "APRO", name: "RE+ Coral nutrition AB+", dims: ["VOLUME"], unit: "ml" },
-  { type: "APRO", name: "AF Power elixir", dims: ["VOLUME"], unit: "ml" },
+  // the coral feeds: a tick on the feeding sheet (6fe63c9b item 7; migration 20261021170000_feed_sheet_tick)
+  { type: "APRO", name: "RE+ Coral nutrition AB+", dims: ["VOLUME"], unit: "ml", sheetTick: true },
+  { type: "APRO", name: "AF Power elixir", dims: ["VOLUME"], unit: "ml", sheetTick: true },
 ];
 
 /**
@@ -100,6 +101,7 @@ export async function loadInitialFeeds(prisma: PrismaClient, unitId: Map<string,
       data: {
         typeId: type.id,
         allowedDimensions: f.dims,
+        sheetTick: f.sheetTick ?? false,
         defaultUnitId: unitId.get(f.unit)!,
         sortOrder,
         names: { create: { name: f.name, validFrom: since } },

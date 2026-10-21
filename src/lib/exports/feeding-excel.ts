@@ -10,6 +10,7 @@ import type { Dimension } from "@prisma/client";
 import ExcelJS from "exceljs";
 import { prisma } from "../db";
 import { AppError } from "../errors";
+import { GIVEN } from "../eating-labels";
 import { dayBounds } from "../feeding";
 import { pickValid } from "../master";
 import { feedingLog } from "../feeding-log";
@@ -106,7 +107,8 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
   const sumUnits = [...new Set([...cols.map((c) => c.unit), otherUnit])];
 
   // rows: one per day and recipient (an animal, or a group with its group item)
-  type Row = { day: string; species: string; name: string; values: Map<number, number>; other: { qty: number | string; name: string }[] };
+  // ticks: the feed columns of an item without a quantity (a coral feed ticked on the sheet): "adva", not a number
+  type Row = { day: string; species: string; name: string; values: Map<number, number>; ticks: Set<number>; other: { qty: number | string; name: string }[] };
   const rows = new Map<string, Row>();
   for (const it of items) {
     const day = dateToDay(it.feedingDay.businessDay);
@@ -120,7 +122,7 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       const name = it.animal
         ? pickValid(it.animal.names, at)?.name ?? it.animal.names.at(-1)?.name ?? "?"
         : `${pickValid(it.group!.names, at)?.name ?? it.group!.names.at(-1)?.name ?? "?"} (csoport)`;
-      row = { day, species, name, values: new Map(), other: [] };
+      row = { day, species, name, values: new Map(), ticks: new Set(), other: [] };
       rows.set(key, row);
     }
     if (it.feed.type.code === "EGYEB") {
@@ -131,6 +133,11 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       if (row.other.length > OTHER_SLOTS) {
         throw new AppError(422, "TOO_MANY_OTHER", `${day}: ${row.name} több mint ${OTHER_SLOTS} egyéb takarmányt kapott; az Excel-sablon ennyit tud.`);
       }
+      continue;
+    }
+    if (it.quantities.length === 0) {
+      const i = cols.findIndex((c) => c.feedId === it.feedId);
+      if (i >= 0) row.ticks.add(i);
       continue;
     }
     for (const q of it.quantities) {
@@ -154,7 +161,7 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       const r = life.get(a.id)!;
       if (!r.arrived || r.arrived >= end || (r.ended && r.ended < start) || rows.has(`${d}|${a.id}`)) continue;
       const name = pickValid(a.names, start)?.name ?? a.names.at(-1)?.name ?? "?";
-      rows.set(`${d}|${a.id}`, { day: d, species: a.species.scientificName, name, values: new Map(), other: [] });
+      rows.set(`${d}|${a.id}`, { day: d, species: a.species.scientificName, name, values: new Map(), ticks: new Set(), other: [] });
     }
   }
   const sorted = [...rows.values()].sort((a, b) => a.day.localeCompare(b.day) || a.name.localeCompare(b.name, "hu"));
@@ -214,6 +221,7 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
     r.getCell(2).value = row.species;
     r.getCell(3).value = row.name;
     for (const [i, v] of row.values) r.getCell(FIRST + i).value = v;
+    for (const i of row.ticks) if (!row.values.has(i)) r.getCell(FIRST + i).value = GIVEN;
     // EGY-05: what the animal did not get that day stays empty and coloured
     for (let c = FIRST; c < otherCol(OTHER_SLOTS); c++) {
       const cell = r.getCell(c);
