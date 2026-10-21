@@ -449,8 +449,9 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
 
 // 6fe63c9b (Lili's request; Balázs 2026-10-21 "mehet"): the list in two steps and the feeding sheet. Each layout
 // fills its own animal's row; the day's feeds are shared, so the second run finds them saved already.
-test("feeding sheet: a group selected from its header, the day's feeds, a row saved on the sheet, the totals", async ({ page }, info) => {
+test("feeding sheet: a group selected from its header, the day's feeds, drafts kept on leaving a row, one save, corrections", async ({ page }, info) => {
   const name = info.project.name === "tablet" ? "Teszt Egy" : "Teszt Kettő";
+  const other = info.project.name === "tablet" ? "Teszt Kettő" : "Teszt Egy";
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
   // step 1: the group's header row selects every member at once
@@ -465,22 +466,32 @@ test("feeding sheet: a group selected from its header, the day's feeds, a row sa
     await saveFeeds.click();
     await expect(dayFeeds.getByRole("status")).toHaveText("A nap takarmányai mentve.");
   }
-  // the item form offers the day's feeds (and Egyéb), not the whole list
   await expect(page.getByTestId("item-form").getByLabel("Takarmány", { exact: true }).locator("option", { hasText: "Mytilus sp." })).toHaveCount(0);
-  // step 3: the sheet's columns are the day's feeds; the clicked row takes the amounts
+  // step 3. Lili 2026-10-21 11:44 UTC (a): a feed weighed AND counted takes both units
   const sheet = page.getByTestId("feeding-sheet");
-  await expect(sheet.getByRole("columnheader", { name: "Mysis (g)" })).toBeVisible();
+  await expect(sheet.getByRole("columnheader", { name: "Litopenaeus vannamei (g + db)" })).toBeVisible();
   const row = sheet.getByRole("row").filter({ hasText: name });
+  const otherRow = sheet.getByRole("row").filter({ hasText: other });
   await row.getByRole("cell", { name, exact: true }).click();
-  const cell = row.getByLabel(`${name}: Mysis (g)`);
-  // barracuda #41: a cell that is not an amount is marked, and the row is not reported as saved
-  await cell.fill("sok");
-  await sheet.getByRole("button", { name: "Sor mentése" }).click();
-  await expect(sheet.getByRole("status")).toHaveText("1 cella nem menthető: érvénytelen mennyiség (Mysis).");
-  await expect(cell).toHaveAttribute("aria-invalid", "true");
-  // barracuda #41: the first save reaches the server but its answer is lost; the second one replays the same
-  // request, so the item is recorded once (12,5 g, not 25 g)
-  await cell.fill("12,5");
+  const mysis = row.getByLabel(`${name}: Mysis (g)`);
+  // a cell that is not an amount is marked, and nothing is sent (#42)
+  await mysis.fill("sok");
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText(`1 cella nem menthető: érvénytelen mennyiség (${name}: Mysis).`);
+  await expect(mysis).toHaveAttribute("aria-invalid", "true");
+  // (b): what is typed stays when the row is left, and can be changed again before the save
+  await mysis.fill("12,5");
+  await row.getByLabel(`${name}: Litopenaeus vannamei (g)`).fill("40");
+  await row.getByLabel(`${name}: Litopenaeus vannamei (db)`).fill("5");
+  await otherRow.getByRole("cell", { name: other, exact: true }).click();
+  await expect(sheet.getByTestId(`sheet-cell-${name}-Mysis`)).toHaveText("12,5 g");
+  await row.getByRole("cell", { name, exact: true }).click();
+  await expect(mysis).toHaveValue("12,5");
+  await mysis.fill("15");
+  // (c): an empty cell is 0. The other animal's Litopenaeus cell is empty in both runs: on the tablet run nothing was
+  // recorded for it yet, and on the desktop run the tablet run emptied it (its item invalidated, below)
+  await expect(sheet.getByTestId(`sheet-cell-${other}-Litopenaeus vannamei`)).toHaveText("0");
+  // one save for everything; the first request reaches the server and its answer is lost, the second click replays it
   await page.route(
     "**/api/feeding/items",
     async (route) => {
@@ -489,14 +500,29 @@ test("feeding sheet: a group selected from its header, the day's feeds, a row sa
     },
     { times: 1 },
   );
-  await sheet.getByRole("button", { name: "Sor mentése" }).click();
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
   await expect(sheet.getByRole("status")).toHaveText("Nincs kapcsolat a szerverrel.");
-  await sheet.getByRole("button", { name: "Sor mentése" }).click();
-  await expect(sheet.getByRole("status")).toHaveText("Sor mentve.");
-  await expect(row).toContainText("12,5 g");
-  await expect(row).not.toContainText("25 g");
-  // the same item the list shows, and it is in the column's total
-  await expect(page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name })).toContainText("Mysis 12,5 g");
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Takarmánylap mentve.");
+  await otherRow.getByRole("cell", { name: other, exact: true }).click();
+  await expect(sheet.getByTestId(`sheet-cell-${name}-Mysis`)).toHaveText("15 g");
+  await expect(sheet.getByTestId(`sheet-cell-${name}-Litopenaeus vannamei`)).toHaveText("40 g, 5 db");
+  const listRow = page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name });
+  await expect(listRow).toContainText("Mysis 15 g");
+  // a saved cell is corrected in place (its item is updated, not a second one)
+  await row.getByRole("cell", { name, exact: true }).click();
+  await mysis.fill("20");
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Takarmánylap mentve.");
+  await expect(listRow).toContainText("Mysis 20 g");
+  await expect(listRow).not.toContainText("Mysis 15 g");
+  // an emptied saved cell: its item is invalidated after a confirmation
+  await row.getByLabel(`${name}: Litopenaeus vannamei (g)`).fill("");
+  await row.getByLabel(`${name}: Litopenaeus vannamei (db)`).fill("");
+  page.once("dialog", (d) => void d.accept("teszt: kiürített cella"));
+  await sheet.getByRole("button", { name: /Takarmánylap mentése/ }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Takarmánylap mentve.");
+  await expect(listRow).not.toContainText("Litopenaeus vannamei 40 g");
   await expect(sheet.getByTestId("sheet-grand-total")).toContainText("g");
   await expect(sheet.getByRole("button", { name: "Takarmánylap nyomtatása" })).toBeVisible();
 });
