@@ -2,7 +2,7 @@ import { DayControls } from "@/components/DayControls";
 import { DayNav } from "@/components/DayNav";
 import { FeedingDay } from "@/components/FeedingDay";
 import { ApplyPlan } from "@/components/FeedingForms";
-import type { FeedOpt, Recipient } from "@/components/FeedingForms";
+import type { FeedOpt, FeedTypeOpt, Recipient } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { feedingHelper } from "@/lib/helpers";
 import { moduleLevel } from "@/lib/master";
@@ -59,6 +59,16 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         })),
       })),
   );
+  // 6fe63c9b, step 2: the day's feeds narrow what is offered; "Egyéb" stays (it takes its real name per item)
+  const chosen = new Set(view.feedIds);
+  const offered = chosen.size ? feeds.filter((f) => chosen.has(f.id) || f.isOther) : feeds;
+  // the sheet's columns: the chosen feeds, or, if none were chosen, the feeds already given that day; never "Egyéb"
+  const given = new Set(view.items.map((i) => i.feedId));
+  const sheetFeeds = feeds.filter((f) => !f.isOther && (chosen.size ? chosen.has(f.id) : given.has(f.id)));
+  const feedTypes: FeedTypeOpt[] = types
+    .filter((t) => t.code !== "EGYEB")
+    .map((t) => ({ code: t.code, name: t.name, emoji: t.emoji, feeds: t.feeds.filter((f) => f.active).map((f) => ({ id: f.id, name: f.name })) }))
+    .filter((t) => t.feeds.length > 0);
   return (
     <Shell title="Takarmánynapló" active="feeding" user={user} helper={await feedingHelper((await moduleLevel(prisma, user.id, user.role, "DOSING")) !== "NONE")}>
       <div className="toolbar">
@@ -82,7 +92,10 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         references={references}
         otherNames={otherNames}
         recipients={recipients}
-        feeds={feeds}
+        feeds={offered}
+        feedTypes={feedTypes}
+        dayFeedIds={view.feedIds}
+        sheetFeeds={sheetFeeds}
       />
     </Shell>
   );

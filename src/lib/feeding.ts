@@ -91,6 +91,49 @@ export async function enforce(tx: Tx, decision: Decision, why: string | undefine
 }
 
 // ---------------------------------------------------------------------------
+// The day's feeds: the list's second step (6fe63c9b, Lili's request; Balázs 2026-10-21 "mehet")
+// ---------------------------------------------------------------------------
+
+export const dayFeedsSchema = z.object({
+  requestId,
+  clientTimestamp: z.iso.datetime({ offset: true }).optional(),
+  day,
+  feedIds: z.array(z.uuid()).max(100),
+  reason: reason.optional(),
+});
+
+/**
+ * Sets which feeds are given that day. It only narrows what the item form and the feeding sheet offer;
+ * an item already recorded with another feed stays. An empty choice means "not chosen": every active
+ * feed is offered again, as before the choice existed.
+ */
+export async function setDayFeeds(actor: Actor, input: z.infer<typeof dayFeedsSchema>, serverNow = new Date()) {
+  if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true };
+  const clientTs = input.clientTimestamp ? new Date(input.clientTimestamp) : null;
+  const wanted = [...new Set(input.feedIds)];
+  return prisma.$transaction(async (tx) => {
+    const { f, fd } = await facts(tx, actor, input.day, serverNow, clientTs);
+    await enforce(tx, canCreate(f.level, { day: f.d, today: f.today, closed: f.closed }), input.reason);
+    const known = await tx.feed.findMany({ where: { id: { in: wanted }, active: true }, select: { id: true } });
+    if (known.length !== wanted.length) throw new AppError(422, "FEED_NOT_FOUND", "Ismeretlen vagy inaktív takarmány.");
+    const before = [...fd.feedIds].sort();
+    const after = [...wanted].sort();
+    if (before.join() === after.join()) return { changed: false };
+    await tx.feedingDay.update({ where: { id: fd.id }, data: { feedIds: wanted } });
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: "UPDATE",
+      entityType: "FeedingDay",
+      entityId: fd.id,
+      changes: { feedIds: { before, after }, day: { before: input.day, after: input.day } },
+      reason: input.reason ?? null,
+      requestId: input.requestId,
+    });
+    return { changed: true };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // The daily list (EGY-01, T-01, R-3, R-7)
 // ---------------------------------------------------------------------------
 
@@ -569,14 +612,22 @@ export async function feedingDayView(d: string) {
     listState: fd?.listState ?? "NOT_FINALIZED",
     lock: fd?.journalDay.state ?? "OPEN",
     animals: list,
+    /** 6fe63c9b: the day's feeds (the list's second step); empty = not chosen */
+    feedIds: fd?.feedIds ?? [],
     items: items.map((it) => ({
       id: it.id,
       version: it.version,
       animalId: it.animalId,
       groupId: it.groupId,
+      feedId: it.feedId,
       feed: pickValid(it.feed.names, it.createdAt)?.name ?? "?",
       otherName: it.otherName,
       quantities: it.quantities.map((q) => ({ value: canonicalDecimal(q.quantity), unit: q.unit.symbol })),
+      // the feeding sheet's cells: the same amounts in the base unit of their dimension (g, ml, db)
+      baseQuantities: it.quantities.map((q) => ({
+        unit: baseOf.get(q.unit.dimension) ?? q.unit.symbol,
+        value: Number(q.quantity) * Number(q.unit.factorToBase ?? 1),
+      })),
       participants: it.participants.map((p) => p.animalId),
       noSelectedMember: it.groupId !== null && !it.participants.some((p) => selected.has(p.animalId)),
       createdById: it.createdById,

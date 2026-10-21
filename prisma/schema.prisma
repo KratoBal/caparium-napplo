@@ -862,6 +862,8 @@ model FeedingDay {
   listState     ListState  @default(NOT_FINALIZED)
   finalizedById String?    @db.Uuid
   finalizedAt   DateTime?  @db.Timestamptz(3)
+  /// 6fe63c9b: the day's feeds (the list's second step); empty = not chosen, every active feed is offered
+  feedIds       String[]   @default([]) @db.Uuid
   journalDay    JournalDay @relation(fields: [journalDayId], references: [id])
 
   selections FeedingSelection[]

@@ -447,6 +447,41 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   }
 });
 
+// 6fe63c9b (Lili's request; Balázs 2026-10-21 "mehet"): the list in two steps and the feeding sheet. Each layout
+// fills its own animal's row; the day's feeds are shared, so the second run finds them saved already.
+test("feeding sheet: a group selected from its header, the day's feeds, a row saved on the sheet, the totals", async ({ page }, info) => {
+  const name = info.project.name === "tablet" ? "Teszt Egy" : "Teszt Kettő";
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
+  // step 1: the group's header row selects every member at once
+  await expect(page.getByTestId("group-head-Teszt csoport")).toBeVisible();
+  await page.getByRole("button", { name: "Teszt csoport: összes kijelölése" }).click();
+  await expect(page.getByLabel(`${name} a mai listán`)).toBeChecked();
+  // step 2: the day's feeds
+  const dayFeeds = page.getByTestId("day-feeds");
+  for (const feed of ["Litopenaeus vannamei", "Mysis"]) await dayFeeds.getByLabel(`A nap takarmánya: ${feed}`).check();
+  const saveFeeds = dayFeeds.getByRole("button", { name: "A nap takarmányainak mentése" });
+  if (await saveFeeds.isEnabled()) {
+    await saveFeeds.click();
+    await expect(dayFeeds.getByRole("status")).toHaveText("A nap takarmányai mentve.");
+  }
+  // the item form offers the day's feeds (and Egyéb), not the whole list
+  await expect(page.getByTestId("item-form").getByLabel("Takarmány", { exact: true }).locator("option", { hasText: "Mytilus sp." })).toHaveCount(0);
+  // step 3: the sheet's columns are the day's feeds; the clicked row takes the amounts
+  const sheet = page.getByTestId("feeding-sheet");
+  await expect(sheet.getByRole("columnheader", { name: "Mysis (g)" })).toBeVisible();
+  const row = sheet.getByRole("row").filter({ hasText: name });
+  await row.getByRole("cell", { name, exact: true }).click();
+  await row.getByLabel(`${name}: Mysis (g)`).fill("12,5");
+  await sheet.getByRole("button", { name: "Sor mentése" }).click();
+  await expect(sheet.getByRole("status")).toHaveText("Sor mentve.");
+  await expect(row).toContainText("12,5 g");
+  // the same item the list shows, and it is in the column's total
+  await expect(page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name })).toContainText("Mysis 12,5 g");
+  await expect(sheet.getByTestId("sheet-grand-total")).toContainText("g");
+  await expect(sheet.getByRole("button", { name: "Takarmánylap nyomtatása" })).toBeVisible();
+});
+
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
   // each layout takes out its own feed: one item per feed and day
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";
