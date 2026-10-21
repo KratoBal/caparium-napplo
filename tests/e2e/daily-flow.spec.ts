@@ -914,7 +914,13 @@ test("water measurements by e-mail: the recipient in the settings, the button fi
   await login(page, "teszt.admin");
   await page.getByRole("link", { name: "Beállítások" }).click();
   const rec = page.getByTestId("water-report-recipient");
-  await rec.getByLabel("A vízmérés címzettje").fill(to);
+  // several recipients (card c2e15128): a bad address in the list is named and nothing is saved; the same address
+  // twice is kept once; the list is stored as "a, b"
+  const second = `masik-${to}`;
+  await rec.getByLabel("A vízmérés címzettjei").fill(`${to}, nem-cim`);
+  await rec.getByRole("button", { name: "Mentés" }).click();
+  await expect(rec.getByRole("status")).toHaveText("Érvénytelen e-mail cím: nem-cim.");
+  await rec.getByLabel("A vízmérés címzettjei").fill(`${to}; ${second}, ${to.toUpperCase()}`);
   await rec.getByRole("button", { name: "Mentés" }).click();
   await expect(rec.getByRole("status")).toHaveText("Mentve.");
   await page.getByRole("link", { name: "Export" }).click();
@@ -923,7 +929,7 @@ test("water measurements by e-mail: the recipient in the settings, the button fi
   const headings = await page.locator("main h2").allTextContents();
   expect(headings.indexOf("Vízmérés kiküldése"), "above the Excel").toBeLessThan(headings.indexOf("Excel"));
   const box = page.getByTestId("water-mail");
-  await expect(box).toContainText(`Címzett: ${to}`);
+  await expect(box).toContainText(`Címzettek: ${to}, ${second}`);
   await box.getByRole("button", { name: "Vízmérés kiküldése" }).click();
   await expect(box.getByRole("status")).toHaveText(
     "A levélküldés nincs beállítva: hiányzik vagy hibás: CAPARIUM_SMTP_HOST, CAPARIUM_SMTP_PORT, CAPARIUM_SMTP_USER, CAPARIUM_SMTP_PASSWORD, CAPARIUM_MAIL_FROM.",

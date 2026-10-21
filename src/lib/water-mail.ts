@@ -1,6 +1,8 @@
-// "Vízmérés kiküldése" (caparium-hibak-4, item 13): the recipient setting and the sending. The recipient is set in
-// Beállítások by a settings admin (a versioned setting row, audited); anyone who may export sends, to that address
-// only (no address is typed at sending time). Every sending is one EXPORT audit row with the recipient and the day.
+// "Vízmérés kiküldése" (caparium-hibak-4, item 13): the recipient setting and the sending. The recipients are set in
+// Beállítások by a settings admin (a versioned setting row, audited); anyone who may export sends, to those addresses
+// only (no address is typed at sending time). Every sending is one EXPORT audit row with the recipients and the day.
+// Several recipients (Lili, 2026-10-21 13:50 UTC, card c2e15128): the same setting holds a comma-separated list,
+// each address checked on its own, stored once and normalized ("a@x.hu, b@y.hu"); one mail goes to all of them.
 import { z } from "zod";
 import { writeAudit } from "./audit";
 import { prisma } from "./db";
@@ -14,9 +16,32 @@ import { waterReportPdf } from "./water-report-pdf";
 
 const requestId = z.string().min(8).max(100);
 
+export const MAX_RECIPIENTS = 10;
+const address = z.email();
+
+/**
+ * The recipients as typed: separated by commas, semicolons or whitespace, each checked, the same address (in any case)
+ * once, in the order typed. An empty text is no recipient. Returns the problem in words, never a half list.
+ */
+export function parseRecipients(raw: string): { ok: true; list: string[] } | { ok: false; message: string } {
+  const parts = raw.split(/[,;\s]+/).map((p) => p.trim()).filter(Boolean);
+  const bad = parts.filter((p) => !address.safeParse(p).success);
+  if (bad.length) return { ok: false, message: `Érvénytelen e-mail cím: ${bad.join(", ")}.` };
+  const seen = new Set<string>();
+  const list = parts.filter((p) => !seen.has(p.toLowerCase()) && seen.add(p.toLowerCase()));
+  if (list.length > MAX_RECIPIENTS) return { ok: false, message: `Legfeljebb ${MAX_RECIPIENTS} címzett adható meg.` };
+  return { ok: true, list };
+}
+
 export const recipientSchema = z.object({
   requestId,
-  email: z.union([z.literal(""), z.email({ error: "Érvényes e-mail címet adj meg." })]),
+  email: z
+    .string()
+    .max(2000)
+    .superRefine((value, ctx) => {
+      const parsed = parseRecipients(value);
+      if (!parsed.ok) ctx.addIssue({ code: "custom", message: parsed.message });
+    }),
 });
 
 export async function setWaterReportRecipient(actor: Actor, raw: z.input<typeof recipientSchema>, now = new Date()) {
@@ -26,7 +51,8 @@ export async function setWaterReportRecipient(actor: Actor, raw: z.input<typeof 
     throw new AppError(403, "ADMIN_ONLY", "A beállításokat csak adminisztrátor módosíthatja.");
   }
   if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true };
-  const email = input.email.trim();
+  const parsed = parseRecipients(input.email);
+  const email = parsed.ok ? parsed.list.join(", ") : "";
   return prisma.$transaction(async (tx) => {
     const before = await getSetting(tx, "water_report_recipient", now);
     if (before === email) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
@@ -56,7 +82,10 @@ export async function sendWaterReport(actor: Actor, input: z.infer<typeof sendSc
     return { replayed: true, to: c.recipient?.after ?? null, day: prior.entityId, pools: c.pools?.after?.length ?? 0 };
   }
   const to = await getSetting(prisma, "water_report_recipient", now);
-  if (!to) throw new AppError(422, "NO_RECIPIENT", "Nincs megadva címzett: a Beállításokban add meg, hova menjen a vízmérés.");
+  // a stored list is checked again: a row written by an older version, or by hand, must not send to a typo
+  const recipients = to ? parseRecipients(to) : null;
+  if (!recipients || !recipients.ok || recipients.list.length === 0)
+    throw new AppError(422, "NO_RECIPIENT", "Nincs megadva címzett: a Beállításokban add meg, hova menjen a vízmérés.");
   const day = businessDayOf(now);
   const report = await waterReport(day);
   // the PDF before the SMTP check: where no SMTP is set the button still builds it, so a packaging fault of the PDF
@@ -70,7 +99,10 @@ export async function sendWaterReport(actor: Actor, input: z.infer<typeof sendSc
   try {
     await send({
       from: config.from,
-      to,
+      // one mail to all: the recipients see each other, which is fine for the zoo's own staff. If an outside address
+      // (a partner, an authority) ever joins the list, sharing the addresses is a privacy question: then bcc, or one
+      // mail per address (barracuda on #53)
+      to: recipients.list.join(", "),
       subject: `Vízmérés – ${day}`,
       text: `A Cápárium nAPPló vízmérési eredményei medencénként: napi értékek ${day}, heti értékek ${report.weekFrom} – ${day}. A részletek a csatolt PDF-ben.`,
       attachments: [{ filename, content: pdf, contentType: "application/pdf" }],
