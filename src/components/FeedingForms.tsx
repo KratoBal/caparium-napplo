@@ -571,6 +571,9 @@ export function EatingTable({ day, rows, editable }: { day: string; rows: Eating
     return !i.state || d.state !== i.state || d.vitamin !== i.vitamin || d.medicine !== i.medicine || (d.medicine && d.note.trim() !== i.note);
   };
   const toSave = rows.filter(changed);
+  // Lili (acrobot 34629, 2026-10-21): the fasting rows invited a click on every row, although the close makes them
+  // fasting days by itself. There a row shows its state only; the recording controls open per row on request
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
 
   async function saveAll() {
     setBusy(true);
@@ -644,6 +647,8 @@ export function EatingTable({ day, rows, editable }: { day: string; rows: Eating
     const d = drafts[r.animalId] ?? initial(r);
     const states = r.selected ? ["EATEN", "PARTIAL", "NOT_EATEN"] : ["FASTING"];
     const manual = s?.source === "MANUAL" ? s : null;
+    // a fasting row keeps its controls folded unless asked for, or unless something is recorded or typed on it
+    const folded = !r.selected && !opened.has(r.animalId) && !manual && !changed(r);
     return (
       <tr key={r.animalId} className={changed(r) ? "active-row" : undefined}>
         <td>{r.name}</td>
@@ -665,7 +670,19 @@ export function EatingTable({ day, rows, editable }: { day: string; rows: Eating
           {s?.vitamin ? "V " : ""}
           {s?.medicine ? `Gy${s.medicineNote ? `: ${s.medicineNote}` : ""}` : ""}
         </td>
-        {editable && (
+        {editable && folded && (
+          <td className="keep">
+            <button
+              className="btn btn-soft small"
+              type="button"
+              onClick={() => setOpened((cur) => new Set(cur).add(r.animalId))}
+              aria-label={`${r.name}: kivétel rögzítése`}
+            >
+              Kivétel rögzítése
+            </button>
+          </td>
+        )}
+        {editable && !folded && (
           <td className="keep">
             <div className="toolbar" style={{ margin: 0 }} data-testid={`eating-${r.name}`}>
               <select className="input" value={d.state} onChange={(e) => set(r.animalId, { state: e.target.value })} aria-label={`${r.name} evési állapota`}>
@@ -707,7 +724,7 @@ export function EatingTable({ day, rows, editable }: { day: string; rows: Eating
       {fasting.length > 0 && (
         <details style={{ marginTop: 12 }} data-testid="eating-fasting">
           <summary>
-            Koplalónapos állatok ({fasting.length}): nincsenek a napi listán, a lista lezárásakor automatikusan koplalónapot kapnak
+            Koplalónapos állatok ({fasting.length}): nincsenek a napi listán, a lista lezárásakor automatikusan koplalónapot kapnak; csak a kivételt kell rögzíteni (például vitamin vagy gyógyszer)
           </summary>
           <div className="table-scroll">
             <table className="log-table" data-testid="eating-fasting-table">

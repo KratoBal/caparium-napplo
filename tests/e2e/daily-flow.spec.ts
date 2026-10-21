@@ -417,6 +417,9 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
 
   // review of #31: a refresh restarts only the rows whose server state changed. A filled-in, unsaved row (Teszt Négy)
   // keeps its draft while another row's status is invalidated; then it is cleared again, nothing of it is saved.
+  // acrobot 34629 (Lili): a fasting row shows its state only; its controls open on request
+  await expect(page.getByTestId("eating-fasting-table").getByLabel("Teszt Négy evési állapota")).toHaveCount(0);
+  await page.getByRole("button", { name: "Teszt Négy: kivétel rögzítése" }).click();
   const other = page.getByTestId("eating-Teszt Négy").getByLabel("Teszt Négy evési állapota");
   await other.selectOption("FASTING");
   page.once("dialog", (d) => void d.accept("teszt: törlés a vázlat-próbához"));
