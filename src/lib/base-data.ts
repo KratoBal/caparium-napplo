@@ -62,7 +62,7 @@ export const ZIMS_UNIT_NAMES: Record<string, string> = {
   "°C": "degree Celsius",
   ppm: "parts per million",
   dKH: "dKH",
-  mV: "mV",
+  mV: "millivolt", // the ZIMS sample file's spelling; the zoo confirmed it (2026-10-21)
 };
 
 export const POOLS = [
