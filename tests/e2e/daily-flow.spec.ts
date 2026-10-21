@@ -417,6 +417,9 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
 
   // review of #31: a refresh restarts only the rows whose server state changed. A filled-in, unsaved row (Teszt Négy)
   // keeps its draft while another row's status is invalidated; then it is cleared again, nothing of it is saved.
+  // acrobot 34629 (Lili): a fasting row shows its state only; its controls open on request
+  await expect(page.getByTestId("eating-fasting-table").getByLabel("Teszt Négy evési állapota")).toHaveCount(0);
+  await page.getByRole("button", { name: "Teszt Négy: kivétel rögzítése" }).click();
   const other = page.getByTestId("eating-Teszt Négy").getByLabel("Teszt Négy evési állapota");
   await other.selectOption("FASTING");
   page.once("dialog", (d) => void d.accept("teszt: törlés a vázlat-próbához"));
@@ -432,6 +435,22 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   await page.reload();
   await expect(page.getByTestId(`state-${name}`)).toHaveText("nem evett meg mindent");
   await expect(page.getByTestId("eating-table").getByRole("row").filter({ hasText: name })).toContainText("V");
+  // barracuda on #50 (the #45 lesson): an unsaved eating draft belongs to its day. The day navigation stays on the
+  // same route; after going to another day and back, the row shows what is saved, not the draft
+  // a row whose server state is the same on both days (Teszt Négy: not on the list, nothing recorded) is the one
+  // that would carry its draft over, since only rows whose server state changed restart their drafts
+  const today = await page.getByTestId("shown-day").textContent();
+  await page.getByTestId("eating-fasting").locator("summary").click();
+  await page.getByRole("button", { name: "Teszt Négy: kivétel rögzítése" }).click();
+  await page.getByTestId("eating-Teszt Négy").getByLabel("Teszt Négy evési állapota").selectOption("FASTING");
+  await page.getByRole("link", { name: "‹ előző nap" }).click();
+  await expect(page.getByTestId("shown-day")).not.toHaveText(today ?? "");
+  await page.getByRole("link", { name: "következő nap ›" }).click();
+  await expect(page.getByTestId("shown-day")).toHaveText(today ?? "");
+  // read in the DOM, not by role: the folded section is closed again after the remount, and its content is hidden
+  await expect
+    .poll(() => page.evaluate(() => [!!document.querySelector('[aria-label="Teszt Négy: kivétel rögzítése"]'), !!document.querySelector('[aria-label="Teszt Négy evési állapota"]')]))
+    .toEqual([true, false]);
 
   // TAK-04: the period log shows the item and the eating pattern; TAK-05: printable as PDF
   await page.getByRole("link", { name: "Takarmányozási napló" }).click();
