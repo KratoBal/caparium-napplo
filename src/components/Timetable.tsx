@@ -37,7 +37,8 @@ export function Timetable({ animals, editable }: { animals: Row[]; editable: boo
     const ok = await run(
       "/api/feeding/plans",
       { requestId: id, plans: changed.map((a) => ({ animalId: a.id, weekdays: days[a.id] ?? [] })) },
-      (res) => `Mentve: ${Number(res.changed ?? 0)} állat terve.`,
+      // a replay (the first answer was lost) is a save already done, not "0 saved" (barracuda #43)
+      (res) => (res.replayed ? "Már mentve." : `Mentve: ${Number(res.changed ?? 0)} állat terve.`),
     );
     if (ok) setPendingId(null);
   }
