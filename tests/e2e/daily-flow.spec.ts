@@ -1061,10 +1061,11 @@ test("export page: the water-mail box is pink with a gap above the calendar, the
   // the title is smaller than the other boxes' titles
   const size = (heading: string) => page.locator("main h2", { hasText: heading }).first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
   expect(await size("Havi ZIMS-csomag")).toBeLessThan(await size("ZIMS CSV"));
+});
 
 // Lili 2026-10-26 (Caparium channel msg 1564351191281049815, point 3; Balázs "Mehet" 1564352369205186581): the admin adds
 // a pool in Beállítások (name, code, volume, icon optional). The pool is deactivated at the end: the other tests list
-// the active pools, and a pool without a measurement group has no place among them.
+// the active pools, and a pool with its memberships has no place among them once the test is over.
 test("settings: the admin adds a new pool; the existing pools stay as they were", async ({ page }) => {
   const suffix = `${Date.now()}`.slice(-8);
   const name = `E2E medence ${suffix}`;
