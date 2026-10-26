@@ -34,11 +34,31 @@ describe("water report PDF", () => {
     });
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
     const lines = await readPdfLines(pdf);
-    expect(lines).toContain("Vízmérés – 2027-09-08");
+    expect(lines).toContain("Cápasuli vízmérés - 2027-09-08");
     expect(lines).toContain("Kismedence ŐŰőű áéíóúöü");
-    expect(lines).toContain("Hőmérséklet 24,5 °C 08:06 TA");
-    expect(lines).toContain("Sűrűség 35,1 ppt 08:06 TA magas");
-    expect(lines).toContain("NO3 8,4 ppm 2027-09-07 1:10 RO");
+    // no date and no time column (Lili 2026-10-26): the daily row is parameter, value, measurer; the weekly one
+    // parameter, value, dilution
+    expect(lines).toContain("Hőmérséklet 24,5 °C TA");
+    expect(lines).toContain("Sűrűség 35,1 ppt TA magas");
+    expect(lines).toContain("NO3 8,4 ppm 1:10 RO");
+  });
+
+  // Lili 2026-10-26 (Caparium channel msg 1564350735267921991, point 1): the date and the time are not columns any more.
+  // The control: the same report with the old columns would carry "08:06" and "2027-09-07" in a row; the only place
+  // the day may stand is the title and the line under it.
+  it("has no date or time column, and the column header rows say so", async () => {
+    const lines = await readPdfLines(
+      await waterReportPdf({
+        day: "2027-09-08",
+        weekFrom: "2027-09-06",
+        pools: [{ pool: "Nagymedence", daily: [v({ parameter: "pH" })], weekly: [v({ parameter: "NO3", day: "2027-09-07", dilution: 10, diluentWater: "RO" })] }],
+      }),
+    );
+    expect(lines.filter((l) => l.includes("08:06"))).toEqual([]);
+    expect(lines.filter((l) => l.includes("2027-09-07"))).toEqual([]);
+    expect(lines).toContain("Paraméter Érték Mérte Eltérés");
+    expect(lines).toContain("Paraméter Érték Hígítás Eltérés");
+    expect(lines.some((l) => l.split(" ").some((w) => w === "Idő" || w === "Nap"))).toBe(false);
   });
 
   it("an empty week says so instead of an empty page", async () => {

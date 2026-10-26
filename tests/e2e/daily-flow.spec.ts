@@ -1031,3 +1031,34 @@ test("the admin's animal order: a row moves with the buttons and the save become
   await expect(save).toBeDisabled();
 });
 
+
+// Lili 2026-10-26 (Caparium channel msg 1564351191281049815, point 2; Balázs "Mehet" 1564352369205186581): the export
+// page. The water-mail box has the pink background #F1D1D8 and a larger gap before the calendar under it; the monthly
+// ZIMS package box has a smaller title and stands below the ZIMS CSV box. Read-only: nothing is sent or saved.
+test("export page: the water-mail box is pink with a gap above the calendar, the monthly ZIMS package sits under the ZIMS CSV box with a smaller title", async ({ page }) => {
+  await login(page, "teszt.admin");
+  await page.goto("/export");
+  const mail = page.getByTestId("water-mail-card");
+  await expect(mail).toBeVisible();
+  expect(await mail.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(241, 209, 216)");
+  // another box keeps the plain card background, so the pink is the mail box's own
+  const excel = page.locator("main .card", { has: page.getByRole("heading", { name: "Excel", exact: true }) });
+  expect(await excel.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe("rgb(241, 209, 216)");
+
+  // the gap between the mail box and the calendar (the date filter) is larger than the 20 px between two cards
+  const mailBox = (await mail.boundingBox())!;
+  const filterBox = (await page.locator("form.filters").boundingBox())!;
+  expect(filterBox.y - (mailBox.y + mailBox.height), "gap above the calendar").toBeGreaterThanOrEqual(28);
+
+  // the order of the boxes: water mail, Excel, ZIMS CSV, then the monthly package
+  const headings = await page.locator("main h2").allTextContents();
+  const at = (start: string) => headings.findIndex((h) => h.startsWith(start));
+  expect(at("Vízmérés kiküldése")).toBeGreaterThanOrEqual(0);
+  expect(at("Excel")).toBeGreaterThan(at("Vízmérés kiküldése"));
+  expect(at("ZIMS CSV")).toBeGreaterThan(at("Excel"));
+  expect(at("Havi ZIMS-csomag"), "under the ZIMS CSV box").toBe(at("ZIMS CSV") + 1);
+
+  // the title is smaller than the other boxes' titles
+  const size = (heading: string) => page.locator("main h2", { hasText: heading }).first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(await size("Havi ZIMS-csomag")).toBeLessThan(await size("ZIMS CSV"));
+});

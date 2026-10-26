@@ -2,6 +2,7 @@
 // weekly values, with the measurer's monogram and the out-of-range mark. Embedded DejaVuSans (src/lib/pdf-font.ts).
 import PDFDocument from "pdfkit";
 import { pdfFont } from "./pdf-font";
+import { waterReportTitle } from "./water-report-text";
 import type { ReportValue, WaterReport } from "./water-report";
 
 const hu = (v: string) => v.replace(".", ",");
@@ -23,7 +24,7 @@ function valueText(v: ReportValue): string {
 }
 
 export async function waterReportPdf(report: WaterReport): Promise<Buffer> {
-  const doc = new PDFDocument({ size: "A4", margin: 48, info: { Title: `Vízmérés ${report.day}`, Author: "Cápárium nAPPló" } });
+  const doc = new PDFDocument({ size: "A4", margin: 48, info: { Title: waterReportTitle(report.day), Author: "Cápárium nAPPló" } });
   doc.registerFont("body", pdfFont());
   doc.font("body");
   const chunks: Buffer[] = [];
@@ -33,14 +34,15 @@ export async function waterReportPdf(report: WaterReport): Promise<Buffer> {
     doc.on("error", reject);
   });
 
-  doc.fontSize(16).text(`Vízmérés – ${report.day}`);
+  doc.fontSize(16).text(waterReportTitle(report.day));
   doc.fontSize(9).fillColor("#555").text(`Napi értékek: ${report.day}. Heti értékek: ${report.weekFrom} – ${report.day}.`);
   doc.fillColor("#000").moveDown();
 
   if (report.pools.length === 0) {
     doc.fontSize(11).text("Ezen a héten még nincs rögzített vízmérés.");
   }
-  const cols = [48, 200, 300, 360, 420];
+  // no date and time columns (Lili 2026-10-26): the day is in the title, the week in the line under it
+  const cols = [48, 220, 340, 440];
   /** A text line on a colored band: the band is drawn first, then the text on it, 4 pt from the left edge. */
   const band = (text: string, size: number, color: string, ink: string) => {
     const h = doc.fontSize(size).heightOfString(text, { width: WIDTH - 8 });
@@ -68,16 +70,16 @@ export async function waterReportPdf(report: WaterReport): Promise<Buffer> {
     band(p.pool, 13, BG_POOL, "#000");
     if (p.daily.length) {
       band("Napi mérés", 10, BG_SECTION, "#333");
-      row(["Paraméter", "Érték", "Idő", "Mérte", "Eltérés"], { header: true });
-      for (const v of p.daily) row([v.parameter, valueText(v), v.time, v.by, MARK[v.reference] ?? ""], { reference: v.reference });
+      row(["Paraméter", "Érték", "Mérte", "Eltérés"], { header: true });
+      for (const v of p.daily) row([v.parameter, valueText(v), v.by, MARK[v.reference] ?? ""], { reference: v.reference });
     }
     if (p.weekly.length) {
       doc.moveDown(0.3);
       band("Heti mérés", 10, BG_SECTION, "#333");
-      row(["Paraméter", "Érték", "Nap", "Hígítás", "Eltérés"], { header: true });
+      row(["Paraméter", "Érték", "Hígítás", "Eltérés"], { header: true });
       for (const v of p.weekly) {
         const dil = [v.dilution ? `1:${v.dilution}` : "", v.diluentWater ?? ""].filter(Boolean).join(" ");
-        row([v.parameter, valueText(v), v.day, dil, MARK[v.reference] ?? ""], { reference: v.reference });
+        row([v.parameter, valueText(v), dil, MARK[v.reference] ?? ""], { reference: v.reference });
       }
     }
   }

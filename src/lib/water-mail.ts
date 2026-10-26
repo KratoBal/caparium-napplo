@@ -13,6 +13,7 @@ import type { Actor } from "./measurements";
 import { businessDayOf } from "./time";
 import { waterReport } from "./water-report";
 import { waterReportPdf } from "./water-report-pdf";
+import { waterReportMailText, waterReportTitle } from "./water-report-text";
 
 const requestId = z.string().min(8).max(100);
 
@@ -95,7 +96,10 @@ export async function sendWaterReport(actor: Actor, input: z.infer<typeof sendSc
   const pdf = await waterReportPdf(report);
   const config = mailConfig();
   const send = sender ?? smtpSender(config);
-  const filename = `Vizmeres_${day}.pdf`;
+  // Lili 2026-10-26 (msg 1564350735267921991): file name and subject "Cápasuli vízmérés - <day>", the letter signed by the sender
+  const title = waterReportTitle(day);
+  const filename = `${title}.pdf`;
+  const senderUser = await prisma.user.findUnique({ where: { id: actor.id }, select: { fullName: true } });
   try {
     await send({
       from: config.from,
@@ -103,8 +107,8 @@ export async function sendWaterReport(actor: Actor, input: z.infer<typeof sendSc
       // (a partner, an authority) ever joins the list, sharing the addresses is a privacy question: then bcc, or one
       // mail per address (barracuda on #53)
       to: recipients.list.join(", "),
-      subject: `Vízmérés – ${day}`,
-      text: `A Cápárium nAPPló vízmérési eredményei medencénként: napi értékek ${day}, heti értékek ${report.weekFrom} – ${day}. A részletek a csatolt PDF-ben.`,
+      subject: title,
+      text: waterReportMailText(senderUser?.fullName ?? ""),
       attachments: [{ filename, content: pdf, contentType: "application/pdf" }],
     });
   } catch (e) {
