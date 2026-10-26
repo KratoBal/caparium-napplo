@@ -1225,7 +1225,7 @@ test("the admin's animal order: a drag handle, a place number and the highlighte
   await expect(save).toBeEnabled();
 
   // the place number: type 1 into the row now third, Enter; a typo moves nothing
-  const place = page.getByLabel(`${start[0]} helye (sorszám)`);
+  const place = page.getByLabel(`${start[0]} helye (sorszám)`, { exact: true });
   await place.fill("sok");
   await place.press("Enter");
   expect(await names()).toEqual([start[1], start[2], start[0], ...start.slice(3)]);
@@ -1237,7 +1237,7 @@ test("the admin's animal order: a drag handle, a place number and the highlighte
   // the faint bands: the second row has another background than the first, and the touched row stands out
   const bg = (n: number) => rows.nth(n).evaluate((el) => getComputedStyle(el).backgroundColor);
   if (count >= 4) expect(await bg(2), "rows alternate in a faint background").not.toBe(await bg(3));
-  await page.getByRole("button", { name: `${start[2]} feljebb` }).click();
+  await page.getByRole("button", { name: `${start[2]} feljebb`, exact: true }).click();
   await expect(rows.nth(1)).toHaveClass(/touched/);
   expect(await bg(1)).not.toBe(await bg(3));
 
