@@ -6,6 +6,7 @@
 // Permissions (Lili 2026-10-26, msg 1564214896453750805, overriding NY-20): every lifecycle event is admin
 // work; an earlier date also needs a reason. The rule is lifecycle-access.ts.
 
+import { byAnimalOrder, orderAssignments } from "./animal-order";
 import { lifecycleAccessProblem } from "./lifecycle-access";
 import type { LifecycleEvent, LifecycleType, Sex } from "@prisma/client";
 import { z } from "zod";
@@ -516,6 +517,8 @@ export type AnimalRow = {
   alive: boolean;
   arrived: string | null;
   ended: { type: LifecycleType; day: string } | null;
+  /** the admin's position (item 4 of card f67b1a06); null = never placed */
+  sortOrder: number | null;
 };
 
 /** Every animal as of an instant, alive ones first (EVE-10: the dead stay listed with their end). */
@@ -547,9 +550,59 @@ export async function listAnimals(at = new Date()): Promise<AnimalRow[]> {
       alive: !!arrival && arrival.occurredAt <= at && !end,
       arrived: arrival ? businessDayOf(arrival.occurredAt) : null,
       ended: end ? { type: end.type, day: businessDayOf(end.occurredAt) } : null,
+      sortOrder: a.sortOrder,
     };
   });
-  return rows.sort((x, y) => Number(y.alive) - Number(x.alive) || x.name.localeCompare(y.name, "hu"));
+  const placed = byAnimalOrder<AnimalRow>((x, y) => x.name.localeCompare(y.name, "hu"));
+  return rows.sort((x, y) => Number(y.alive) - Number(x.alive) || placed(x, y));
+}
+
+// ---------------------------------------------------------------------------
+// The admin's order of the animals (Lili 2026-10-26, card f67b1a06, item 4)
+// ---------------------------------------------------------------------------
+
+export const animalOrderSchema = z.object({
+  requestId: z.string().min(8).max(100),
+  /** the animals in the order the admin gave; the ones not listed (dead, just arrived) follow them */
+  ids: z.array(z.uuid()).min(1).max(5000),
+});
+export type AnimalOrderInput = z.input<typeof animalOrderSchema>;
+
+export async function setAnimalOrder(actor: Actor, raw: AnimalOrderInput) {
+  const input = animalOrderSchema.parse(raw);
+  if (new Set(input.ids).size !== input.ids.length) throw new AppError(422, "ORDER_DUPLICATE", "Egy állat csak egyszer szerepelhet a sorrendben.");
+  if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true };
+  if ((await moduleLevel(prisma, actor.id, actor.role, "FEEDING")) !== "ADMIN") {
+    throw new AppError(403, "ADMIN_ONLY", "Az állatok sorrendjét csak adminisztrátor állíthatja.");
+  }
+  return prisma.$transaction(async (tx) => {
+    const all = await tx.animal.findMany({ select: { id: true, sortOrder: true, names: { select: { name: true, validTo: true } } } });
+    const known = new Set(all.map((a) => a.id));
+    const unknown = input.ids.filter((id) => !known.has(id));
+    if (unknown.length > 0) throw new AppError(404, "ANIMAL_NOT_FOUND", "Az egyik állat nem található.");
+    const nameOf = (a: (typeof all)[number]) => (a.names.find((n) => !n.validTo) ?? a.names.at(-1))?.name ?? "";
+    const current = [...all]
+      .map((a) => ({ id: a.id, name: nameOf(a), sortOrder: a.sortOrder }))
+      .sort(byAnimalOrder((x, y) => x.name.localeCompare(y.name, "hu")));
+    const next = orderAssignments(
+      input.ids,
+      current.map((a) => a.id),
+    );
+    const before = new Map(all.map((a) => [a.id, a.sortOrder]));
+    const changed = next.filter((n) => before.get(n.id) !== n.sortOrder);
+    if (changed.length === 0) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
+    for (const n of changed) await tx.animal.update({ where: { id: n.id }, data: { sortOrder: n.sortOrder } });
+    const nameById = new Map(current.map((a) => [a.id, a.name]));
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: "MASTER_CHANGE",
+      entityType: "AnimalOrder",
+      entityId: "all",
+      changes: diffFields({ order: current.map((a) => nameById.get(a.id)) }, { order: next.map((n) => nameById.get(n.id)) }),
+      requestId: input.requestId,
+    });
+    return { replayed: false, changed: changed.length };
+  });
 }
 
 export async function animalEvents(animalId: string) {

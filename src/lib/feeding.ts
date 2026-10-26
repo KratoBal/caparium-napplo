@@ -584,7 +584,7 @@ export async function feedingDayView(d: string) {
         orderBy: { createdAt: "asc" },
       })
     : [];
-  const unsorted: DayAnimal[] = animals
+  const unsorted: (DayAnimal & { sortOrder: number | null })[] = animals
     .map((a) => {
       const m = pickValid(a.memberships, at) ?? a.memberships.find((x) => x.validFrom < end && (!x.validTo || x.validTo > start));
       const p = pickValid(a.placements, at) ?? a.placements.find((x) => x.validFrom < end && (!x.validTo || x.validTo > start));
@@ -595,9 +595,10 @@ export async function feedingDayView(d: string) {
         groupName: m ? pickValid(m.group.names, at)?.name ?? "?" : null,
         poolName: p ? pickValid(p.pool.names, at)?.displayName ?? p.pool.code : null,
         selected: selected.has(a.id),
+        sortOrder: a.sortOrder,
       };
     });
-  // by pool, then by name (Lili 2026-10-26, card f67b1a06)
+  // by pool, then the admin's order, then by name (Lili 2026-10-26, card f67b1a06)
   const list = sortDayAnimals(unsorted);
   // row totals per recipient in the base unit of each dimension (EGY-06, EGY-08): 1 kg and 500 g are
   // 1500 g, pieces and grams never add up

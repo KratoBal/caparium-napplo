@@ -3,6 +3,7 @@
 // the same animals. A group item counts for an animal it was given to (its participant snapshot, R-8),
 // and for a pool if any participant was there that day. Names are the ones valid on the day (K3).
 
+import { byAnimalOrder } from "./animal-order";
 import { prisma } from "./db";
 import { GIVEN } from "./eating-labels";
 import { AppError } from "./errors";
@@ -139,6 +140,7 @@ export async function feedingLog(f: LogFilter) {
         derived.set(animalId, [...(derived.get(animalId) ?? []), day]);
       }
   const names = await prisma.animalName.findMany({ where: { animalId: { in: [...animalIds] } } });
+  const placedAt = new Map((await prisma.animal.findMany({ where: { id: { in: [...animalIds] } }, select: { id: true, sortOrder: true } })).map((a) => [a.id, a.sortOrder]));
   const end = dayBounds(f.to).end;
   const pattern = [...animalIds]
     .map((id) => {
@@ -149,9 +151,9 @@ export async function feedingLog(f: LogFilter) {
           .filter((s) => s.animalId === id)
           .map((s) => [dateToDay(s.feedingDay.businessDay), { state: s.state as string, vitamin: s.vitamin, medicine: s.medicine }] as const),
       ]);
-      return { id, name: pickValid(own, new Date(end.getTime() - 1))?.name ?? own.at(-1)?.name ?? "?", cells };
+      return { id, name: pickValid(own, new Date(end.getTime() - 1))?.name ?? own.at(-1)?.name ?? "?", sortOrder: placedAt.get(id) ?? null, cells };
     })
-    .sort((a, b) => a.name.localeCompare(b.name, "hu"));
+    .sort(byAnimalOrder((a, b) => a.name.localeCompare(b.name, "hu")));
 
   return { days, rows, entries, totals, own, group, filtered: f.animalId !== null || f.poolId !== null, pattern };
 }

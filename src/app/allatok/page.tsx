@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AnimalOrder } from "@/components/AnimalOrder";
 import { AnimalActions, AnimalEditForm, InitialAnimalsLoader, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
 import { PlanForm } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
@@ -68,6 +69,17 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="card">
+        <h2>Sorrend</h2>
+        <p className="hint">
+          Húzd a sort a helyére (érintőképernyőn a Fel és Le gombokkal), majd mentsd. A takarmánynapló „Ki eszik ma” listája medencén belül, az evési minta és az Excel-exportok ezt a sorrendet követik. Akit nem raktál sorba (új érkező), az utolsó helyre kerül, név szerint.
+        </p>
+        <AnimalOrder
+          key={animals.filter((a) => a.alive).map((a) => a.id).join()}
+          animals={animals.filter((a) => a.alive).map((a) => ({ id: a.id, name: a.name, species: a.species, poolName: a.poolName }))}
+        />
       </div>
 
       {selected && (
