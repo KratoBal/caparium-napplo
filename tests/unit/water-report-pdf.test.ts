@@ -89,5 +89,31 @@ describe("water report PDF", () => {
       expect(new Set(inkOf(texts, "Paraméter"))).toEqual(new Set(["#333333"]));
       expect(new Set(inkOf(texts, "Nagymedence"))).toEqual(new Set(["#000000"]));
     });
+
+    // NOT a mutation test: with the guard in band() removed this walk is still green (measured over 480 combinations
+    // of row counts), because row() already breaks the page at y > 760 and the last band needs only y <= 777.9; the
+    // guard is a safety net with 0.7 pt to spare, and this walk holds the invariant if row heights or margins change.
+    // barracuda's review remark (#62): a band is drawn first and its text after; where a section line falls at the
+    // foot of a page, the rectangle must not stay on the old page while the text goes to the next. The daily row count
+    // is walked through a range that puts the "Heti mérés" line (and the next pool line) at every height near the foot.
+    it("keeps every band and its text on the same page, wherever a section line falls", async () => {
+      for (let daily = 38; daily <= 56; daily++) {
+        const rows = Array.from({ length: daily }, (_, i) => v({ parameter: `P${i}` }));
+        const pdf = await waterReportPdf({
+          day: "2027-09-08",
+          weekFrom: "2027-09-06",
+          pools: [
+            { pool: "Nagymedence", daily: rows, weekly: [v({ parameter: "W", day: "2027-09-07" })] },
+            { pool: "Korallos", daily: [v({ parameter: "K" })], weekly: [] },
+          ],
+        });
+        const { fillPages, textPages } = await readPdfColors(pdf);
+        const pageOf = (text: string) => textPages.filter((t) => t.text.includes(text)).map((t) => t.page);
+        const bandPages = (color: string) => fillPages.filter((f) => f.color === color).map((f) => f.page);
+        expect(bandPages("#a9cbd6"), `pool bands, ${daily} rows`).toEqual([...pageOf("Nagymedence"), ...pageOf("Korallos")]);
+        const sections = textPages.filter((t) => t.text === "Napi mérés" || t.text === "Heti mérés").map((t) => t.page);
+        expect(bandPages("#c9dde5"), `section bands, ${daily} rows`).toEqual(sections);
+      }
+    });
   });
 });

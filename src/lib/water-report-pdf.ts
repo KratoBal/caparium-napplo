@@ -43,8 +43,10 @@ export async function waterReportPdf(report: WaterReport): Promise<Buffer> {
   const cols = [48, 200, 300, 360, 420];
   /** A text line on a colored band: the band is drawn first, then the text on it, 4 pt from the left edge. */
   const band = (text: string, size: number, color: string, ink: string) => {
-    const y = doc.y;
     const h = doc.fontSize(size).heightOfString(text, { width: WIDTH - 8 });
+    // a band is a rectangle plus text: both on the same page, or the rectangle stays behind on the old one
+    if (doc.y + h + 4 > doc.page.height - doc.page.margins.bottom) doc.addPage();
+    const y = doc.y;
     doc.save().rect(LEFT, y - 2, WIDTH, h + 4).fill(color).restore();
     doc.fontSize(size).fillColor(ink).text(text, LEFT + 4, y, { width: WIDTH - 8 });
     doc.x = LEFT;
