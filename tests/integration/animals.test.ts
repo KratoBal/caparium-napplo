@@ -50,7 +50,7 @@ describe("lifecycle (DAT-05, T-09)", () => {
 
   // Lili 2026-10-26 09:51 UTC (Caparium channel msg 1564214896453750805) overrides NY-20 ("an aquarist moves an
   // animal today"): the animal list is seen and managed by admins only, so every lifecycle event is admin work.
-  it("Lili 10-26: an aquarist records no lifecycle event at all (transfer, group change, death, release), an admin does", async () => {
+  it("Lili 10-26: an aquarist records no lifecycle event at all (transfer, death, release), an admin does", async () => {
     const id = await arrive("Költöző");
     for (const event of [
       { type: "TRANSFER" as const, toPoolId: f.pool("KARANTEN") },
@@ -58,7 +58,7 @@ describe("lifecycle (DAT-05, T-09)", () => {
       { type: "RELEASE" as const },
     ])
       await expectCode(
-        createLifecycleEvent(f.admin, { requestId: rid(), animalId: id, occurredAtLocal: "2026-02-03T08:00", ...event }, at("2026-02-03", "08:05")),
+        createLifecycleEvent(f.aq1, { requestId: rid(), animalId: id, occurredAtLocal: "2026-02-03T08:00", ...event }, at("2026-02-03", "08:05")),
         "ADMIN_ONLY",
       );
     // nothing was written by the refused calls
