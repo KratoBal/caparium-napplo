@@ -15,7 +15,7 @@ async function login(page: Page, loginId: string) {
 // each layout writes its own group, so the two projects never touch the same cell
 function plan(projectName: string) {
   return projectName === "tablet"
-    ? { tab: "Kismedencék", pool: "Korallos" }
+    ? { tab: "Kis Akváriumok", pool: "Korallos" }
     : { tab: "Nagy medencék", pool: "Nagymedence" };
 }
 
@@ -793,7 +793,7 @@ test("home: the customer's illustrated cards, 3-2-3, each to its module, only wi
   expect(Math.abs(a.x + (await box(0, 2)).x + (await box(0, 2)).width - (b.x + c.x + c.width))).toBeLessThan(4);
   await page.getByTestId("home-kismedencek").click();
   await expect(page).toHaveURL(/\/vizmeres\?csoport=NAPI_KIS/);
-  await expect(page.getByRole("tab", { name: "Kismedencék" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Kis Akváriumok" })).toHaveAttribute("aria-selected", "true");
 
   // phone width: one column
   await page.setViewportSize({ width: 390, height: 844 });

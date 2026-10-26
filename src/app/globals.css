@@ -69,6 +69,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tabs { display: flex; gap: 10px; flex-wrap: wrap; }
 .tab { min-height: var(--touch); display: inline-flex; align-items: center; padding: 0 20px; border-radius: var(--radius-sm); background: var(--c-field); color: var(--c-ink); font-weight: 600; text-decoration: none; }
 .tab.active { background: var(--c-primary-soft); color: var(--c-primary); }
+/* Picture buttons (daily water page): the picture is as wide as the text and keeps its aspect ratio; the labels
+   line up at the bottom of the row. The picture box takes no width of its own (width 0, min-width 100%), so the
+   label decides the width. */
+.tab-picture { flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 6px; padding: 10px 20px; }
+.tab-picture-box { display: block; width: 0; min-width: 100%; }
+.tab-picture-box img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.tab-picture .tab-label { text-align: center; white-space: nowrap; }
+.tab-picture:not(.active) img { filter: grayscale(1); }
 .toolbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 18px 0; }
 .toolbar .spacer { flex: 1; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--c-muted); font-weight: 600; }
