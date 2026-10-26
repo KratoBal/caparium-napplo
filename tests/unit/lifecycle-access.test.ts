@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lifecycleAccessProblem, type LifecycleEventType } from "@/lib/lifecycle-access";
+import { lifecycleAccessProblem, lifecycleInvalidateProblem, type LifecycleEventType } from "@/lib/lifecycle-access";
 
 // Lili 2026-10-26 09:51 UTC (Caparium channel msg 1564214896453750805): every lifecycle event is admin work.
 // This overrides NY-20 ("an aquarist moves an animal today").
@@ -20,3 +20,12 @@ describe("who records a lifecycle event (Lili 10-26 overrides NY-20)", () => {
     expect(lifecycleAccessProblem("RECORD", "DEATH")).toContain("elhullás");
   });
 });
+
+// Acrobot 2026-10-26 (36167): taking a recorded event back is admin work too, also an aquarist's own older one.
+describe("who invalidates a lifecycle event", () => {
+  it("lets an admin, and no other level", () => {
+    expect(lifecycleInvalidateProblem("ADMIN")).toBeNull();
+    for (const level of ["RECORD", "READ", "NONE"] as const) expect(lifecycleInvalidateProblem(level)).toContain("csak adminisztrátor");
+  });
+});
+
