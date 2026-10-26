@@ -20,8 +20,8 @@ describe("the main navigation", () => {
     expect(navFor("AQUARIST").some((n) => n.href === "/allatok")).toBe(false);
   });
 
-  it("gives admins the two extra entries after the common ones, and nobody else", () => {
-    expect(labels("ADMIN").slice(-2)).toEqual(["Függő mentések", "Beállítások"]);
+  it("gives admins the extra entries after the common ones, and nobody else", () => {
+    expect(labels("ADMIN").slice(-3)).toEqual(["Függő mentések", "Állatok", "Beállítások"]);
     for (const role of ["AQUARIST", "SYSTEM"] as const) {
       expect(labels(role)).not.toContain("Függő mentések");
       expect(labels(role)).not.toContain("Beállítások");
@@ -31,5 +31,24 @@ describe("the main navigation", () => {
   it("keeps every other entry for the aquarist (nothing else was hidden)", () => {
     expect(labels("AQUARIST")).toEqual(labels("ADMIN").filter((l) => !["Állatok", "Függő mentések", "Beállítások"].includes(l)));
     expect(new Set(labels("ADMIN")).size).toBe(labels("ADMIN").length);
+  });
+
+  // Lili 2026-10-26 (caparium-menu-sorrend-szinek): the exact order of her list, and the color group of each entry.
+  it("keeps Lili's order for an admin", () => {
+    expect(labels("ADMIN")).toEqual([
+      "Áttekintés", "Napi vízmérés", "Heti vízmérés", "Export", "Takarmánynapló", "Evési napló", "Takarmánykivétel",
+      "Takarmánykalkulátor", "Vegyszeradagolás", "Vízmérési napló", "Takarmányozási napló", "Takarmánylista",
+      "Kimutatások", "Függő mentések", "Állatok", "Beállítások",
+    ]);
+  });
+
+  it("puts each entry in its color group, and leaves the rest plain", () => {
+    const tone = (label: string) => navFor("ADMIN").find((n) => n.label === label)?.tone;
+    for (const l of ["Napi vízmérés", "Heti vízmérés", "Vegyszeradagolás", "Vízmérési napló"]) expect(tone(l), l).toBe("water");
+    for (const l of ["Takarmánynapló", "Evési napló", "Takarmánykivétel", "Takarmánykalkulátor", "Takarmányozási napló", "Takarmánylista"]) {
+      expect(tone(l), l).toBe("feed");
+    }
+    // the control: the entries Lili marked "szín marad" are really plain, so the two checks above cannot pass on a menu where everything is colored
+    for (const l of ["Áttekintés", "Export", "Kimutatások", "Függő mentések", "Állatok", "Beállítások"]) expect(tone(l), l).toBeUndefined();
   });
 });

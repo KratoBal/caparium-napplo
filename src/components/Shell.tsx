@@ -47,7 +47,11 @@ export async function Shell({
       <nav className="nav" aria-label="Fő navigáció">
         {user &&
           navFor(user.role).map((n) => (
-            <Link key={n.label} href={n.href} className={n.key === active ? "active" : undefined}>
+            <Link
+              key={n.label}
+              href={n.href}
+              className={[n.tone ? `nav-${n.tone}` : "", n.key === active ? "active" : ""].filter(Boolean).join(" ") || undefined}
+            >
               {n.label}
             </Link>
           ))}
