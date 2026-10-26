@@ -12,13 +12,13 @@ import { businessDayOf, formatDayLong, isValidDay, weekdayName } from "@/lib/tim
 
 /**
  * The two daily group buttons carry a picture above the text (Lili 2026-10-26: Nagy medencék -> the capybara,
- * Kis Akvariumok -> the shrimp). The label is presentation only: the group's stored name (exports, reports,
+ * Kis Akváriumok -> the shrimp). The label is presentation only: the group's stored name (exports, reports,
  * settings) is untouched. The pictures are 360 px wide WebP files with an alpha channel; the inactive button
  * shows the same colored file in grayscale through CSS.
  */
 const TAB_LOOK: Record<string, { image: string; width: number; height: number; label?: string }> = {
   NAPI_NAGY: { image: "/vizmeres/nagymedencek.webp", width: 360, height: 189 },
-  NAPI_KIS: { image: "/vizmeres/kis-akvariumok.webp", width: 360, height: 334, label: "Kis Akvariumok" },
+  NAPI_KIS: { image: "/vizmeres/kis-akvariumok.webp", width: 360, height: 334, label: "Kis Akváriumok" },
 };
 
 export type MeasurementSearch = { csoport?: string; nap?: string; kor?: string };
