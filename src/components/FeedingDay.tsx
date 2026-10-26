@@ -8,7 +8,7 @@ import { deviates } from "@/lib/calc-math";
 import { chooserPools } from "@/lib/day-animals";
 import { GIVEN } from "@/lib/eating-labels";
 import type { DayAnimal } from "@/lib/feeding";
-import { DayFeeds, FinalizeList, GroupSelect, InvalidateButton, ItemForm, SelectBox, type FeedOpt, type FeedTypeOpt, type Recipient } from "./FeedingForms";
+import { DayFeeds, FinalizeList, GroupSwitch, InvalidateButton, ItemForm, SelectBox, type FeedOpt, type FeedTypeOpt, type Recipient } from "./FeedingForms";
 import { FeedingSheet } from "./FeedingSheet";
 
 type Item = {
@@ -88,18 +88,21 @@ export function FeedingDay(props: {
         <p className="hint">Közös lista: bármelyik akvarista módosíthatja. Akit a kész listán nem választottak ki, a nap lezárásakor koplalónapot kap.</p>
         <div data-testid="animal-chooser">
           {chooserGroups.map((g) => (
-            <div key={g.key} className="toolbar" data-testid={`group-head-${g.name}`}>
-              <span className="hint" style={{ minWidth: 160 }}>
+            <div key={g.key} className="pick-block" data-testid={`group-head-${g.name}`}>
+              <div className="section-title">
+                {g.emoji && <span aria-hidden="true">{g.emoji}</span>}
                 {g.name}
-              </span>
-              {g.animals.map((a) => (
-                <label key={a.id} className="check">
-                  <SelectBox day={day} animalId={a.id} name={a.name} selected={a.selected} disabled={!editable} />
-                  {a.name}
-                  {a.groupName && <small className="hint"> ({a.groupName})</small>}
-                </label>
-              ))}
-              {editable && <GroupSelect day={day} name={g.name} memberIds={g.animals.map((a) => a.id)} />}
+                {editable && <GroupSwitch day={day} name={g.name} memberIds={g.animals.map((a) => a.id)} selectedCount={g.animals.filter((a) => a.selected).length} />}
+              </div>
+              <div className="pick-items">
+                {g.animals.map((a) => (
+                  <label key={a.id} className="check">
+                    <SelectBox day={day} animalId={a.id} name={a.name} selected={a.selected} disabled={!editable} />
+                    {a.name}
+                    {a.groupName && <small className="hint"> ({a.groupName})</small>}
+                  </label>
+                ))}
+              </div>
             </div>
           ))}
         </div>

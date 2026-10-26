@@ -487,8 +487,17 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
   // step 1: the pool's header row selects every animal in it at once (Lili 2026-10-26: the list is by pool)
   await expect(page.getByTestId("group-head-Nagymedence")).toBeVisible();
-  await page.getByRole("button", { name: "Nagymedence: összes kijelölése" }).click();
+  // Lili 2026-10-26 (items 2 and 3): one small switch per pool instead of the two buttons, no "Kiválasztva." beside a tick,
+  // the pool and feed type names bold black two steps larger with their icon before them
+  await expect(page.getByRole("button", { name: /összes kijelölése|Egyik sem/i })).toHaveCount(0);
+  await page.getByRole("switch", { name: "Nagymedence: mind kijelölve" }).check();
   await expect(page.getByLabel(`${name} a mai listán`)).toBeChecked();
+  await expect(page.getByTestId("animal-chooser").getByRole("status").filter({ hasText: /Kiválasztva|Kivéve/ })).toHaveCount(0);
+  const title = page.getByTestId("group-head-Nagymedence").locator(".section-title");
+  expect(await title.evaluate((el) => { const c = getComputedStyle(el); return [c.fontWeight, c.color, c.fontSize]; })).toEqual(["700", "rgb(0, 0, 0)", "18px"]);
+  const typeTitle = page.getByTestId("day-feeds").locator(".section-title").first();
+  expect(await typeTitle.evaluate((el) => { const c = getComputedStyle(el); return [c.fontWeight, c.color, c.fontSize]; })).toEqual(["700", "rgb(0, 0, 0)", "18px"]);
+  await expect(typeTitle.locator('[aria-hidden="true"]'), "the feed type's icon stands before its name").toHaveCount(1);
   // step 2: the day's feeds
   const dayFeeds = page.getByTestId("day-feeds");
   for (const feed of ["Litopenaeus vannamei", "Mysis", "AF Power elixir"]) await dayFeeds.getByLabel(`A nap takarmánya: ${feed}`).check();
@@ -1111,4 +1120,23 @@ test("settings: the admin adds a new pool; the existing pools stay as they were"
     }
     await db.$disconnect();
   }
+});
+
+// Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 4; Balázs "Mehet" 1564357004217159823): the eating log has the
+// jump calendar too. The chosen day opens, and jumping back to today opens today's. Read-only.
+test("eating log: the jump calendar opens the chosen day, and back to today opens today's", async ({ page }) => {
+  await login(page, "teszt.akvarista1");
+  await page.goto("/evesi-naplo");
+  const picker = page.getByTestId("day-picker");
+  await expect(picker.getByRole("button", { name: "Ugrás" })).toBeVisible();
+  const todayText = await page.getByTestId("shown-day").textContent();
+  const earlier = budapestDay(-3);
+  await picker.getByLabel("Nap").fill(earlier);
+  await picker.getByRole("button", { name: "Ugrás" }).click();
+  await expect(page).toHaveURL(new RegExp(`nap=${earlier}`));
+  await expect(page.getByTestId("shown-day")).not.toHaveText(todayText ?? "");
+  // back to today: the picker's own day
+  await picker.getByLabel("Nap").fill(budapestDay(0));
+  await picker.getByRole("button", { name: "Ugrás" }).click();
+  await expect(page.getByTestId("shown-day")).toHaveText(todayText ?? "");
 });

@@ -28,6 +28,15 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
     <Shell title="Evési napló" active="eating" user={user} helper={await feedingHelper((await moduleLevel(prisma, user.id, user.role, "DOSING")) !== "NONE")}>
       <div className="toolbar">
         <DayNav path="/evesi-naplo" day={day} today={today} />
+        {/* Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 4): the jump calendar, as on the water measurement
+            and withdrawal pages: the chosen day opens, and jumping back to today opens today's */}
+        <form method="get" action="/evesi-naplo" style={{ display: "flex", gap: 10, alignItems: "flex-end" }} data-testid="day-picker">
+          <label className="field">
+            Nap
+            <input className="input" type="date" name="nap" defaultValue={day} max={today} />
+          </label>
+          <button className="btn btn-soft" type="submit">Ugrás</button>
+        </form>
         <span className="spacer" />
         <span className={`badge ${eat.listState === "FINALIZED" ? "badge-valid" : "badge-pending"}`}>
           {eat.listState === "FINALIZED" ? "Lista kész" : "Lista nincs kész"}
