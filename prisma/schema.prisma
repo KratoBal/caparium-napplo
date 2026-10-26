@@ -680,6 +680,7 @@ model Animal {
   calculatorRuns CalculatorRun[]
   references     FeedingReference[]
   feedingPlans   FeedingPlan[]
+  listMembers    FeedingListAnimal[]
 
   @@map("animal")
 }
@@ -813,10 +814,11 @@ model Feed {
   sortOrder         Int
   createdAt         DateTime    @default(now()) @db.Timestamptz(3)
 
-  type        FeedType         @relation(fields: [typeId], references: [id])
-  defaultUnit Unit             @relation(fields: [defaultUnitId], references: [id])
+  type        FeedType          @relation(fields: [typeId], references: [id])
+  defaultUnit Unit              @relation(fields: [defaultUnitId], references: [id])
   names       FeedName[]
   coralDoses  CoralFeedDose[]
+  listMembers FeedingListFeed[]
   items       FeedingItem[]
   withdrawals WithdrawalItem[]
 
@@ -1227,4 +1229,42 @@ model FeedingPlan {
 
   @@index([animalId, validFrom])
   @@map("feeding_plan")
+}
+
+// NAMED FEEDING LISTS (Lili 2026-10-26, Caparium channel msg 1564356412946124921, item 1; Balázs "Mehet" 1564357004217159823):
+// an admin composes a list under a name ("Puhatestű nap": animals and feeds); a user picks it in the feeding page's header and
+// it ticks its animals on the day's list and adds its feeds to the day's feeds. A template, not a fact: the day's list stays
+// common and editable (R-7), and "Lista a terv szerint" (the weekly timetable) stays beside it. Archived, never deleted;
+// one active list per name (partial index, SQL); the members are replaced when the admin edits the list.
+model FeedingList {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  active      Boolean  @default(true)
+  createdById String   @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  animals FeedingListAnimal[]
+  feeds   FeedingListFeed[]
+
+  @@map("feeding_list")
+}
+
+model FeedingListAnimal {
+  listId   String      @db.Uuid
+  animalId String      @db.Uuid
+  list     FeedingList @relation(fields: [listId], references: [id])
+  animal   Animal      @relation(fields: [animalId], references: [id])
+
+  @@id([listId, animalId])
+  @@map("feeding_list_animal")
+}
+
+model FeedingListFeed {
+  listId String      @db.Uuid
+  feedId String      @db.Uuid
+  list   FeedingList @relation(fields: [listId], references: [id])
+  feed   Feed        @relation(fields: [feedId], references: [id])
+
+  @@id([listId, feedId])
+  @@map("feeding_list_feed")
 }

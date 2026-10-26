@@ -1140,3 +1140,40 @@ test("eating log: the jump calendar opens the chosen day, and back to today open
   await picker.getByRole("button", { name: "Ugrás" }).click();
   await expect(page.getByTestId("shown-day")).toHaveText(todayText ?? "");
 });
+
+// Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 1; Balázs "Mehet" 1564357004217159823): the named feeding
+// lists. The admin composes one on the timetable page; in the feeding page's header a dropdown picks it, which ticks its
+// animals and adds its feeds; "Lista a terv szerint" stays beside it. The list is archived at the end.
+test("feeding lists: the admin composes one, the header's dropdown ticks its animals and adds its feeds", async ({ page }, info) => {
+  const name = `E2E lista ${info.project.name}`;
+  await login(page, "teszt.admin");
+  await page.goto("/etetes/rend");
+  const editor = page.getByTestId("feeding-lists");
+  const form = editor.getByTestId("new-list");
+  const save = form.getByRole("button", { name: "Lista felvétele" });
+  await expect(save, "a name and a member are needed").toBeDisabled();
+  await form.getByLabel("új lista: neve").fill(name);
+  await expect(save).toBeDisabled();
+  await form.getByLabel("új lista: Teszt Egy").check();
+  await form.getByLabel("új lista: Mysis").check();
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(form.getByRole("status")).toHaveText("Lista felvéve.");
+  await expect(editor.locator("details", { hasText: name })).toHaveCount(1);
+
+  await page.goto("/etetes");
+  await expect(page.getByRole("button", { name: "Lista a terv szerint" }), "the weekly plan's button stays").toBeVisible();
+  const pick = page.getByTestId("apply-list");
+  await pick.getByLabel("Névvel ellátott lista").selectOption({ label: name });
+  await expect(pick.getByRole("status")).toContainText(`${name}:`);
+  await expect(page.getByLabel("Teszt Egy a mai listán")).toBeChecked();
+  await expect(page.getByTestId("day-feeds").getByLabel("A nap takarmánya: Mysis")).toBeChecked();
+
+  // archived: the list leaves the dropdown
+  await page.goto("/etetes/rend");
+  const row = page.getByTestId("feeding-lists").locator("details", { hasText: name });
+  await row.locator("summary").click();
+  page.once("dialog", (d) => void d.accept());
+  await row.getByRole("button", { name: "Archiválás" }).click();
+  await expect(page.getByTestId("feeding-lists").locator("details", { hasText: name })).toHaveCount(0);
+});

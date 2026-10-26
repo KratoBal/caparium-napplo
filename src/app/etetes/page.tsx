@@ -3,6 +3,7 @@ import { DayControls } from "@/components/DayControls";
 import { DayNav } from "@/components/DayNav";
 import { FeedingDay } from "@/components/FeedingDay";
 import { ApplyPlan } from "@/components/FeedingForms";
+import { ApplyList } from "@/components/FeedingLists";
 import type { FeedOpt, FeedTypeOpt, Recipient } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { feedingHelper } from "@/lib/helpers";
@@ -11,6 +12,7 @@ import { referencesOn } from "@/lib/calculator";
 import { prisma } from "@/lib/db";
 import { feedingDayView } from "@/lib/feeding";
 import { knownOtherNames, listFeeds } from "@/lib/feeds";
+import { activeFeedingLists } from "@/lib/feeding-lists";
 import { dayStatus } from "@/lib/journal";
 import { requireModuleRead } from "@/lib/session";
 import { businessDayOf, isValidDay } from "@/lib/time";
@@ -23,13 +25,14 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
   const today = businessDayOf(new Date());
   const sp = await searchParams;
   const day = sp.nap && isValidDay(sp.nap) && sp.nap <= today ? sp.nap : today;
-  const [view, lock, types, units, references, otherNames] = await Promise.all([
+  const [view, lock, types, units, references, otherNames, lists] = await Promise.all([
     feedingDayView(day),
     dayStatus(null, day, "FEEDING"),
     listFeeds(),
     prisma.unit.findMany({ where: { active: true }, orderBy: { symbol: "asc" } }),
     referencesOn(day),
     knownOtherNames(),
+    activeFeedingLists(),
   ]);
   const canRecord = level === "RECORD" || level === "ADMIN";
   const isAdmin = level === "ADMIN";
@@ -79,6 +82,8 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         <span className={`badge ${view.listState === "FINALIZED" ? "badge-valid" : "badge-pending"}`} data-testid="list-state">
           {view.listState === "FINALIZED" ? "Lista kész" : "Lista nincs kész"}
         </span>
+        {/* Lili 2026-10-26 (item 1): the named lists in the header, beside the weekly plan's button */}
+        {editable && lists.length > 0 && <ApplyList day={day} lists={lists.map((l) => ({ id: l.id, name: l.name }))} />}
         {editable && <ApplyPlan day={day} />}
         <Link className="btn btn-soft" href="/etetes/rend">
           Etetési rend
