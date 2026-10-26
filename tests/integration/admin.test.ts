@@ -241,6 +241,28 @@ describe("a new pool (Lili 2026-10-26, point 3)", () => {
     expect((await prisma.groupMembership.findMany({ where: { poolId: two.id } })).map((x) => x.groupId).sort()).toEqual([f.group("NAPI_NAGY"), f.group("HETI")].sort());
   });
 
+  // Lili 2026-10-26 (msg 1564364366844006430): "Nincs vízmérés", as the salt pools
+  it("marked 'no water measurement' it is added without a group, joins no group, and a group with the mark is refused", async () => {
+    const before = await snapshot();
+    const r = (await createPool(f.admin, input({ name: `Nincs vízmérés ${tag}`, code: `NOWATER_${tag}`, groupIds: [], noWaterMeasurement: true }))) as { id: string };
+    made.push(r.id);
+    expect(await prisma.groupMembership.count({ where: { poolId: r.id } })).toBe(0);
+    const row = await prisma.pool.findUniqueOrThrow({ where: { id: r.id } });
+    expect([row.active, row.volumeLiters?.toString()]).toEqual([true, "1250.5"]);
+    const audit = await prisma.auditEntry.findFirstOrThrow({ where: { entityType: "Pool", entityId: r.id } });
+    expect(audit.changes).toMatchObject({ noWaterMeasurement: { after: true }, groups: { after: [] } });
+    // in no group's rows
+    const now = new Date();
+    for (const g of ["NAPI_KIS", "NAPI_NAGY", "HETI"]) {
+      expect((await groupLayout(prisma, f.group(g), now)).pools.map((p) => p.name)).not.toContain(`Nincs vízmérés ${tag}`);
+    }
+    const after = await snapshot();
+    expect(after.memberships).toEqual(before.memberships);
+    // the mark and a group together contradict each other
+    const both = await createPool(f.admin, input({ name: `Mindkettő ${tag}`, code: `BOTH_${tag}`, noWaterMeasurement: true })).then(() => null, (e: unknown) => e);
+    expect((both as Error).name).toBe("ZodError");
+  });
+
   it("the icon is optional: without it the pool has none", async () => {
     const r = (await createPool(f.admin, input({ name: `Ikon nélkül ${tag}`, code: `NOICON_${tag}` }))) as { id: string };
     made.push(r.id);

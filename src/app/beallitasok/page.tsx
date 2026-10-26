@@ -143,7 +143,7 @@ export default async function SettingsPage() {
           <div data-testid="new-pool-box">
             <h3 style={{ marginTop: 20 }}>Új medence</h3>
             <p className="hint">
-              Név, kód, űrtartalom (liter) és legalább egy mérési csoport kell, az ikon nem kötelező. Csak új medencét vesz fel: a meglévő
+              Név, kód, űrtartalom (liter) és legalább egy mérési csoport kell, az ikon nem kötelező. A „Nincs vízmérés” jelölővel a medence csoport nélkül is felvehető: nyilvántartott, de nem kerül mérési táblába (mint a sózók). Csak új medencét vesz fel: a meglévő
               medencéket, méréseket, neveket és csoporttagságokat nem érinti. A kiválasztott csoport(ok) mérési táblájában a medence a lista
               végére kerül.
             </p>

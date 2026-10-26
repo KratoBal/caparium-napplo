@@ -1102,10 +1102,22 @@ test("settings: the admin adds a new pool; the existing pools stay as they were"
     await add.click();
     await expect(box.getByRole("status")).toHaveText("Ez a medencekód már foglalt.");
     await expect(box.getByLabel("Új medence neve")).toHaveValue(`Másik ${suffix}`);
+    // "Nincs vízmérés" (Lili, msg 1564364366844006430): no group needed, the group boxes are off, the pool is in no group
+    await box.getByLabel("Nagy medencék").uncheck();
+    await box.getByLabel("Új medence neve").fill(`Víz nélkül ${suffix}`);
+    await box.getByLabel("Új medence kódja").fill(`${code}_V`);
+    await expect(add, "a group is needed again").toBeDisabled();
+    await box.getByLabel("Nincs vízmérés").check();
+    await expect(box.getByLabel("Kismedencék")).toBeDisabled();
+    await expect(add).toBeEnabled();
+    await add.click();
+    await expect(box.getByRole("status")).toHaveText("Medence felvéve.");
+    await expect(page.getByTestId(`pool-Víz nélkül ${suffix}`)).toContainText("nincs vízmérés");
   } finally {
     // closed again: the pool inactive and its memberships ended, so the tests after this one see the old tables
-    const pool = await db.pool.findUnique({ where: { code } });
-    if (pool) {
+    for (const c of [code, `${code}_V`]) {
+      const pool = await db.pool.findUnique({ where: { code: c } });
+      if (!pool) continue;
       await db.pool.update({ where: { id: pool.id }, data: { active: false } });
       await db.groupMembership.updateMany({ where: { poolId: pool.id, validTo: null }, data: { validTo: new Date() } });
     }
