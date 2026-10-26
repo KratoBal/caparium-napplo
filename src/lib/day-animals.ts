@@ -2,7 +2,7 @@
 // order and the grouping are tested without a page.
 import { byAnimalOrder } from "./animal-order";
 
-export type ChooserAnimal = { id: string; name: string; poolName: string | null; sortOrder?: number | null };
+export type ChooserAnimal = { id: string; name: string; poolName: string | null; poolEmoji?: string | null; sortOrder?: number | null };
 
 /** Lili 2026-10-26 (card f67b1a06, items 2 and 4): by pool, the pool-less last, then the admin's order, then by name. */
 export function sortDayAnimals<T extends ChooserAnimal>(animals: T[]): T[] {
@@ -16,12 +16,12 @@ export function sortDayAnimals<T extends ChooserAnimal>(animals: T[]): T[] {
 export const NO_POOL = "Medence nélkül";
 
 /** One line per pool, in the order the animals arrive (sorted by `sortDayAnimals`). */
-export function chooserPools<T extends ChooserAnimal>(animals: T[]): { key: string; name: string; animals: T[] }[] {
-  const lines: { key: string; name: string; animals: T[] }[] = [];
+export function chooserPools<T extends ChooserAnimal>(animals: T[]): { key: string; name: string; emoji: string | null; animals: T[] }[] {
+  const lines: { key: string; name: string; emoji: string | null; animals: T[] }[] = [];
   for (const a of animals) {
     const last = lines.at(-1);
     if (last && last.name === (a.poolName ?? NO_POOL)) last.animals.push(a);
-    else lines.push({ key: a.poolName ?? "nincs", name: a.poolName ?? NO_POOL, animals: [a] });
+    else lines.push({ key: a.poolName ?? "nincs", name: a.poolName ?? NO_POOL, emoji: a.poolEmoji ?? null, animals: [a] });
   }
   return lines;
 }

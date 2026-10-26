@@ -27,6 +27,13 @@ describe("the day's animals by pool", () => {
     expect(new Set(lines.map((l) => l.key)).size).toBe(lines.length);
   });
 
+  // Lili 2026-10-26 (item 3): the pool's icon stands before its name; a pool without one has none
+  it("carries the pool's icon to its line", () => {
+    const withIcon = (id: string, name: string, poolName: string | null, poolEmoji: string | null): ChooserAnimal => ({ id, name, poolName, poolEmoji });
+    const lines = chooserPools(sortDayAnimals([withIcon("1", "Anna", "Nagymedence", "🦈"), withIcon("2", "Béla", "Kismedence", null), withIcon("3", "Zita", "Nagymedence", "🦈"), withIcon("4", "Ádám", null, null)]));
+    expect(lines.map((l) => [l.name, l.emoji])).toEqual([["Kismedence", null], ["Nagymedence", "🦈"], [NO_POOL, null]]);
+  });
+
   it("makes no lines for no animals", () => {
     expect(chooserPools([])).toEqual([]);
   });

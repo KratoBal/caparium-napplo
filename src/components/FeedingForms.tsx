@@ -94,44 +94,39 @@ export function SelectBox({ day, animalId, name, selected, disabled }: { day: st
         onChange={(e) => {
           const next = e.target.checked;
           setShown(next);
-          void run("/api/feeding/selection", { day, animalIds: [animalId], selected: next }, next ? "Kiválasztva." : "Kivéve.").then((ok) => {
+          void run("/api/feeding/selection", { day, animalIds: [animalId], selected: next }, "").then((ok) => {
             if (!ok) setShown(!next);
           });
         }}
       />
-      <Msg msg={msg} />
+      {/* Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 2): no "Kiválasztva." / "Kivéve." beside the
+          tick; only a refusal is said */}
+      {msg && !msg.ok && <Msg msg={msg} />}
     </label>
   );
 }
 
 /**
- * A group's "select all" and "none" (6fe63c9b, Lili: grouped checkboxes with a select-all per group). Selecting
- * selects the members of the day one by one; "none" takes them off, with the usual confirmation if an animal
- * already has an item or a status that day.
+ * A pool's one switch (Lili 2026-10-26, item 3, replacing the two buttons "Összes kijelölése" and "Egyik sem"): on =
+ * every animal of the line is on the day's list, off = none. Switching it on selects the members one by one; off takes
+ * them off, with the usual confirmation if an animal already has an item or a status that day.
  */
-export function GroupSelect({ day, name, memberIds }: { day: string; name: string; memberIds: string[] }) {
+export function GroupSwitch({ day, name, memberIds, selectedCount }: { day: string; name: string; memberIds: string[]; selectedCount: number }) {
   const { msg, busy, run } = useSend();
+  const allOn = memberIds.length > 0 && selectedCount === memberIds.length;
   return (
-    <span>
-      <button
-        className="btn btn-soft"
-        type="button"
+    <span className="switch-wrap">
+      <input
+        className="switch"
+        type="checkbox"
+        role="switch"
+        checked={allOn}
         disabled={busy}
-        aria-label={`${name}: összes kijelölése`}
-        onClick={() => void run("/api/feeding/selection", { day, animalIds: memberIds, selected: true }, "Csoport kiválasztva.")}
-      >
-        Összes kijelölése
-      </button>{" "}
-      <button
-        className="btn btn-soft"
-        type="button"
-        disabled={busy}
-        aria-label={`${name}: egyik sem`}
-        onClick={() => void run("/api/feeding/selection", { day, animalIds: memberIds, selected: false }, "Csoport kivéve.")}
-      >
-        Egyik sem
-      </button>
-      <Msg msg={msg} />
+        aria-label={`${name}: mind kijelölve`}
+        title={allOn ? "Mind kijelölve: kikapcsolva egyik sem" : "Bekapcsolva mind kijelölve"}
+        onChange={() => void run("/api/feeding/selection", { day, animalIds: memberIds, selected: !allOn }, "")}
+      />
+      {msg && !msg.ok && <Msg msg={msg} />}
     </span>
   );
 }
@@ -153,11 +148,12 @@ export function DayFeeds({ day, types, chosen, editable }: { day: string; types:
   return (
     <div data-testid="day-feeds">
       {types.map((t) => (
-        <div key={t.code} className="toolbar">
-          <span className="hint" style={{ minWidth: 160 }}>
-            {t.emoji ? `${t.emoji} ` : ""}
+        <div key={t.code} className="pick-block" data-testid={`feed-type-${t.name}`}>
+          <div className="section-title">
+            {t.emoji && <span aria-hidden="true">{t.emoji}</span>}
             {t.name}
-          </span>
+          </div>
+          <div className="pick-items">
           {t.feeds.map((f) => (
             <label key={f.id} className="check">
               <input
@@ -174,6 +170,7 @@ export function DayFeeds({ day, types, chosen, editable }: { day: string; types:
               {f.name}
             </label>
           ))}
+          </div>
         </div>
       ))}
       {editable && (
