@@ -21,12 +21,22 @@ export function weekdayOf(day: string): number {
   return w === 0 ? 7 : w;
 }
 
+/**
+ * THE PLAN IS THE ADMIN'S (Lili 2026-10-26, Caparium channel msg 1564404799359946884: "az Etetési rend szerkesztése egyelőre CSAK
+ * adminnak"): the server refuses everyone else (403), the page and the menu entry hide it too. Reading it stays open to everyone: "Lista
+ * a terv szerint" (applyPlan) only reads the plan.
+ */
+async function requirePlanAdmin(actor: Actor) {
+  if ((await moduleLevel(prisma, actor.id, actor.role, "FEEDING")) !== "ADMIN") {
+    throw new AppError(403, "ADMIN_ONLY", "Az etetési rendet csak adminisztrátor módosíthatja.");
+  }
+}
+
 /** Sets an animal's plan from now on (a new version; the old one stays for the record). */
 export async function setFeedingPlan(actor: Actor, raw: z.input<typeof planSchema>, serverNow = new Date()) {
   const input = planSchema.parse(raw);
+  await requirePlanAdmin(actor);
   if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true };
-  const level = await moduleLevel(prisma, actor.id, actor.role, "FEEDING");
-  if (level === "NONE" || level === "READ") throw new AppError(403, "READ_ONLY", "A tervet rögzítési joggal lehet módosítani.");
   return prisma.$transaction(async (tx) => ({ replayed: false, changed: await planInTx(tx, actor, input.animalId, input.weekdays, input.requestId, serverNow) }));
 }
 
@@ -61,13 +71,12 @@ export const plansSchema = z.object({
 /**
  * THE FEEDING TIMETABLE (6fe63c9b, item 4; Lili: "az admin létrehoz egy heti órarendet"): every animal's days on
  * one screen, saved together in one transaction. Each changed row is a new plan version, exactly as the single
- * animal's form (setFeedingPlan); an unchanged row writes nothing. The same permission: recording or admin.
+ * animal's form (setFeedingPlan); an unchanged row writes nothing. The same permission: the admin's.
  */
 export async function setFeedingPlans(actor: Actor, raw: z.input<typeof plansSchema>, serverNow = new Date()) {
   const input = plansSchema.parse(raw);
+  await requirePlanAdmin(actor);
   if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true, changed: 0 };
-  const level = await moduleLevel(prisma, actor.id, actor.role, "FEEDING");
-  if (level === "NONE" || level === "READ") throw new AppError(403, "READ_ONLY", "A tervet rögzítési joggal lehet módosítani.");
   const ids = input.plans.map((p) => p.animalId);
   if (new Set(ids).size !== ids.length) throw new AppError(422, "DUPLICATE_ANIMAL", "Egy állat egyszer szerepelhet.");
   // a stable lock order: two overlapping saves cannot wait on each other

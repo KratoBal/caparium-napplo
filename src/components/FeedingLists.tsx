@@ -3,7 +3,7 @@
 // NAMED FEEDING LISTS (Lili 2026-10-26, Caparium channel msg 1564356412946124921, item 1): the dropdown in the feeding page's
 // header (ApplyList) and the admin's editor on the timetable page (FeedingListsEditor). The list ticks and adds, never takes
 // off; the server decides every permission.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { chooserPools, sortDayAnimals, type ChooserAnimal } from "@/lib/day-animals";
 import { Msg, useSend, type FeedTypeOpt } from "./FeedingForms";
 
@@ -17,25 +17,53 @@ function newRequestId(): string {
 }
 
 function appliedText(res: Record<string, unknown>): string {
-  const added = Number(res.added ?? 0);
-  const feeds = Number(res.feedsAdded ?? 0);
   const skipped = Array.isArray(res.skipped) ? (res.skipped as string[]) : [];
-  const parts = [`${added} állat a listán`, `${feeds} új takarmány`];
   const tail = skipped.length ? ` Kézi koplalónap miatt kimaradt: ${skipped.join(", ")}.` : "";
-  return `${String(res.name ?? "A lista")}: ${parts.join(", ")}.${tail}`;
+  if (res.name === null || res.name === undefined) return "Minden kijelölés kivéve.";
+  const removed = Number(res.removed ?? 0);
+  return `${String(res.name)}: ${Number(res.added ?? 0)} állat kijelölve${removed ? `, ${removed} kivéve` : ""}, ${Number(res.feeds ?? 0)} takarmány.${tail}`;
 }
 
-/** The header's dropdown: choosing a list ticks its animals and adds its feeds (and only adds). */
-export function ApplyList({ day, lists }: { day: string; lists: ListOpt[] }) {
+/**
+ * The header's switch and dropdown (Lili 2026-10-26, msg 1564404481708265704 and 1564405423417593988): the same kind of switch as
+ * the pool's in the feeding list. On: a list can be chosen, and choosing one makes the day's selection exactly that list (it does not
+ * pile up on the one before: the animals and feeds of the list are ticked, everything else is taken off; by-hand changes
+ * afterwards are fine, choosing again returns to the list). Off: the whole selection is taken off. The server asks for the usual
+ * confirmation when an animal already has an item that day.
+ */
+export function ApplyList({ day, lists, selectedAnimalIds, dayFeedIds }: { day: string; lists: ListOpt[]; selectedAnimalIds: string[]; dayFeedIds: string[] }) {
   const { msg, busy, run } = useSend();
   const [value, setValue] = useState("");
+  const hasSelection = selectedAnimalIds.length > 0 || dayFeedIds.length > 0;
+  const [on, setOn] = useState(hasSelection);
+  // a selection that appears (a tick by hand, the weekly plan) means the switch is on; only the switch itself turns it off
+  useEffect(() => {
+    if (hasSelection) setOn(true);
+  }, [hasSelection]);
   return (
     <span className="toolbar" style={{ margin: 0 }} data-testid="apply-list">
+      <input
+        className="switch"
+        type="checkbox"
+        role="switch"
+        checked={on}
+        disabled={busy}
+        aria-label="Etetési listák"
+        title={on ? "Bekapcsolva: lista választható. Kikapcsolva az összes kijelölés kikerül." : "Kikapcsolva: kapcsold be a lista választásához."}
+        onChange={(e) => {
+          const next = e.target.checked;
+          setOn(next);
+          if (next) return;
+          void run("/api/feeding/lists/apply", { day, listId: null }, appliedText).then((ok) => {
+            if (!ok) setOn(true);
+          });
+        }}
+      />
       <select
         className="input"
         aria-label="Névvel ellátott lista"
         value={value}
-        disabled={busy}
+        disabled={busy || !on}
         onChange={(e) => {
           const listId = e.target.value;
           if (!listId) return;
@@ -156,8 +184,8 @@ export function FeedingListsEditor({ lists, animals, types }: { lists: ListView[
       <h2>Névvel ellátott listák</h2>
       <p className="hint">
         Egy lista állatokat és takarmányokat gyűjt egy név alá (például „Puhatestű nap”). A takarmánynapló fejlécében legördülőből választható:
-        kipipálja a lista állatait és hozzáadja a takarmányait a napi listához. Utána kézzel bővíthető és szűkíthető; a „Lista a terv szerint”
-        mellette marad. A lista csak hozzáad, a napon semmit nem vesz le.
+        a napi lista pontosan a lista állatai és takarmányai lesz (nem halmozódik az előző listára). Utána kézzel bővíthető és szűkíthető;
+        a „Lista a terv szerint” mellette marad. A fejléc kapcsolója kikapcsolva az összes kijelölést kiveszi.
       </p>
       {lists.map((l) => (
         <details key={l.id} className="pick-details">

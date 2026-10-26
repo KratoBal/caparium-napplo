@@ -33,7 +33,11 @@ describe("feeding list input", () => {
     expect(updateListSchema.safeParse({ ...ok, listId: A }).success).toBe(true);
     expect(applyListSchema.safeParse({ requestId: "req-00000001", day: "2027-11-08", listId: A }).success).toBe(true);
     expect(applyListSchema.safeParse({ requestId: "req-00000001", day: "tegnap", listId: A }).success).toBe(false);
-    // the feeds step appends ":feeds": a longer id is refused up front, not after the animals were ticked
+    // no list at all is allowed (the header's switch off: the whole selection is taken off); the confirmation passes through
+    expect(applyListSchema.safeParse({ requestId: "req-00000001", day: "2027-11-08", listId: null }).success).toBe(true);
+    expect(applyListSchema.safeParse({ requestId: "req-00000001", day: "2027-11-08", listId: A, confirmCascade: true }).success).toBe(true);
+    expect(applyListSchema.safeParse({ requestId: "req-00000001", day: "2027-11-08" }).success, "the list id is stated, null or an id").toBe(false);
+    // the later steps append ":off" and ":feeds": a longer id is refused up front, not half way
     expect(applyListSchema.safeParse({ requestId: "r".repeat(90), day: "2027-11-08", listId: A }).success).toBe(true);
     expect(applyListSchema.safeParse({ requestId: "r".repeat(91), day: "2027-11-08", listId: A }).success).toBe(false);
   });

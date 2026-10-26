@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { setEatingStatus } from "@/lib/eating";
 import { AppError } from "@/lib/errors";
-import { feedingDayView, setDayFeeds, setSelection } from "@/lib/feeding";
+import { feedingDayView, saveFeedingItem, setDayFeeds, setSelection } from "@/lib/feeding";
 import { activeFeedingLists, applyFeedingList, archiveFeedingList, createFeedingList, updateFeedingList } from "@/lib/feeding-lists";
 import { dayToDate } from "@/lib/time";
 import { fixtures, rid } from "./fixtures";
@@ -13,12 +13,14 @@ import { fixtures, rid } from "./fixtures";
 let f: Awaited<ReturnType<typeof fixtures>>;
 const a: Record<string, string> = {};
 const feed: Record<string, string> = {};
+const unit: Record<string, string> = {};
 const at = (d: string, t: string) => new Date(`${d}T${t}:00+01:00`);
 
 beforeAll(async () => {
   f = await fixtures();
   for (const n of await prisma.animalName.findMany()) a[n.name] = n.animalId;
   for (const n of await prisma.feedName.findMany()) feed[n.name] = n.feedId;
+  for (const u of await prisma.unit.findMany()) unit[u.symbol] = u.id;
 });
 
 async function expectCode(p: Promise<unknown>, code: string) {
@@ -63,49 +65,80 @@ describe("composing the lists (admin only)", () => {
     // the archived list keeps its row, and its name is free again
     expect(await prisma.feedingList.count({ where: { id: r.id, active: false } })).toBe(1);
     await createFeedingList(f.admin, { requestId: rid(), name: "Szerkesztett 2", animalIds: [a["Teszt Egy"]], feedIds: [] });
-    await expectCode(applyFeedingList(f.aq1, { requestId: rid(), day: "2027-11-08", listId: r.id }, at("2027-11-08", "08:00")), "LIST_NOT_FOUND");
+    await expectCode(applyFeedingList(f.aq1, { requestId: rid(), day: "2027-11-14", listId: r.id }, at("2027-11-14", "08:00")), "LIST_NOT_FOUND");
   });
 });
 
-describe("applying a list to the day: it ticks and adds, never takes off", () => {
+describe("picking a list: the day's selection becomes that list; no list takes everything off", () => {
   const monday = "2027-11-08";
-  it("ticks the list's animals and adds its feeds; what was already on the day stays; a second pick adds nothing", async () => {
-    // the day already has one animal ticked and one feed chosen by a person
+  const mk = async (name: string, animalNames: string[], feedNames: string[]) =>
+    ((await createFeedingList(f.admin, { requestId: rid(), name, animalIds: animalNames.map((n) => a[n]), feedIds: feedNames.map((n) => feed[n]) })) as { id: string }).id;
+
+  it("ticks the list's animals and chooses its feeds, and takes off what was on the day and is not in it; a second pick changes nothing", async () => {
+    // the day already has an animal ticked and a feed chosen by a person
     await setSelection(f.aq1, { requestId: rid(), day: monday, animalIds: [a["Teszt Három"]], selected: true }, at(monday, "07:50"));
     await setDayFeeds(f.aq1, { requestId: rid(), day: monday, feedIds: [feed["Teszt kagyló"]] }, at(monday, "07:51"));
-    const list = (await createFeedingList(f.admin, { requestId: rid(), name: "Hétfői lista", animalIds: [a["Teszt Egy"], a["Teszt Kettő"]], feedIds: [feed["Teszt hal"]] })) as { id: string };
-    const r = await applyFeedingList(f.aq1, { requestId: rid(), day: monday, listId: list.id }, at(monday, "08:00"));
-    expect(r).toMatchObject({ name: "Hétfői lista", added: 2, feedsAdded: 1, skipped: [] });
-    expect(await selected(monday)).toEqual(["Teszt Egy", "Teszt Három", "Teszt Kettő"]);
-    expect(await dayFeedIds(monday)).toEqual([feed["Teszt hal"], feed["Teszt kagyló"]].sort());
+    const list = await mk("Hétfői lista", ["Teszt Egy", "Teszt Kettő"], ["Teszt hal"]);
+    const r = await applyFeedingList(f.aq1, { requestId: rid(), day: monday, listId: list }, at(monday, "08:00"));
+    expect(r).toMatchObject({ name: "Hétfői lista", added: 2, removed: 1, skipped: [], feeds: 1 });
+    expect(await selected(monday)).toEqual(["Teszt Egy", "Teszt Kettő"]);
+    expect(await dayFeedIds(monday)).toEqual([feed["Teszt hal"]]);
     // again: nothing new
-    expect(await applyFeedingList(f.aq1, { requestId: rid(), day: monday, listId: list.id }, at(monday, "08:05"))).toMatchObject({ added: 0, feedsAdded: 0 });
-    // the user takes one off by hand afterwards, as usual
-    await setSelection(f.aq1, { requestId: rid(), day: monday, animalIds: [a["Teszt Kettő"]], selected: false }, at(monday, "08:10"));
-    expect(await selected(monday)).toEqual(["Teszt Egy", "Teszt Három"]);
+    expect(await applyFeedingList(f.aq1, { requestId: rid(), day: monday, listId: list }, at(monday, "08:05"))).toMatchObject({ added: 0, removed: 0 });
   });
 
-  // barracuda on #66 (d): a day with NO feeds chosen offers every feed; a list with feeds narrows it to the list's feeds
-  it("a day with no feeds chosen is narrowed to the list's feeds", async () => {
+  it("a second list REPLACES the first (it does not pile up), and what a person ticks by hand after the pick stays", async () => {
+    const other = await mk("Másik lista", ["Teszt Három"], ["Teszt kagyló"]);
+    const r = await applyFeedingList(f.aq1, { requestId: rid(), day: monday, listId: other }, at(monday, "08:10"));
+    expect(r).toMatchObject({ added: 1, removed: 2, feeds: 1 });
+    expect(await selected(monday)).toEqual(["Teszt Három"]);
+    expect(await dayFeedIds(monday)).toEqual([feed["Teszt kagyló"]]);
+    // by hand afterwards: free
+    await setSelection(f.aq1, { requestId: rid(), day: monday, animalIds: [a["Teszt Négy"]], selected: true }, at(monday, "08:15"));
+    expect(await selected(monday)).toEqual(["Teszt Négy", "Teszt Három"].sort());
+  });
+
+  it("no list (the switch off) takes the whole selection and the day's feeds off", async () => {
+    const r = await applyFeedingList(f.aq1, { requestId: rid(), day: monday, listId: null }, at(monday, "08:20"));
+    expect(r).toMatchObject({ name: null, added: 0, removed: 2, feeds: 0 });
+    expect(await selected(monday)).toEqual([]);
+    expect(await dayFeedIds(monday)).toEqual([]);
+  });
+
+  it("an animal that already has an item is taken off only after the confirmation, and nothing changes before it", async () => {
+    const tuesday = "2027-11-09";
+    const keep = await mk("Keddi lista", ["Teszt Egy"], ["Teszt hal"]);
+    await setSelection(f.aq1, { requestId: rid(), day: tuesday, animalIds: [a["Teszt Kettő"]], selected: true }, at(tuesday, "07:50"));
+    await saveFeedingItem(f.aq1, { requestId: rid(), day: tuesday, animalId: a["Teszt Kettő"], feedId: feed["Teszt hal"], quantities: [{ value: "10", unitId: unit.g }] } as Parameters<typeof saveFeedingItem>[1], at(tuesday, "07:55"));
+    await expectCode(applyFeedingList(f.aq1, { requestId: rid(), day: tuesday, listId: keep }, at(tuesday, "08:00")), "HAS_RECORDS");
+    expect(await selected(tuesday)).toEqual(["Teszt Kettő"]);
+    expect(await dayFeedIds(tuesday)).toEqual([]);
+    const r = await applyFeedingList(f.aq1, { requestId: rid(), day: tuesday, listId: keep, confirmCascade: true }, at(tuesday, "08:01"));
+    expect(r).toMatchObject({ added: 1, removed: 1 });
+    expect(await selected(tuesday)).toEqual(["Teszt Egy"]);
+    expect(await prisma.feedingItem.count({ where: { animalId: a["Teszt Kettő"], status: "VALID", feedingDay: { businessDay: dayToDate(tuesday) } } })).toBe(0);
+  });
+
+  it("a day with feeds chosen and a list with none: the day's feeds are cleared (every feed is offered again)", async () => {
     const wednesday = "2027-11-10";
+    await setDayFeeds(f.aq1, { requestId: rid(), day: wednesday, feedIds: [feed["Teszt hal"]] }, at(wednesday, "07:50"));
+    const list = await mk("Szerdai lista", ["Teszt Egy"], []);
+    expect(await applyFeedingList(f.aq1, { requestId: rid(), day: wednesday, listId: list }, at(wednesday, "08:00"))).toMatchObject({ added: 1, feeds: 0 });
     expect(await dayFeedIds(wednesday)).toEqual([]);
-    const list = (await createFeedingList(f.admin, { requestId: rid(), name: "Szerdai lista", animalIds: [a["Teszt Egy"]], feedIds: [feed["Teszt hal"], feed["Teszt kagyló"]] })) as { id: string };
-    expect(await applyFeedingList(f.aq1, { requestId: rid(), day: wednesday, listId: list.id }, at(wednesday, "08:00"))).toMatchObject({ added: 1, feedsAdded: 2 });
+    // and a list with feeds on a day with none chosen: the day's feeds become the list's
+    const withFeeds = await mk("Szerdai lista 2", ["Teszt Egy"], ["Teszt hal", "Teszt kagyló"]);
+    expect(await applyFeedingList(f.aq1, { requestId: rid(), day: wednesday, listId: withFeeds }, at(wednesday, "08:05"))).toMatchObject({ feeds: 2 });
     expect(await dayFeedIds(wednesday)).toEqual([feed["Teszt hal"], feed["Teszt kagyló"]].sort());
   });
 
-  it("an animal with a manual fasting day is left out and named; an animal-only list leaves the day's feeds alone", async () => {
-    const tuesday = "2027-11-09";
-    await setEatingStatus(f.aq1, { requestId: rid(), day: tuesday, animalId: a["Teszt Kettő"], state: "FASTING" }, at(tuesday, "07:30"));
-    const list = (await createFeedingList(f.admin, { requestId: rid(), name: "Keddi lista", animalIds: [a["Teszt Egy"], a["Teszt Kettő"]], feedIds: [] })) as { id: string };
-    const r = await applyFeedingList(f.aq1, { requestId: rid(), day: tuesday, listId: list.id }, at(tuesday, "08:00"));
-    expect(r).toMatchObject({ added: 1, feedsAdded: 0, skipped: ["Teszt Kettő"] });
-    expect(await selected(tuesday)).toEqual(["Teszt Egy"]);
-    expect(await dayFeedIds(tuesday)).toEqual([]);
-  });
-
-  it("the day's permissions are the list's: an earlier day is admin work", async () => {
-    const list = (await createFeedingList(f.admin, { requestId: rid(), name: "Régi nap lista", animalIds: [a["Teszt Egy"]], feedIds: [] })) as { id: string };
-    await expectCode(applyFeedingList(f.aq1, { requestId: rid(), day: "2027-11-12", listId: list.id }, at("2027-11-13", "08:00")), "NOT_TODAY");
+  it("an animal with a manual fasting day is left out and named; the day's permissions are the list's: an earlier day is admin work", async () => {
+    const thursday = "2027-11-11";
+    await setEatingStatus(f.aq1, { requestId: rid(), day: thursday, animalId: a["Teszt Kettő"], state: "FASTING" }, at(thursday, "07:30"));
+    const list = await mk("Csütörtöki lista", ["Teszt Egy", "Teszt Kettő"], []);
+    const r = await applyFeedingList(f.aq1, { requestId: rid(), day: thursday, listId: list }, at(thursday, "08:00"));
+    expect(r).toMatchObject({ added: 1, skipped: ["Teszt Kettő"] });
+    expect(await selected(thursday)).toEqual(["Teszt Egy"]);
+    await expectCode(applyFeedingList(f.aq1, { requestId: rid(), day: "2027-11-12", listId: list }, at("2027-11-13", "08:00")), "NOT_TODAY");
+    await expectCode(applyFeedingList(f.aq1, { requestId: rid(), day: thursday, listId: "00000000-0000-4000-8000-000000000001" }, at(thursday, "08:30")), "LIST_NOT_FOUND");
   });
 });

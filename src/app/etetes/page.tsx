@@ -83,11 +83,21 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
           {view.listState === "FINALIZED" ? "Lista kész" : "Lista nincs kész"}
         </span>
         {/* Lili 2026-10-26 (item 1): the named lists in the header, beside the weekly plan's button */}
-        {editable && lists.length > 0 && <ApplyList day={day} lists={lists.map((l) => ({ id: l.id, name: l.name }))} />}
+        {editable && lists.length > 0 && (
+          <ApplyList
+            day={day}
+            lists={lists.map((l) => ({ id: l.id, name: l.name }))}
+            selectedAnimalIds={view.animals.filter((a) => a.selected).map((a) => a.id)}
+            dayFeedIds={view.feedIds}
+          />
+        )}
         {editable && <ApplyPlan day={day} />}
-        <Link className="btn btn-soft" href="/etetes/rend">
-          Etetési rend
-        </Link>
+        {/* Lili 2026-10-26 (msg 1564404799359946884): the timetable is the admin's for now; nobody else sees the entry */}
+        {isAdmin && (
+          <Link className="btn btn-soft" href="/etetes/rend">
+            Etetési rend
+          </Link>
+        )}
         <DayControls kind="FEEDING" day={day} status={lock} isAdmin={isAdmin} />
       </div>
 

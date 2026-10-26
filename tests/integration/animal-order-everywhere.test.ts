@@ -5,7 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setAnimalOrder } from "@/lib/animals";
 import { prisma } from "@/lib/db";
-import { feedingDayView, saveFeedingItem } from "@/lib/feeding";
+import { feedingDayView, saveFeedingItem, setSelection } from "@/lib/feeding";
 import { feedingLog } from "@/lib/feeding-log";
 import { breakdown } from "@/lib/reports";
 import { fixtures, rid } from "./fixtures";
@@ -23,6 +23,8 @@ beforeAll(async () => {
   for (const n of await prisma.animalName.findMany()) a[n.name] = n.animalId;
   for (const n of await prisma.feedName.findMany()) feed[n.name] = n.feedId;
   for (const u of await prisma.unit.findMany()) unit[u.symbol] = u.id;
+  // an item is given only to an animal on the day's list
+  await setSelection(f.aq1, { requestId: rid(), day, animalIds: MINE.map((n) => a[n]), selected: true }, at("07:50"));
   // the items in the DEFAULT order, so the order of the lists cannot be the order they were entered in
   for (const [i, n] of MINE.entries()) {
     await saveFeedingItem(f.aq1, { requestId: rid(), day, animalId: a[n], feedId: feed["Teszt hal"], quantities: [{ value: "10", unitId: unit.g }] } as Parameters<typeof saveFeedingItem>[1], at(`0${8 + i}:00`));
