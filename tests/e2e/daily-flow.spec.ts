@@ -1196,6 +1196,8 @@ test("feeding lists: the admin composes one, the header's dropdown ticks its ani
 test("the admin's animal order: a drag handle, a place number and the highlighted rows (nothing is saved)", async ({ page }) => {
   await login(page, "teszt.admin");
   await page.goto("/allatok");
+  // a mouse press is not auto-waited for like a click: the page must be hydrated before the handle can hear it
+  await page.waitForLoadState("networkidle");
   const list = page.getByTestId("animal-order");
   const rows = list.getByRole("listitem");
   const count = await rows.count();

@@ -36,7 +36,9 @@ const PAGES = [
 // .helper*: the floating helper in the corner is not part of a form row.
 // .tab-picture: the two group buttons of the daily water page carry a picture above the text (Lili 2026-10-26),
 // so they are taller than a plain tab on purpose; the plain tabs (weekly page and the rest) stay at 48px.
-const OWN_SIZE = ".cell-input, .meta-select, .helper, .helper *, .helper-on, .tab-picture";
+// .btn-mini and .order-place: the small up/down buttons and the place number of the animal order list, smaller on purpose
+// (Lili 2026-10-26, msg 1564366690601664713: "a fel/le gomb maradjon, de kisebb méretben").
+const OWN_SIZE = ".cell-input, .meta-select, .helper, .helper *, .helper-on, .tab-picture, .btn-mini, .order-place";
 
 type Control = { what: string; height: number; ownSize: boolean; native: boolean };
 
