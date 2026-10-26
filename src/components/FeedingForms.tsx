@@ -114,17 +114,26 @@ export function SelectBox({ day, animalId, name, selected, disabled }: { day: st
 export function GroupSwitch({ day, name, memberIds, selectedCount }: { day: string; name: string; memberIds: string[]; selectedCount: number }) {
   const { msg, busy, run } = useSend();
   const allOn = memberIds.length > 0 && selectedCount === memberIds.length;
+  // shown at once, rolled back when the server refuses (the refresh brings the stored state), as the animal's tick
+  const [shown, setShown] = useState(allOn);
+  useEffect(() => setShown(allOn), [allOn]);
   return (
     <span className="switch-wrap">
       <input
         className="switch"
         type="checkbox"
         role="switch"
-        checked={allOn}
+        checked={shown}
         disabled={busy}
         aria-label={`${name}: mind kijelölve`}
-        title={allOn ? "Mind kijelölve: kikapcsolva egyik sem" : "Bekapcsolva mind kijelölve"}
-        onChange={() => void run("/api/feeding/selection", { day, animalIds: memberIds, selected: !allOn }, "")}
+        title={shown ? "Mind kijelölve: kikapcsolva egyik sem" : "Bekapcsolva mind kijelölve"}
+        onChange={(e) => {
+          const next = e.target.checked;
+          setShown(next);
+          void run("/api/feeding/selection", { day, animalIds: memberIds, selected: next }, "").then((ok) => {
+            if (!ok) setShown(!next);
+          });
+        }}
       />
       {msg && !msg.ok && <Msg msg={msg} />}
     </span>
