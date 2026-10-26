@@ -1189,3 +1189,59 @@ test("feeding lists: the admin composes one, the header's dropdown ticks its ani
   await row.getByRole("button", { name: "Archiválás" }).click();
   await expect(page.getByTestId("feeding-lists").locator("details", { hasText: name })).toHaveCount(0);
 });
+
+// Lili 2026-10-26 (Caparium channel msg 1564366437148270735 and 1564366690601664713; Balázs "Mehet" via acrobot): the animal order
+// is dragged by a handle (a pointer drag, mouse and touch), typed into a place number, or moved with the small buttons; the row
+// moved and the place it lands on are highlighted. Nothing is saved: "Elvetés" ends the test.
+test("the admin's animal order: a drag handle, a place number and the highlighted rows (nothing is saved)", async ({ page }) => {
+  await login(page, "teszt.admin");
+  await page.goto("/allatok");
+  // a mouse press is not auto-waited for like a click: the page must be hydrated before the handle can hear it
+  await page.waitForLoadState("networkidle");
+  const list = page.getByTestId("animal-order");
+  const rows = list.getByRole("listitem");
+  const count = await rows.count();
+  test.skip(count < 3, "needs three living animals");
+  const names = async () => rows.evaluateAll((els) => els.map((el) => el.getAttribute("data-testid")?.replace("order-row-", "") ?? ""));
+  const start = await names();
+  const save = page.getByTestId("save-order");
+  await expect(save).toBeDisabled();
+
+  // the list is far down the page, and a mouse move outside the viewport reaches nothing (a click scrolls by itself, a
+  // mouse move does not): the middle of the first three rows goes to the middle of the screen, away from the edges where
+  // the drag scrolls the page
+  await rows.nth(1).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  // the handle: press on the first row, move over the third; the first is the dragged row, the third the target
+  const handle = list.getByTestId(`order-handle-${start[0]}`);
+  const h = (await handle.boundingBox())!;
+  const third = (await rows.nth(2).boundingBox())!;
+  await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(h.x + h.width / 2, third.y + third.height / 2, { steps: 8 });
+  await expect(rows.nth(0)).toHaveClass(/dragging/);
+  await expect(rows.nth(2)).toHaveClass(/drop-target/);
+  await page.mouse.up();
+  expect(await names()).toEqual([start[1], start[2], start[0], ...start.slice(3)]);
+  await expect(save).toBeEnabled();
+
+  // the place number: type 1 into the row now third, Enter; a typo moves nothing
+  const place = page.getByLabel(`${start[0]} helye (sorszám)`, { exact: true });
+  await place.fill("sok");
+  await place.press("Enter");
+  expect(await names()).toEqual([start[1], start[2], start[0], ...start.slice(3)]);
+  await expect(place).toHaveValue("3");
+  await place.fill("1");
+  await place.press("Enter");
+  expect(await names()).toEqual(start);
+
+  // the faint bands: the second row has another background than the first, and the touched row stands out
+  const bg = (n: number) => rows.nth(n).evaluate((el) => getComputedStyle(el).backgroundColor);
+  if (count >= 4) expect(await bg(2), "rows alternate in a faint background").not.toBe(await bg(3));
+  await page.getByRole("button", { name: `${start[2]} feljebb`, exact: true }).click();
+  await expect(rows.nth(1)).toHaveClass(/touched/);
+  expect(await bg(1)).not.toBe(await bg(3));
+
+  await page.getByRole("button", { name: "Elvetés" }).click();
+  expect(await names()).toEqual(start);
+  await expect(save).toBeDisabled();
+});

@@ -33,6 +33,35 @@ export function moveTo(ids: readonly string[], id: string, to: number): string[]
 }
 
 /**
+ * Which row a drag is over: `centers` are the vertical centers of the rows in their order, `y` the pointer. The row whose
+ * center is nearest, so the target follows the pointer through the gaps and past the first and last row (Lili 2026-10-26,
+ * msg 1564366437148270735: a drag handle, mouse and touch). -1 for no rows.
+ */
+export function rowAt(centers: readonly number[], y: number): number {
+  let best = -1;
+  let dist = Infinity;
+  centers.forEach((c, i) => {
+    const d = Math.abs(c - y);
+    if (d < dist) {
+      dist = d;
+      best = i;
+    }
+  });
+  return best;
+}
+
+/**
+ * The place the admin typed ("3" = the third), as a zero-based index; null for anything that is not a whole number from 1
+ * to `count`, so a typo changes nothing.
+ */
+export function parsePlace(text: string, count: number): number | null {
+  const t = text.trim();
+  if (!/^\d{1,4}$/.test(t)) return null;
+  const n = Number(t);
+  return n >= 1 && n <= count ? n - 1 : null;
+}
+
+/**
  * The positions to store: the submitted animals in the submitted order, then every other animal in the order it
  * had (`othersInCurrentOrder`), so the animals the admin did not see (dead, just arrived) keep their relative
  * place and come after the shown ones. Positions are 0, 1, 2, ... without gaps.

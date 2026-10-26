@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { byAnimalOrder, moveBy, moveTo, orderAssignments } from "@/lib/animal-order";
+import { byAnimalOrder, moveBy, moveTo, orderAssignments, parsePlace, rowAt } from "@/lib/animal-order";
 
 type A = { name: string; sortOrder: number | null };
 const byName = (a: A, b: A) => a.name.localeCompare(b.name, "hu");
@@ -68,5 +68,30 @@ describe("orderAssignments", () => {
   });
   it("with nothing else it is just the submitted list", () => {
     expect(orderAssignments(["x", "y"], [])).toEqual([{ id: "x", sortOrder: 0 }, { id: "y", sortOrder: 1 }]);
+  });
+});
+
+// Lili 2026-10-26 (msg 1564366437148270735): the drag handle and the place number
+describe("rowAt: the row under the pointer", () => {
+  const centers = [20, 60, 100, 140];
+  it("is the row with the nearest center, through the gaps and past both ends", () => {
+    expect(rowAt(centers, 61)).toBe(1);
+    expect(rowAt(centers, 79)).toBe(1);
+    expect(rowAt(centers, 81)).toBe(2);
+    expect(rowAt(centers, -300)).toBe(0);
+    expect(rowAt(centers, 900)).toBe(3);
+  });
+  it("is -1 for no rows", () => {
+    expect(rowAt([], 10)).toBe(-1);
+  });
+});
+
+describe("parsePlace: the place typed into a row", () => {
+  it("takes a whole number from 1 to the count, as a zero-based index", () => {
+    expect(parsePlace("1", 5)).toBe(0);
+    expect(parsePlace(" 5 ", 5)).toBe(4);
+  });
+  it("takes nothing else: a typo moves no animal", () => {
+    for (const bad of ["", "0", "6", "-1", "2,5", "2.5", "két", "1e1", "12345"]) expect(parsePlace(bad, 5), `"${bad}"`).toBeNull();
   });
 });

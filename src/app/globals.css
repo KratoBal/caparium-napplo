@@ -239,3 +239,19 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 /* named feeding lists (Lili 2026-10-26, item 1): a list is an opened row of the editor */
 .pick-details { border: 1px solid var(--c-line); border-radius: var(--radius-sm); padding: 8px 14px; margin: 10px 0; }
 .pick-details > summary { cursor: pointer; font-weight: 600; font-size: 16px; min-height: var(--touch); display: flex; align-items: center; }
+
+
+/* the animal order list (Lili 2026-10-26, msg 1564366437148270735 and 1564366690601664713): a drag handle, a place number, small
+   up/down buttons; the rows alternate in a faint background so the white is broken, the row being moved and the place it
+   would land on are highlighted, and the last touched row stands out */
+.order-list { list-style: none; padding: 0; margin: 0; }
+.order-row { display: flex; align-items: center; gap: 12px; padding: 4px 10px; border-radius: var(--radius-sm); border: 2px solid transparent; }
+.order-row:nth-child(even) { background: var(--c-field); }
+.order-row.touched { background: var(--c-primary-soft); border-color: var(--c-primary); }
+.order-row.dragging { background: #cfe9ee; border-color: var(--c-primary); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); }
+.order-row.drop-target { background: #fdf0c8; border-color: #e0a526; }
+.order-handle { flex: none; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; font-size: 24px; color: var(--c-muted); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; border-radius: var(--radius-sm); }
+.order-handle:active { cursor: grabbing; background: var(--c-line); }
+.order-place { width: 64px; height: 40px; text-align: center; padding: 0 6px; }
+.order-name { min-width: 200px; font-weight: 600; }
+.btn-mini { min-height: 34px; padding: 0 12px; font-size: 13px; }

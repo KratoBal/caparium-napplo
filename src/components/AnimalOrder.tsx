@@ -1,11 +1,14 @@
 "use client";
 
-// The admin's own order of the animals (Lili 2026-10-26, card f67b1a06, item 4): drag a row (a mouse), or use the
-// up and down buttons (a tablet has no HTML drag). Nothing is stored until "Sorrend mentése"; the lists and the
-// exports then follow the saved order. The moves are the pure rules of lib/animal-order.
+// The admin's own order of the animals (Lili 2026-10-26, card f67b1a06, item 4; the drag handle, the place number and the
+// row colors: Lili's msg 1564366437148270735 and 1564366690601664713, memory 2496). A row moves three ways: dragged by its
+// HANDLE (a pointer drag, so a mouse and a finger both work; the old HTML drag had no touch), typed into its place
+// number field, or with the small up and down buttons. The row being moved and the place it would land on are
+// highlighted, the rows alternate in a faint background and the last touched row stands out. Nothing is stored until
+// "Sorrend mentése"; the lists and the exports then follow the saved order. The rules are the pure ones of lib/animal-order.
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { moveBy, moveTo } from "@/lib/animal-order";
+import { useEffect, useRef, useState } from "react";
+import { moveBy, moveTo, parsePlace, rowAt } from "@/lib/animal-order";
 
 type Row = { id: string; name: string; species: string; poolName: string | null };
 
@@ -15,15 +18,66 @@ function requestId(): string {
   return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
 
+/** The place number of a row: type the place it should have, Enter or leaving the field moves it there. */
+function PlaceField({ name, place, count, disabled, onPlace }: { name: string; place: number; count: number; disabled: boolean; onPlace: (index: number) => void }) {
+  const [text, setText] = useState(String(place));
+  useEffect(() => setText(String(place)), [place]);
+  function commit() {
+    const to = parsePlace(text, count);
+    if (to === null || to === place - 1) return setText(String(place));
+    onPlace(to);
+  }
+  return (
+    <input
+      className="input order-place"
+      inputMode="numeric"
+      aria-label={`${name} helye (sorszám)`}
+      value={text}
+      disabled={disabled}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        }
+      }}
+    />
+  );
+}
+
 export function AnimalOrder({ animals }: { animals: Row[] }) {
   const router = useRouter();
   const initial = animals.map((a) => a.id);
   const [order, setOrder] = useState(initial);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<number | null>(null);
+  const [active, setActive] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLLIElement>());
   const byId = new Map(animals.map((a) => [a.id, a]));
   const dirty = order.join() !== initial.join();
+
+  const move = (id: string, to: number) => {
+    setOrder((cur) => moveTo(cur, id, to));
+    setActive(id);
+  };
+
+  // the pointer's row: the nearest row center (a row's rectangle is read at each move, the rows do not move while dragging)
+  function rowUnder(clientY: number): number {
+    const centers = order.map((id) => {
+      const r = rowRefs.current.get(id)?.getBoundingClientRect();
+      return r ? r.top + r.height / 2 : Infinity;
+    });
+    return rowAt(centers, clientY);
+  }
+
+  function endDrag(commit: boolean) {
+    if (commit && dragging && over !== null && order.indexOf(dragging) !== over) move(dragging, over);
+    setDragging(null);
+    setOver(null);
+  }
 
   async function save() {
     setBusy(true);
@@ -50,37 +104,47 @@ export function AnimalOrder({ animals }: { animals: Row[] }) {
 
   return (
     <div>
-      <ol data-testid="animal-order" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+      <ol data-testid="animal-order" className="order-list">
         {order.map((id, i) => {
           const a = byId.get(id)!;
+          const cls = ["order-row", dragging === id ? "dragging" : "", dragging && dragging !== id && over === i ? "drop-target" : "", active === id && !dragging ? "touched" : ""].filter(Boolean).join(" ");
           return (
-            <li
-              key={id}
-              draggable
-              data-testid={`order-row-${a.name}`}
-              onDragStart={() => setDragging(id)}
-              onDragEnd={() => setDragging(null)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (dragging && dragging !== id) setOrder((cur) => moveTo(cur, dragging, cur.indexOf(id)));
-                setDragging(null);
-              }}
-              className="toolbar"
-              style={{ margin: "4px 0", cursor: "grab", opacity: dragging === id ? 0.5 : 1 }}
-            >
-              <span aria-hidden="true" style={{ minWidth: 28 }}>
-                {i + 1}.
+            <li key={id} ref={(el) => void (el ? rowRefs.current.set(id, el) : rowRefs.current.delete(id))} data-testid={`order-row-${a.name}`} className={cls}>
+              {/* the handle: a pointer drag with capture, so the move keeps coming after the pointer leaves it (a finger too) */}
+              <span
+                className="order-handle"
+                data-testid={`order-handle-${a.name}`}
+                aria-hidden="true"
+                title="Húzd a helyére"
+                onPointerDown={(e) => {
+                  if (busy) return;
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  setDragging(id);
+                  setOver(i);
+                  setActive(id);
+                }}
+                onPointerMove={(e) => {
+                  if (dragging !== id) return;
+                  setOver(rowUnder(e.clientY));
+                  // near the top or bottom of the screen the page follows the finger
+                  if (e.clientY < 70) window.scrollBy(0, -14);
+                  else if (e.clientY > window.innerHeight - 70) window.scrollBy(0, 14);
+                }}
+                onPointerUp={() => endDrag(true)}
+                onPointerCancel={() => endDrag(false)}
+              >
+                ⠿
               </span>
-              <span style={{ minWidth: 200 }}>{a.name}</span>
+              <PlaceField name={a.name} place={i + 1} count={order.length} disabled={busy} onPlace={(to) => move(id, to)} />
+              <span className="order-name">{a.name}</span>
               <span className="hint" style={{ flex: 1 }}>
                 {a.species}
                 {a.poolName ? ` · ${a.poolName}` : ""}
               </span>
-              <button className="btn btn-soft" type="button" aria-label={`${a.name} feljebb`} disabled={i === 0 || busy} onClick={() => setOrder((cur) => moveBy(cur, id, -1))}>
+              <button className="btn btn-soft btn-mini" type="button" aria-label={`${a.name} feljebb`} disabled={i === 0 || busy} onClick={() => { setOrder((cur) => moveBy(cur, id, -1)); setActive(id); }}>
                 Fel
               </button>
-              <button className="btn btn-soft" type="button" aria-label={`${a.name} lejjebb`} disabled={i === order.length - 1 || busy} onClick={() => setOrder((cur) => moveBy(cur, id, 1))}>
+              <button className="btn btn-soft btn-mini" type="button" aria-label={`${a.name} lejjebb`} disabled={i === order.length - 1 || busy} onClick={() => { setOrder((cur) => moveBy(cur, id, 1)); setActive(id); }}>
                 Le
               </button>
             </li>
