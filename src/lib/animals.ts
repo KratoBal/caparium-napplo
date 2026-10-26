@@ -6,7 +6,7 @@
 // Permissions (Lili 2026-10-26, msg 1564214896453750805, overriding NY-20): every lifecycle event is admin
 // work; an earlier date also needs a reason. The rule is lifecycle-access.ts.
 
-import { lifecycleAccessProblem } from "./lifecycle-access";
+import { lifecycleAccessProblem, lifecycleInvalidateProblem } from "./lifecycle-access";
 import type { LifecycleEvent, LifecycleType, Sex } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
@@ -220,6 +220,8 @@ export async function invalidateLifecycleEvent(
 ) {
   if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId, entityId: id } })) return { replayed: true };
   const level = await moduleLevel(prisma, actor.id, actor.role, "FEEDING");
+  const denied = lifecycleInvalidateProblem(level);
+  if (denied) throw new AppError(403, "ADMIN_ONLY", denied);
   return prisma.$transaction(async (tx) => {
     // the animal's lock first, then the event read again under it (lockAnimal)
     const owner = await tx.lifecycleEvent.findUnique({ where: { id }, select: { animalId: true } });

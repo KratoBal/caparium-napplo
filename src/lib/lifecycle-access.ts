@@ -15,3 +15,13 @@ export function lifecycleAccessProblem(level: Level, type: LifecycleEventType): 
     ? "Új állatot (érkezést) csak adminisztrátor rögzíthet."
     : "Az állatok eseményeit (áthelyezés, csoportváltás, elhullás, kiadás) csak adminisztrátor rögzíthet.";
 }
+
+/**
+ * Who may invalidate an animal's lifecycle event. Acrobot 2026-10-26 (36167, after barracuda's note on #54):
+ * managing the animals is admin work, and taking a recorded event back is part of it, also for an event an
+ * aquarist recorded earlier (before the events became admin work). `null`: allowed.
+ */
+export function lifecycleInvalidateProblem(level: Level): string | null {
+  return level === "ADMIN" ? null : "Az állatok eseményeit csak adminisztrátor érvényteleníthet.";
+}
+
