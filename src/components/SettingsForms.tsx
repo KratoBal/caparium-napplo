@@ -134,35 +134,51 @@ export function PoolRow(p: { poolId: string; name: string; groups: string }) {
   );
 }
 
-/** Lili 2026-10-26 (point 3): a new pool, admin only. Name, code and volume are needed; the icon is optional. */
-export function NewPoolForm() {
-  const empty = { name: "", code: "", volume: "", emoji: "" };
+/** Lili 2026-10-26 (point 3): a new pool, admin only. Name, code, volume and at least one measurement group are needed; the icon is optional. */
+export function NewPoolForm({ groups }: { groups: { id: string; name: string }[] }) {
+  const empty = { name: "", code: "", volume: "", emoji: "", groupIds: [] as string[] };
   const [f, setF] = useState(empty);
   const { msg, busy, save } = useSave();
-  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
-  const ready = f.name.trim() !== "" && f.code.trim() !== "" && f.volume.trim() !== "";
+  const set = (k: "name" | "code" | "volume" | "emoji") => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const toggle = (id: string) => setF({ ...f, groupIds: f.groupIds.includes(id) ? f.groupIds.filter((g) => g !== id) : [...f.groupIds, id] });
+  const ready = f.name.trim() !== "" && f.code.trim() !== "" && f.volume.trim() !== "" && f.groupIds.length > 0;
   return (
-    <div className="toolbar" data-testid="new-pool">
-      <input className="input" aria-label="Új medence neve" placeholder="név" value={f.name} onChange={set("name")} />
-      <input className="input small" aria-label="Új medence kódja" placeholder="kód (pl. UJ_MEDENCE)" value={f.code} onChange={set("code")} />
-      <input className="input small" inputMode="decimal" aria-label="Új medence űrtartalma (liter)" placeholder="liter" value={f.volume} onChange={set("volume")} />
-      <input className="input" style={{ width: 90 }} aria-label="Új medence ikonja (nem kötelező)" placeholder="ikon" value={f.emoji} onChange={set("emoji")} />
-      <button
-        className="btn"
-        type="button"
-        disabled={busy || !ready}
-        onClick={() =>
-          void save(
-            "/api/admin/pools",
-            "POST",
-            { name: f.name.trim(), code: f.code.trim(), volumeLiters: f.volume.trim().replace(",", "."), ...(f.emoji.trim() ? { emoji: f.emoji.trim() } : {}) },
-            "Medence felvéve.",
-          ).then((ok) => ok && setF(empty))
-        }
-      >
-        Medence felvétele
-      </button>
-      <Msg msg={msg} />
+    <div data-testid="new-pool">
+      <div className="toolbar">
+        <input className="input" aria-label="Új medence neve" placeholder="név" value={f.name} onChange={set("name")} />
+        <input className="input small" aria-label="Új medence kódja" placeholder="kód (pl. UJ_MEDENCE)" value={f.code} onChange={set("code")} />
+        <input className="input small" inputMode="decimal" aria-label="Új medence űrtartalma (liter)" placeholder="liter" value={f.volume} onChange={set("volume")} />
+        <input className="input" style={{ width: 90 }} aria-label="Új medence ikonja (nem kötelező)" placeholder="ikon" value={f.emoji} onChange={set("emoji")} />
+      </div>
+      <fieldset className="field" style={{ border: 0, padding: 0, margin: "8px 0" }}>
+        Mérési csoport (legalább egy)
+        <span style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {groups.map((g) => (
+            <label key={g.id} className="check">
+              <input type="checkbox" checked={f.groupIds.includes(g.id)} onChange={() => toggle(g.id)} />
+              {g.name}
+            </label>
+          ))}
+        </span>
+      </fieldset>
+      <div className="toolbar">
+        <button
+          className="btn"
+          type="button"
+          disabled={busy || !ready}
+          onClick={() =>
+            void save(
+              "/api/admin/pools",
+              "POST",
+              { name: f.name.trim(), code: f.code.trim(), volumeLiters: f.volume.trim().replace(",", "."), groupIds: f.groupIds, ...(f.emoji.trim() ? { emoji: f.emoji.trim() } : {}) },
+              "Medence felvéve.",
+            ).then((ok) => ok && setF(empty))
+          }
+        >
+          Medence felvétele
+        </button>
+        <Msg msg={msg} />
+      </div>
     </div>
   );
 }

@@ -1081,6 +1081,8 @@ test("settings: the admin adds a new pool; the existing pools stay as they were"
     await box.getByLabel("Új medence kódja").fill(code.toLowerCase());
     await expect(add).toBeDisabled();
     await box.getByLabel("Új medence űrtartalma (liter)").fill("1250,5");
+    await expect(add, "a measurement group is needed too").toBeDisabled();
+    await box.getByLabel("Kismedencék").check();
     await expect(add).toBeEnabled();
     await add.click();
     await expect(box.getByRole("status")).toHaveText("Medence felvéve.");
@@ -1088,16 +1090,24 @@ test("settings: the admin adds a new pool; the existing pools stay as they were"
     await expect(box.getByLabel("Új medence neve")).toHaveValue("");
     await expect(page.getByLabel(`${name} új neve`)).toBeVisible();
     await expect(page.getByLabel(`${name} űrtartalma (liter)`)).toHaveValue("1250,5");
+    // its group is named in its row of the pool table
+    await expect(page.getByTestId(`pool-${name}`)).toContainText("Kismedencék");
     expect(await page.locator('input[aria-label$="új neve"]').count()).toBe(before + 1);
     // the same code again is refused with the reason, and the form keeps what was typed
     await box.getByLabel("Új medence neve").fill(`Másik ${suffix}`);
     await box.getByLabel("Új medence kódja").fill(code);
     await box.getByLabel("Új medence űrtartalma (liter)").fill("100");
+    await box.getByLabel("Nagy medencék").check();
     await add.click();
     await expect(box.getByRole("status")).toHaveText("Ez a medencekód már foglalt.");
     await expect(box.getByLabel("Új medence neve")).toHaveValue(`Másik ${suffix}`);
   } finally {
-    await db.pool.updateMany({ where: { code }, data: { active: false } });
+    // closed again: the pool inactive and its memberships ended, so the tests after this one see the old tables
+    const pool = await db.pool.findUnique({ where: { code } });
+    if (pool) {
+      await db.pool.update({ where: { id: pool.id }, data: { active: false } });
+      await db.groupMembership.updateMany({ where: { poolId: pool.id, validTo: null }, data: { validTo: new Date() } });
+    }
     await db.$disconnect();
   }
 });
