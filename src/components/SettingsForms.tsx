@@ -136,12 +136,12 @@ export function PoolRow(p: { poolId: string; name: string; groups: string }) {
 
 /** Lili 2026-10-26 (point 3): a new pool, admin only. Name, code, volume and at least one measurement group are needed; the icon is optional. */
 export function NewPoolForm({ groups }: { groups: { id: string; name: string }[] }) {
-  const empty = { name: "", code: "", volume: "", emoji: "", groupIds: [] as string[] };
+  const empty = { name: "", code: "", volume: "", emoji: "", groupIds: [] as string[], noWater: false };
   const [f, setF] = useState(empty);
   const { msg, busy, save } = useSave();
   const set = (k: "name" | "code" | "volume" | "emoji") => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const toggle = (id: string) => setF({ ...f, groupIds: f.groupIds.includes(id) ? f.groupIds.filter((g) => g !== id) : [...f.groupIds, id] });
-  const ready = f.name.trim() !== "" && f.code.trim() !== "" && f.volume.trim() !== "" && f.groupIds.length > 0;
+  const ready = f.name.trim() !== "" && f.code.trim() !== "" && f.volume.trim() !== "" && (f.noWater || f.groupIds.length > 0);
   return (
     <div data-testid="new-pool">
       <div className="toolbar">
@@ -151,14 +151,19 @@ export function NewPoolForm({ groups }: { groups: { id: string; name: string }[]
         <input className="input" style={{ width: 90 }} aria-label="Új medence ikonja (nem kötelező)" placeholder="ikon" value={f.emoji} onChange={set("emoji")} />
       </div>
       <fieldset className="field" style={{ border: 0, padding: 0, margin: "8px 0" }}>
-        Mérési csoport (legalább egy)
+        Mérési csoport (legalább egy, vagy nincs vízmérés)
         <span style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {groups.map((g) => (
             <label key={g.id} className="check">
-              <input type="checkbox" checked={f.groupIds.includes(g.id)} onChange={() => toggle(g.id)} />
+              <input type="checkbox" checked={f.groupIds.includes(g.id)} disabled={f.noWater} onChange={() => toggle(g.id)} />
               {g.name}
             </label>
           ))}
+          {/* Lili 2026-10-26 (msg 1564364366844006430): registered, but no water measurement (as the salt pools); no group then */}
+          <label className="check">
+            <input type="checkbox" checked={f.noWater} onChange={(e) => setF({ ...f, noWater: e.target.checked, groupIds: e.target.checked ? [] : f.groupIds })} />
+            Nincs vízmérés
+          </label>
         </span>
       </fieldset>
       <div className="toolbar">
@@ -170,7 +175,7 @@ export function NewPoolForm({ groups }: { groups: { id: string; name: string }[]
             void save(
               "/api/admin/pools",
               "POST",
-              { name: f.name.trim(), code: f.code.trim(), volumeLiters: f.volume.trim().replace(",", "."), groupIds: f.groupIds, ...(f.emoji.trim() ? { emoji: f.emoji.trim() } : {}) },
+              { name: f.name.trim(), code: f.code.trim(), volumeLiters: f.volume.trim().replace(",", "."), groupIds: f.groupIds, ...(f.noWater ? { noWaterMeasurement: true } : {}), ...(f.emoji.trim() ? { emoji: f.emoji.trim() } : {}) },
               "Medence felvéve.",
             ).then((ok) => ok && setF(empty))
           }

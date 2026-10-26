@@ -207,7 +207,7 @@ export async function renamePool(actor: Actor, input: PoolNameInput, now = new D
 // the admin adds a pool with its name, code and volume, and optionally an icon. It ONLY adds a row: no existing pool,
 // measurement or name is touched, and nothing is deleted. The pool joins the measurement groups the admin picks (a row
 // in group_membership each, at the end of the group's pool list, valid from the start of today's business day so
-// that a measurement of this morning finds it); the existing memberships are not touched.
+// that a measurement of this morning finds it); the existing memberships are not touched. With "Nincs vízmérés" it joins none.
 // ---------------------------------------------------------------------------
 
 export const createPoolSchema = z.object({
@@ -220,14 +220,23 @@ export const createPoolSchema = z.object({
     .toUpperCase()
     .regex(/^[A-Z][A-Z0-9_]{1,29}$/, "A kód 2–30 karakter: nagybetű, szám, alsó vonás, betűvel kezdődik."),
   volumeLiters: z.string().trim().min(1, "Az űrtartalom kötelező (liter).").max(32),
-  // at least one existing measurement group (Nagy medencék, Kismedencék, Heti mérés): a pool outside every group can be
-  // named and shown but takes no measurement (acrobot 2026-10-26 20:17: the aim is a new aquarium that is measured)
+  // at least one existing measurement group (Nagy medencék, Kismedencék, Heti mérés): the aim is a new aquarium that is
+  // measured (acrobot 2026-10-26 20:17) ...
   groupIds: z
     .array(z.uuid())
-    .min(1, "Válassz legalább egy mérési csoportot.")
     .max(20)
     .transform((ids) => [...new Set(ids)]),
+  // ... unless it is marked "Nincs vízmérés" (Lili 2026-10-26, msg 1564364366844006430): a registered pool with no water
+  // measurement, as the salt pools are (a water softener whose salt tablet is a consumable). Then no group is needed, and
+  // none may be given: the pool does not enter any measurement table.
+  noWaterMeasurement: z.boolean().optional(),
   emoji: emojiField.optional(),
+}).superRefine((v, ctx) => {
+  if (v.noWaterMeasurement) {
+    if (v.groupIds.length > 0) ctx.addIssue({ code: "custom", path: ["groupIds"], message: "Vízmérés nélküli medencéhez nem választható mérési csoport." });
+  } else if (v.groupIds.length === 0) {
+    ctx.addIssue({ code: "custom", path: ["groupIds"], message: "Válassz legalább egy mérési csoportot, vagy jelöld: nincs vízmérés." });
+  }
 });
 export type CreatePoolInput = z.infer<typeof createPoolSchema>;
 
@@ -264,7 +273,14 @@ export async function createPool(actor: Actor, raw: z.input<typeof createPoolSch
         action: "MASTER_CHANGE",
         entityType: "Pool",
         entityId: pool.id,
-        changes: diffFields(null, { code: pool.code, displayName: input.name, volumeLiters: volume, emoji, groups: groups.map((g) => g.name) }),
+        changes: diffFields(null, {
+          code: pool.code,
+          displayName: input.name,
+          volumeLiters: volume,
+          emoji,
+          groups: groups.map((g) => g.name),
+          ...(input.noWaterMeasurement ? { noWaterMeasurement: true } : {}),
+        }),
         requestId: input.requestId,
       });
       return { replayed: false, id: pool.id };

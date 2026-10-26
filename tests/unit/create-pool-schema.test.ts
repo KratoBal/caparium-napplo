@@ -28,6 +28,18 @@ describe("createPoolSchema", () => {
     expect(createPoolSchema.parse({ ...ok, groupIds: [GROUP, GROUP] }).groupIds).toEqual([GROUP]);
   });
 
+  // Lili 2026-10-26 (msg 1564364366844006430): "Nincs vízmérés", as the salt pools: no group needed, and none allowed
+  it("marked 'no water measurement', a pool needs no group and may not have one", () => {
+    const { groupIds: _g, ...rest } = ok;
+    expect(createPoolSchema.safeParse({ ...rest, groupIds: [], noWaterMeasurement: true }).success).toBe(true);
+    const both = createPoolSchema.safeParse({ ...ok, noWaterMeasurement: true });
+    expect(both.success).toBe(false);
+    expect(JSON.stringify(both.error?.issues)).toContain("nem választható mérési csoport");
+    // the flag off (or missing) keeps the rule: a group is needed
+    expect(createPoolSchema.safeParse({ ...rest, groupIds: [], noWaterMeasurement: false }).success).toBe(false);
+    expect(createPoolSchema.safeParse({ ...rest, groupIds: [] }).success).toBe(false);
+  });
+
   it("name and volume are needed; the name is export-safe; the icon must be an icon, not text", () => {
     expect(createPoolSchema.safeParse({ ...ok, name: "" }).success).toBe(false);
     expect(createPoolSchema.safeParse({ ...ok, name: "x" }).success).toBe(false);
