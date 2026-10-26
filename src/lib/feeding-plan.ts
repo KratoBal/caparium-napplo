@@ -97,10 +97,24 @@ export async function applyPlan(actor: Actor, raw: z.input<typeof applySchema>, 
   const wd = weekdayOf(input.day);
   const plans = await prisma.feedingPlan.findMany({ where: { validTo: null } });
   const planned = plans.filter((p) => p.weekdays.includes(wd)).map((p) => p.animalId);
-  const alive = await aliveOnDay(prisma, input.day, planned);
+  return addAnimalsToDay(actor, input, planned, serverNow);
+}
+
+/**
+ * Puts the given animals on the day's list: the ones alive that day and not on it yet, without a manual fasting day.
+ * Shared by the weekly plan ("Lista a terv szerint") and the named lists (src/lib/feeding-lists.ts): both only ADD.
+ * The day's permissions are setSelection's.
+ */
+export async function addAnimalsToDay(
+  actor: Actor,
+  input: { requestId: string; clientTimestamp?: string | undefined; day: string; reason?: string | undefined },
+  animalIds: string[],
+  serverNow = new Date(),
+) {
+  const alive = await aliveOnDay(prisma, input.day, animalIds);
   const fd = await prisma.$transaction((tx) => ensureFeedingDay(tx, input.day));
   const already = await selectedOn(prisma, fd.fd.id);
-  const candidates = planned.filter((id) => alive.has(id) && !already.has(id));
+  const candidates = animalIds.filter((id) => alive.has(id) && !already.has(id));
   // a manual fasting day is a person's decision for that day: the plan does not override it (setSelection
   // would ask for a confirmation and stop the whole list), so those animals are left out and named
   const fasting = await prisma.eatingStatus.findMany({
