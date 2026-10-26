@@ -100,7 +100,8 @@ describe("the recipient and the sending", () => {
     expect([pdf.filename, pdf.contentType]).toEqual(["Cápasuli vízmérés - 2027-09-08.pdf", "application/pdf"]);
     const lines = await readPdfLines(pdf.content);
     expect(lines).toContain("Nagymedence");
-    expect(lines).toContain("Hőmérséklet 24,6 °C AE");
+    // parameter, value, measurer, then the reference (the common TEMP range here)
+    expect(lines.some((l) => l.startsWith("Hőmérséklet 24,6 °C AE "))).toBe(true);
     expect(lines).toContain("Cápasuli vízmérés - 2027-09-08");
     const audit = await prisma.auditEntry.findFirstOrThrow({ where: { entityType: "WaterReportMail", entityId: "2027-09-08" } });
     expect([audit.action, audit.userId]).toEqual(["EXPORT", f.aq1.id]);
