@@ -1207,6 +1207,10 @@ test("the admin's animal order: a drag handle, a place number and the highlighte
   const save = page.getByTestId("save-order");
   await expect(save).toBeDisabled();
 
+  // the list is far down the page, and a mouse move outside the viewport reaches nothing (a click scrolls by itself, a
+  // mouse move does not): the middle of the first three rows goes to the middle of the screen, away from the edges where
+  // the drag scrolls the page
+  await rows.nth(1).evaluate((el) => el.scrollIntoView({ block: "center" }));
   // the handle: press on the first row, move over the third; the first is the dragged row, the third the target
   const handle = list.getByTestId(`order-handle-${start[0]}`);
   const h = (await handle.boundingBox())!;
