@@ -85,6 +85,15 @@ describe("applying a list to the day: it ticks and adds, never takes off", () =>
     expect(await selected(monday)).toEqual(["Teszt Egy", "Teszt Három"]);
   });
 
+  // barracuda on #66 (d): a day with NO feeds chosen offers every feed; a list with feeds narrows it to the list's feeds
+  it("a day with no feeds chosen is narrowed to the list's feeds", async () => {
+    const wednesday = "2027-11-10";
+    expect(await dayFeedIds(wednesday)).toEqual([]);
+    const list = (await createFeedingList(f.admin, { requestId: rid(), name: "Szerdai lista", animalIds: [a["Teszt Egy"]], feedIds: [feed["Teszt hal"], feed["Teszt kagyló"]] })) as { id: string };
+    expect(await applyFeedingList(f.aq1, { requestId: rid(), day: wednesday, listId: list.id }, at(wednesday, "08:00"))).toMatchObject({ added: 1, feedsAdded: 2 });
+    expect(await dayFeedIds(wednesday)).toEqual([feed["Teszt hal"], feed["Teszt kagyló"]].sort());
+  });
+
   it("an animal with a manual fasting day is left out and named; an animal-only list leaves the day's feeds alone", async () => {
     const tuesday = "2027-11-09";
     await setEatingStatus(f.aq1, { requestId: rid(), day: tuesday, animalId: a["Teszt Kettő"], state: "FASTING" }, at(tuesday, "07:30"));
@@ -97,6 +106,6 @@ describe("applying a list to the day: it ticks and adds, never takes off", () =>
 
   it("the day's permissions are the list's: an earlier day is admin work", async () => {
     const list = (await createFeedingList(f.admin, { requestId: rid(), name: "Régi nap lista", animalIds: [a["Teszt Egy"]], feedIds: [] })) as { id: string };
-    await expectCode(applyFeedingList(f.aq1, { requestId: rid(), day: "2027-11-10", listId: list.id }, at("2027-11-11", "08:00")), "NOT_TODAY");
+    await expectCode(applyFeedingList(f.aq1, { requestId: rid(), day: "2027-11-12", listId: list.id }, at("2027-11-13", "08:00")), "NOT_TODAY");
   });
 });

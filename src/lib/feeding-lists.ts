@@ -27,7 +27,8 @@ export const createListSchema = z.object({ requestId, name, ...members }).refine
 export const updateListSchema = z.object({ requestId, listId: z.uuid(), name, ...members }).refine(needMembers, { message: NEED_MEMBERS });
 export const archiveListSchema = z.object({ requestId, listId: z.uuid() });
 export const applyListSchema = z.object({
-  requestId,
+  // shorter than the usual 100: the feeds step adds ":feeds" to it, and a longer one would fail after the animals went on
+  requestId: z.string().min(8).max(90),
   clientTimestamp: z.iso.datetime({ offset: true }).optional(),
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   listId: z.uuid(),

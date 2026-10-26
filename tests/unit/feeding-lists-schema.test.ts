@@ -33,5 +33,8 @@ describe("feeding list input", () => {
     expect(updateListSchema.safeParse({ ...ok, listId: A }).success).toBe(true);
     expect(applyListSchema.safeParse({ requestId: "req-00000001", day: "2027-11-08", listId: A }).success).toBe(true);
     expect(applyListSchema.safeParse({ requestId: "req-00000001", day: "tegnap", listId: A }).success).toBe(false);
+    // the feeds step appends ":feeds": a longer id is refused up front, not after the animals were ticked
+    expect(applyListSchema.safeParse({ requestId: "r".repeat(90), day: "2027-11-08", listId: A }).success).toBe(true);
+    expect(applyListSchema.safeParse({ requestId: "r".repeat(91), day: "2027-11-08", listId: A }).success).toBe(false);
   });
 });
