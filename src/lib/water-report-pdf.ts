@@ -7,6 +7,17 @@ import type { ReportValue, WaterReport } from "./water-report";
 const hu = (v: string) => v.replace(".", ",");
 const MARK: Record<string, string> = { LOW: "alacsony", HIGH: "magas" };
 
+// Lili 2026-10-26 (Caparium channel msg 1564304366884626515): row backgrounds and the ink of an out-of-range row.
+// The column header row (Paraméter, Érték, ...) keeps its ink and size and gets the palest background; the value
+// rows stay white (Lili's answer to the first sample, msg 1564305747733651507).
+const BG_POOL = "#A9CBD6"; // the pool (aquarium) name line
+const BG_SECTION = "#C9DDE5"; // the "Napi mérés" / "Heti mérés" line
+const BG_HEADER = "#E6F0F3"; // the column header row under "Napi mérés" / "Heti mérés"
+const INK_LOW = "#161dd6"; // a row whose value is below the reference range
+const INK_HIGH = "#a81715"; // a row whose value is above it
+const LEFT = 48;
+const WIDTH = 499; // 547 - 48, the printable width of the A4 page with the 48 pt margin
+
 function valueText(v: ReportValue): string {
   return `${hu(v.value)}${v.unit === v.parameter ? "" : ` ${v.unit}`}`;
 }
@@ -30,28 +41,41 @@ export async function waterReportPdf(report: WaterReport): Promise<Buffer> {
     doc.fontSize(11).text("Ezen a héten még nincs rögzített vízmérés.");
   }
   const cols = [48, 200, 300, 360, 420];
-  const row = (cells: string[], bold = false) => {
+  /** A text line on a colored band: the band is drawn first, then the text on it, 4 pt from the left edge. */
+  const band = (text: string, size: number, color: string, ink: string) => {
+    const y = doc.y;
+    const h = doc.fontSize(size).heightOfString(text, { width: WIDTH - 8 });
+    doc.save().rect(LEFT, y - 2, WIDTH, h + 4).fill(color).restore();
+    doc.fontSize(size).fillColor(ink).text(text, LEFT + 4, y, { width: WIDTH - 8 });
+    doc.x = LEFT;
+    doc.y = y + h + 4;
+  };
+  const row = (cells: string[], opts: { header?: boolean; reference?: string } = {}) => {
     if (doc.y > 760) doc.addPage();
     const y = doc.y;
-    doc.fontSize(9).fillColor(bold ? "#333" : "#000");
+    if (opts.header) doc.save().rect(LEFT, y - 2, WIDTH, 14).fill(BG_HEADER).restore();
+    const ink = opts.header ? "#333" : opts.reference === "LOW" ? INK_LOW : opts.reference === "HIGH" ? INK_HIGH : "#000";
+    doc.fontSize(9).fillColor(ink);
     cells.forEach((c, i) => doc.text(c, cols[i], y, { width: (cols[i + 1] ?? 547) - cols[i] - 6, lineBreak: false }));
     doc.y = y + 14;
     doc.x = 48;
   };
   for (const p of report.pools) {
     if (doc.y > 700) doc.addPage();
-    doc.moveDown(0.5).fontSize(13).fillColor("#000").text(p.pool, 48);
+    doc.moveDown(0.5);
+    band(p.pool, 13, BG_POOL, "#000");
     if (p.daily.length) {
-      doc.fontSize(10).fillColor("#333").text("Napi mérés", 48);
-      row(["Paraméter", "Érték", "Idő", "Mérte", "Eltérés"], true);
-      for (const v of p.daily) row([v.parameter, valueText(v), v.time, v.by, MARK[v.reference] ?? ""]);
+      band("Napi mérés", 10, BG_SECTION, "#333");
+      row(["Paraméter", "Érték", "Idő", "Mérte", "Eltérés"], { header: true });
+      for (const v of p.daily) row([v.parameter, valueText(v), v.time, v.by, MARK[v.reference] ?? ""], { reference: v.reference });
     }
     if (p.weekly.length) {
-      doc.moveDown(0.3).fontSize(10).fillColor("#333").text("Heti mérés", 48);
-      row(["Paraméter", "Érték", "Nap", "Hígítás", "Eltérés"], true);
+      doc.moveDown(0.3);
+      band("Heti mérés", 10, BG_SECTION, "#333");
+      row(["Paraméter", "Érték", "Nap", "Hígítás", "Eltérés"], { header: true });
       for (const v of p.weekly) {
         const dil = [v.dilution ? `1:${v.dilution}` : "", v.diluentWater ?? ""].filter(Boolean).join(" ");
-        row([v.parameter, valueText(v), v.day, dil, MARK[v.reference] ?? ""]);
+        row([v.parameter, valueText(v), v.day, dil, MARK[v.reference] ?? ""], { reference: v.reference });
       }
     }
   }
