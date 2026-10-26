@@ -221,7 +221,10 @@ export const createPoolSchema = z.object({
 });
 export type CreatePoolInput = z.infer<typeof createPoolSchema>;
 
-export async function createPool(actor: Actor, input: CreatePoolInput, now = new Date()) {
+export async function createPool(actor: Actor, raw: z.input<typeof createPoolSchema>, now = new Date()) {
+  // parsed here too, not only in the route: the code is made capital by the schema, and a caller that skipped it
+  // would store "nagy" next to "NAGY" (the unique index is case-sensitive)
+  const input = createPoolSchema.parse(raw);
   // the admin ROLE, like user management: a SETTINGS=ADMIN override on an aquarist does not add pools
   if (actor.role !== "ADMIN") throw new AppError(403, "ADMIN_ROLE_ONLY", "Új medencét csak adminisztrátor szerepű dolgozó vehet fel.");
   await requireSettingsAdmin(actor);
