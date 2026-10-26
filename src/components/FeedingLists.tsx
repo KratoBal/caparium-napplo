@@ -4,7 +4,7 @@
 // header (ApplyList) and the admin's editor on the timetable page (FeedingListsEditor). The list ticks and adds, never takes
 // off; the server decides every permission.
 import { useState } from "react";
-import { chooserPools, type ChooserAnimal } from "@/lib/day-animals";
+import { chooserPools, sortDayAnimals, type ChooserAnimal } from "@/lib/day-animals";
 import { Msg, useSend, type FeedTypeOpt } from "./FeedingForms";
 
 export type ListOpt = { id: string; name: string };
@@ -80,7 +80,7 @@ function ListForm(p: { list?: ListView; animals: EditAnimal[]; types: FeedTypeOp
       <div className="toolbar">
         <input className="input" aria-label={`${label}: neve`} placeholder="a lista neve" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
-      {chooserPools(p.animals).map((g) => (
+      {chooserPools(sortDayAnimals(p.animals)).map((g) => (
         <div key={g.key} className="pick-block">
           <div className="section-title">
             {g.emoji && <span aria-hidden="true">{g.emoji}</span>}

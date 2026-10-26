@@ -9,7 +9,7 @@
 import type { Dimension } from "@prisma/client";
 import ExcelJS from "exceljs";
 import { prisma } from "../db";
-import { byAnimalOrder } from "../animal-order";
+import { byAnimalOrder, compareAnimals } from "../animal-order";
 import { AppError } from "../errors";
 import { GIVEN } from "../eating-labels";
 import { dayBounds } from "../feeding";
@@ -168,8 +168,7 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
   }
   // per day: the admin's order (card f67b1a06, item 4); a group row has no position of its own and, like the
   // never-placed animals, follows by name
-  const inDay = byAnimalOrder<Row>((a, b) => a.name.localeCompare(b.name, "hu"));
-  const sorted = [...rows.values()].sort((a, b) => a.day.localeCompare(b.day) || inDay(a, b));
+  const sorted = [...rows.values()].sort((a, b) => a.day.localeCompare(b.day) || compareAnimals(a, b));
 
   // column layout: A date, B species, C name, D label column, feeds, Egyéb 1..5, SUM/Állat per unit, notes
   const FIRST = 5;
@@ -415,7 +414,7 @@ export async function buildWithdrawalWorkbook(f: FeedingExcelFilter): Promise<{ 
 /** EGY-13: the report as Excel: one sheet by day, one by recipient, per feed and base unit. */
 export async function buildReportWorkbook(f: { from: string; to: string; poolId: string | null; animalId: string | null }): Promise<{ buffer: Buffer; rows: number }> {
   const log = await feedingLog(f);
-  const r = breakdown(log.entries, log.days, log.filtered);
+  const r = breakdown(log.entries, log.days, log.filtered, log.recipientOrder);
   const units = [...new Set(r.columns.filter((c) => !c.group).map((c) => c.unit))];
   const groupUnits = [...new Set(r.columns.filter((c) => c.group).map((c) => c.unit))];
   const wb = new ExcelJS.Workbook();

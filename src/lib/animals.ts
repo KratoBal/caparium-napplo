@@ -6,7 +6,7 @@
 // Permissions (Lili 2026-10-26, msg 1564214896453750805, overriding NY-20): every lifecycle event is admin
 // work; an earlier date also needs a reason. The rule is lifecycle-access.ts.
 
-import { byAnimalOrder, orderAssignments } from "./animal-order";
+import { compareAnimals, orderAssignments } from "./animal-order";
 import { lifecycleAccessProblem, lifecycleInvalidateProblem } from "./lifecycle-access";
 import type { LifecycleEvent, LifecycleType, Sex } from "@prisma/client";
 import { z } from "zod";
@@ -555,8 +555,7 @@ export async function listAnimals(at = new Date()): Promise<AnimalRow[]> {
       sortOrder: a.sortOrder,
     };
   });
-  const placed = byAnimalOrder<AnimalRow>((x, y) => x.name.localeCompare(y.name, "hu"));
-  return rows.sort((x, y) => Number(y.alive) - Number(x.alive) || placed(x, y));
+  return rows.sort((x, y) => Number(y.alive) - Number(x.alive) || compareAnimals(x, y));
 }
 
 // ---------------------------------------------------------------------------
@@ -585,7 +584,7 @@ export async function setAnimalOrder(actor: Actor, raw: AnimalOrderInput) {
     const nameOf = (a: (typeof all)[number]) => (a.names.find((n) => !n.validTo) ?? a.names.at(-1))?.name ?? "";
     const current = [...all]
       .map((a) => ({ id: a.id, name: nameOf(a), sortOrder: a.sortOrder }))
-      .sort(byAnimalOrder((x, y) => x.name.localeCompare(y.name, "hu")));
+      .sort(compareAnimals);
     const next = orderAssignments(
       input.ids,
       current.map((a) => a.id),

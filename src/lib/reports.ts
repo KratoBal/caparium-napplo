@@ -4,6 +4,7 @@
 // filter the group items stand in their own columns and their own totals (review of #17, as the log's
 // total in #11): a day's sum must not read as if the animal had eaten the group's food alone.
 
+import { compareAnimals } from "./animal-order";
 import type { LogEntry } from "./feeding-log";
 
 export const GROUP_MARK = " [csoportos tétel]";
@@ -26,7 +27,7 @@ function line(label: string, entries: LogEntry[], split: boolean): ReportLine {
 }
 
 /** `filtered`: an animal or pool filter is on, so the group items are kept apart. */
-export function breakdown(entries: LogEntry[], days: string[], filtered = false) {
+export function breakdown(entries: LogEntry[], days: string[], filtered = false, recipientOrder?: ReadonlyMap<string, number | null>) {
   const columns: Column[] = [
     ...new Map(
       entries.map((e) => {
@@ -37,7 +38,10 @@ export function breakdown(entries: LogEntry[], days: string[], filtered = false)
     ).values(),
   ].sort((a, b) => Number(a.group) - Number(b.group) || a.feed.localeCompare(b.feed, "hu") || a.unit.localeCompare(b.unit));
   const byDay = days.map((d) => line(d, entries.filter((e) => e.day === d), filtered));
-  const recipients = [...new Set(entries.map((e) => e.recipient))].sort((a, b) => a.localeCompare(b, "hu"));
+  // the animals in the admin's order (Lili 2026-10-26, msg 1564402506396598303); without the positions, by name as before
+  const recipients = [...new Set(entries.map((e) => e.recipient))].sort((a, b) =>
+    compareAnimals({ name: a, sortOrder: recipientOrder?.get(a) ?? null }, { name: b, sortOrder: recipientOrder?.get(b) ?? null }),
+  );
   const byRecipient = recipients.map((r) => line(r, entries.filter((e) => e.recipient === r), filtered));
   return { columns, byDay, byRecipient, total: line("Összesen", entries, filtered), filtered };
 }

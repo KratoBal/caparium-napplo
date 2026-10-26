@@ -514,6 +514,14 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   // step 3. Lili 2026-10-21 11:44 UTC (a): a feed weighed AND counted takes both units
   const sheet = page.getByTestId("feeding-sheet");
   await expect(sheet.getByRole("columnheader", { name: "Litopenaeus vannamei (g + db)" })).toBeVisible();
+  // Lili 2026-10-26 (msg 1564403940320346223): "Mai tételek" is last, as a summary
+  const headings = await page.locator("main h2").allTextContents();
+  const place = (start: string) => headings.findIndex((h) => h.startsWith(start));
+  expect(place("Ki eszik ma")).toBeGreaterThanOrEqual(0);
+  expect(place("A nap takarmányai")).toBeGreaterThan(place("Ki eszik ma"));
+  expect(place("Takarmánylap")).toBeGreaterThan(place("A nap takarmányai"));
+  expect(place("Új tétel")).toBeGreaterThan(place("Takarmánylap"));
+  expect(place("Mai tételek"), "last").toBeGreaterThan(place("Új tétel"));
   const row = sheet.getByRole("row").filter({ hasText: name });
   const otherRow = sheet.getByRole("row").filter({ hasText: other });
   await row.getByRole("cell", { name, exact: true }).click();
