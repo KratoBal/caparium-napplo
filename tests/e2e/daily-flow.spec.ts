@@ -1190,6 +1190,8 @@ test("feeding lists: the admin composes one, the header's switch and dropdown ma
   await page.waitForLoadState("networkidle");
   await expect(page.getByRole("button", { name: "Lista a terv szerint" }), "the weekly plan's button stays").toBeVisible();
   const pick = page.getByTestId("apply-list");
+  // taking an animal off the day's list that already has an item asks first (R-3); this run may find items from the tests before
+  page.on("dialog", (d) => void d.accept());
   // Lili 2026-10-26 (msg 1564404481708265704): the switch before the dropdown: on = a list can be chosen, off = everything off
   const power = pick.getByRole("switch", { name: "Etetési listák" });
   await power.check();
@@ -1205,8 +1207,7 @@ test("feeding lists: the admin composes one, the header's switch and dropdown ma
   await page.getByLabel("Teszt Kettő a mai listán").check();
   await expect(page.getByLabel("Teszt Kettő a mai listán")).toBeChecked();
 
-  // the switch off: the whole selection goes (an animal with items would ask first: accept)
-  page.on("dialog", (d) => void d.accept());
+  // the switch off: the whole selection goes (the dialog handler above accepts the confirmation)
   await power.uncheck();
   await expect(pick.getByRole("status")).toHaveText("Minden kijelölés kivéve.");
   await expect(pick.getByLabel("Névvel ellátott lista")).toBeDisabled();

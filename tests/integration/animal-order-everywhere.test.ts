@@ -27,7 +27,7 @@ beforeAll(async () => {
   await setSelection(f.aq1, { requestId: rid(), day, animalIds: MINE.map((n) => a[n]), selected: true }, at("07:50"));
   // the items in the DEFAULT order, so the order of the lists cannot be the order they were entered in
   for (const [i, n] of MINE.entries()) {
-    await saveFeedingItem(f.aq1, { requestId: rid(), day, animalId: a[n], feedId: feed["Teszt hal"], quantities: [{ value: "10", unitId: unit.g }] } as Parameters<typeof saveFeedingItem>[1], at(`0${8 + i}:00`));
+    await saveFeedingItem(f.aq1, { requestId: rid(), day, animalId: a[n], feedId: feed["Teszt hal"], quantities: [{ value: "10", unitId: unit.g }] } as Parameters<typeof saveFeedingItem>[1], at(`${String(8 + i).padStart(2, "0")}:00`));
   }
 });
 afterAll(async () => {
