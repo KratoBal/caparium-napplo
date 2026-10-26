@@ -14,6 +14,7 @@ const v = (over: Partial<ReportValue>): ReportValue => ({
   time: "08:06",
   by: "TA",
   reference: "IN_RANGE",
+  range: null,
   dilution: null,
   diluentWater: null,
   ...over,
