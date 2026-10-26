@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { NewUserForm, PoolRow, PoolVolumeForm, ReferenceRow, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
+import { NewPoolForm, NewUserForm, PoolRow, PoolVolumeForm, ReferenceRow, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
@@ -16,7 +16,7 @@ export default async function SettingsPage() {
   if ((await moduleLevel(prisma, user.id, user.role, "SETTINGS")) !== "ADMIN") redirect("/nincs-jogosultsag");
   const now = new Date();
   const reasons = await reasonsRequired(prisma);
-  const [params, pools, users, feedTypes] = await Promise.all([
+  const [params, pools, users, feedTypes, groups] = await Promise.all([
     prisma.parameter.findMany({
       where: { active: true },
       orderBy: { sortOrder: "asc" },
@@ -40,6 +40,7 @@ export default async function SettingsPage() {
         })
       : Promise.resolve([]),
     prisma.feedType.findMany({ orderBy: { sortOrder: "asc" } }),
+    prisma.measurementGroup.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
   ]);
   return (
     <Shell title="Beállítások" active="settings" user={user}>
@@ -138,6 +139,17 @@ export default async function SettingsPage() {
             </tbody>
           </table>
         </div>
+        {user.role === "ADMIN" && (
+          <div data-testid="new-pool-box">
+            <h3 style={{ marginTop: 20 }}>Új medence</h3>
+            <p className="hint">
+              Név, kód, űrtartalom (liter) és legalább egy mérési csoport kell, az ikon nem kötelező. Csak új medencét vesz fel: a meglévő
+              medencéket, méréseket, neveket és csoporttagságokat nem érinti. A kiválasztott csoport(ok) mérési táblájában a medence a lista
+              végére kerül.
+            </p>
+            <NewPoolForm groups={groups} />
+          </div>
+        )}
         <h3 style={{ marginTop: 20 }}>Űrtartalom</h3>
         <p className="hint">Literben. A vegyszer-kalkulátor ezzel számol, amikor a medencét kiválasztod.</p>
         <table className="log-table" data-testid="pool-volumes">
