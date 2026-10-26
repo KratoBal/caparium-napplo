@@ -5,6 +5,7 @@
 // Quantities are per dimension (pieces and grams never add up, DN-16); a group item keeps the
 // group's quantity and a snapshot of who was selected (R-8: no equal split is invented).
 
+import { sortDayAnimals } from "./day-animals";
 import type { Dimension, FeedingItem, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
@@ -583,7 +584,7 @@ export async function feedingDayView(d: string) {
         orderBy: { createdAt: "asc" },
       })
     : [];
-  const list: DayAnimal[] = animals
+  const unsorted: DayAnimal[] = animals
     .map((a) => {
       const m = pickValid(a.memberships, at) ?? a.memberships.find((x) => x.validFrom < end && (!x.validTo || x.validTo > start));
       const p = pickValid(a.placements, at) ?? a.placements.find((x) => x.validFrom < end && (!x.validTo || x.validTo > start));
@@ -595,8 +596,9 @@ export async function feedingDayView(d: string) {
         poolName: p ? pickValid(p.pool.names, at)?.displayName ?? p.pool.code : null,
         selected: selected.has(a.id),
       };
-    })
-    .sort((x, y) => (x.groupName ?? "~").localeCompare(y.groupName ?? "~", "hu") || x.name.localeCompare(y.name, "hu"));
+    });
+  // by pool, then by name (Lili 2026-10-26, card f67b1a06)
+  const list = sortDayAnimals(unsorted);
   // row totals per recipient in the base unit of each dimension (EGY-06, EGY-08): 1 kg and 500 g are
   // 1500 g, pieces and grams never add up
   const baseOf = new Map((await prisma.unit.findMany({ where: { isBase: true } })).map((u) => [u.dimension, u.symbol]));

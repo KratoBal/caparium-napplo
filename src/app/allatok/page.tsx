@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AnimalActions, AnimalEditForm, InitialAnimalsLoader, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
 import { PlanForm } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
@@ -20,6 +21,9 @@ const SEX = { MALE: "hím", FEMALE: "nőstény", UNKNOWN: "?" } as const;
 // follows from its dated events, and the whole history stays (V-14).
 export default async function AnimalsPage({ searchParams }: { searchParams: Promise<{ allat?: string }> }) {
   const { user, level } = await requireModuleRead("FEEDING");
+  // Lili 2026-10-26 (msg 1564214896453750805): the animal list is seen and managed by admins only for now;
+  // death, transfer and release are recorded by them too. The menu hides the entry, this is the guard.
+  if (user.role !== "ADMIN") redirect("/nincs-jogosultsag");
   const sp = await searchParams;
   const now = new Date();
   const [animals, groups, pools, species] = await Promise.all([

@@ -48,15 +48,28 @@ describe("lifecycle (DAT-05, T-09)", () => {
     expect((await openPlacement(id))?.poolId).toBe(f.pool("NAGY"));
   });
 
-  it("an aquarist moves an animal today; an earlier day needs an admin and a reason (NY-20 default)", async () => {
+  // Lili 2026-10-26 09:51 UTC (Caparium channel msg 1564214896453750805) overrides NY-20 ("an aquarist moves an
+  // animal today"): the animal list is seen and managed by admins only, so every lifecycle event is admin work.
+  it("Lili 10-26: an aquarist records no lifecycle event at all (transfer, death, release), an admin does", async () => {
     const id = await arrive("Költöző");
-    await createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KARANTEN"), occurredAtLocal: "2026-02-03T08:00" }, at("2026-02-03", "08:05"));
+    for (const event of [
+      { type: "TRANSFER" as const, toPoolId: f.pool("KARANTEN") },
+      { type: "DEATH" as const },
+      { type: "RELEASE" as const },
+    ])
+      await expectCode(
+        createLifecycleEvent(f.aq1, { requestId: rid(), animalId: id, occurredAtLocal: "2026-02-03T08:00", ...event }, at("2026-02-03", "08:05")),
+        "ADMIN_ONLY",
+      );
+    // nothing was written by the refused calls
+    expect(await prisma.lifecycleEvent.count({ where: { animalId: id } })).toBe(1);
+    await createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KARANTEN"), occurredAtLocal: "2026-02-03T08:00" }, at("2026-02-03", "08:05"));
     expect((await openPlacement(id))?.poolId).toBe(f.pool("KARANTEN"));
     expect(await prisma.placement.count({ where: { animalId: id } })).toBe(2);
-    await expectCode(
-      createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("NAGY"), occurredAtLocal: "2026-02-03T20:00" }, at("2026-02-04", "08:00")),
-      "NOT_TODAY",
-    );
+  });
+
+  it("an admin's transfer for an earlier day needs a reason when the reasons are on", async () => {
+    const id = await arrive("Késői Költöző");
     await withReasons(() =>
       expectCode(
         createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("NAGY"), occurredAtLocal: "2026-02-03T20:00" }, at("2026-02-04", "08:00")),
@@ -67,11 +80,11 @@ describe("lifecycle (DAT-05, T-09)", () => {
 
   it("after a death nothing is open, a later event is refused and nothing is written", async () => {
     const id = await arrive("Elhulló");
-    await createLifecycleEvent(f.aq1, { requestId: rid(), type: "DEATH", animalId: id, occurredAtLocal: "2026-02-05T07:00" }, at("2026-02-05", "07:30"));
+    await createLifecycleEvent(f.admin, { requestId: rid(), type: "DEATH", animalId: id, occurredAtLocal: "2026-02-05T07:00" }, at("2026-02-05", "07:30"));
     expect(await openPlacement(id)).toBeNull();
     const events = await prisma.lifecycleEvent.count({ where: { animalId: id } });
     await expectCode(
-      createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KIS"), occurredAtLocal: "2026-02-05T09:00" }, at("2026-02-05", "09:05")),
+      createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KIS"), occurredAtLocal: "2026-02-05T09:00" }, at("2026-02-05", "09:05")),
       "LIFECYCLE_INVALID",
     );
     expect(await prisma.lifecycleEvent.count({ where: { animalId: id } })).toBe(events);
@@ -81,11 +94,11 @@ describe("lifecycle (DAT-05, T-09)", () => {
 
   it("invalidating a death (by its recorder, today) reopens the placement; the arrival under later events cannot go", async () => {
     const id = await arrive("Tévedés");
-    const d = await createLifecycleEvent(f.aq1, { requestId: rid(), type: "DEATH", animalId: id, occurredAtLocal: "2026-02-06T07:00" }, at("2026-02-06", "07:30"));
-    await invalidateLifecycleEvent(f.aq1, d.eventId, { requestId: rid(), expectedVersion: 1, reason: "rossz állatra rögzítve" }, at("2026-02-06", "08:00"));
+    const d = await createLifecycleEvent(f.admin, { requestId: rid(), type: "DEATH", animalId: id, occurredAtLocal: "2026-02-06T07:00" }, at("2026-02-06", "07:30"));
+    await invalidateLifecycleEvent(f.admin, d.eventId, { requestId: rid(), expectedVersion: 1, reason: "rossz állatra rögzítve" }, at("2026-02-06", "08:00"));
     expect((await openPlacement(id))?.poolId).toBe(f.pool("NAGY"));
     const arrival = await prisma.lifecycleEvent.findFirstOrThrow({ where: { animalId: id, type: "ARRIVAL" } });
-    await createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KIS"), occurredAtLocal: "2026-02-06T09:00" }, at("2026-02-06", "09:05"));
+    await createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KIS"), occurredAtLocal: "2026-02-06T09:00" }, at("2026-02-06", "09:05"));
     await expectCode(
       invalidateLifecycleEvent(f.admin, arrival.id, { requestId: rid(), expectedVersion: 1, reason: "teszt" }, at("2026-02-06", "10:00")),
       "LIFECYCLE_INVALID",
@@ -114,8 +127,8 @@ describe("lifecycle (DAT-05, T-09)", () => {
       await held;
     });
     await isLocked;
-    const death = createLifecycleEvent(f.aq1, { requestId: rid(), type: "DEATH", animalId: id, occurredAtLocal: `${d}T09:00` }, at(d, "09:15"));
-    const move = createLifecycleEvent(f.aq2, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KIS"), occurredAtLocal: `${d}T09:10` }, at(d, "09:15"));
+    const death = createLifecycleEvent(f.admin, { requestId: rid(), type: "DEATH", animalId: id, occurredAtLocal: `${d}T09:00` }, at(d, "09:15"));
+    const move = createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KIS"), occurredAtLocal: `${d}T09:10` }, at(d, "09:15"));
     const settled = Promise.allSettled([death, move]);
     const early = await Promise.race([settled.then(() => "done"), new Promise((r) => setTimeout(() => r("waiting"), 500))]);
     expect(early, "an event change must wait for the animal's lock").toBe("waiting");
@@ -132,9 +145,9 @@ describe("lifecycle (DAT-05, T-09)", () => {
   it("one valid event per animal and instant", async () => {
     const d = "2026-02-11";
     const id = await arrive("Egy Pillanat", "2026-02-09");
-    await createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KIS"), occurredAtLocal: `${d}T09:00` }, at(d, "09:05"));
+    await createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KIS"), occurredAtLocal: `${d}T09:00` }, at(d, "09:05"));
     await expectCode(
-      createLifecycleEvent(f.aq1, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("NAGY"), occurredAtLocal: `${d}T09:00` }, at(d, "09:06")),
+      createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("NAGY"), occurredAtLocal: `${d}T09:00` }, at(d, "09:06")),
       "SAME_INSTANT",
     );
   });

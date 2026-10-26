@@ -3,9 +3,10 @@
 // animal is and which group it belongs to is DERIVED: on every event change the placements and the
 // memberships of that animal are rebuilt from its valid events, in the same transaction, so a later
 // date fix or an invalidation can never leave them contradicting the events.
-// Permissions (NY-20 default, R-1): an aquarist records today's events; an earlier date is admin
-// work with a reason; an arrival (a new animal) is master data, admin only.
+// Permissions (Lili 2026-10-26, msg 1564214896453750805, overriding NY-20): every lifecycle event is admin
+// work; an earlier date also needs a reason. The rule is lifecycle-access.ts.
 
+import { lifecycleAccessProblem } from "./lifecycle-access";
 import type { LifecycleEvent, LifecycleType, Sex } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
@@ -144,9 +145,8 @@ export async function createLifecycleEvent(actor: Actor, input: LifecycleInput, 
   const prior = await prisma.lifecycleEvent.findUnique({ where: { requestId: input.requestId } });
   if (prior) return { eventId: prior.id, animalId: prior.animalId, replayed: true };
   const level = await moduleLevel(prisma, actor.id, actor.role, "FEEDING");
-  if (input.type === "ARRIVAL" && level !== "ADMIN") {
-    throw new AppError(403, "ADMIN_ONLY", "Új állatot (érkezést) csak adminisztrátor rögzíthet.");
-  }
+  const denied = lifecycleAccessProblem(level, input.type);
+  if (denied) throw new AppError(403, "ADMIN_ONLY", denied);
   const clientTs = input.clientTimestamp ? new Date(input.clientTimestamp) : null;
   const eff = effectiveNow(serverNow, clientTs, 30, 48);
   const occurredAt = input.occurredAtLocal ? resolveLocalDateTime(input.occurredAtLocal)?.instant : eff.now;

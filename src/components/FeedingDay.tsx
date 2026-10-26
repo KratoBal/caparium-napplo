@@ -5,6 +5,7 @@
 // what is typed (not saved yet) to the row's saved total, per base unit, never pieces to grams.
 import { useCallback, useState } from "react";
 import { deviates } from "@/lib/calc-math";
+import { chooserPools } from "@/lib/day-animals";
 import { GIVEN } from "@/lib/eating-labels";
 import type { DayAnimal } from "@/lib/feeding";
 import { DayFeeds, FinalizeList, GroupSelect, InvalidateButton, ItemForm, SelectBox, type FeedOpt, type FeedTypeOpt, type Recipient } from "./FeedingForms";
@@ -51,13 +52,8 @@ export function FeedingDay(props: {
   const [draft, setDraft] = useState<Record<string, number>>({});
   const onDraft = useCallback((d: Record<string, number>) => setDraft(d), []);
   const names = new Map(animals.map((a) => [a.id, a.name]));
-  // the chooser's lines: the animals arrive sorted by group, then by name
-  const chooserGroups: { key: string; groupId: string | null; name: string | null; animals: DayAnimal[] }[] = [];
-  for (const a of animals) {
-    const last = chooserGroups.at(-1);
-    if (last && last.groupId === a.groupId) last.animals.push(a);
-    else chooserGroups.push({ key: a.groupId ?? "nincs", groupId: a.groupId, name: a.groupName, animals: [a] });
-  }
+  // the chooser's lines (Lili 2026-10-26, card f67b1a06): one line per POOL, the animals arrive sorted by pool, then by name
+  const chooserGroups = chooserPools(animals);
   const itemsFor = (key: string) => items.filter((i) => (i.animalId ?? `g:${i.groupId}`) === key);
   const isRecipient = (key: string) => recipients.some((r) => r.key === key);
   const rowProps = (key: string) =>
@@ -92,17 +88,18 @@ export function FeedingDay(props: {
         <p className="hint">Közös lista: bármelyik akvarista módosíthatja. Akit a kész listán nem választottak ki, a nap lezárásakor koplalónapot kap.</p>
         <div data-testid="animal-chooser">
           {chooserGroups.map((g) => (
-            <div key={g.key} className="toolbar" data-testid={`group-head-${g.name ?? "nincs"}`}>
+            <div key={g.key} className="toolbar" data-testid={`group-head-${g.name}`}>
               <span className="hint" style={{ minWidth: 160 }}>
-                {g.name ?? "Csoport nélkül"}
+                {g.name}
               </span>
               {g.animals.map((a) => (
                 <label key={a.id} className="check">
                   <SelectBox day={day} animalId={a.id} name={a.name} selected={a.selected} disabled={!editable} />
                   {a.name}
+                  {a.groupName && <small className="hint"> ({a.groupName})</small>}
                 </label>
               ))}
-              {editable && g.groupId && <GroupSelect day={day} name={g.name ?? "?"} memberIds={g.animals.map((a) => a.id)} />}
+              {editable && <GroupSelect day={day} name={g.name} memberIds={g.animals.map((a) => a.id)} />}
             </div>
           ))}
         </div>
@@ -112,6 +109,14 @@ export function FeedingDay(props: {
           </div>
         )}
       </div>
+      {props.feedTypes && (
+        <div className="card">
+          <h2>A nap takarmányai</h2>
+          <p className="hint">A második lépés: mit kapnak ma az állatok. A takarmánylap oszlopai és a tétel takarmány-listája ezek lesznek; ha nincs kiválasztva semmi, minden takarmány választható.</p>
+          <DayFeeds day={day} types={props.feedTypes} chosen={props.dayFeedIds ?? []} editable={editable} />
+        </div>
+      )}
+      {/* Lili 2026-10-26 (card f67b1a06, item 2): "Mai tételek" comes below "A nap takarmányai" */}
       <div className="card">
         <h2>Mai tételek</h2>
         <p className="hint">Az aznapi állatok tételei, összege és referenciája. Kattints egy sorra: az új tétel annak szól.</p>
@@ -168,13 +173,6 @@ export function FeedingDay(props: {
         </div>
       </div>
 
-      {props.feedTypes && (
-        <div className="card">
-          <h2>A nap takarmányai</h2>
-          <p className="hint">A második lépés: mit kapnak ma az állatok. A takarmánylap oszlopai és a tétel takarmány-listája ezek lesznek; ha nincs kiválasztva semmi, minden takarmány választható.</p>
-          <DayFeeds day={day} types={props.feedTypes} chosen={props.dayFeedIds ?? []} editable={editable} />
-        </div>
-      )}
       {/* keyed by the day: DayNav changes ?nap= on the same route, which keeps a client component's state, so a
           draft typed on one day would show (and save) on the next; a new day is a new sheet (barracuda #45) */}
       <FeedingSheet key={day} day={day} editable={editable} recipients={recipients} feeds={props.sheetFeeds ?? []} items={items} active={active} onActive={setActive} />
