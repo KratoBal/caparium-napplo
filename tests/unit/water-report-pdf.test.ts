@@ -2,7 +2,7 @@
 // (a built-in PDF font would give "P" and "p"), and a pool's daily and weekly values in their rows.
 import { describe, expect, it } from "vitest";
 import type { ReportValue } from "@/lib/water-report";
-import { waterReportPdf } from "@/lib/water-report-pdf";
+import { rangeText, waterReportPdf } from "@/lib/water-report-pdf";
 import { readPdfColors } from "../support/pdf-colors";
 import { readPdfLines } from "../support/pdf-readback";
 
@@ -14,6 +14,7 @@ const v = (over: Partial<ReportValue>): ReportValue => ({
   time: "08:06",
   by: "TA",
   reference: "IN_RANGE",
+  range: null,
   dilution: null,
   diluentWater: null,
   ...over,
@@ -27,8 +28,11 @@ describe("water report PDF", () => {
       pools: [
         {
           pool: "Kismedence ŐŰőű áéíóúöü",
-          daily: [v({ parameter: "Hőmérséklet", value: "24.5", unit: "°C" }), v({ parameter: "Sűrűség", value: "35.1", unit: "ppt", reference: "HIGH" })],
-          weekly: [v({ parameter: "NO3", value: "8.4", unit: "ppm", day: "2027-09-07", dilution: 10, diluentWater: "RO" })],
+          daily: [
+            v({ parameter: "Hőmérséklet", value: "24.5", unit: "°C", range: { min: "23", max: "26", unit: "°C" } }),
+            v({ parameter: "Sűrűség", value: "35.1", unit: "ppt", reference: "HIGH", range: { min: "33", max: "36", unit: "ppt" } }),
+          ],
+          weekly: [v({ parameter: "NO3", value: "8.4", unit: "ppm", day: "2027-09-07", dilution: 10, diluentWater: "RO", range: { min: null, max: "10", unit: "ppm" } })],
         },
       ],
     });
@@ -36,29 +40,35 @@ describe("water report PDF", () => {
     const lines = await readPdfLines(pdf);
     expect(lines).toContain("Cápasuli vízmérés - 2027-09-08");
     expect(lines).toContain("Kismedence ŐŰőű áéíóúöü");
-    // no date and no time column (Lili 2026-10-26): the daily row is parameter, value, measurer; the weekly one
-    // parameter, value, dilution
-    expect(lines).toContain("Hőmérséklet 24,5 °C TA");
-    expect(lines).toContain("Sűrűség 35,1 ppt TA magas");
-    expect(lines).toContain("NO3 8,4 ppm 1:10 RO");
+    // no date and no time column (Lili 2026-10-26); the same six columns in both tables (msg 1564363895722737696): parameter,
+    // value, measurer, dilution, reference, deviation; an empty cell where there is none
+    expect(lines).toContain("Hőmérséklet 24,5 °C TA 23 – 26 °C");
+    expect(lines).toContain("Sűrűség 35,1 ppt TA 33 – 36 ppt magas");
+    expect(lines).toContain("NO3 8,4 ppm TA 1:10 RO ≤ 10 ppm");
   });
 
-  // Lili 2026-10-26 (Caparium channel msg 1564350735267921991, point 1): the date and the time are not columns any more.
-  // The control: the same report with the old columns would carry "08:06" and "2027-09-07" in a row; the only place
-  // the day may stand is the title and the line under it.
-  it("has no date or time column, and the column header rows say so", async () => {
+  // Lili 2026-10-26 (msg 1564363895722737696): the measurer and the dilution are columns of their own, in the same place in both
+  // tables, so a weekly row without a dilution has an EMPTY cell and the reference stays in its column
+  it("keeps every cell in its column: the dilution cell is empty where there is none, and the measurer is in both tables", async () => {
     const lines = await readPdfLines(
       await waterReportPdf({
         day: "2027-09-08",
         weekFrom: "2027-09-06",
-        pools: [{ pool: "Nagymedence", daily: [v({ parameter: "pH" })], weekly: [v({ parameter: "NO3", day: "2027-09-07", dilution: 10, diluentWater: "RO" })] }],
+        pools: [
+          {
+            pool: "Korallos",
+            daily: [v({ parameter: "pH", value: "8.3", by: "LI", range: { min: "8", max: "8.4", unit: "pH" } })],
+            weekly: [
+              v({ parameter: "Mg", value: "1345", unit: "ppm", by: "LI", range: { min: "1250", max: "1400", unit: "ppm" } }),
+              v({ parameter: "PO4", value: "0.98", unit: "ppm", by: "LI", reference: "HIGH", dilution: 10, diluentWater: "SW", range: { min: null, max: "0.1", unit: "ppm" } }),
+            ],
+          },
+        ],
       }),
     );
-    expect(lines.filter((l) => l.includes("08:06"))).toEqual([]);
-    expect(lines.filter((l) => l.includes("2027-09-07"))).toEqual([]);
-    expect(lines).toContain("Paraméter Érték Mérte Eltérés");
-    expect(lines).toContain("Paraméter Érték Hígítás Eltérés");
-    expect(lines.some((l) => l.split(" ").some((w) => w === "Idő" || w === "Nap"))).toBe(false);
+    expect(lines).toContain("pH 8,3 LI 8 – 8,4");
+    expect(lines).toContain("Mg 1345 ppm LI 1250 – 1400 ppm");
+    expect(lines).toContain("PO4 0,98 ppm LI 1:10 SW ≤ 0,1 ppm magas");
   });
 
   it("an empty week says so instead of an empty page", async () => {
@@ -135,5 +145,19 @@ describe("water report PDF", () => {
         expect(bandPages("#c9dde5"), `section bands, ${daily} rows`).toEqual(sections);
       }
     });
+  });
+});
+
+describe("the reference text", () => {
+  const r = (parameter: string, range: ReportValue["range"]) => rangeText(v({ parameter, unit: parameter, range }));
+  it("is 'min – max unit', '≤ max unit' or '≥ min unit', with the Hungarian comma", () => {
+    expect(rangeText(v({ parameter: "Sűrűség", range: { min: "33", max: "36", unit: "ppt" } }))).toBe("33 – 36 ppt");
+    expect(rangeText(v({ parameter: "PO4", range: { min: null, max: "0.1", unit: "ppm" } }))).toBe("≤ 0,1 ppm");
+    expect(rangeText(v({ parameter: "KH", range: { min: "7", max: null, unit: "dKH" } }))).toBe("≥ 7 dKH");
+  });
+  it("leaves the unit out where it is the parameter's own name (pH), as the value does, and is empty without a range", () => {
+    expect(r("pH", { min: "8", max: "8.4", unit: "pH" })).toBe("8 – 8,4");
+    expect(r("pH", null)).toBe("");
+    expect(r("pH", { min: null, max: null, unit: "pH" })).toBe("");
   });
 });

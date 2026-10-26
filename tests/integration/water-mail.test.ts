@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import type { MailSender, OutgoingMail } from "@/lib/mail";
+import { setReference } from "@/lib/admin";
 import { createMeasurement } from "@/lib/measurements";
 import { sendWaterReport, setWaterReportRecipient } from "@/lib/water-mail";
 import { waterReport, weekStart } from "@/lib/water-report";
@@ -43,6 +44,7 @@ describe("the water report", () => {
   it("today's latest daily value and the week's latest weekly value per pool; a pool with nothing is left out", async () => {
     expect(weekStart("2027-09-08")).toBe("2027-09-06"); // a Wednesday -> its Monday
     expect(weekStart("2027-09-12")).toBe("2027-09-06"); // a Sunday -> the same week's Monday
+    await setReference(f.admin, { requestId: rid(), parameterId: f.param("NO3"), poolId: f.pool("NAGY"), min: null, max: "7", mode: "change" }, cest("2027-09-01T10:00"));
     await measure("NAPI_NAGY", "NAGY", "TEMP", "24,1", "2027-09-08T07:00");
     await measure("NAPI_NAGY", "NAGY", "TEMP", "24,6", "2027-09-08T15:00", { newRound: true }); // a later round of the day wins
     await measure("NAPI_NAGY", "NAGY", "PH", "8,1", "2027-09-07T08:00"); // yesterday: not a daily value of today
@@ -51,6 +53,13 @@ describe("the water report", () => {
     await measure("HETI", "KIS", "KH", "8,2", "2027-09-03T09:00"); // last week: out
     const r = await waterReport("2027-09-08");
     expect(r.weekFrom).toBe("2027-09-06");
+    // the reference of a value is the range it was judged against: the POOL's own if it has one, else the common one
+    // (Lili 2026-10-26, msg 1564363895722737696). Nagymedence gets its own NO3 range; its TEMP stays the common one.
+    const commonTemp = await prisma.referenceRange.findFirstOrThrow({ where: { parameterId: f.param("TEMP"), poolId: null, validTo: null }, include: { unit: true } });
+    const tempRange = r.pools.find((p) => p.pool === "Nagymedence")!.daily[0]!.range;
+    expect(tempRange).toEqual({ min: commonTemp.min?.toString() ?? null, max: commonTemp.max?.toString() ?? null, unit: commonTemp.unit.symbol });
+    const no3 = r.pools.find((p) => p.pool === "Nagymedence")!.weekly[0]!.range;
+    expect(no3).toEqual({ min: null, max: "7", unit: "ppm" });
     const nagy = r.pools.find((p) => p.pool === "Nagymedence")!;
     expect(nagy.daily.map((v) => [v.parameter, v.value, v.time])).toEqual([["Hőmérséklet", "24.6", "15:00"]]);
     expect(nagy.weekly.map((v) => [v.parameter, v.value, v.day, v.dilution, v.diluentWater])).toEqual([["NO3", "8.4", "2027-09-07", 10, "RO"]]);
@@ -91,7 +100,8 @@ describe("the recipient and the sending", () => {
     expect([pdf.filename, pdf.contentType]).toEqual(["Cápasuli vízmérés - 2027-09-08.pdf", "application/pdf"]);
     const lines = await readPdfLines(pdf.content);
     expect(lines).toContain("Nagymedence");
-    expect(lines).toContain("Hőmérséklet 24,6 °C AE");
+    // parameter, value, measurer, then the reference (the common TEMP range here)
+    expect(lines.some((l) => l.startsWith("Hőmérséklet 24,6 °C AE "))).toBe(true);
     expect(lines).toContain("Cápasuli vízmérés - 2027-09-08");
     const audit = await prisma.auditEntry.findFirstOrThrow({ where: { entityType: "WaterReportMail", entityId: "2027-09-08" } });
     expect([audit.action, audit.userId]).toEqual(["EXPORT", f.aq1.id]);

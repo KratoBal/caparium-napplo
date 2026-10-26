@@ -23,6 +23,11 @@ export type ReportValue = {
   time: string;
   by: string;
   reference: ReferenceStatus;
+  /**
+   * The range the value was judged against (Lili 2026-10-26, msg 1564363895722737696): the one stored with the measurement,
+   * which referenceAt picked as the POOL's own range if it has one, else the common one. null = no range.
+   */
+  range: { min: string | null; max: string | null; unit: string } | null;
   dilution: number | null;
   diluentWater: string | null;
 };
@@ -70,6 +75,13 @@ export async function waterReport(day: string): Promise<WaterReport> {
     time: localTimeOf(m.measuredAt),
     by: mono.monogram(m.responsibleUserId, m.measuredAt),
     reference: referenceOf(m),
+    range: m.referenceRange
+      ? {
+          min: m.referenceRange.min === null ? null : canonicalDecimal(m.referenceRange.min),
+          max: m.referenceRange.max === null ? null : canonicalDecimal(m.referenceRange.max),
+          unit: m.referenceRange.unit.symbol,
+        }
+      : null,
     dilution: m.dilution,
     diluentWater: m.diluentWater,
   });
