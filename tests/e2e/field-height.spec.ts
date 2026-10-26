@@ -34,7 +34,9 @@ const PAGES = [
 // .cell-input: the measurement cell is the page's main input, larger on purpose (56px).
 // .meta-select: the small RO/SW and dilution pickers under a measurement cell (40px).
 // .helper*: the floating helper in the corner is not part of a form row.
-const OWN_SIZE = ".cell-input, .meta-select, .helper, .helper *, .helper-on";
+// .tab-picture: the two group buttons of the daily water page carry a picture above the text (Lili 2026-10-26),
+// so they are taller than a plain tab on purpose; the plain tabs (weekly page and the rest) stay at 48px.
+const OWN_SIZE = ".cell-input, .meta-select, .helper, .helper *, .helper-on, .tab-picture";
 
 type Control = { what: string; height: number; ownSize: boolean; native: boolean };
 
