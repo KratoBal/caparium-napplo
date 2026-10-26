@@ -12,6 +12,11 @@ export default defineConfig({
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
+    // The browser runs in the zoo's zone, as the tablets do. The forms default to the browser's own date and time, the server's
+    // business day is Europe/Budapest, and a CI runner is in UTC: from local midnight to one o'clock (two in summer) the form
+    // offered yesterday and the server answered "Korábbi napot csak adminisztrátor módosíthat" (dosing, helper, animals; measured
+    // on #73 and #74, 2026-10-27 00:2x local), and the tests that compute today in Budapest disagreed with the page.
+    timezoneId: "Europe/Budapest",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
