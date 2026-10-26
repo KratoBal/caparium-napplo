@@ -40,6 +40,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .nav { grid-row: 2; grid-column: 1; background: var(--c-nav); color: var(--c-white); padding: 24px 12px; display: flex; flex-direction: column; gap: 6px; }
 .nav a, .nav span { display: flex; align-items: center; min-height: var(--touch); padding: 0 16px; border-radius: var(--radius-sm); color: var(--c-white); text-decoration: none; font-size: 15px; }
 .nav a.active { background: var(--c-primary); font-weight: 600; }
+/* Label colors of two menu groups (Lili 2026-10-26): water measurement and feeding. Also on the active entry. */
+.nav a.nav-water { color: #a8dde0; }
+.nav a.nav-feed { color: #ffcfc2; }
 .nav span.disabled { color: #99b8bf; }
 .nav small { font-size: 11px; margin-left: 6px; }
 .nav-foot { margin-top: auto; padding: 16px; font-size: 11px; letter-spacing: 0.06em; color: #99b8bf; font-weight: 600; }
