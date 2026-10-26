@@ -9,6 +9,7 @@ import { hashPassword } from "./auth";
 import { prisma, type Tx } from "./db";
 import { compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
+import { emojiField } from "./icons";
 import { FIRST_NAME_FROM, moduleLevel, validAt } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
@@ -197,6 +198,61 @@ export async function renamePool(actor: Actor, input: PoolNameInput, now = new D
     });
     return { replayed: false };
   });
+}
+
+// ---------------------------------------------------------------------------
+// A new pool (Lili 2026-10-26, Caparium channel msg 1564351191281049815, point 3; Balázs "Mehet" 1564352369205186581):
+// the admin adds a pool with its name, code and volume, and optionally an icon. It ONLY adds a row: no existing pool,
+// measurement or name is touched, and nothing is deleted. The pool is not in any measurement group yet (the group
+// membership is the starting data's, base-data.ts), so it takes no measurements until that is decided.
+// ---------------------------------------------------------------------------
+
+export const createPoolSchema = z.object({
+  requestId,
+  name: exportSafe(z.string().trim().min(2).max(60)),
+  // the internal, never shown key, in the shape of the starting data's codes (NAGY, KIS_SOZO); typed in any case
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z][A-Z0-9_]{1,29}$/, "A kód 2–30 karakter: nagybetű, szám, alsó vonás, betűvel kezdődik."),
+  volumeLiters: z.string().trim().min(1, "Az űrtartalom kötelező (liter).").max(32),
+  emoji: emojiField.optional(),
+});
+export type CreatePoolInput = z.infer<typeof createPoolSchema>;
+
+export async function createPool(actor: Actor, input: CreatePoolInput, now = new Date()) {
+  // the admin ROLE, like user management: a SETTINGS=ADMIN override on an aquarist does not add pools
+  if (actor.role !== "ADMIN") throw new AppError(403, "ADMIN_ROLE_ONLY", "Új medencét csak adminisztrátor szerepű dolgozó vehet fel.");
+  await requireSettingsAdmin(actor);
+  const volume = parseDecimalInput(input.volumeLiters);
+  if (volume === null || compareDecimal(volume, "0") <= 0) throw new AppError(422, "INVALID_VOLUME", "Az űrtartalom pozitív szám legyen (liter).");
+  if (await replayed(input.requestId)) return { replayed: true };
+  const emoji = input.emoji ? input.emoji : null;
+  try {
+    return await prisma.$transaction(async (tx) => {
+      // the same name check as a rename; there is no pool of its own to leave out yet
+      const clash = await tx.poolName.findFirst({
+        where: { displayName: { equals: input.name, mode: "insensitive" }, pool: { active: true }, ...validAt(now) },
+      });
+      if (clash) throw new AppError(409, "NAME_TAKEN", "Ilyen nevű aktív medence már van.");
+      const pool = await tx.pool.create({
+        data: { code: input.code, emoji, volumeLiters: volume, names: { create: { displayName: input.name, validFrom: FIRST_NAME_FROM } } },
+      });
+      await writeAudit(tx, {
+        userId: actor.id,
+        action: "MASTER_CHANGE",
+        entityType: "Pool",
+        entityId: pool.id,
+        changes: diffFields(null, { code: pool.code, displayName: input.name, volumeLiters: volume, emoji }),
+        requestId: input.requestId,
+      });
+      return { replayed: false, id: pool.id };
+    });
+  } catch (e) {
+    if (isUniqueViolation(e, "code")) throw new AppError(409, "CODE_TAKEN", "Ez a medencekód már foglalt.");
+    throw e;
+  }
 }
 
 // ---------------------------------------------------------------------------

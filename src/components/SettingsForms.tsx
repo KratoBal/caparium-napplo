@@ -31,12 +31,14 @@ function useSave() {
   const router = useRouter();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  async function save(url: string, method: string, body: Record<string, unknown>, okText = "Mentve.") {
+  /** Resolves true when the save went through, so a form can empty itself only then. */
+  async function save(url: string, method: string, body: Record<string, unknown>, okText = "Mentve."): Promise<boolean> {
     setBusy(true);
     const err = await post(url, method, body);
     setBusy(false);
     setMsg(err ? { ok: false, text: err } : { ok: true, text: okText });
     if (!err) router.refresh();
+    return err === null;
   }
   return { msg, busy, save };
 }
@@ -129,6 +131,39 @@ export function PoolRow(p: { poolId: string; name: string; groups: string }) {
         <Msg msg={msg} />
       </td>
     </tr>
+  );
+}
+
+/** Lili 2026-10-26 (point 3): a new pool, admin only. Name, code and volume are needed; the icon is optional. */
+export function NewPoolForm() {
+  const empty = { name: "", code: "", volume: "", emoji: "" };
+  const [f, setF] = useState(empty);
+  const { msg, busy, save } = useSave();
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const ready = f.name.trim() !== "" && f.code.trim() !== "" && f.volume.trim() !== "";
+  return (
+    <div className="toolbar" data-testid="new-pool">
+      <input className="input" aria-label="Új medence neve" placeholder="név" value={f.name} onChange={set("name")} />
+      <input className="input small" aria-label="Új medence kódja" placeholder="kód (pl. UJ_MEDENCE)" value={f.code} onChange={set("code")} />
+      <input className="input small" inputMode="decimal" aria-label="Új medence űrtartalma (liter)" placeholder="liter" value={f.volume} onChange={set("volume")} />
+      <input className="input" style={{ width: 90 }} aria-label="Új medence ikonja (nem kötelező)" placeholder="ikon" value={f.emoji} onChange={set("emoji")} />
+      <button
+        className="btn"
+        type="button"
+        disabled={busy || !ready}
+        onClick={() =>
+          void save(
+            "/api/admin/pools",
+            "POST",
+            { name: f.name.trim(), code: f.code.trim(), volumeLiters: f.volume.trim().replace(",", "."), ...(f.emoji.trim() ? { emoji: f.emoji.trim() } : {}) },
+            "Medence felvéve.",
+          ).then((ok) => ok && setF(empty))
+        }
+      >
+        Medence felvétele
+      </button>
+      <Msg msg={msg} />
+    </div>
   );
 }
 

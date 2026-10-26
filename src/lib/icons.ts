@@ -11,11 +11,14 @@ import type { Actor } from "./measurements";
 // one emoji, possibly with skin tone, variation selector or zero-width joiners; nothing that reads as text
 const EMOJI = /^(?:\p{Extended_Pictographic}|\p{Emoji_Modifier}|\p{Regional_Indicator}|‍|️){1,8}$/u;
 
+/** One icon or nothing; shared with the new-pool form, which takes the icon as an optional field. */
+export const emojiField = z.string().trim().max(16).refine((v) => v === "" || EMOJI.test(v), "Ide egyetlen ikon (emoji) írható, szöveg nem.");
+
 export const iconSchema = z.object({
   requestId: z.string().min(8).max(100),
   target: z.enum(["pool", "feedType"]),
   id: z.uuid(),
-  emoji: z.string().trim().max(16).refine((v) => v === "" || EMOJI.test(v), "Ide egyetlen ikon (emoji) írható, szöveg nem."),
+  emoji: emojiField,
 });
 
 export async function setIcon(actor: Actor, raw: z.input<typeof iconSchema>) {

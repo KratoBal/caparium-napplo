@@ -1061,4 +1061,43 @@ test("export page: the water-mail box is pink with a gap above the calendar, the
   // the title is smaller than the other boxes' titles
   const size = (heading: string) => page.locator("main h2", { hasText: heading }).first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
   expect(await size("Havi ZIMS-csomag")).toBeLessThan(await size("ZIMS CSV"));
+
+// Lili 2026-10-26 (Caparium channel msg 1564351191281049815, point 3; Balázs "Mehet" 1564352369205186581): the admin adds
+// a pool in Beállítások (name, code, volume, icon optional). The pool is deactivated at the end: the other tests list
+// the active pools, and a pool without a measurement group has no place among them.
+test("settings: the admin adds a new pool; the existing pools stay as they were", async ({ page }) => {
+  const suffix = `${Date.now()}`.slice(-8);
+  const name = `E2E medence ${suffix}`;
+  const code = `E2E_${suffix}`;
+  const db = new PrismaClient();
+  try {
+    await login(page, "teszt.admin");
+    await page.goto("/beallitasok");
+    const before = await page.locator('input[aria-label$="új neve"]').count();
+    const box = page.getByTestId("new-pool");
+    const add = box.getByRole("button", { name: "Medence felvétele" });
+    await expect(add, "name, code and volume are needed").toBeDisabled();
+    await box.getByLabel("Új medence neve").fill(name);
+    await box.getByLabel("Új medence kódja").fill(code.toLowerCase());
+    await expect(add).toBeDisabled();
+    await box.getByLabel("Új medence űrtartalma (liter)").fill("1250,5");
+    await expect(add).toBeEnabled();
+    await add.click();
+    await expect(box.getByRole("status")).toHaveText("Medence felvéve.");
+    // the form empties itself and the pool is in the list, with its volume
+    await expect(box.getByLabel("Új medence neve")).toHaveValue("");
+    await expect(page.getByLabel(`${name} új neve`)).toBeVisible();
+    await expect(page.getByLabel(`${name} űrtartalma (liter)`)).toHaveValue("1250,5");
+    expect(await page.locator('input[aria-label$="új neve"]').count()).toBe(before + 1);
+    // the same code again is refused with the reason, and the form keeps what was typed
+    await box.getByLabel("Új medence neve").fill(`Másik ${suffix}`);
+    await box.getByLabel("Új medence kódja").fill(code);
+    await box.getByLabel("Új medence űrtartalma (liter)").fill("100");
+    await add.click();
+    await expect(box.getByRole("status")).toHaveText("Ez a medencekód már foglalt.");
+    await expect(box.getByLabel("Új medence neve")).toHaveValue(`Másik ${suffix}`);
+  } finally {
+    await db.pool.updateMany({ where: { code }, data: { active: false } });
+    await db.$disconnect();
+  }
 });

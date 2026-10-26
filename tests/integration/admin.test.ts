@@ -1,6 +1,6 @@
 // Master data administration (K3 change vs correction, ÁLT-09, VIZ-22, ÁLT-17).
-import { beforeAll, describe, expect, it } from "vitest";
-import { createUser, renamePool, setReference, updateUser } from "@/lib/admin";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createPool, createUser, renamePool, setReference, updateUser } from "@/lib/admin";
 import { login } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
@@ -164,5 +164,76 @@ describe("users (ÁLT-04, ÁLT-06, ÁLT-17)", () => {
       "elírás javítása (a korábbi mérésekre is)",
       "névváltozás (mostantól)",
     ]);
+  });
+});
+
+// Lili 2026-10-26 (Caparium channel msg 1564351191281049815, point 3; Balázs "Mehet" 1564352369205186581): the admin adds
+// a pool. It only ADDS: no existing pool, name, measurement or volume changes, nothing is deleted.
+describe("a new pool (Lili 2026-10-26, point 3)", () => {
+  const made: string[] = [];
+  const tag = `${Date.now()}`.slice(-8);
+  const input = (over: Record<string, unknown> = {}) => ({ requestId: rid(), name: `Próba medence ${tag}`, code: `PROBA_${tag}`, volumeLiters: "1250.5", ...over });
+  // the shared test database must not keep an active pool without a group: the other specs list the active pools
+  afterAll(async () => {
+    await prisma.pool.updateMany({ where: { id: { in: made } }, data: { active: false } });
+  });
+
+  async function snapshot() {
+    const [pools, names, measurements] = await Promise.all([
+      prisma.pool.findMany({ orderBy: { code: "asc" } }),
+      prisma.poolName.findMany({ orderBy: [{ poolId: "asc" }, { validFrom: "asc" }] }),
+      prisma.measurement.count(),
+    ]);
+    return { pools, names, measurements };
+  }
+
+  it("an admin adds a pool with name, code, volume and icon: one new pool, one name, one audit row, everything else untouched", async () => {
+    const before = await snapshot();
+    const r = (await createPool(f.admin, input({ code: ` proba_${tag} `, emoji: "🐠" }))) as { id: string; replayed: boolean };
+    made.push(r.id);
+    expect(r.replayed).toBe(false);
+    const row = await prisma.pool.findUniqueOrThrow({ where: { id: r.id }, include: { names: true } });
+    // the code is stored in capitals, trimmed
+    expect([row.code, row.volumeLiters?.toString(), row.emoji, row.active]).toEqual([`PROBA_${tag}`, "1250.5", "🐠", true]);
+    expect(row.names.map((n) => [n.displayName, n.validTo])).toEqual([[`Próba medence ${tag}`, null]]);
+    const audit = await prisma.auditEntry.findFirstOrThrow({ where: { entityType: "Pool", entityId: r.id } });
+    expect([audit.action, audit.userId]).toEqual(["MASTER_CHANGE", f.admin.id]);
+    expect(audit.changes).toMatchObject({ code: { after: `PROBA_${tag}` }, displayName: { after: `Próba medence ${tag}` }, emoji: { after: "🐠" } });
+    // nothing that existed changed: the old pools and names are equal row by row, the measurements are as many
+    const after = await snapshot();
+    expect(after.pools.filter((p) => p.id !== r.id)).toEqual(before.pools);
+    expect(after.names.filter((n) => n.poolId !== r.id)).toEqual(before.names);
+    expect([after.pools.length, after.names.length, after.measurements]).toEqual([before.pools.length + 1, before.names.length + 1, before.measurements]);
+  });
+
+  it("the icon is optional: without it the pool has none", async () => {
+    const r = (await createPool(f.admin, input({ name: `Ikon nélkül ${tag}`, code: `NOICON_${tag}` }))) as { id: string };
+    made.push(r.id);
+    expect((await prisma.pool.findUniqueOrThrow({ where: { id: r.id } })).emoji).toBeNull();
+  });
+
+  it("the same request again adds nothing", async () => {
+    const same = input({ name: `Egyszer ${tag}`, code: `EGYSZER_${tag}` });
+    const first = (await createPool(f.admin, same)) as { id: string };
+    made.push(first.id);
+    expect(await createPool(f.admin, same)).toEqual({ replayed: true });
+    expect(await prisma.pool.count({ where: { code: `EGYSZER_${tag}` } })).toBe(1);
+  });
+
+  it("only an admin: an aquarist is refused, and so is an aquarist with a SETTINGS=ADMIN override; nothing is added", async () => {
+    const before = await prisma.pool.count();
+    await expectCode(createPool(f.aq1, input({ name: `Akvarista ${tag}`, code: `AKV_${tag}` })), "ADMIN_ROLE_ONLY");
+    const lead = await prisma.user.create({ data: { loginId: `medence-gazda-${Date.now()}`, fullName: "Medence Gazda", role: "AQUARIST" } });
+    await prisma.modulePermission.create({ data: { userId: lead.id, module: "SETTINGS", level: "ADMIN" } });
+    await expectCode(createPool({ id: lead.id, role: "AQUARIST" }, input({ name: `Gazda ${tag}`, code: `GAZDA_${tag}` })), "ADMIN_ROLE_ONLY");
+    expect(await prisma.pool.count()).toBe(before);
+  });
+
+  it("a taken code or a taken name (any case) is refused, and the volume must be a positive number", async () => {
+    await expectCode(createPool(f.admin, input({ name: `Más név ${tag}`, code: "nagy" })), "CODE_TAKEN");
+    await expectCode(createPool(f.admin, input({ name: "nagymedence", code: `MASIK_${tag}` })), "NAME_TAKEN");
+    await expectCode(createPool(f.admin, input({ name: `Nulla ${tag}`, code: `NULLA_${tag}`, volumeLiters: "0" })), "INVALID_VOLUME");
+    await expectCode(createPool(f.admin, input({ name: `Szöveg ${tag}`, code: `SZOVEG_${tag}`, volumeLiters: "sok" })), "INVALID_VOLUME");
+    expect(await prisma.pool.count({ where: { code: { in: ["MASIK_" + tag, "NULLA_" + tag, "SZOVEG_" + tag] } } })).toBe(0);
   });
 });

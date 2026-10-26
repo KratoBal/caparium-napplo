@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { NewUserForm, PoolRow, PoolVolumeForm, ReferenceRow, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
+import { NewPoolForm, NewUserForm, PoolRow, PoolVolumeForm, ReferenceRow, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
@@ -138,6 +138,16 @@ export default async function SettingsPage() {
             </tbody>
           </table>
         </div>
+        {user.role === "ADMIN" && (
+          <div data-testid="new-pool-box">
+            <h3 style={{ marginTop: 20 }}>Új medence</h3>
+            <p className="hint">
+              Név, kód és űrtartalom (liter) kell, az ikon nem kötelező. Csak új medencét vesz fel: a meglévő medencéket, méréseket és neveket nem
+              érinti. Mérési csoportba még nem kerül, tehát mérés addig nem rögzíthető rá.
+            </p>
+            <NewPoolForm />
+          </div>
+        )}
         <h3 style={{ marginTop: 20 }}>Űrtartalom</h3>
         <p className="hint">Literben. A vegyszer-kalkulátor ezzel számol, amikor a medencét kiválasztod.</p>
         <table className="log-table" data-testid="pool-volumes">
