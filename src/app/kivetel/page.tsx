@@ -61,6 +61,16 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
     <Shell title="Takarmánykivétel" active="withdrawal" user={user}>
       <div className="toolbar">
         <DayNav path="/kivetel" day={day} today={today} />
+        {/* Lili 2026-10-26: a date picker, as on the water measurement pages; the compare period is kept */}
+        <form method="get" action="/kivetel" style={{ display: "flex", gap: 10, alignItems: "flex-end" }} data-testid="day-picker">
+          <input type="hidden" name="tol" value={from} />
+          <input type="hidden" name="ig" value={to} />
+          <label className="field">
+            Nap
+            <input className="input" type="date" name="nap" defaultValue={day} max={today} />
+          </label>
+          <button className="btn btn-soft" type="submit">Ugrás</button>
+        </form>
         <span className="spacer" />
         <span className="pill" data-testid="withdrawal-total">
           Kivéve: {Object.entries(view.totals).map(([u, v]) => `${num(v)} ${u}`).join(", ") || "semmi"}

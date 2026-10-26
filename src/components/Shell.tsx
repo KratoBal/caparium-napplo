@@ -4,27 +4,9 @@ import type { HelperData } from "@/lib/helpers";
 import { Helper } from "./Helper";
 import { ReasonProvider } from "./ReasonSwitch";
 import { prisma } from "@/lib/db";
+import { navFor, type NavKey } from "@/lib/nav";
 import { reasonsRequired } from "@/lib/reasons";
 import { businessDayOf, formatDayLong } from "@/lib/time";
-
-type NavKey = "overview" | "daily" | "weekly" | "log" | "export" | "animals" | "feeds" | "feeding" | "eating" | "feedlog" | "withdrawal" | "calculator" | "dosing" | "reports" | "pending" | "settings";
-
-const NAV: { key: NavKey | null; href: string | null; label: string; note?: string }[] = [
-  { key: "overview", href: "/", label: "Áttekintés" },
-  { key: "daily", href: "/vizmeres", label: "Napi vízmérés" },
-  { key: "weekly", href: "/heti", label: "Heti vízmérés" },
-  { key: "log", href: "/naplo", label: "Vízmérési napló" },
-  { key: "export", href: "/export", label: "Export" },
-  { key: "animals", href: "/allatok", label: "Állatok" },
-  { key: "feeds", href: "/takarmanyok", label: "Takarmánylista" },
-  { key: "feeding", href: "/etetes", label: "Takarmánynapló" },
-  { key: "eating", href: "/evesi-naplo", label: "Evési napló" },
-  { key: "feedlog", href: "/takarmany-naplo", label: "Takarmányozási napló" },
-  { key: "calculator", href: "/kalkulator", label: "Takarmánykalkulátor" },
-  { key: "withdrawal", href: "/kivetel", label: "Takarmánykivétel" },
-  { key: "dosing", href: "/adagolas", label: "Vegyszeradagolás" },
-  { key: "reports", href: "/kimutatasok", label: "Kimutatások" },
-];
 
 export async function Shell({
   title,
@@ -64,26 +46,11 @@ export async function Shell({
       </header>
       <nav className="nav" aria-label="Fő navigáció">
         {user &&
-          [
-            ...NAV,
-            ...(user.role === "ADMIN"
-              ? [
-                  { key: "pending" as NavKey, href: "/fuggo", label: "Függő mentések" },
-                  { key: "settings" as NavKey, href: "/beallitasok", label: "Beállítások" },
-                ]
-              : []),
-          ].map((n) =>
-            n.href ? (
-              <Link key={n.label} href={n.href} className={n.key === active ? "active" : undefined}>
-                {n.label}
-              </Link>
-            ) : (
-              <span key={n.label} className="disabled" aria-disabled="true">
-                {n.label}
-                {n.note && <small>({n.note})</small>}
-              </span>
-            ),
-          )}
+          navFor(user.role).map((n) => (
+            <Link key={n.label} href={n.href} className={n.key === active ? "active" : undefined}>
+              {n.label}
+            </Link>
+          ))}
         <div className="nav-foot">CÁPASULI • TESZTKÖRNYEZET</div>
       </nav>
       <main className="main">

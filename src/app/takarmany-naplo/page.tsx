@@ -81,33 +81,6 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
       {log && (
         <>
           <div className="card">
-            <h2>Etetések ({log.rows.length})</h2>
-            <p className="hint" data-testid="log-totals">
-              {log.filtered && Object.keys(log.group).length > 0
-                ? `Egyedi tételek: ${fmt(log.own) || "semmi"}; csoportos tételekben (a csoport teljes mennyisége, felosztás nélkül): ${fmt(log.group)}`
-                : `Összesen: ${fmt(log.totals) || "semmi"}`}{" "}
-              (alapegységben; a darab és a tömeg külön)
-            </p>
-            <div className="table-scroll">
-              <table className="log-table" data-testid="feeding-log">
-                <thead>
-                  <tr><th>Nap</th><th>Kinek</th><th>Medence</th><th>Takarmány</th><th>Mennyiség</th></tr>
-                </thead>
-                <tbody>
-                  {log.rows.map((r) => (
-                    <tr key={r.id}>
-                      <td>{r.day}</td>
-                      <td>{r.recipient}</td>
-                      <td>{r.pools || "–"}</td>
-                      <td>{r.feed}</td>
-                      <td>{r.quantities}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div className="card">
             <h2>Evési minta</h2>
             <div className="table-scroll">
               <table className="log-table" data-testid="eating-pattern">
@@ -138,6 +111,33 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
                           </td>
                         );
                       })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="card">
+            <h2>Etetések ({log.rows.length})</h2>
+            <p className="hint" data-testid="log-totals">
+              {log.filtered && Object.keys(log.group).length > 0
+                ? `Egyedi tételek: ${fmt(log.own) || "semmi"}; csoportos tételekben (a csoport teljes mennyisége, felosztás nélkül): ${fmt(log.group)}`
+                : `Összesen: ${fmt(log.totals) || "semmi"}`}{" "}
+              (alapegységben; a darab és a tömeg külön)
+            </p>
+            <div className="table-scroll">
+              <table className="log-table" data-testid="feeding-log">
+                <thead>
+                  <tr><th>Nap</th><th>Kinek</th><th>Medence</th><th>Takarmány</th><th>Mennyiség</th></tr>
+                </thead>
+                <tbody>
+                  {log.rows.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.day}</td>
+                      <td>{r.recipient}</td>
+                      <td>{r.pools || "–"}</td>
+                      <td>{r.feed}</td>
+                      <td>{r.quantities}</td>
                     </tr>
                   ))}
                 </tbody>

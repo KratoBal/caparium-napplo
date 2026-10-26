@@ -346,7 +346,8 @@ test("animals: the list from the events, a transfer recorded, the history kept; 
   const tablet = info.project.name === "tablet";
   const name = tablet ? "Teszt Három" : "Teszt Négy";
   const target = tablet ? "Karantén" : "Kismedence";
-  await login(page, "teszt.akvarista1");
+  // Lili 2026-10-26: the animal list is for admins only now
+  await login(page, "teszt.admin");
   await page.getByRole("link", { name: "Állatok" }).click();
   await expect(page.getByTestId("animals-table")).toContainText("Teszt Egy");
   await page.getByTestId("animals-table").getByRole("link", { name }).click();
@@ -358,8 +359,6 @@ test("animals: the list from the events, a transfer recorded, the history kept; 
   await expect(actions.getByRole("status")).toHaveText("Áthelyezés rögzítve.");
   await expect(page.getByTestId("animal-detail")).toContainText("Áthelyezés");
   await expect(page.getByTestId("animals-table").getByRole("row").filter({ hasText: name })).toContainText(target);
-  // an aquarist sees no arrival form (a new animal is admin work)
-  await expect(page.getByTestId("new-arrival")).toHaveCount(0);
 
   await page.getByRole("link", { name: "Takarmánylista" }).click();
   await expect(page.getByTestId("feeds-RAK")).toContainText("Litopenaeus vannamei");
@@ -486,9 +485,9 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   const other = info.project.name === "tablet" ? "Teszt Kettő" : "Teszt Egy";
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
-  // step 1: the group's header row selects every member at once
-  await expect(page.getByTestId("group-head-Teszt csoport")).toBeVisible();
-  await page.getByRole("button", { name: "Teszt csoport: összes kijelölése" }).click();
+  // step 1: the pool's header row selects every animal in it at once (Lili 2026-10-26: the list is by pool)
+  await expect(page.getByTestId("group-head-Nagymedence")).toBeVisible();
+  await page.getByRole("button", { name: "Nagymedence: összes kijelölése" }).click();
   await expect(page.getByLabel(`${name} a mai listán`)).toBeChecked();
   // step 2: the day's feeds
   const dayFeeds = page.getByTestId("day-feeds");
@@ -631,6 +630,8 @@ test("withdrawal: an item for tomorrow, the day's total, taken against given, th
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Takarmánykivétel" }).click();
+  // Lili 2026-10-26 (card f67b1a06, item 5): a date picker beside the day arrows, as on the water measurement pages
+  await expect(page.getByTestId("day-picker").getByRole("button", { name: "Ugrás" })).toBeVisible();
   const form = page.getByTestId("withdrawal-form");
   await form.getByLabel("Takarmány", { exact: true }).selectOption({ label: feedName });
   await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("200");
@@ -848,7 +849,7 @@ test("the feeding timetable: every animal's days on one screen, saved together, 
 
 test("conveniences: a feeding plan, the list from it, the feed type icons", async ({ page }) => {
   // Teszt Három: the feeding test expects Teszt Négy OFF today's list, and the plan adds to it
-  await login(page, "teszt.akvarista1");
+  await login(page, "teszt.admin");
   await page.getByRole("link", { name: "Állatok" }).click();
   await page.getByTestId("animals-table").getByRole("link", { name: "Teszt Három" }).click();
   const plan = page.getByTestId("plan-form");
@@ -968,12 +969,19 @@ test("animals: an admin edits an animal's data, with the reasons off no reason i
   await expect(page.getByTestId("animal-detail")).toContainText(note);
   await expect(page.getByTestId("animal-edit").getByLabel("Nem (módosítás)")).toHaveValue(next);
 
-  await page.context().clearCookies();
+});
+
+// Lili 2026-10-26 (card f67b1a06, item 7): the animal list is seen and managed by admins only for now. The menu
+// entry is hidden for an aquarist and the page itself sends them to the no-access page.
+test("animals: an aquarist has no menu entry and the page sends them to the no-access page", async ({ page }) => {
   await login(page, "teszt.akvarista1");
+  await expect(page.getByRole("link", { name: "Állatok" })).toHaveCount(0);
   await page.goto("/allatok");
-  await page.getByTestId("animals-table").getByRole("link", { name: "Teszt Egy", exact: true }).click();
-  await expect(page.getByTestId("animal-detail")).toBeVisible();
-  await expect(page.getByTestId("animal-edit")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/nincs-jogosultsag/);
+  // Takarmánylista stays for the aquarist, directly above Kimutatások
+  const nav = page.getByRole("navigation", { name: "Fő navigáció" });
+  const links = await nav.getByRole("link").allInnerTexts();
+  expect(links.indexOf("Kimutatások") - links.indexOf("Takarmánylista")).toBe(1);
 });
 
 // Last in the file: it loads the description's 25 animals into the shared e2e database (acrobot 33380). The tablet
