@@ -92,6 +92,19 @@ describe("lifecycle (DAT-05, T-09)", () => {
     expect(row).toMatchObject({ alive: false, ended: { type: "DEATH", day: "2026-02-05" } });
   });
 
+  it("Lili 10-26: an aquarist cannot invalidate an event either, not even one recorded under her own name earlier", async () => {
+    const id = await arrive("Visszavonhatatlan");
+    const moved = await createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: id, toPoolId: f.pool("KARANTEN"), occurredAtLocal: "2026-02-06T07:00" }, at("2026-02-06", "07:30"));
+    // an event an aquarist recorded before the events became admin work (the old rule let her take it back the same day)
+    await prisma.lifecycleEvent.update({ where: { id: moved.eventId }, data: { createdById: f.aq1.id } });
+    await expectCode(
+      invalidateLifecycleEvent(f.aq1, moved.eventId, { requestId: rid(), expectedVersion: 1, reason: "tévedés" }, at("2026-02-06", "08:00")),
+      "ADMIN_ONLY",
+    );
+    expect((await prisma.lifecycleEvent.findUniqueOrThrow({ where: { id: moved.eventId } })).status).toBe("VALID");
+    expect((await openPlacement(id))?.poolId).toBe(f.pool("KARANTEN"));
+  });
+
   it("invalidating a death (by its recorder, today) reopens the placement; the arrival under later events cannot go", async () => {
     const id = await arrive("Tévedés");
     const d = await createLifecycleEvent(f.admin, { requestId: rid(), type: "DEATH", animalId: id, occurredAtLocal: "2026-02-06T07:00" }, at("2026-02-06", "07:30"));
