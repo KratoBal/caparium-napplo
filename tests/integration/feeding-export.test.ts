@@ -165,4 +165,31 @@ describe("the eating Excel (EVE-07)", () => {
     expect(note.getCell(1).value).toBe("Megjegyzés");
     expect(note.getCell("E").value).toBe("Teszt Kettő: fél tabletta");
   });
+
+  // Lili 2026-10-26 (card f67b1a06, item 4): the export follows the admin's order of the animals
+  it("the eating sheet lists the animals in the admin's order; with no order placed it is species, then name", async () => {
+    const period = { from: "2026-04-07", to: "2026-04-09" };
+    const namesOf = async () => {
+      const ws = await sheet((await buildEatingWorkbook(period)).buffer);
+      const out: string[] = [];
+      ws.eachRow((r, n) => {
+        const name = r.getCell(2).value;
+        if (n > 2 && r.getCell(1).value !== "Megjegyzés" && typeof name === "string" && name) out.push(name);
+      });
+      return out;
+    };
+    const before = await namesOf();
+    expect(before.length).toBeGreaterThanOrEqual(3);
+    try {
+      const reversed = [...before].reverse();
+      for (const [i, name] of reversed.entries()) {
+        const animalId = (await prisma.animalName.findFirstOrThrow({ where: { name } })).animalId;
+        await prisma.animal.update({ where: { id: animalId }, data: { sortOrder: i } });
+      }
+      expect(await namesOf()).toEqual(reversed);
+    } finally {
+      await prisma.animal.updateMany({ data: { sortOrder: null } });
+    }
+    expect(await namesOf()).toEqual(before);
+  });
 });

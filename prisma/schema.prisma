@@ -662,6 +662,9 @@ model Animal {
   speciesId String   @db.Uuid
   sex       Sex      @default(UNKNOWN)
   note      String?
+  // the admin's own order of the animals (Lili 2026-10-26, card f67b1a06 item 4): lists and exports follow it,
+  // an animal never placed (null) comes after the placed ones, by name
+  sortOrder Int?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   species        Species                 @relation(fields: [speciesId], references: [id])

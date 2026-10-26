@@ -9,6 +9,7 @@
 import type { Dimension } from "@prisma/client";
 import ExcelJS from "exceljs";
 import { prisma } from "../db";
+import { byAnimalOrder } from "../animal-order";
 import { AppError } from "../errors";
 import { GIVEN } from "../eating-labels";
 import { dayBounds } from "../feeding";
@@ -109,7 +110,7 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
 
   // rows: one per day and recipient (an animal, or a group with its group item)
   // ticks: the feed columns of an item without a quantity (a coral feed ticked on the sheet): "adva", not a number
-  type Row = { day: string; species: string; name: string; values: Map<number, number>; ticks: Set<number>; other: { qty: number | string; name: string }[] };
+  type Row = { day: string; species: string; name: string; sortOrder: number | null; values: Map<number, number>; ticks: Set<number>; other: { qty: number | string; name: string }[] };
   const rows = new Map<string, Row>();
   for (const it of items) {
     const day = dateToDay(it.feedingDay.businessDay);
@@ -123,7 +124,7 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       const name = it.animal
         ? pickValid(it.animal.names, at)?.name ?? it.animal.names.at(-1)?.name ?? "?"
         : `${pickValid(it.group!.names, at)?.name ?? it.group!.names.at(-1)?.name ?? "?"} (csoport)`;
-      row = { day, species, name, values: new Map(), ticks: new Set(), other: [] };
+      row = { day, species, name, sortOrder: it.animal?.sortOrder ?? null, values: new Map(), ticks: new Set(), other: [] };
       rows.set(key, row);
     }
     if (it.feed.type.code === "EGYEB") {
@@ -162,10 +163,13 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       const r = life.get(a.id)!;
       if (!r.arrived || r.arrived >= end || (r.ended && r.ended < start) || rows.has(`${d}|${a.id}`)) continue;
       const name = pickValid(a.names, start)?.name ?? a.names.at(-1)?.name ?? "?";
-      rows.set(`${d}|${a.id}`, { day: d, species: a.species.scientificName, name, values: new Map(), ticks: new Set(), other: [] });
+      rows.set(`${d}|${a.id}`, { day: d, species: a.species.scientificName, name, sortOrder: a.sortOrder, values: new Map(), ticks: new Set(), other: [] });
     }
   }
-  const sorted = [...rows.values()].sort((a, b) => a.day.localeCompare(b.day) || a.name.localeCompare(b.name, "hu"));
+  // per day: the admin's order (card f67b1a06, item 4); a group row has no position of its own and, like the
+  // never-placed animals, follows by name
+  const inDay = byAnimalOrder<Row>((a, b) => a.name.localeCompare(b.name, "hu"));
+  const sorted = [...rows.values()].sort((a, b) => a.day.localeCompare(b.day) || inDay(a, b));
 
   // column layout: A date, B species, C name, D label column, feeds, Egyéb 1..5, SUM/Állat per unit, notes
   const FIRST = 5;
@@ -294,13 +298,15 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
       return {
         id: a.id,
         species: a.species.scientificName,
+        sortOrder: a.sortOrder,
         name: pickValid(a.names, at)?.name ?? a.names.at(-1)?.name ?? "?",
         group: m ? pickValid(m.group.names, at)?.name ?? "" : "",
         arrived: r.arrived!,
         ended: r.ended ?? null,
       };
     })
-    .sort((a, b) => a.species.localeCompare(b.species, "hu") || a.name.localeCompare(b.name, "hu"));
+    // the admin's order (card f67b1a06, item 4); the never-placed keep the old order, by species then name
+    .sort(byAnimalOrder((a, b) => a.species.localeCompare(b.species, "hu") || a.name.localeCompare(b.name, "hu")));
 
   const wb = new ExcelJS.Workbook();
   wb.creator = "Cápárium nAPPló";

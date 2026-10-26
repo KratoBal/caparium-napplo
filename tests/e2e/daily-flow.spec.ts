@@ -1011,3 +1011,23 @@ test("animals: the starting list's status line, and an admin loads it with one c
   await expect(page.getByTestId("animals-table")).toContainText("Nokedli");
   await expect(page.getByTestId("animals-table")).toContainText("Ráják");
 });
+
+test("the admin's animal order: a row moves with the buttons and the save becomes available (nothing is saved)", async ({ page }) => {
+  await login(page, "teszt.admin");
+  await page.goto("/allatok");
+  const list = page.getByTestId("animal-order");
+  const rows = list.getByRole("listitem");
+  const count = await rows.count();
+  test.skip(count < 2, "needs two living animals");
+  const first = (await rows.nth(0).getByRole("button").first().getAttribute("aria-label")) ?? "";
+  const firstName = first.replace(/ feljebb$/, "");
+  const save = page.getByTestId("save-order");
+  await expect(save).toBeDisabled();
+  await page.getByRole("button", { name: `${firstName} lejjebb` }).click();
+  await expect(rows.nth(1)).toContainText(firstName);
+  await expect(save).toBeEnabled();
+  await page.getByRole("button", { name: "Elvetés" }).click();
+  await expect(rows.nth(0)).toContainText(firstName);
+  await expect(save).toBeDisabled();
+});
+

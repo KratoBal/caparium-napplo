@@ -1,7 +1,7 @@
 // Animals, lifecycle and feeds against a real database (adatmodell 6., 7., 11.; DAT-05, R-1, NY-20).
 // Days in February 2026: no other test file writes there.
 import { beforeAll, describe, expect, it } from "vitest";
-import { createLifecycleEvent, editAnimal, invalidateLifecycleEvent, listAnimals, rebuildAnimal, renameEntity } from "@/lib/animals";
+import { createLifecycleEvent, editAnimal, invalidateLifecycleEvent, listAnimals, rebuildAnimal, renameEntity, setAnimalOrder } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { createFeed, updateFeed } from "@/lib/feeds";
@@ -244,5 +244,49 @@ describe("feeds (DAT-02, TAK-07, T-08)", () => {
     const reader = await prisma.user.create({ data: { loginId: `olvaso-${rid()}`, fullName: "Olvasó Akvarista", role: "AQUARIST", passwordHash: "x" } });
     await prisma.modulePermission.create({ data: { userId: reader.id, module: "FEEDING", level: "READ" } });
     await expectCode(createFeed({ id: reader.id, role: "AQUARIST" }, { requestId: rid(), typeId: egyeb.id, name: "Teszt olvasó egyéb", dimensions: ["MASS"], defaultUnitId: g }), "READ_ONLY");
+  });
+});
+
+// Lili 2026-10-26 (card f67b1a06, item 4): the admin's own order of the animals
+describe("the animal order (Lili 10-26, item 4)", () => {
+  it("an admin places the animals; the list follows, the unlisted come after; an aquarist may not; nothing else changes", async () => {
+    const a = await arrive("Sorrend Alfa");
+    const b = await arrive("Sorrend Béta");
+    const c = await arrive("Sorrend Gamma");
+    const mine = new Set([a, b, c]);
+    try {
+      await expectCode(setAnimalOrder(f.aq1, { requestId: rid(), ids: [c, a, b] }), "ADMIN_ONLY");
+      expect((await prisma.animal.findMany({ where: { id: { in: [a, b, c] }, sortOrder: { not: null } } })).length).toBe(0);
+
+      await setAnimalOrder(f.admin, { requestId: rid(), ids: [c, a, b] });
+      const rows = await listAnimals(at("2026-02-06", "09:00"));
+      expect(rows.filter((r) => mine.has(r.id)).map((r) => r.id)).toEqual([c, a, b]);
+      // placed first (positions 0, 1, 2), every other animal after them
+      expect(rows.filter((r) => r.alive).slice(0, 3).map((r) => r.id)).toEqual([c, a, b]);
+      expect(rows.slice(0, 3).map((r) => r.sortOrder)).toEqual([0, 1, 2]);
+
+      // one audit row for the whole order, by the admin
+      expect(await prisma.auditEntry.count({ where: { entityType: "AnimalOrder", userId: f.admin.id } })).toBeGreaterThanOrEqual(1);
+
+      // the same order again is no change; a repeated request id is replayed
+      await expectCode(setAnimalOrder(f.admin, { requestId: rid(), ids: [c, a, b] }), "NO_CHANGE");
+      const again = rid();
+      await setAnimalOrder(f.admin, { requestId: again, ids: [a, b, c] });
+      expect(await setAnimalOrder(f.admin, { requestId: again, ids: [a, b, c] })).toEqual({ replayed: true });
+    } finally {
+      // no other test file may inherit a position
+      await prisma.animal.updateMany({ data: { sortOrder: null } });
+    }
+  });
+
+  it("a duplicate or an unknown animal is refused and nothing is stored", async () => {
+    const a = await arrive("Sorrend Delta");
+    try {
+      await expectCode(setAnimalOrder(f.admin, { requestId: rid(), ids: [a, a] }), "ORDER_DUPLICATE");
+      await expectCode(setAnimalOrder(f.admin, { requestId: rid(), ids: [a, "00000000-0000-4000-8000-000000000000"] }), "ANIMAL_NOT_FOUND");
+      expect(await prisma.animal.count({ where: { sortOrder: { not: null } } })).toBe(0);
+    } finally {
+      await prisma.animal.updateMany({ data: { sortOrder: null } });
+    }
   });
 });
