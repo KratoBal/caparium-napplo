@@ -45,8 +45,9 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
   const canSend = level === "RECORD" || level === "ADMIN";
   return (
     <Shell title="Export" active="export" user={user}>
-      {/* caparium-hibak-4 (Balázs 2026-10-20 09:45 UTC): the first item of Export, above the Excel */}
-      <div className="card">
+      {/* caparium-hibak-4 (Balázs 2026-10-20 09:45 UTC): the first item of Export, above the Excel. Lili 2026-10-26
+          (msg 1564351191281049815): its own background, and a larger gap above the calendar. */}
+      <div className="card card-mail" data-testid="water-mail-card">
         <h2>Vízmérés kiküldése</h2>
         <p className="hint">A mai napi és az e heti vízmérés eredményei medencénként, PDF-ben, e-mailben.</p>
         {canSend ? <WaterMailButton recipient={recipient} /> : <p className="hint">A kiküldéshez exportálási jog kell.</p>}
@@ -74,8 +75,6 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
         </fieldset>
         <button className="btn btn-soft" type="submit">Szűrés</button>
       </form>
-
-      <MonthlyPackage />
 
       <div className="card">
         <h2>Excel</h2>
@@ -120,6 +119,8 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
         </p>
         <ZimsCreate from={from} to={to} poolIds={chosen} />
       </div>
+
+      <MonthlyPackage />
 
       {diffs.length > 0 && (
         <div className="card" data-testid="divergence">
@@ -184,7 +185,7 @@ async function MonthlyPackage() {
   });
   return (
     <div className="card" data-testid="monthly-package">
-      <h2>Havi ZIMS-csomag ({from} – {to})</h2>
+      <h2 className="title-small">Havi ZIMS-csomag ({from} – {to})</h2>
       <p className="hint">
         A rendszer havonta egyszer előkészíti az előző hónap ZIMS-fájljait letöltésre (e-mailt nem küld). Ez előnézet, nem leadás: a ZIMS-be
         feltöltött futást továbbra is egy adminisztrátor jelöli leadottnak.

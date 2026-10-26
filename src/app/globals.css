@@ -64,6 +64,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .card { background: var(--c-white); border: 1px solid var(--c-line); border-radius: var(--radius); padding: 24px; }
 .card + .card { margin-top: 20px; }
 .card h2 { font-size: 21px; }
+.card h2.title-small { font-size: 17px; }
+/* Lili 2026-10-26 (Caparium channel msg 1564350735267921991 and 1564351191281049815): the "Vízmérés kiküldése" box on the
+   export page has its own background, and a larger gap before the calendar (date filter) under it. The hint is
+   inked darker there: the muted gray is 3.4:1 on this pink, the ink 9.9:1. */
+.card.card-mail { background: #f1d1d8; margin-bottom: 32px; }
+.card-mail .hint { color: var(--c-ink); }
 .hint { color: var(--c-muted); font-size: 14px; margin: 6px 0 0; }
 .btn { display: inline-flex; align-items: center; justify-content: center; min-height: var(--touch); padding: 0 22px; border-radius: var(--radius-sm); border: 0; background: var(--c-primary); color: var(--c-white); font-weight: 600; font-size: 16px; cursor: pointer; text-decoration: none; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
