@@ -797,6 +797,11 @@ test("home: the customer's illustrated cards, 3-2-3, each to its module, only wi
   await login(page, "teszt.akvarista1");
   const rows = page.locator(".home-row");
   await expect(rows).toHaveCount(3);
+  // Lili 2026-10-26 (msg 1564412957499330631): no "A mai nap gyorsindítója" module; the two pages it linked stay one click away
+  await expect(page.getByText("gyorsindítója")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Új mérés" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Vízmérési napló" }), "the log is still in the menu").toBeVisible();
+  await expect(page.getByTestId("home-nagymedencek"), "the daily water pages are still cards").toBeVisible();
   const captions = async (i: number) => (await rows.nth(i).locator(".home-caption").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
   expect(await captions(0)).toEqual(["Nagy medencék NAPI VÍZMÉRÉS", "Kis medencék NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS"]);
   expect(await captions(1)).toEqual(["Nyomelem és megkötő adagolás", "Takarmány kalkulátor"]);

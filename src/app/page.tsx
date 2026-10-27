@@ -126,14 +126,9 @@ export default async function OverviewPage() {
           ) : null;
         })}
       </nav>
-      <div className="quick">
-        <h3 style={{ fontSize: 21 }}>A mai nap gyorsindítója</h3>
-        <p>Mérés rögzítése és a napló megnyitása.</p>
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-          <Link className="btn" href="/vizmeres">Új mérés</Link>
-          <Link className="btn" href="/naplo">Napló megnyitása</Link>
-        </div>
-      </div>
+      {/* Lili 2026-10-26 (Caparium channel msg 1564412957499330631): "A mai nap gyorsindítója" is gone, the picture cards jump straight to
+          each page. Its two links were not exclusive: "Új mérés" (/vizmeres) is the two daily water cards and the "Napi vízmérés" menu entry,
+          "Napló megnyitása" (/naplo) is the "Vízmérési napló" menu entry. */}
     </Shell>
   );
 }
