@@ -182,6 +182,13 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .eat-FASTING { background: #c6d7e4; color: #1b608b; }
 .eat-pending { background: var(--c-field); color: #1d6694; border: 1px dashed #8fbfdf; }
 .table-scroll { overflow-x: auto; }
+/* Lili 2026-10-27: the feeding sheet's header row stays on top while it scrolls down, like a frozen row in Excel
+   (the Állat column does not: the highlighted row is enough, Lili 22:35 UTC). A sticky cell sticks to its nearest
+   scrolling box; with overflow-x alone that box never scrolls down, the page does, and the header leaves with it.
+   So the box scrolls both ways within a height of its own. The line under the header is a shadow: a collapsed
+   border stays behind when the cell sticks. */
+.feeding-sheet .sheet-scroll { overflow: auto; max-height: 70vh; max-height: 70dvh; }
+.feeding-sheet .log-table thead th { position: sticky; top: 0; z-index: 1; box-shadow: inset 0 -1px 0 var(--c-line); }
 .filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 20px; }
 
 /* ---- overview ---- */
@@ -227,6 +234,9 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
   .main { padding: 0; }
   .card { border: 0; padding: 0 0 12px; }
   .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* the printed sheet is the whole table: no scroll box, the header a plain row (the printer repeats it per page) */
+  .feeding-sheet .sheet-scroll { overflow: visible; max-height: none; }
+  .feeding-sheet .log-table thead th { position: static; }
 }
 
 /* AST-01: the helper in the corner */
