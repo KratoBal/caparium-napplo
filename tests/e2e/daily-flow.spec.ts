@@ -688,6 +688,29 @@ test("withdrawal: an item for tomorrow, the day's total, taken against given, th
   expect(file.suggestedFilename()).toMatch(/^Takarmanykivetel_\d{4}-\d{2}-\d{2}/);
 });
 
+// Lili 2026-10-27 20:49 UTC (acrobot 37044): a gram row with a value of 1000 g or more is shown in kg as a whole.
+test("taken against given: a row reaching 1000 g is shown in kg, two decimals", async ({ page }, info) => {
+  // each layout its own mass-only feed (a piece feed would add a second row); yesterday's item is used today, so it falls
+  // into the default period
+  const feedName = info.project.name === "tablet" ? "Teszt tintahal" : "Teszt hal";
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest" }).format(new Date());
+  const yesterday = new Date(`${today}T12:00:00Z`);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  await login(page, "teszt.admin");
+  await page.goto(`/kivetel?nap=${yesterday.toISOString().slice(0, 10)}`);
+  // one item per feed and day: a retry finds it already there
+  if ((await page.getByTestId("withdrawal-list").getByRole("row").filter({ hasText: feedName }).count()) === 0) {
+    const form = page.getByTestId("withdrawal-form");
+    await form.getByLabel("Takarmány", { exact: true }).selectOption({ label: feedName });
+    await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("1500");
+    await form.getByRole("button", { name: "Kivétel mentése" }).click();
+    await expect(form.getByRole("status")).toHaveText("Kivétel mentve.");
+  }
+  const row = page.getByTestId("taken-given").getByRole("row").filter({ hasText: feedName });
+  await expect(row.getByRole("cell").nth(1)).toHaveText("kg");
+  await expect(row.getByRole("cell").nth(2)).toHaveText("1,50");
+});
+
 test("calculator: general, no animal on top, saved as the reference of the animal picked next to the button", async ({ page }, info) => {
   const name = info.project.name === "tablet" ? "Teszt Három" : "Teszt Négy";
   await login(page, "teszt.akvarista1");
@@ -1062,6 +1085,22 @@ test("animals: the starting list's status line, and an admin loads it with one c
   await expect(button).toHaveCount(0);
   await expect(page.getByTestId("animals-table")).toContainText("Nokedli");
   await expect(page.getByTestId("animals-table")).toContainText("Ráják");
+});
+
+// Lili 2026-10-27 20:44 UTC (acrobot 37043): the list, the open animal, a new animal, the starting list without its
+// explanation, and the order block last.
+test("animals page: the blocks in Lili's order, the starting list without its explanation", async ({ page }) => {
+  await login(page, "teszt.admin");
+  await page.goto("/allatok");
+  const first = page.getByTestId("animals-table").getByRole("link").first();
+  const name = await first.innerText();
+  await first.click();
+  await expect(page.getByTestId("animal-detail")).toBeVisible();
+  // the list's heading carries the living count, "Állatok (25 élő)"
+  const headings = (await page.locator(".card > h2").allInnerTexts()).map((h, i) => (i === 0 ? h.replace(/ \(\d+ élő\)$/, "") : h));
+  expect(headings).toEqual(["Állatok", name, "Új állat, faj, csoport", "Kezdő állatlista", "Sorrend"]);
+  await expect(page.getByTestId("initial-animals-status")).toBeVisible();
+  await expect(page.getByText("Kétszer nem tölt be semmit")).toHaveCount(0);
 });
 
 test("the admin's animal order: a row moves with the buttons and the save becomes available (nothing is saved)", async ({ page }) => {

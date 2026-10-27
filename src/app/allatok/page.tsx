@@ -42,6 +42,7 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
   const plans = await currentPlans();
   const canRecord = level === "RECORD" || level === "ADMIN";
   const isAdmin = user.role === "ADMIN";
+  // Lili 2026-10-27 20:44 UTC (acrobot 37043): the list, the open animal, a new animal, the starting list, the order last.
   return (
     <Shell title="Állatok" active="animals" user={user}>
       <div className="card">
@@ -69,17 +70,6 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
             </tbody>
           </table>
         </div>
-      </div>
-
-      <div className="card">
-        <h2>Sorrend</h2>
-        <p className="hint">
-          Húzd a sort a helyére (érintőképernyőn a Fel és Le gombokkal), majd mentsd. A takarmánynapló „Ki eszik ma” listája medencén belül, az evési minta és az Excel-exportok ezt a sorrendet követik. Akit nem raktál sorba (új érkező), az utolsó helyre kerül, név szerint.
-        </p>
-        <AnimalOrder
-          key={animals.filter((a) => a.alive).map((a) => a.id).join()}
-          animals={animals.filter((a) => a.alive).map((a) => ({ id: a.id, name: a.name, species: a.species, poolName: a.poolName }))}
-        />
       </div>
 
       {selected && (
@@ -129,13 +119,6 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
 
       {isAdmin && (
         <div className="card">
-          <h2>Kezdő állatlista</h2>
-          <InitialAnimalsLoader {...(await initialAnimalsStatus())} />
-        </div>
-      )}
-
-      {isAdmin && (
-        <div className="card">
           <h2>Új állat, faj, csoport</h2>
           <p className="hint">Az érkezés hozza létre az állatot. A tesztkörnyezetben csak kitalált adat szerepel.</p>
           <NewArrival species={species.map((s) => ({ id: s.id, name: s.hungarianName ? `${s.scientificName} (${s.hungarianName})` : s.scientificName }))} pools={poolOpts} groups={groups} />
@@ -143,6 +126,24 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
           <SimpleCreate url="/api/admin/animal-groups" label="Új csoport neve" field="name" testId="new-group" />
         </div>
       )}
+
+      {isAdmin && (
+        <div className="card">
+          <h2>Kezdő állatlista</h2>
+          <InitialAnimalsLoader {...(await initialAnimalsStatus())} />
+        </div>
+      )}
+
+      <div className="card">
+        <h2>Sorrend</h2>
+        <p className="hint">
+          Húzd a sort a helyére (érintőképernyőn a Fel és Le gombokkal), majd mentsd. A takarmánynapló „Ki eszik ma” listája medencén belül, az evési minta és az Excel-exportok ezt a sorrendet követik. Akit nem raktál sorba (új érkező), az utolsó helyre kerül, név szerint.
+        </p>
+        <AnimalOrder
+          key={animals.filter((a) => a.alive).map((a) => a.id).join()}
+          animals={animals.filter((a) => a.alive).map((a) => ({ id: a.id, name: a.name, species: a.species, poolName: a.poolName }))}
+        />
+      </div>
     </Shell>
   );
 }
