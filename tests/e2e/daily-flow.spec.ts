@@ -526,6 +526,33 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   // step 3. Lili 2026-10-21 11:44 UTC (a): a feed weighed AND counted takes both units
   const sheet = page.getByTestId("feeding-sheet");
   await expect(sheet.getByRole("columnheader", { name: "Litopenaeus vannamei (g + db)" })).toBeVisible();
+  // Lili 2026-10-27: the header row stays on top while the sheet scrolls down, like a frozen row in Excel. The box has
+  // a height of its own; here it is made short so that this run's few rows scroll, and the header must stay at its top
+  const box = sheet.locator(".sheet-scroll");
+  const animalHead = sheet.getByRole("columnheader", { name: "Állat" });
+  expect(await box.evaluate((el) => getComputedStyle(el).maxHeight), "the box scrolls within a height of its own").not.toBe("none");
+  const scrolled = await box.evaluate((el) => {
+    el.style.maxHeight = "140px";
+    el.scrollTop = el.scrollHeight;
+    return el.scrollTop;
+  });
+  expect(scrolled, "the short box did scroll").toBeGreaterThan(0);
+  const [boxTop, headTop] = await Promise.all([
+    box.evaluate((el) => el.getBoundingClientRect().top),
+    animalHead.evaluate((el) => el.getBoundingClientRect().top),
+  ]);
+  expect(Math.abs(headTop - boxTop), "the header row stays at the top of the scrolled box").toBeLessThan(1);
+  // and it covers the rows passing under it: an opaque background (barracuda on #82)
+  expect(await animalHead.evaluate((el) => getComputedStyle(el).backgroundColor), "the stuck header covers the rows under it").not.toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
+  await box.evaluate((el) => {
+    el.style.maxHeight = "";
+    el.scrollTop = 0;
+  });
+  // printed, the sheet is the whole table: no scroll box, the header a plain row
+  await page.emulateMedia({ media: "print" });
+  expect(await box.evaluate((el) => [getComputedStyle(el).overflowY, getComputedStyle(el).maxHeight])).toEqual(["visible", "none"]);
+  expect(await animalHead.evaluate((el) => getComputedStyle(el).position)).toBe("static");
+  await page.emulateMedia({ media: "screen" });
   // Lili 2026-10-26 (msg 1564403940320346223): "Mai tételek" is last, as a summary
   const headings = await page.locator("main h2").allTextContents();
   const place = (start: string) => headings.findIndex((h) => h.startsWith(start));
