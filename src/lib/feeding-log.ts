@@ -9,7 +9,7 @@ import { GIVEN } from "./eating-labels";
 import { AppError } from "./errors";
 import { isDerivedFasting, listFacts } from "./eating-pattern";
 import { dayBounds } from "./feeding";
-import { pickValid } from "./master";
+import { nameAt, pickValid } from "./master";
 import { addDays, businessDayOf, dateToDay, dayToDate } from "./time";
 
 export const LOG_MAX_DAYS = 92; // a screen, not an export: about a quarter
@@ -88,7 +88,7 @@ export async function feedingLog(f: LogFilter) {
       part[base] = (part[base] ?? 0) + v;
     }
     const feed = pickValid(it.feed.names, at)?.name ?? it.feed.names.at(-1)?.name ?? "?";
-    const recipient = it.animal ? pickValid(it.animal.names, at)?.name ?? "?" : `${pickValid(it.group!.names, at)?.name ?? "?"} (csoport)`;
+    const recipient = it.animal ? nameAt(it.animal.names, at)?.name ?? "?" : `${nameAt(it.group!.names, at)?.name ?? "?"} (csoport)`;
     recipientOrder.set(recipient, it.animal ? it.animal.sortOrder : null);
     for (const q of it.quantities) {
       entries.push({
@@ -104,8 +104,8 @@ export async function feedingLog(f: LogFilter) {
       id: it.id,
       day,
       recipient: it.animal
-        ? pickValid(it.animal.names, at)?.name ?? "?"
-        : `${pickValid(it.group!.names, at)?.name ?? "?"} (csoport)`,
+        ? nameAt(it.animal.names, at)?.name ?? "?"
+        : `${nameAt(it.group!.names, at)?.name ?? "?"} (csoport)`,
       pools: [...new Set(pools.map((p) => p.name))].join(", "),
       feed: it.otherName ? `${feed}: ${it.otherName}` : feed,
       quantities: it.quantities.map((q) => `${Number(q.quantity).toString().replace(".", ",")} ${q.unit.symbol}`).join(" + ") || GIVEN,

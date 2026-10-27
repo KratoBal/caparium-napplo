@@ -2,12 +2,12 @@
 // group item counted for its participants, the eating pattern of the same filter. Days in June 2026.
 import { beforeAll, describe, expect, it } from "vitest";
 import { renamePool } from "@/lib/admin";
-import { createLifecycleEvent } from "@/lib/animals";
+import { createGroup, createLifecycleEvent } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { setEatingStatus } from "@/lib/eating";
-import { finalizeList, saveFeedingItem, setSelection } from "@/lib/feeding";
+import { feedingDayView, finalizeList, saveFeedingItem, setSelection } from "@/lib/feeding";
 import { feedingLog } from "@/lib/feeding-log";
-import { pickValid } from "@/lib/master";
+import { FIRST_NAME_FROM, pickValid } from "@/lib/master";
 import { businessDayOf } from "@/lib/time";
 import { fixtures, rid } from "./fixtures";
 
@@ -110,5 +110,35 @@ describe("the feeding log (TAK-04)", () => {
     await finalizeList(f.aq1, { requestId: rid(), day: today });
     const after = await feedingLog({ ...day, animalId: a["Teszt Kettő"] });
     expect(after.pattern.map((p) => p.cells[today])).toEqual([{ state: "FASTING", vitamin: false, medicine: false }]);
+  });
+});
+
+// Lili 2026-10-27 23:07 UTC: on a day recorded back in time the feeding sheet read "? (csoport)": the group's name row
+// began after that day (an admin's group was named from the moment it was made), while its members were already in
+// it. Days in November 2025: no other file writes there.
+describe("a group named after the day its members were in it", () => {
+  it("shows its first name on that day, on the sheet and in the log; a new group is named from the beginning", async () => {
+    const group = await prisma.animalGroup.create({
+      data: { names: { create: { name: "Késői nevű csoport", validFrom: new Date("2025-11-20T08:00:00Z") } } },
+    });
+    const speciesId = (await prisma.species.findFirstOrThrow({ where: { scientificName: "Teszt faj A" } })).id;
+    const d = "2025-11-05";
+    const now = new Date(`${d}T09:00:00+01:00`);
+    const { animalId } = await createLifecycleEvent(
+      f.admin,
+      { requestId: rid(), type: "ARRIVAL", newAnimal: { speciesId, name: "Novemberi Egy", sex: "MALE" }, toPoolId: f.pool("NAGY"), toGroupId: group.id, occurredAtLocal: `${d}T08:00`, reason: "teszt" },
+      now,
+    );
+    await setSelection(f.aq1, { requestId: rid(), day: d, animalIds: [animalId], selected: true }, now);
+    await saveFeedingItem(f.aq1, { requestId: rid(), day: d, groupId: group.id, feedId: feed["Teszt kagyló"], quantities: [{ value: "20", unitId: unit.g }] }, now);
+
+    const view = await feedingDayView(d);
+    expect(view.animals.find((x) => x.id === animalId)?.groupName).toBe("Késői nevű csoport");
+    const log = await feedingLog({ from: d, to: d, poolId: null, animalId: null });
+    expect(log.rows.map((r) => r.recipient)).toEqual(["Késői nevű csoport (csoport)"]);
+
+    const made = await createGroup(f.admin, { requestId: rid(), name: "Új teszt csoport" });
+    const names = await prisma.animalGroupName.findMany({ where: { groupId: made.id } });
+    expect(names.map((n) => n.validFrom.getTime())).toEqual([FIRST_NAME_FROM.getTime()]);
   });
 });
