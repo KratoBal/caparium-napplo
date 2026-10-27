@@ -542,6 +542,8 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
     animalHead.evaluate((el) => el.getBoundingClientRect().top),
   ]);
   expect(Math.abs(headTop - boxTop), "the header row stays at the top of the scrolled box").toBeLessThan(1);
+  // and it covers the rows passing under it: an opaque background (barracuda on #82)
+  expect(await animalHead.evaluate((el) => getComputedStyle(el).backgroundColor), "the stuck header covers the rows under it").not.toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
   await box.evaluate((el) => {
     el.style.maxHeight = "";
     el.scrollTop = 0;
