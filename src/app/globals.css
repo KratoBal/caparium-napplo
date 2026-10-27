@@ -174,8 +174,6 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .tile h3 { font-size: 20px; margin-top: 14px; }
 .tile .big { color: var(--c-primary); font-weight: 600; font-size: 19px; margin-top: 10px; }
 .tile.muted { opacity: 0.6; }
-.quick { margin-top: 28px; background: var(--c-ink); color: var(--c-white); border-radius: var(--radius); padding: 24px; }
-.quick p { color: #c5d7db; }
 
 /* ---- login ---- */
 .login-wrap { display: flex; justify-content: center; padding: 40px 16px; }
