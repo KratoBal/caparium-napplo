@@ -630,7 +630,7 @@ export async function feedingDayView(d: string) {
       feedId: it.feedId,
       feed: pickValid(it.feed.names, it.createdAt)?.name ?? "?",
       otherName: it.otherName,
-      quantities: it.quantities.map((q) => ({ value: canonicalDecimal(q.quantity), unit: q.unit.symbol })),
+      quantities: it.quantities.map((q) => ({ value: canonicalDecimal(q.quantity), unit: q.unit.symbol, unitId: q.unitId, dimension: q.unit.dimension })),
       // the feeding sheet's cells: the same amounts in the base unit of their dimension (g, ml, db)
       baseQuantities: it.quantities.map((q) => ({
         unit: baseOf.get(q.unit.dimension) ?? q.unit.symbol,

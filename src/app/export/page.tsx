@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SubmissionButtons, WaterMailButton, ZimsCreate } from "@/components/ExportActions";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
-import { divergence, previousMonth } from "@/lib/exports/zims";
+import { previousMonth } from "@/lib/exports/zims";
 import { SYSTEM_USER_ID } from "@/lib/db";
 import { getSetting, moduleLevel, pickValid } from "@/lib/master";
 import { requireUser } from "@/lib/session";
@@ -13,7 +12,6 @@ export const dynamic = "force-dynamic";
 
 const PURPOSE = { SUBMISSION: "Leadás", TRIAL: "Próbaimport", PREVIEW: "Előnézet" } as const;
 const STATE = { CREATED: "Elkészült, még nincs leadva", SUBMITTED: "Leadva", REJECTED: "A ZIMS elutasította" } as const;
-const KIND = { MODIFIED: "Leadás után módosult", INVALIDATED: "Leadás után érvénytelenítve", NOT_SUBMITTED: "Leadott időszakban, de nincs leadva" } as const;
 
 // E, F (feladat-4): Excel and ZIMS CSV; exporting is not submitting (T-20, R-9).
 export default async function ExportPage({ searchParams }: { searchParams: Promise<{ tol?: string; ig?: string; medence?: string | string[] }> }) {
@@ -32,15 +30,12 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
     orderBy: { code: "asc" },
   });
   const chosen = (Array.isArray(sp.medence) ? sp.medence : sp.medence ? [sp.medence] : []).filter((id) => pools.some((p) => p.id === id));
-  const [runs, diffs] = await Promise.all([
-    prisma.exportRun.findMany({
-      where: { kind: "ZIMS_CSV" },
-      include: { files: { select: { id: true, fileName: true, rowCount: true } } },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    }),
-    from <= to ? divergence(from, to) : Promise.resolve([]),
-  ]);
+  const runs = await prisma.exportRun.findMany({
+    where: { kind: "ZIMS_CSV" },
+    include: { files: { select: { id: true, fileName: true, rowCount: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
   const recipient = await getSetting(prisma, "water_report_recipient", now);
   const canSend = level === "RECORD" || level === "ADMIN";
   return (
@@ -114,33 +109,15 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
       <div className="card">
         <h2>ZIMS CSV</h2>
         <p className="hint">
-          Rendszerenként külön fájl. Az elkészült export még nincs a ZIMS-ben: amikor feltöltötted, jelöld „Leadva”-ként, és
-          a rendszer onnantól jelzi, ha egy leadott mérés megváltozik. A ZIMS-kompatibilitást a próbaimport igazolja.
+          Rendszerenként külön fájl. Az elkészült export még nincs a ZIMS-ben: amikor feltöltötted, jelöld „Leadva”-ként.
         </p>
         <ZimsCreate from={from} to={to} poolIds={chosen} />
       </div>
 
       <MonthlyPackage />
 
-      {diffs.length > 0 && (
-        <div className="card" data-testid="divergence">
-          <h2>Leadás után eltér ({diffs.length})</h2>
-          <p className="hint">Ezeket a sorokat újra le kell adni; hogy a ZIMS a javítást hogyan fogadja, a próbaimport dönti el (NY-18).</p>
-          <table className="log-table">
-            <thead><tr><th>Nap</th><th>Rendszer</th><th>Eltérés</th><th></th></tr></thead>
-            <tbody>
-              {diffs.map((d) => (
-                <tr key={`${d.kind}-${d.measurementId}`}>
-                  <td>{d.day}</td>
-                  <td>{d.poolName}</td>
-                  <td className="value-out">{KIND[d.kind]}</td>
-                  <td><Link href={`/naplo/${d.measurementId}`}>előzmény</Link></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* caparium-lili-1027 (Lili 2026-10-27 12:17 UTC): the "Leadás után eltér" list leaves the page for now; divergence()
+          stays in src/lib/exports/zims.ts. */}
 
       <div className="card">
         <h2>Korábbi ZIMS-exportok</h2>

@@ -70,7 +70,7 @@ export function useSend() {
 }
 
 export function Msg({ msg }: { msg: { ok: boolean; text: string } | null }) {
-  if (!msg) return null;
+  if (!msg?.text) return null;
   return (
     <span className={msg.ok ? "hint" : "err"} role="status">
       {msg.text}
@@ -194,12 +194,27 @@ export function DayFeeds({ day, types, chosen, editable }: { day: string; types:
   );
 }
 
-export function FinalizeList({ day }: { day: string }) {
+/**
+ * Lili 2026-10-27 12:18 and 12:23 UTC (item 5): one button at the bottom of the day's choice. Ticked animals and feeds, then
+ * "Takarmánylap kész" finalizes the list and brings the feeding sheet into view. Once finalized, the same place shows the
+ * state (the header's "Lista nincs kész" badge is gone).
+ */
+export function FinalizeList({ day, finalized, editable }: { day: string; finalized: boolean; editable: boolean }) {
   const { msg, busy, run } = useSend();
+  if (finalized || !editable) {
+    return (
+      <span className={`badge ${finalized ? "badge-valid" : "badge-pending"}`} data-testid="list-state">
+        {finalized ? "Takarmánylap kész" : "Takarmánylap nincs kész"}
+      </span>
+    );
+  }
+  async function finalize() {
+    if (await run("/api/feeding/finalize", { day }, "")) document.querySelector("[data-testid=feeding-sheet]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   return (
     <span>
-      <button className="btn" type="button" disabled={busy} onClick={() => void run("/api/feeding/finalize", { day }, "A lista kész.")}>
-        Lista kész
+      <button className="btn" type="button" disabled={busy} onClick={() => void finalize()}>
+        Takarmánylap kész
       </button>
       <Msg msg={msg} />
     </span>
@@ -239,6 +254,52 @@ function OtherNames({ id, names }: { id: string; names?: string[] }) {
   );
 }
 
+/**
+ * Lili 2026-10-27 12:42 UTC (item 8): a saved item loaded into its form by the row's "Módosítás" button. Saving sends the item's
+ * id and version, so the same item is updated (the server checks the version and writes the audit entry), not a new one added.
+ */
+export type EditItem = {
+  id: string;
+  version: number;
+  feedId: string;
+  otherName: string | null;
+  quantities: { value: string; unitId: string; dimension: string }[];
+  /** the feeding item's recipient key (animal id or g:<group id>) */
+  recipient?: string;
+  /** the withdrawal item's use day */
+  useDay?: string;
+};
+
+/** The form's fields from an item: the amounts with a decimal comma, as typed elsewhere. */
+function editFields(item: EditItem) {
+  return {
+    values: Object.fromEntries(item.quantities.map((q) => [q.dimension, q.value.replace(".", ",")])),
+    units: Object.fromEntries(item.quantities.map((q) => [q.dimension, q.unitId])),
+  };
+}
+
+/** "Módosítás" in a list row: quiet, beside "Érvénytelenítés" (item 8). */
+export function EditButton({ label, onEdit }: { label: string; onEdit: () => void }) {
+  return (
+    <button className="btn btn-row" type="button" onClick={onEdit} aria-label={`${label}: módosítás`}>
+      Módosítás
+    </button>
+  );
+}
+
+function EditBar({ busy, onCancel }: { busy: boolean; onCancel: () => void }) {
+  return (
+    <button className="btn btn-soft" type="button" disabled={busy} onClick={onCancel}>
+      Mégse
+    </button>
+  );
+}
+
+/** Brings a form being loaded with an item into view. */
+function showForm(testId: string) {
+  document.querySelector(`[data-testid=${testId}]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 export function ItemForm({
   day,
   recipients,
@@ -247,6 +308,8 @@ export function ItemForm({
   active,
   onActive,
   onDraft,
+  editing,
+  onEditDone,
 }: {
   day: string;
   recipients: Recipient[];
@@ -257,6 +320,9 @@ export function ItemForm({
   onActive?: (key: string) => void;
   /** EGY-06: what is typed but not saved yet, in base units */
   onDraft?: (draft: Record<string, number>) => void;
+  /** item 8: the item loaded by a row's "Módosítás" */
+  editing?: EditItem | null;
+  onEditDone?: () => void;
 }) {
   const [ownRec, setOwnRec] = useState(recipients[0]?.key ?? "");
   const rec = active ?? ownRec;
@@ -278,6 +344,18 @@ export function ItemForm({
     }
     onDraft(draft);
   }, [feed, values, units, onDraft]);
+  useEffect(() => {
+    if (!editing) return;
+    if (editing.recipient) setRec(editing.recipient);
+    setFeedId(editing.feedId);
+    setOther(editing.otherName ?? "");
+    const f = editFields(editing);
+    setValues(f.values);
+    setUnits(f.units);
+    showForm("item-form");
+    // the load runs once per chosen item
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
   if (recipients.length === 0) return <p className="hint">Tételt csak a listán kiválasztott állat vagy csoport kaphat.</p>;
   async function save() {
     if (!feed || !r) return;
@@ -286,10 +364,20 @@ export function ItemForm({
       .map((d) => ({ value: values[d.dimension].trim(), unitId: units[d.dimension] ?? d.units[0].id }));
     const ok = await run(
       "/api/feeding/items",
-      { day, feedId: feed.id, quantities, ...(r.animalId ? { animalId: r.animalId } : { groupId: r.groupId }), ...(feed.isOther ? { otherName: other.trim() } : {}) },
-      "Tétel mentve.",
+      {
+        day,
+        feedId: feed.id,
+        quantities,
+        ...(r.animalId ? { animalId: r.animalId } : { groupId: r.groupId }),
+        ...(feed.isOther ? { otherName: other.trim() } : {}),
+        ...(editing ? { itemId: editing.id, expectedVersion: editing.version } : {}),
+      },
+      editing ? "Tétel módosítva." : "Tétel mentve.",
     );
-    if (ok) setValues({});
+    if (ok) {
+      setValues({});
+      onEditDone?.();
+    }
   }
   return (
     <div className="toolbar" data-testid="item-form">
@@ -343,20 +431,21 @@ export function ItemForm({
         </label>
       ))}
       <button className="btn" type="button" disabled={busy} onClick={() => void save()}>
-        Tétel mentése
+        {editing ? "Módosítás mentése" : "Tétel mentése"}
       </button>
+      {editing && <EditBar busy={busy} onCancel={() => { setValues({}); onEditDone?.(); }} />}
       <Msg msg={msg} />
     </div>
   );
 }
 
-export function InvalidateButton({ url, version, label = "Érvénytelenítés" }: { url: string; version: number; label?: string }) {
+export function InvalidateButton({ url, version, label = "Érvénytelenítés", row = false }: { url: string; version: number; label?: string; row?: boolean }) {
   const { msg, busy, run } = useSend();
   const reasonsOn = useReasonsOn();
   return (
     <span>
       <button
-        className="btn btn-soft"
+        className={row ? "btn btn-row" : "btn btn-soft"}
         type="button"
         disabled={busy}
         onClick={() => {
@@ -374,7 +463,22 @@ export function InvalidateButton({ url, version, label = "Érvénytelenítés" }
 export type StatusView = { id: string; version: number; state: string; source: string; vitamin: boolean; medicine: boolean; medicineNote: string | null };
 
 /** KIV-01, KIV-04: one withdrawal item; the use day defaults to the next day (T-10). */
-export function WithdrawalForm({ day, useDay, feeds, otherNames }: { day: string; useDay: string; feeds: FeedOpt[]; otherNames?: string[] }) {
+export function WithdrawalForm({
+  day,
+  useDay,
+  feeds,
+  otherNames,
+  editing,
+  onEditDone,
+}: {
+  day: string;
+  useDay: string;
+  feeds: FeedOpt[];
+  otherNames?: string[];
+  /** item 8: the item loaded by a row's "Módosítás" */
+  editing?: EditItem | null;
+  onEditDone?: () => void;
+}) {
   const [feedId, setFeedId] = useState(feeds[0]?.id ?? "");
   const [other, setOther] = useState("");
   const [use, setUse] = useState(useDay);
@@ -382,13 +486,42 @@ export function WithdrawalForm({ day, useDay, feeds, otherNames }: { day: string
   const [units, setUnits] = useState<Record<string, string>>({});
   const { msg, busy, run } = useSend();
   const feed = feeds.find((x) => x.id === feedId);
+  useEffect(() => {
+    if (!editing) return;
+    setFeedId(editing.feedId);
+    setOther(editing.otherName ?? "");
+    if (editing.useDay) setUse(editing.useDay);
+    const f = editFields(editing);
+    setValues(f.values);
+    setUnits(f.units);
+    showForm("withdrawal-form");
+  }, [editing]);
+  function reset() {
+    setValues({});
+    setUse(useDay);
+    onEditDone?.();
+  }
   async function save() {
     if (!feed) return;
     const quantities = feed.dims
       .filter((d) => (values[d.dimension] ?? "").trim())
       .map((d) => ({ value: values[d.dimension].trim(), unitId: units[d.dimension] ?? d.units[0].id }));
-    const ok = await run("/api/withdrawals/items", { day, useDay: use, feedId: feed.id, quantities, ...(feed.isOther ? { otherName: other.trim() } : {}) }, "Kivétel mentve.");
-    if (ok) setValues({});
+    const ok = await run(
+      "/api/withdrawals/items",
+      {
+        day,
+        useDay: use,
+        feedId: feed.id,
+        quantities,
+        ...(feed.isOther ? { otherName: other.trim() } : {}),
+        ...(editing ? { itemId: editing.id, expectedVersion: editing.version } : {}),
+      },
+      editing ? "Kivétel módosítva." : "Kivétel mentve.",
+    );
+    if (ok) {
+      if (editing) reset();
+      else setValues({});
+    }
   }
   return (
     <div className="toolbar" data-testid="withdrawal-form">
@@ -436,10 +569,63 @@ export function WithdrawalForm({ day, useDay, feeds, otherNames }: { day: string
         <input className="input" type="date" value={use} onChange={(e) => setUse(e.target.value)} aria-label="Felhasználás napja" />
       </label>
       <button className="btn" type="button" disabled={busy} onClick={() => void save()}>
-        Kivétel mentése
+        {editing ? "Módosítás mentése" : "Kivétel mentése"}
       </button>
+      {editing && <EditBar busy={busy} onCancel={reset} />}
       <Msg msg={msg} />
     </div>
+  );
+}
+
+export type WithdrawalRow = {
+  id: string;
+  version: number;
+  type: string;
+  feedId: string;
+  feed: string;
+  otherName: string | null;
+  quantities: { value: string; unit: string; unitId: string; dimension: string }[];
+  useDay: string;
+};
+
+/**
+ * KIV-01 and item 8 (Lili 2026-10-27 12:42 UTC): the day's withdrawal items and the form under them. A row's "Módosítás" loads the
+ * item into the form; saving updates that item. A feed no longer active cannot be chosen in the form, so its row has no "Módosítás".
+ */
+export function WithdrawalItems({ day, useDay, feeds, otherNames, items, editable }: { day: string; useDay: string; feeds: FeedOpt[]; otherNames?: string[]; items: WithdrawalRow[]; editable: boolean }) {
+  const [editing, setEditing] = useState<EditItem | null>(null);
+  return (
+    <>
+      <div className="table-scroll">
+        <table className="log-table" data-testid="withdrawal-list">
+          <thead>
+            <tr><th>Típus</th><th>Takarmány</th><th>Mennyiség</th><th>Felhasználás napja</th><th></th></tr>
+          </thead>
+          <tbody>
+            {items.map((i) => {
+              const name = i.otherName ? `${i.feed}: ${i.otherName}` : i.feed;
+              return (
+                <tr key={i.id} className={editing?.id === i.id ? "active-row" : undefined}>
+                  <td>{i.type}</td>
+                  <td>{name}</td>
+                  <td>{i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")}</td>
+                  <td>{i.useDay}</td>
+                  <td className="keep">
+                    {editable && (
+                      <span className="row-actions">
+                        {feeds.some((f) => f.id === i.feedId) && <EditButton label={name} onEdit={() => setEditing({ id: i.id, version: i.version, feedId: i.feedId, otherName: i.otherName, quantities: i.quantities, useDay: i.useDay })} />}
+                        <InvalidateButton url={`/api/withdrawals/items/${i.id}/invalidate`} version={i.version} row />
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {editable && <WithdrawalForm day={day} useDay={useDay} feeds={feeds} otherNames={otherNames} editing={editing} onEditDone={() => setEditing(null)} />}
+    </>
   );
 }
 
@@ -494,7 +680,8 @@ export function PlanForm({ animalId, weekdays }: { animalId: string; weekdays: n
 /** JAV-08: selects the animals planned for the day's weekday; it only adds to the common list. */
 function planText(res: Record<string, unknown>): string {
   const skipped = Array.isArray(res.skipped) ? (res.skipped as string[]) : [];
-  if (skipped.length === 0) return "A terv szerinti állatok a listán.";
+  // Lili 2026-10-27 (item 4): the plain success says nothing in the header bar; the ticked boxes show it
+  if (skipped.length === 0) return "";
   return `A terv szerinti állatok a listán, kivéve, akinek ma kézi koplalónapja van: ${skipped.join(", ")}. Őket kézzel lehet felvenni.`;
 }
 

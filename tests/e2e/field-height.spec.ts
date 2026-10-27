@@ -38,7 +38,8 @@ const PAGES = [
 // so they are taller than a plain tab on purpose; the plain tabs (weekly page and the rest) stay at 48px.
 // .btn-mini and .order-place: the small up/down buttons and the place number of the animal order list, smaller on purpose
 // (Lili 2026-10-26, msg 1564366690601664713: "a fel/le gomb maradjon, de kisebb méretben").
-const OWN_SIZE = ".cell-input, .meta-select, .helper, .helper *, .helper-on, .tab-picture, .btn-mini, .order-place";
+// .btn-row: the "Módosítás" and "Érvénytelenítés" buttons inside a list row, small and quiet on purpose (Lili 2026-10-27 12:46 UTC).
+const OWN_SIZE = ".cell-input, .meta-select, .helper, .helper *, .helper-on, .tab-picture, .btn-mini, .order-place, .btn-row";
 
 type Control = { what: string; height: number; ownSize: boolean; native: boolean };
 

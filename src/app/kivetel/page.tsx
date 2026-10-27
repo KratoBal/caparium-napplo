@@ -1,6 +1,6 @@
 import { DayControls } from "@/components/DayControls";
-import { DayNav } from "@/components/DayNav";
-import { CloseWithdrawalDay, InvalidateButton, WithdrawalForm, type FeedOpt } from "@/components/FeedingForms";
+import { DayJump, DayNav } from "@/components/DayNav";
+import { CloseWithdrawalDay, WithdrawalItems, type FeedOpt } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
@@ -62,15 +62,7 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
       <div className="toolbar">
         <DayNav path="/kivetel" day={day} today={today} />
         {/* Lili 2026-10-26: a date picker, as on the water measurement pages; the compare period is kept */}
-        <form method="get" action="/kivetel" style={{ display: "flex", gap: 10, alignItems: "flex-end" }} data-testid="day-picker">
-          <input type="hidden" name="tol" value={from} />
-          <input type="hidden" name="ig" value={to} />
-          <label className="field">
-            Nap
-            <input className="input" type="date" name="nap" defaultValue={day} max={today} />
-          </label>
-          <button className="btn btn-soft" type="submit">Ugrás</button>
-        </form>
+        <DayJump path="/kivetel" day={day} today={today} keep={{ tol: from, ig: to }} />
         <span className="spacer" />
         <span className="pill" data-testid="withdrawal-total">
           Kivéve: {Object.entries(view.totals).map(([u, v]) => `${num(v)} ${u}`).join(", ") || "semmi"}
@@ -81,25 +73,7 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
       <div className="card">
         <h2>Kivett takarmány</h2>
         <p className="hint">Amit ma kiveszel a fagyasztóból; a felhasználás napja alapból a holnap. A darab és a tömeg külön összeg.</p>
-        <div className="table-scroll">
-          <table className="log-table" data-testid="withdrawal-list">
-            <thead>
-              <tr><th>Típus</th><th>Takarmány</th><th>Mennyiség</th><th>Felhasználás napja</th><th></th></tr>
-            </thead>
-            <tbody>
-              {view.items.map((i) => (
-                <tr key={i.id}>
-                  <td>{i.type}</td>
-                  <td>{i.otherName ? `${i.feed}: ${i.otherName}` : i.feed}</td>
-                  <td>{i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")}</td>
-                  <td>{i.useDay}</td>
-                  <td className="keep">{editable && <InvalidateButton url={`/api/withdrawals/items/${i.id}/invalidate`} version={i.version} />}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {editable && <WithdrawalForm day={day} useDay={addDays(day, 1)} feeds={feeds} otherNames={otherNames} />}
+        <WithdrawalItems day={day} useDay={addDays(day, 1)} feeds={feeds} otherNames={otherNames} items={view.items} editable={editable} />
       </div>
 
       <div className="card">

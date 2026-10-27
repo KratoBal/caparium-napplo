@@ -38,7 +38,7 @@ export function ZimsCreate({ from, to, poolIds }: { from: string; to: string; po
     router.refresh();
   }
   return (
-    <div className="toolbar" data-testid="zims-create">
+    <div className="toolbar toolbar-end" data-testid="zims-create">
       <label className="field">
         Cél
         <select className="input" value={purpose} onChange={(e) => setPurpose(e.target.value as typeof purpose)} aria-label="Az export célja">
