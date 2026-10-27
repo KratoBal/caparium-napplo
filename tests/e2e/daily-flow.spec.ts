@@ -363,6 +363,28 @@ test("animals: the list from the events, a transfer recorded, the history kept; 
   await page.getByRole("link", { name: "Takarmánylista" }).click();
   await expect(page.getByTestId("feeds-RAK")).toContainText("Litopenaeus vannamei");
   await expect(page.getByTestId("feeds-RAK")).toContainText("tömeg és darab");
+
+  // Lili 2026-10-27 22:42 and 22:45 UTC: a feed of the list is changed with a small quiet "Módosítás" beside the
+  // activation (both buttons the small kind); the name is a correction, the unit only while nothing was recorded
+  const feedName = `E2E rák ${info.project.name}`;
+  const newFeed = page.getByTestId("new-feed");
+  await newFeed.getByLabel("Takarmány neve").fill(feedName);
+  await newFeed.getByLabel("Alapértelmezett egység").selectOption({ label: "g" });
+  await newFeed.getByRole("button", { name: "Felvétel" }).click();
+  await expect(newFeed.getByRole("status")).toHaveText("Takarmány felvéve.");
+  const feedRow = page.getByRole("row").filter({ hasText: feedName });
+  const edit = feedRow.getByRole("button", { name: `${feedName}: módosítás` });
+  await expect(edit).toHaveClass(/btn-row/);
+  await expect(feedRow.getByRole("button", { name: "Inaktiválás" })).toHaveClass(/btn-row/);
+  page.once("dialog", (d) => void d.accept());
+  await edit.click();
+  const editor = feedRow.locator('[data-testid^="feed-edit-"]');
+  await editor.getByLabel("Takarmány új neve").fill(`${feedName} javított`);
+  await editor.getByLabel("darabban is").check();
+  await editor.getByRole("button", { name: "Mentés" }).click();
+  const renamed = page.getByRole("row").filter({ hasText: `${feedName} javított` });
+  await expect(renamed).toContainText("tömeg és darab");
+  await expect(renamed.locator('[data-testid^="feed-edit-"]'), "the editor closes after the save").toHaveCount(0);
 });
 
 test("feeding: the daily list, an item in pieces and grams, the list finalized; the eating log", async ({ page }, info) => {
