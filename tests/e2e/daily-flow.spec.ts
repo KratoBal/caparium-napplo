@@ -811,7 +811,7 @@ test("reports: the tables and the Excel; no daily report menu any more", async (
   // VIZ-20: the monthly package's card on the export page; the overview's feeding tile
   await page.getByRole("link", { name: "Export" }).click();
   await expect(page.getByTestId("monthly-package")).toContainText("Havi ZIMS-csomag");
-  await page.getByRole("link", { name: "Áttekintés" }).click();
+  await page.getByRole("link", { name: "START", exact: true }).click();
   await expect(page.getByTestId("home-evesi")).toBeVisible();
 });
 
@@ -925,8 +925,10 @@ test("the helper: a quick question about the page, switched off and on", async (
   await form.getByRole("button", { name: "+ Adagolás mentése" }).click();
   await expect(form.getByRole("status")).toHaveText("Adagolás mentve.");
   // a fresh session on the overview: the pages before may already have shown the alert
-  await page.getByRole("link", { name: "Áttekintés" }).click();
-  await expect(page.getByRole("heading", { name: "Mai áttekintés" })).toBeVisible();
+  await page.getByRole("link", { name: "START", exact: true }).click();
+  // Lili 2026-10-27 13:02 UTC: the start page has no "Mai áttekintés" title; what is under the bar stays
+  await expect(page.getByRole("heading", { name: "Jó munkát!" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mai áttekintés" })).toHaveCount(0);
   await page.evaluate(() => sessionStorage.clear());
   await page.reload();
   // AST-03: the overview's helper opens by itself, once

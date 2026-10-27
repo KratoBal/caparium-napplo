@@ -15,7 +15,8 @@ export async function Shell({
   helper,
   children,
 }: {
-  title: string;
+  /** none on the start page (Lili 2026-10-27 13:02 UTC): the bar keeps the day and the user */
+  title?: string;
   active?: NavKey;
   user: SessionUser | null;
   /** AST-01: the page's helper, if it has one */
@@ -31,8 +32,9 @@ export async function Shell({
         <div className="brand-sub">nAPPló</div>
       </div>
       <header className="topbar">
-        <h1>{title}</h1>
+        {title && <h1>{title}</h1>}
         <span className="pill" data-testid="today">{today}</span>
+        {!title && <span style={{ flex: 1 }} aria-hidden="true" />}
         {user && (
           <div className="userbox">
             <span data-testid="current-user">

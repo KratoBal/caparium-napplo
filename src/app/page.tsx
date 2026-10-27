@@ -65,7 +65,7 @@ export default async function OverviewPage() {
         })
       : [];
   return (
-    <Shell title="Mai áttekintés" active="overview" user={user} helper={water ? await waterHelper(dosing) : feeding ? await feedingHelper(dosing) : null}>
+    <Shell active="overview" user={user} helper={water ? await waterHelper(dosing) : feeding ? await feedingHelper(dosing) : null}>
       <h2 style={{ fontSize: 40 }}>Jó munkát!</h2>
       <p className="hint" style={{ fontSize: 17 }}>A mai feladatok és a naplók állapota egy helyen.</p>
       {/* the daily count the old tile carried */}
