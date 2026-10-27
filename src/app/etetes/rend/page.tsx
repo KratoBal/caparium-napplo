@@ -36,7 +36,7 @@ export default async function TimetablePage() {
       {
         <FeedingListsEditor
           lists={lists}
-          animals={view.animals.map((a) => ({ id: a.id, name: a.name, poolName: a.poolName, poolEmoji: a.poolEmoji }))}
+          animals={view.animals.map((a) => ({ id: a.id, name: a.name, poolName: a.poolName, poolEmoji: a.poolEmoji, poolSortOrder: a.poolSortOrder }))}
           types={feedTypes}
         />
       }

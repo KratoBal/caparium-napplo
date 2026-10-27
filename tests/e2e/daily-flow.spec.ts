@@ -1087,6 +1087,19 @@ test("animals: the starting list's status line, and an admin loads it with one c
   await expect(page.getByTestId("animals-table")).toContainText("Ráják");
 });
 
+// Lili 2026-10-27 22:15 UTC (acrobot 37086): the "Ki eszik ma" pool lines in the pools' own order (Pool.sortOrder), not by
+// name. After the starting list's load (the test above), so several pools have animals.
+test("feeding: the pool lines of the day's chooser in the pools' own order", async ({ page }) => {
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
+  await expect(page.getByTestId("animal-chooser")).toBeVisible();
+  const heads = (await page.locator('[data-testid^="group-head-"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.slice("group-head-".length))));
+  const order = ["Nagymedence", "Karantén", "Kismedence", "Ragadozós", "Korallos", "Inkubátor", "Kis sózó", "Sózó"];
+  const known = heads.filter((h) => order.includes(h));
+  expect(known.length, `pools with animals: ${heads.join(", ")}`).toBeGreaterThanOrEqual(3);
+  expect(known).toEqual([...known].sort((x, y) => order.indexOf(x) - order.indexOf(y)));
+});
+
 // Lili 2026-10-27 20:44 UTC (acrobot 37043): the list, the open animal, a new animal, the starting list without its
 // explanation, and the order block last.
 test("animals page: the blocks in Lili's order, the starting list without its explanation", async ({ page }) => {
