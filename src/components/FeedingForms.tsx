@@ -146,7 +146,19 @@ export type FeedTypeOpt = { code: string; name: string; emoji: string | null; fe
  * The list's second step (6fe63c9b): the feeds given that day, by type. Saved for the day; the item form and the
  * feeding sheet then offer only these (and "Egyéb"). Nothing chosen offers every feed, as before.
  */
-export function DayFeeds({ day, types, chosen, editable }: { day: string; types: FeedTypeOpt[]; chosen: string[]; editable: boolean }) {
+export function DayFeeds({
+  day,
+  types,
+  chosen,
+  editable,
+  finalized,
+}: {
+  day: string;
+  types: FeedTypeOpt[];
+  chosen: string[];
+  editable: boolean;
+  finalized: boolean;
+}) {
   const [picked, setPicked] = useState<string[]>(chosen);
   // reset only when the SAVED choice changes: a refresh after another action brings a new array with the same
   // content, and resetting on it dropped a tick not saved yet (measured in the e2e)
@@ -184,15 +196,39 @@ export function DayFeeds({ day, types, chosen, editable }: { day: string; types:
       ))}
       {editable && (
         <div className="toolbar">
-          <button className="btn" type="button" disabled={busy || !changed} onClick={() => void run("/api/feeding/day-feeds", { day, feedIds: picked }, "A nap takarmányai mentve.")}>
-            A nap takarmányainak mentése
-          </button>
+          {finalized ? (
+            <>
+              <FinalizeList day={day} finalized editable />
+              {/* after the list is ready, a changed choice still needs a way in; the button shows only then */}
+              {changed && (
+                <button className="btn" type="button" disabled={busy} onClick={() => void run("/api/feeding/day-feeds", { day, feedIds: picked }, "A nap takarmányai mentve.")}>
+                  A nap takarmányainak mentése
+                </button>
+              )}
+            </>
+          ) : (
+            <button className="btn" type="button" disabled={busy} onClick={() => void ready()}>
+              Takarmánylap kész
+            </button>
+          )}
           <Msg msg={msg} />
         </div>
       )}
     </div>
   );
+
+  /**
+   * Lili 2026-10-27 22:47 UTC: ONE button records the choice above and makes the feeding sheet. A changed choice is
+   * saved first; when that fails, the list is not finalized (the ticks would be lost behind a finished sheet).
+   */
+  async function ready() {
+    if (changed && !(await run("/api/feeding/day-feeds", { day, feedIds: picked }, ""))) return;
+    if (await run("/api/feeding/finalize", { day }, "")) scrollToSheet();
+  }
 }
+
+const scrollToSheet = () =>
+  document.querySelector("[data-testid=feeding-sheet]")?.scrollIntoView({ behavior: "smooth", block: "start" });
 
 /**
  * Lili 2026-10-27 12:18 and 12:23 UTC (item 5): one button at the bottom of the day's choice. Ticked animals and feeds, then
@@ -209,7 +245,7 @@ export function FinalizeList({ day, finalized, editable }: { day: string; finali
     );
   }
   async function finalize() {
-    if (await run("/api/feeding/finalize", { day }, "")) document.querySelector("[data-testid=feeding-sheet]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (await run("/api/feeding/finalize", { day }, "")) scrollToSheet();
   }
   return (
     <span>

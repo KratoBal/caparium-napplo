@@ -124,8 +124,9 @@ export function FeedingDay(props: {
         <div className="card">
           <h2>A nap takarmányai</h2>
           <p className="hint">A második lépés: mit kapnak ma az állatok. A takarmánylap oszlopai és a tétel takarmány-listája ezek lesznek; ha nincs kiválasztva semmi, minden takarmány választható.</p>
-          <DayFeeds day={day} types={props.feedTypes} chosen={props.dayFeedIds ?? []} editable={editable} />
-          {finalizeBar}
+          {/* the feeds' one button saves the choice and finalizes (Lili 2026-10-27 22:47 UTC); a read-only day shows the state */}
+          <DayFeeds day={day} types={props.feedTypes} chosen={props.dayFeedIds ?? []} editable={editable} finalized={props.finalized} />
+          {!editable && finalizeBar}
         </div>
       )}
       {/* keyed by the day: DayNav changes ?nap= on the same route, which keeps a client component's state, so a

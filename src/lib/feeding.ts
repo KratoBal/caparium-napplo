@@ -12,7 +12,7 @@ import { diffFields, writeAudit } from "./audit";
 import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
-import { ensureJournalDay, moduleLevel, pickValid } from "./master";
+import { ensureJournalDay, moduleLevel, nameAt, pickValid } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { closedAt } from "./measurements";
@@ -602,7 +602,7 @@ export async function feedingDayView(d: string) {
         id: a.id,
         name: pickValid(a.names, at)?.name ?? a.names.at(-1)?.name ?? "?",
         groupId: m?.groupId ?? null,
-        groupName: m ? pickValid(m.group.names, at)?.name ?? "?" : null,
+        groupName: m ? nameAt(m.group.names, at)?.name ?? "?" : null,
         poolName: p ? pickValid(p.pool.names, at)?.displayName ?? p.pool.code : null,
         poolEmoji: p?.pool.emoji ?? null,
         poolSortOrder: p?.pool.sortOrder ?? null,
