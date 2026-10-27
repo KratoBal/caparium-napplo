@@ -85,7 +85,8 @@ export async function waterReport(day: string): Promise<WaterReport> {
     dilution: m.dilution,
     diluentWater: m.diluentWater,
   });
-  const pools = await prisma.pool.findMany({ where: { active: true }, include: { names: true }, orderBy: { code: "asc" } });
+  // the pools in their fixed order (Lili 2026-10-26, msg 1564418747047874581); one never placed comes after the placed ones, by code
+  const pools = await prisma.pool.findMany({ where: { active: true }, include: { names: true }, orderBy: [{ sortOrder: { sort: "asc", nulls: "last" } }, { code: "asc" }] });
   const sortOf = new Map(rows.map((m) => [m.parameterId, m.parameter.sortOrder]));
   const ordered = (list: (typeof rows)[number][]) => list.sort((a, b) => (sortOf.get(a.parameterId) ?? 0) - (sortOf.get(b.parameterId) ?? 0)).map(view);
   return {

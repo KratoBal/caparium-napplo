@@ -65,15 +65,17 @@ export const ZIMS_UNIT_NAMES: Record<string, string> = {
   mV: "millivolt", // the ZIMS sample file's spelling; the zoo confirmed it (2026-10-21)
 };
 
+// `order` is the pool's place in the water report PDF (Lili 2026-10-26, msg 1564418747047874581); the same numbers the migration
+// 20261027000000_pool_sort_order gives the pools of a database that already exists
 export const POOLS = [
-  { code: "NAGY", name: "Nagymedence" },
-  { code: "KIS", name: "Kismedence" },
-  { code: "KARANTEN", name: "Karantén" },
-  { code: "KORALLOS", name: "Korallos" },
-  { code: "INKUBATOR", name: "Inkubátor" },
-  { code: "RAGADOZOS", name: "Ragadozós" },
-  { code: "KIS_SOZO", name: "Kis sózó" },
-  { code: "SOZO", name: "Sózó" },
+  { code: "NAGY", name: "Nagymedence", order: 0 },
+  { code: "KARANTEN", name: "Karantén", order: 1 },
+  { code: "KIS", name: "Kismedence", order: 2 },
+  { code: "RAGADOZOS", name: "Ragadozós", order: 3 },
+  { code: "KORALLOS", name: "Korallos", order: 4 },
+  { code: "INKUBATOR", name: "Inkubátor", order: 5 },
+  { code: "KIS_SOZO", name: "Kis sózó", order: 6 },
+  { code: "SOZO", name: "Sózó", order: 7 },
 ];
 
 export const GROUPS = [
@@ -162,7 +164,7 @@ export async function loadBaseData(prisma: PrismaClient): Promise<BaseDataIds> {
     const existing = await prisma.pool.findUnique({ where: { code: p.code } });
     const row =
       existing ??
-      (await prisma.pool.create({ data: { code: p.code, names: { create: { displayName: p.name, validFrom: SINCE } } } }));
+      (await prisma.pool.create({ data: { code: p.code, sortOrder: p.order, names: { create: { displayName: p.name, validFrom: SINCE } } } }));
     poolId.set(p.code, row.id);
   }
 

@@ -260,8 +260,10 @@ export async function createPool(actor: Actor, raw: z.input<typeof createPoolSch
       if (clash) throw new AppError(409, "NAME_TAKEN", "Ilyen nevű aktív medence már van.");
       const groups = await tx.measurementGroup.findMany({ where: { id: { in: input.groupIds }, active: true }, orderBy: { sortOrder: "asc" } });
       if (groups.length !== input.groupIds.length) throw new AppError(422, "GROUP_NOT_FOUND", "A kiválasztott mérési csoport nem található.");
+      // at the end of the water report's order: the next number after the highest one
+      const last = await tx.pool.aggregate({ _max: { sortOrder: true } });
       const pool = await tx.pool.create({
-        data: { code: input.code, emoji, volumeLiters: volume, names: { create: { displayName: input.name, validFrom: FIRST_NAME_FROM } } },
+        data: { code: input.code, emoji, volumeLiters: volume, sortOrder: (last._max.sortOrder ?? -1) + 1, names: { create: { displayName: input.name, validFrom: FIRST_NAME_FROM } } },
       });
       const from = dayBounds(businessDayOf(now)).start;
       for (const g of groups) {

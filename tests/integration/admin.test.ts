@@ -218,6 +218,9 @@ describe("a new pool (Lili 2026-10-26, point 3)", () => {
     });
     // nothing that existed changed: the old pools, names and memberships are equal row by row, the measurements as many
     const after = await snapshot();
+    // the new pool goes to the end of the water report's order (Lili 2026-10-26, msg 1564418747047874581)
+    const highest = Math.max(...before.pools.map((p) => p.sortOrder ?? -1));
+    expect(row.sortOrder).toBe(highest + 1);
     expect(after.pools.filter((p) => p.id !== r.id)).toEqual(before.pools);
     expect(after.names.filter((n) => n.poolId !== r.id)).toEqual(before.names);
     expect(after.memberships.filter((m) => m.poolId !== r.id)).toEqual(before.memberships);
