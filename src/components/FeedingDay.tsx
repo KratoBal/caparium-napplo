@@ -99,7 +99,6 @@ export function FeedingDay(props: {
                   <label key={a.id} className="check">
                     <SelectBox day={day} animalId={a.id} name={a.name} selected={a.selected} disabled={!editable} />
                     {a.name}
-                    {a.groupName && <small className="hint"> ({a.groupName})</small>}
                   </label>
                 ))}
               </div>

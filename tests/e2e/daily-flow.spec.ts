@@ -492,6 +492,10 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   await expect(page.getByRole("button", { name: /összes kijelölése|Egyik sem/i })).toHaveCount(0);
   await page.getByRole("switch", { name: "Nagymedence: mind kijelölve" }).check();
   await expect(page.getByLabel(`${name} a mai listán`)).toBeChecked();
+  // Lili 2026-10-26 (Caparium channel msg 1564401863950995497): the animals only, no group names, in the "Ki eszik ma" list
+  // (Teszt Egy and Teszt Kettő belong to "Teszt csoport", which the old list wrote after their names)
+  await expect(page.getByTestId("animal-chooser")).toContainText(name);
+  await expect(page.getByTestId("animal-chooser")).not.toContainText("Teszt csoport");
   await expect(page.getByTestId("animal-chooser").getByRole("status").filter({ hasText: /Kiválasztva|Kivéve/ })).toHaveCount(0);
   const title = page.getByTestId("group-head-Nagymedence").locator(".section-title");
   expect(await title.evaluate((el) => { const c = getComputedStyle(el); return [c.fontWeight, c.color, c.fontSize]; })).toEqual(["700", "rgb(0, 0, 0)", "18px"]);
