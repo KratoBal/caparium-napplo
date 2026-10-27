@@ -8,7 +8,7 @@ import { deviates } from "@/lib/calc-math";
 import { chooserPools, sortDayAnimals } from "@/lib/day-animals";
 import { GIVEN } from "@/lib/eating-labels";
 import type { DayAnimal } from "@/lib/feeding";
-import { DayFeeds, EditButton, FinalizeList, GroupSwitch, InvalidateButton, ItemForm, SelectBox, type EditItem, type FeedOpt, type FeedTypeOpt, type Recipient } from "./FeedingForms";
+import { DayFeeds, FinalizeList, GroupSwitch, InvalidateButton, ItemForm, SelectBox, type FeedOpt, type FeedTypeOpt, type Recipient } from "./FeedingForms";
 import { FeedingSheet } from "./FeedingSheet";
 
 type Item = {
@@ -51,7 +51,6 @@ export function FeedingDay(props: {
   const [active, setActive] = useState(recipients[0]?.key ?? "");
   const [draft, setDraft] = useState<Record<string, number>>({});
   const onDraft = useCallback((d: Record<string, number>) => setDraft(d), []);
-  const [editing, setEditing] = useState<EditItem | null>(null);
   const names = new Map(animals.map((a) => [a.id, a.name]));
   // the chooser's lines (Lili 2026-10-26, card f67b1a06): one line per POOL, the animals arrive sorted by pool, then by name
   const chooserGroups = chooserPools(sortDayAnimals(animals));
@@ -83,13 +82,10 @@ export function FeedingDay(props: {
       <FinalizeList day={day} finalized={props.finalized} editable={editable} />
     </div>
   );
-  // item 8 (Lili 2026-10-27 12:42 UTC): "Módosítás" loads the item into the form below; only where the form can show it (the
-  // recipient is on today's list, the feed is offered). Both row buttons are the quiet kind (12:46 UTC).
-  const rowButtons = (key: string, i: Item) => (
+  // Lili 2026-10-27 23:08 UTC: no "Módosítás" on the day's items, the feeding sheet corrects them; the quiet
+  // "Érvénytelenítés" stays (12:46 UTC)
+  const rowButtons = (i: Item) => (
     <span className="row-actions">
-      {isRecipient(key) && feeds.some((f) => f.id === i.feedId) && (
-        <EditButton label={line(i)} onEdit={() => setEditing({ id: i.id, version: i.version, feedId: i.feedId, otherName: i.otherName, quantities: i.quantities, recipient: key })} />
-      )}
       <InvalidateButton url={`/api/feeding/items/${i.id}/invalidate`} version={i.version} row />
     </span>
   );
@@ -142,8 +138,7 @@ export function FeedingDay(props: {
           {activeLabel && (
             <p className="banner banner-ok" data-testid="live-total">
               {activeLabel}: eddig {fmt(saved) || "semmi"}
-              {/* while an item is being changed the typed amount replaces it, so it is not added to the saved total */}
-              {editing ? " · egy tétel módosítása" : Object.keys(draft).length > 0 && ` · most beírva ${fmt(draft)} · együtt ${fmt(together)}`}
+              {Object.keys(draft).length > 0 && ` · most beírva ${fmt(draft)} · együtt ${fmt(together)}`}
             </p>
           )}
           <ItemForm
@@ -154,8 +149,6 @@ export function FeedingDay(props: {
             active={active}
             onActive={setActive}
             onDraft={onDraft}
-            editing={editing}
-            onEditDone={() => setEditing(null)}
           />
         </div>
       )}
@@ -178,7 +171,7 @@ export function FeedingDay(props: {
                   <td className="keep">
                     {itemsFor(a.id).map((i) => (
                       <div key={i.id}>
-                        {line(i)} {editable && rowButtons(a.id, i)}
+                        {line(i)} {editable && rowButtons(i)}
                       </div>
                     ))}
                   </td>
@@ -201,7 +194,7 @@ export function FeedingDay(props: {
                               nincs kiválasztott tag: az érvénytelenítés külön döntés
                             </span>
                           )}{" "}
-                          {editable && rowButtons(`g:${g.id}`, i)}
+                          {editable && rowButtons(i)}
                         </div>
                       ))}
                     </td>
