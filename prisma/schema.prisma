@@ -120,7 +120,7 @@ model Pool {
   emoji        String?
   // the fixed order of the pools in the water report PDF (Lili 2026-10-26, Caparium channel msg 1564418747047874581): the first
   // values are Nagymedence, Karantén, Kismedence, Ragadozós, Korallos, Inkubátor, then the salt pools; a new pool takes the next
-  // number, at the end. null = never placed (after the placed ones, by code).
+  // number, at the end. null = never placed (after the placed ones, in the order they were created).
   sortOrder    Int?
   // caparium-hibak-3: the pool's volume in litres, the chemical calculator works with it; null = not given yet
   volumeLiters Decimal?  @db.Decimal(14, 4)

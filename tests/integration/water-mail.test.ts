@@ -86,6 +86,35 @@ describe("the pools' order in the report", () => {
   });
 });
 
+// acrobot 2026-10-27 01:41: a pool WITHOUT a number (made before the order existed, or by hand) comes after the numbered ones, in
+// the order it was created, whatever its code says; and a pool added through the form takes the highest number plus one.
+describe("pools without a number in the report", () => {
+  const day = "2027-10-06";
+  const made: string[] = [];
+  afterAll(async () => {
+    await prisma.pool.updateMany({ where: { id: { in: made } }, data: { active: false } });
+    await prisma.groupMembership.updateMany({ where: { poolId: { in: made }, validTo: null }, data: { validTo: new Date() } });
+  });
+  const unnumbered = async (code: string, name: string) => {
+    const p = await prisma.pool.create({ data: { code, names: { create: { displayName: name, validFrom: new Date("1970-01-01T00:00:00Z") } } } });
+    await prisma.groupMembership.create({ data: { groupId: f.group("NAPI_KIS"), poolId: p.id, sortOrder: 90 + made.length, validFrom: new Date("1970-01-01T00:00:00Z") } });
+    made.push(p.id);
+    await new Promise((r) => setTimeout(r, 20)); // distinct creation times
+    return p;
+  };
+  it("come after the numbered pools, by creation, not by code", async () => {
+    // created first, code last in the alphabet; created second, code first
+    const first = await unnumbered(`ZZZ_${rid().slice(-6).toUpperCase().replace(/[^A-Z0-9]/g, "X")}`, "Régi számozatlan");
+    const second = await unnumbered(`AAA_${rid().slice(-6).toUpperCase().replace(/[^A-Z0-9]/g, "X")}`, "Újabb számozatlan");
+    expect([first.sortOrder, second.sortOrder]).toEqual([null, null]);
+    await measure("NAPI_KIS", "INKUBATOR", "TEMP", "24", `${day}T07:00`);
+    await createMeasurement(f.aq1, { requestId: rid(), groupId: f.group("NAPI_KIS"), poolId: second.id, parameterId: f.param("TEMP"), value: "24", measuredAtLocal: `${day}T07:01` }, cest(`${day}T07:01`));
+    await createMeasurement(f.aq1, { requestId: rid(), groupId: f.group("NAPI_KIS"), poolId: first.id, parameterId: f.param("TEMP"), value: "24", measuredAtLocal: `${day}T07:02` }, cest(`${day}T07:02`));
+    const r = await waterReport(day);
+    expect(r.pools.map((p) => p.pool)).toEqual(["Inkubátor", "Régi számozatlan", "Újabb számozatlan"]);
+  });
+});
+
 describe("the recipient and the sending", () => {
   it("no recipient: refused before anything is built; an aquarist cannot set it; a settings admin can, audited", async () => {
     Object.assign(process.env, SMTP);
