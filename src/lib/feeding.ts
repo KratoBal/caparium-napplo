@@ -561,7 +561,17 @@ export async function invalidateFeedingItem(actor: Actor, id: string, input: z.i
 // The day view (EGY-06, EGY-08: totals per unit, never across dimensions)
 // ---------------------------------------------------------------------------
 
-export type DayAnimal = { id: string; name: string; groupId: string | null; groupName: string | null; poolName: string | null; poolEmoji: string | null; selected: boolean };
+export type DayAnimal = {
+  id: string;
+  name: string;
+  groupId: string | null;
+  groupName: string | null;
+  poolName: string | null;
+  poolEmoji: string | null;
+  /** the pool's place, for the "Ki eszik ma" pool lines (day-animals.ts) */
+  poolSortOrder: number | null;
+  selected: boolean;
+};
 
 export async function feedingDayView(d: string) {
   const { start, end } = dayBounds(d);
@@ -595,6 +605,7 @@ export async function feedingDayView(d: string) {
         groupName: m ? pickValid(m.group.names, at)?.name ?? "?" : null,
         poolName: p ? pickValid(p.pool.names, at)?.displayName ?? p.pool.code : null,
         poolEmoji: p?.pool.emoji ?? null,
+        poolSortOrder: p?.pool.sortOrder ?? null,
         selected: selected.has(a.id),
         sortOrder: a.sortOrder,
       };
