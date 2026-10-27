@@ -4,7 +4,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createLifecycleEvent, editAnimal, invalidateLifecycleEvent, listAnimals, rebuildAnimal, renameEntity, setAnimalOrder } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { createFeed, updateFeed } from "@/lib/feeds";
+import { saveFeedingItem, setSelection } from "@/lib/feeding";
+import { createFeed, listFeeds, updateFeed } from "@/lib/feeds";
 import { fixtures, rid, withReasons } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -243,6 +244,45 @@ describe("feeds (DAT-02, TAK-07, T-08)", () => {
     expect(feed.allowedDimensions.sort()).toEqual(["COUNT", "MASS"]);
     await updateFeed(f.admin, r.id, { requestId: rid(), active: false });
     expect((await prisma.feed.findUniqueOrThrow({ where: { id: r.id } })).active).toBe(false);
+  });
+
+  it("a feed is changed in the list: the name as a correction on every day, the unit only while nothing was recorded with it (Lili 2026-10-27)", async () => {
+    const type = await prisma.feedType.findUniqueOrThrow({ where: { code: "RAK" } });
+    const unitId = async (symbol: string) => (await prisma.unit.findUniqueOrThrow({ where: { symbol } })).id;
+    const [g, db, ml] = [await unitId("g"), await unitId("db"), await unitId("ml")];
+    const r = await createFeed(f.admin, { requestId: rid(), typeId: type.id, name: "Teszt vörös rák", dimensions: ["MASS"], defaultUnitId: g }, new Date("2026-10-01T08:00:00Z"));
+    // nothing recorded yet: the unit and the dimensions change; the unit must be one of the dimensions
+    await expectCode(updateFeed(f.admin, r.id, { requestId: rid(), defaultUnitId: ml }), "UNIT_DIMENSION");
+    await updateFeed(f.admin, r.id, { requestId: rid(), defaultUnitId: db, dimensions: ["COUNT", "MASS"] });
+    let feed = await prisma.feed.findUniqueOrThrow({ where: { id: r.id } });
+    expect([feed.defaultUnitId, [...feed.allowedDimensions].sort()]).toEqual([db, ["COUNT", "MASS"]]);
+    expect((await listFeeds()).flatMap((t) => t.feeds).find((x) => x.id === r.id)?.uses).toBe(0);
+
+    // one item: the unit stays, the name still changes
+    const d = "2026-10-05";
+    const animalId = (await prisma.animalName.findFirstOrThrow({ where: { name: "Teszt Egy" } })).animalId;
+    const now = new Date(`${d}T09:00:00+02:00`);
+    await setSelection(f.aq1, { requestId: rid(), day: d, animalIds: [animalId], selected: true }, now);
+    await saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId, feedId: r.id, quantities: [{ value: "3", unitId: db }] }, now);
+    expect((await listFeeds()).flatMap((t) => t.feeds).find((x) => x.id === r.id)?.uses).toBe(1);
+    await expectCode(updateFeed(f.admin, r.id, { requestId: rid(), defaultUnitId: g }), "FEED_IN_USE");
+    await expect(updateFeed(f.admin, r.id, { requestId: rid(), defaultUnitId: g })).rejects.toThrow("erre 1 van");
+    // a dimension added counts as a change too: the recorded amounts were read against the old set
+    await expectCode(updateFeed(f.admin, r.id, { requestId: rid(), dimensions: ["MASS", "COUNT", "VOLUME"] }), "FEED_IN_USE");
+    // the same unit and dimensions sent back is no unit change: it passes the use check and is "no change"
+    await expectCode(updateFeed(f.admin, r.id, { requestId: rid(), defaultUnitId: db, dimensions: ["MASS", "COUNT"] }), "NO_CHANGE");
+    feed = await prisma.feed.findUniqueOrThrow({ where: { id: r.id } });
+    expect(feed.defaultUnitId).toBe(db);
+
+    // the name is a correction (Lili 22:45 UTC): the item's day, before the rename, shows the new name too
+    await updateFeed(f.admin, r.id, { requestId: rid(), name: "Procambarus clarkii", mode: "correction" });
+    for (const when of [new Date(`${d}T12:00:00+02:00`), new Date()])
+      expect((await listFeeds(when)).flatMap((t) => t.feeds).find((x) => x.id === r.id)?.name).toBe("Procambarus clarkii");
+    expect(await prisma.feedName.count({ where: { feedId: r.id } })).toBe(1);
+    // with the reasons on, the rename asks for one
+    await withReasons(async () => {
+      await expectCode(updateFeed(f.admin, r.id, { requestId: rid(), name: "Procambarus sp.", mode: "correction" }), "REASON_REQUIRED");
+    });
   });
 
   it("an aquarist who records feeding may add an Egyéb feed, no other type; a read-only one may not (caparium-hibak-4)", async () => {

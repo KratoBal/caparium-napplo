@@ -34,8 +34,23 @@ export const updateFeedSchema = z.object({
   name: name.optional(),
   mode: z.enum(["change", "correction"]).optional(),
   active: z.boolean().optional(),
+  // Lili 2026-10-27 22:42 UTC: the default unit and the dimensions too, but only on a feed nothing was recorded with
+  dimensions: z.array(z.enum(["MASS", "COUNT", "VOLUME"])).min(1).max(3).optional(),
+  defaultUnitId: z.uuid({ error: "Válassz alapértelmezett egységet." }).optional(),
   reason: z.string().trim().min(3).max(500).optional(),
 });
+
+/**
+ * What was recorded with a feed: feeding items and withdrawals, valid or not. Its unit or dimensions change only at
+ * zero, because a recorded amount is read in them: "12" taken in grams would turn into 12 pieces.
+ */
+export async function feedUses(tx: Pick<typeof prisma, "feedingItem" | "withdrawalItem">, feedId: string): Promise<number> {
+  const [items, withdrawals] = await Promise.all([
+    tx.feedingItem.count({ where: { feedId } }),
+    tx.withdrawalItem.count({ where: { feedId } }),
+  ]);
+  return items + withdrawals;
+}
 
 async function requireAdmin(actor: Actor) {
   if ((await moduleLevel(prisma, actor.id, actor.role, "SETTINGS")) !== "ADMIN") {
@@ -99,6 +114,26 @@ export async function updateFeed(actor: Actor, id: string, input: z.infer<typeof
         await tx.feedName.create({ data: { feedId: id, name: input.name, validFrom: now } });
       }
     }
+    if (input.dimensions !== undefined || input.defaultUnitId !== undefined) {
+      const dimensions = (input.dimensions ?? f.allowedDimensions) as Dimension[];
+      const unit = await tx.unit.findUnique({ where: { id: input.defaultUnitId ?? f.defaultUnitId } });
+      if (!unit || !dimensions.includes(unit.dimension as Dimension)) {
+        throw new AppError(422, "UNIT_DIMENSION", "Az alapértelmezett egység a megengedett dimenziók egyike legyen.");
+      }
+      const same = unit.id === f.defaultUnitId && [...dimensions].sort().join() === [...f.allowedDimensions].sort().join();
+      if (!same) {
+        const uses = await feedUses(tx, id);
+        if (uses > 0) {
+          throw new AppError(409, "FEED_IN_USE", `A mértékegység csak olyan takarmánynál változtatható, amire még nincs tétel; erre ${uses} van.`);
+        }
+        const old = await tx.unit.findUnique({ where: { id: f.defaultUnitId } });
+        before.defaultUnit = old?.symbol ?? null;
+        before.dimensions = f.allowedDimensions;
+        after.defaultUnit = unit.symbol;
+        after.dimensions = dimensions;
+        await tx.feed.update({ where: { id }, data: { defaultUnitId: unit.id, allowedDimensions: dimensions } });
+      }
+    }
     if (input.active !== undefined && input.active !== f.active) {
       await tx.feed.update({ where: { id }, data: { active: input.active } });
       after.active = input.active;
@@ -121,7 +156,12 @@ export async function updateFeed(actor: Actor, id: string, input: z.infer<typeof
 export async function listFeeds(at = new Date()) {
   const types = await prisma.feedType.findMany({
     orderBy: { sortOrder: "asc" },
-    include: { feeds: { orderBy: { sortOrder: "asc" }, include: { names: true, defaultUnit: true } } },
+    include: {
+      feeds: {
+        orderBy: { sortOrder: "asc" },
+        include: { names: true, defaultUnit: true, _count: { select: { items: true, withdrawals: true } } },
+      },
+    },
   });
   return types.map((t) => ({
     id: t.id,
@@ -133,6 +173,9 @@ export async function listFeeds(at = new Date()) {
       name: pickValid(f.names, at)?.name ?? f.names.at(-1)?.name ?? "?",
       dimensions: f.allowedDimensions,
       defaultUnit: f.defaultUnit.symbol,
+      defaultUnitId: f.defaultUnitId,
+      /** recorded items and withdrawals: the unit stays while this is not 0 */
+      uses: f._count.items + f._count.withdrawals,
       active: f.active,
       temporary: f.temporary,
       sheetTick: f.sheetTick,
