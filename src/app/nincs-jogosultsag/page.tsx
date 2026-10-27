@@ -12,7 +12,7 @@ export default async function NoAccessPage() {
         <h2>Ehhez a modulhoz nincs jogosultságod.</h2>
         <p className="hint">Ha szükséged van rá, az adminisztrátor tudja megadni.</p>
         <p>
-          <Link href="/">Vissza az áttekintéshez</Link>
+          <Link href="/">Vissza a START oldalra</Link>
         </p>
       </div>
     </Shell>

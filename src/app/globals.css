@@ -99,6 +99,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tab-picture:not(.active) img { filter: grayscale(1); }
 .toolbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 18px 0; }
 .toolbar .spacer { flex: 1; }
+.toolbar-end { align-items: flex-end; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--c-muted); font-weight: 600; }
 .input { height: var(--touch); border: 1px solid var(--c-control-line); background: var(--c-control-bg); border-radius: var(--radius-sm); padding: 0 14px; font-size: 16px; color: var(--c-ink); }
 .input:hover:not(:disabled):not(:focus) { background: var(--c-control-bg-hover); }
@@ -112,6 +113,10 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
    in bold black, two steps larger (14 -> 18 px), their icon before them, the items under them */
 .pick-block { margin: 14px 0 6px; }
 .section-title { display: flex; align-items: center; gap: 10px; font-weight: 700; color: #000; font-size: 18px; }
+/* Lili 2026-10-27 12:25 UTC (item 6): a faint band behind the pool and feed headers and the feeding sheet's header row; it
+   prints too (print-color-adjust), and it is light enough to cost almost no ink */
+.section-title, .feeding-sheet .log-table thead th { background: var(--c-primary-soft); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.section-title { padding: 6px 10px; border-radius: var(--radius-sm); }
 .pick-items { display: flex; flex-wrap: wrap; gap: 4px 18px; }
 /* one small on/off switch instead of two buttons: on = all, off = none */
 .switch-wrap { display: inline-flex; align-items: center; gap: 8px; }
@@ -265,3 +270,9 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .order-place { width: 64px; height: 40px; text-align: center; padding: 0 6px; }
 .order-name { min-width: 200px; font-weight: 600; }
 .btn-mini { min-height: 34px; padding: 0 12px; font-size: 13px; }
+/* Lili 2026-10-27 12:46 UTC (item 8): the buttons inside a list row (Módosítás, Érvénytelenítés) are small and quiet, so the list
+   reads first; the page's main buttons keep their weight */
+.btn-row { min-height: 32px; padding: 0 10px; font-size: 13px; font-weight: 500; background: transparent; color: var(--c-muted); border: 1px solid var(--c-line); }
+.btn-row:hover:not(:disabled) { background: var(--c-bg); color: var(--c-ink); }
+.btn-row:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 1px; }
+.row-actions { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }

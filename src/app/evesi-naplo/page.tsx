@@ -1,5 +1,5 @@
 import { DayControls } from "@/components/DayControls";
-import { DayNav } from "@/components/DayNav";
+import { DayJump, DayNav } from "@/components/DayNav";
 import { EatingTable } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { feedingHelper } from "@/lib/helpers";
@@ -30,13 +30,7 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
         <DayNav path="/evesi-naplo" day={day} today={today} />
         {/* Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 4): the jump calendar, as on the water measurement
             and withdrawal pages: the chosen day opens, and jumping back to today opens today's */}
-        <form method="get" action="/evesi-naplo" style={{ display: "flex", gap: 10, alignItems: "flex-end" }} data-testid="day-picker">
-          <label className="field">
-            Nap
-            <input className="input" type="date" name="nap" defaultValue={day} max={today} />
-          </label>
-          <button className="btn btn-soft" type="submit">Ugrás</button>
-        </form>
+        <DayJump path="/evesi-naplo" day={day} today={today} />
         <span className="spacer" />
         <span className={`badge ${eat.listState === "FINALIZED" ? "badge-valid" : "badge-pending"}`}>
           {eat.listState === "FINALIZED" ? "Lista kész" : "Lista nincs kész"}

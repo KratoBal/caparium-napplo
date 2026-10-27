@@ -8,7 +8,7 @@ import { deviates } from "@/lib/calc-math";
 import { chooserPools, sortDayAnimals } from "@/lib/day-animals";
 import { GIVEN } from "@/lib/eating-labels";
 import type { DayAnimal } from "@/lib/feeding";
-import { DayFeeds, FinalizeList, GroupSwitch, InvalidateButton, ItemForm, SelectBox, type FeedOpt, type FeedTypeOpt, type Recipient } from "./FeedingForms";
+import { DayFeeds, EditButton, FinalizeList, GroupSwitch, InvalidateButton, ItemForm, SelectBox, type EditItem, type FeedOpt, type FeedTypeOpt, type Recipient } from "./FeedingForms";
 import { FeedingSheet } from "./FeedingSheet";
 
 type Item = {
@@ -20,7 +20,7 @@ type Item = {
   feed: string;
   otherName: string | null;
   baseQuantities: { unit: string; value: number }[];
-  quantities: { value: string; unit: string }[];
+  quantities: { value: string; unit: string; unitId: string; dimension: string }[];
   participants: string[];
   noSelectedMember: boolean;
 };
@@ -51,6 +51,7 @@ export function FeedingDay(props: {
   const [active, setActive] = useState(recipients[0]?.key ?? "");
   const [draft, setDraft] = useState<Record<string, number>>({});
   const onDraft = useCallback((d: Record<string, number>) => setDraft(d), []);
+  const [editing, setEditing] = useState<EditItem | null>(null);
   const names = new Map(animals.map((a) => [a.id, a.name]));
   // the chooser's lines (Lili 2026-10-26, card f67b1a06): one line per POOL, the animals arrive sorted by pool, then by name
   const chooserGroups = chooserPools(sortDayAnimals(animals));
@@ -76,6 +77,22 @@ export function FeedingDay(props: {
       </span>
     );
   };
+  // item 5: the bottom of the choice (the animals, then the feeds) carries the one button and the state
+  const finalizeBar = (
+    <div className="toolbar">
+      <FinalizeList day={day} finalized={props.finalized} editable={editable} />
+    </div>
+  );
+  // item 8 (Lili 2026-10-27 12:42 UTC): "Módosítás" loads the item into the form below; only where the form can show it (the
+  // recipient is on today's list, the feed is offered). Both row buttons are the quiet kind (12:46 UTC).
+  const rowButtons = (key: string, i: Item) => (
+    <span className="row-actions">
+      {isRecipient(key) && feeds.some((f) => f.id === i.feedId) && (
+        <EditButton label={line(i)} onEdit={() => setEditing({ id: i.id, version: i.version, feedId: i.feedId, otherName: i.otherName, quantities: i.quantities, recipient: key })} />
+      )}
+      <InvalidateButton url={`/api/feeding/items/${i.id}/invalidate`} version={i.version} row />
+    </span>
+  );
   const line = (i: Item) => `${i.otherName ? `${i.feed}: ${i.otherName}` : i.feed} ${i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ") || GIVEN}`;
 
   return (
@@ -105,17 +122,14 @@ export function FeedingDay(props: {
             </div>
           ))}
         </div>
-        {editable && !props.finalized && (
-          <div className="toolbar">
-            <FinalizeList day={day} />
-          </div>
-        )}
+        {!props.feedTypes && finalizeBar}
       </div>
       {props.feedTypes && (
         <div className="card">
           <h2>A nap takarmányai</h2>
           <p className="hint">A második lépés: mit kapnak ma az állatok. A takarmánylap oszlopai és a tétel takarmány-listája ezek lesznek; ha nincs kiválasztva semmi, minden takarmány választható.</p>
           <DayFeeds day={day} types={props.feedTypes} chosen={props.dayFeedIds ?? []} editable={editable} />
+          {finalizeBar}
         </div>
       )}
       {/* keyed by the day: DayNav changes ?nap= on the same route, which keeps a client component's state, so a
@@ -128,10 +142,21 @@ export function FeedingDay(props: {
           {activeLabel && (
             <p className="banner banner-ok" data-testid="live-total">
               {activeLabel}: eddig {fmt(saved) || "semmi"}
-              {Object.keys(draft).length > 0 && ` · most beírva ${fmt(draft)} · együtt ${fmt(together)}`}
+              {/* while an item is being changed the typed amount replaces it, so it is not added to the saved total */}
+              {editing ? " · egy tétel módosítása" : Object.keys(draft).length > 0 && ` · most beírva ${fmt(draft)} · együtt ${fmt(together)}`}
             </p>
           )}
-          <ItemForm day={day} recipients={recipients} feeds={feeds} otherNames={props.otherNames} active={active} onActive={setActive} onDraft={onDraft} />
+          <ItemForm
+            day={day}
+            recipients={recipients}
+            feeds={feeds}
+            otherNames={props.otherNames}
+            active={active}
+            onActive={setActive}
+            onDraft={onDraft}
+            editing={editing}
+            onEditDone={() => setEditing(null)}
+          />
         </div>
       )}
       {/* Lili 2026-10-26 (Caparium channel msg 1564403940320346223): "Mai tételek" is LAST, as a summary. The order of the page: Ki eszik
@@ -153,7 +178,7 @@ export function FeedingDay(props: {
                   <td className="keep">
                     {itemsFor(a.id).map((i) => (
                       <div key={i.id}>
-                        {line(i)} {editable && <InvalidateButton url={`/api/feeding/items/${i.id}/invalidate`} version={i.version} />}
+                        {line(i)} {editable && rowButtons(a.id, i)}
                       </div>
                     ))}
                   </td>
@@ -176,7 +201,7 @@ export function FeedingDay(props: {
                               nincs kiválasztott tag: az érvénytelenítés külön döntés
                             </span>
                           )}{" "}
-                          {editable && <InvalidateButton url={`/api/feeding/items/${i.id}/invalidate`} version={i.version} />}
+                          {editable && rowButtons(`g:${g.id}`, i)}
                         </div>
                       ))}
                     </td>

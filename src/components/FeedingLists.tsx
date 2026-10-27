@@ -19,7 +19,8 @@ function newRequestId(): string {
 function appliedText(res: Record<string, unknown>): string {
   const skipped = Array.isArray(res.skipped) ? (res.skipped as string[]) : [];
   const tail = skipped.length ? ` Kézi koplalónap miatt kimaradt: ${skipped.join(", ")}.` : "";
-  if (res.name === null || res.name === undefined) return "Minden kijelölés kivéve.";
+  // Lili 2026-10-27 (item 4): the switch turned off says nothing; the unchecked boxes show it
+  if (res.name === null || res.name === undefined) return "";
   const removed = Number(res.removed ?? 0);
   return `${String(res.name)}: ${Number(res.added ?? 0)} állat kijelölve${removed ? `, ${removed} kivéve` : ""}, ${Number(res.feeds ?? 0)} takarmány.${tail}`;
 }

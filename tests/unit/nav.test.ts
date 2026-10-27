@@ -36,7 +36,7 @@ describe("the main navigation", () => {
   // Lili 2026-10-26 (caparium-menu-sorrend-szinek): the exact order of her list, and the color group of each entry.
   it("keeps Lili's order for an admin", () => {
     expect(labels("ADMIN")).toEqual([
-      "Áttekintés", "Napi vízmérés", "Heti vízmérés", "Export", "Takarmánynapló", "Evési napló", "Takarmánykivétel",
+      "START", "Napi vízmérés", "Heti vízmérés", "Export", "Takarmánynapló", "Evési napló", "Takarmánykivétel",
       "Takarmánykalkulátor", "Vegyszeradagolás", "Vízmérési napló", "Takarmányozási napló", "Takarmánylista",
       "Kimutatások", "Függő mentések", "Állatok", "Beállítások",
     ]);
@@ -49,6 +49,6 @@ describe("the main navigation", () => {
       expect(tone(l), l).toBe("feed");
     }
     // the control: the entries Lili marked "szín marad" are really plain, so the two checks above cannot pass on a menu where everything is colored
-    for (const l of ["Áttekintés", "Export", "Kimutatások", "Függő mentések", "Állatok", "Beállítások"]) expect(tone(l), l).toBeUndefined();
+    for (const l of ["START", "Export", "Kimutatások", "Függő mentések", "Állatok", "Beállítások"]) expect(tone(l), l).toBeUndefined();
   });
 });

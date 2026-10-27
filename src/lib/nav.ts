@@ -13,7 +13,8 @@ export type NavItem = { key: NavKey; href: string; label: string; tone?: NavTone
 // Everything else keeps the plain label color. "Takarmánylista" still sits directly above "Kimutatások" (card
 // f67b1a06), for everyone.
 const NAV: NavItem[] = [
-  { key: "overview", href: "/", label: "Áttekintés" },
+  // Lili 2026-10-27 13:02 UTC: the first entry is called START
+  { key: "overview", href: "/", label: "START" },
   { key: "daily", href: "/vizmeres", label: "Napi vízmérés", tone: "water" },
   { key: "weekly", href: "/heti", label: "Heti vízmérés", tone: "water" },
   { key: "export", href: "/export", label: "Export" },

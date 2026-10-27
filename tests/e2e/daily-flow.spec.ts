@@ -394,9 +394,21 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   await expect(live).toContainText("most beírva 10 g");
   await expect(live).toContainText("együtt 52,5 g");
   await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("");
-  const finalize = page.getByRole("button", { name: "Lista kész" });
+  // Lili 2026-10-27 12:42 UTC (item 8): "Módosítás" loads the item into the form, and saving changes that item (no second one)
+  await row.getByRole("button", { name: "módosítás" }).click();
+  await expect(form.getByLabel("Mennyiség (tömeg)", { exact: true })).toHaveValue("42,5");
+  await expect(form.getByLabel("Mennyiség (darab)", { exact: true })).toHaveValue("6");
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("40");
+  await form.getByRole("button", { name: "Módosítás mentése" }).click();
+  await expect(form.getByRole("status")).toHaveText("Tétel módosítva.");
+  await expect(row).toContainText("40 g");
+  await expect(row).not.toContainText("42,5 g");
+  await expect(form.getByRole("button", { name: "Tétel mentése" })).toBeVisible();
+  // Lili 2026-10-27 (item 5): the one button at the bottom of the choice; once finalized, the same place shows the state
+  const finalize = page.getByRole("button", { name: "Takarmánylap kész" });
   if (await finalize.count()) await finalize.click();
-  await expect(page.getByTestId("list-state")).toHaveText("Lista kész");
+  await expect(page.getByTestId("list-state")).toHaveText("Takarmánylap kész");
+  await expect(finalize).toHaveCount(0);
 
   await page.getByRole("link", { name: "Evési napló" }).click();
   // caparium-hibak-5: the log lists who is on today's list; the others are folded away as fasting days
@@ -659,6 +671,17 @@ test("withdrawal: an item for tomorrow, the day's total, taken against given, th
   await form.getByRole("button", { name: "Kivétel mentése" }).click();
   await expect(form.getByRole("status")).toHaveText("Kivétel mentve.");
   await expect(page.getByTestId("withdrawal-list")).toContainText(feedName);
+  // Lili 2026-10-27 12:42 UTC (item 8): "Módosítás" loads the item into the form below; saving updates the same item
+  const taken = page.getByTestId("withdrawal-list").getByRole("row").filter({ hasText: feedName });
+  await expect(taken).toHaveCount(1);
+  await taken.getByRole("button", { name: "módosítás" }).click();
+  await expect(form.getByLabel("Mennyiség (tömeg)", { exact: true })).toHaveValue("200");
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("250");
+  await form.getByRole("button", { name: "Módosítás mentése" }).click();
+  await expect(form.getByRole("status")).toHaveText("Kivétel módosítva.");
+  await expect(taken).toHaveCount(1);
+  await expect(taken).toContainText("250 g");
+  await expect(form.getByRole("button", { name: "Kivétel mentése" })).toBeVisible();
   await expect(page.getByTestId("withdrawal-total")).toContainText("g");
   await expect(page.getByTestId("taken-given")).toBeVisible();
   const [file] = await Promise.all([page.waitForEvent("download"), page.getByTestId("excel-kivetel").click()]);
@@ -788,7 +811,7 @@ test("reports: the tables and the Excel; no daily report menu any more", async (
   // VIZ-20: the monthly package's card on the export page; the overview's feeding tile
   await page.getByRole("link", { name: "Export" }).click();
   await expect(page.getByTestId("monthly-package")).toContainText("Havi ZIMS-csomag");
-  await page.getByRole("link", { name: "Áttekintés" }).click();
+  await page.getByRole("link", { name: "START", exact: true }).click();
   await expect(page.getByTestId("home-evesi")).toBeVisible();
 });
 
@@ -902,8 +925,10 @@ test("the helper: a quick question about the page, switched off and on", async (
   await form.getByRole("button", { name: "+ Adagolás mentése" }).click();
   await expect(form.getByRole("status")).toHaveText("Adagolás mentve.");
   // a fresh session on the overview: the pages before may already have shown the alert
-  await page.getByRole("link", { name: "Áttekintés" }).click();
-  await expect(page.getByRole("heading", { name: "Mai áttekintés" })).toBeVisible();
+  await page.getByRole("link", { name: "START", exact: true }).click();
+  // Lili 2026-10-27 13:02 UTC: the start page has no "Mai áttekintés" title; what is under the bar stays
+  await expect(page.getByRole("heading", { name: "Jó munkát!" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mai áttekintés" })).toHaveCount(0);
   await page.evaluate(() => sessionStorage.clear());
   await page.reload();
   // AST-03: the overview's helper opens by itself, once
@@ -1153,23 +1178,26 @@ test("settings: the admin adds a new pool; the existing pools stay as they were"
 });
 
 // Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 4; Balázs "Mehet" 1564357004217159823): the eating log has the
-// jump calendar too. The chosen day opens, and jumping back to today opens today's. Read-only.
-test("eating log: the jump calendar opens the chosen day, and back to today opens today's", async ({ page }) => {
-  await login(page, "teszt.akvarista1");
-  await page.goto("/evesi-naplo");
-  const picker = page.getByTestId("day-picker");
-  await expect(picker.getByRole("button", { name: "Ugrás" })).toBeVisible();
-  const todayText = await page.getByTestId("shown-day").textContent();
-  const earlier = budapestDay(-3);
-  await picker.getByLabel("Nap").fill(earlier);
-  await picker.getByRole("button", { name: "Ugrás" }).click();
-  await expect(page).toHaveURL(new RegExp(`nap=${earlier}`));
-  await expect(page.getByTestId("shown-day")).not.toHaveText(todayText ?? "");
-  // back to today: the picker's own day
-  await picker.getByLabel("Nap").fill(budapestDay(0));
-  await picker.getByRole("button", { name: "Ugrás" }).click();
-  await expect(page.getByTestId("shown-day")).toHaveText(todayText ?? "");
-});
+// jump calendar too. The chosen day opens, and jumping back to today opens today's. Read-only. Lili 2026-10-27 12:36 UTC (item 7):
+// the feeding page gets the same calendar beside its arrows.
+for (const [name, path] of [["eating log", "/evesi-naplo"], ["feeding page", "/etetes"]] as const) {
+  test(`${name}: the jump calendar opens the chosen day, and back to today opens today's`, async ({ page }) => {
+    await login(page, "teszt.akvarista1");
+    await page.goto(path);
+    const picker = page.getByTestId("day-picker");
+    await expect(picker.getByRole("button", { name: "Ugrás" })).toBeVisible();
+    const todayText = await page.getByTestId("shown-day").textContent();
+    const earlier = budapestDay(-3);
+    await picker.getByLabel("Nap").fill(earlier);
+    await picker.getByRole("button", { name: "Ugrás" }).click();
+    await expect(page).toHaveURL(new RegExp(`nap=${earlier}`));
+    await expect(page.getByTestId("shown-day")).not.toHaveText(todayText ?? "");
+    // back to today: the picker's own day
+    await picker.getByLabel("Nap").fill(budapestDay(0));
+    await picker.getByRole("button", { name: "Ugrás" }).click();
+    await expect(page.getByTestId("shown-day")).toHaveText(todayText ?? "");
+  });
+}
 
 // Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 1; Balázs "Mehet" 1564357004217159823): the named feeding
 // lists. The admin composes one on the timetable page; in the feeding page's header a dropdown picks it, which ticks its
@@ -1214,7 +1242,8 @@ test("feeding lists: the admin composes one, the header's switch and dropdown ma
 
   // the switch off: the whole selection goes (the dialog handler above accepts the confirmation)
   await power.uncheck();
-  await expect(pick.getByRole("status")).toHaveText("Minden kijelölés kivéve.");
+  // Lili 2026-10-27 (item 4): no state text in the header bar; the unchecked boxes below show it
+  await expect(pick.getByRole("status")).toHaveCount(0);
   await expect(pick.getByLabel("Névvel ellátott lista")).toBeDisabled();
   await expect(page.getByLabel("Teszt Egy a mai listán")).not.toBeChecked();
   await expect(page.getByLabel("Teszt Kettő a mai listán")).not.toBeChecked();

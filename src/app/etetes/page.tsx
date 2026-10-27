@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { DayControls } from "@/components/DayControls";
-import { DayNav } from "@/components/DayNav";
+import { DayJump, DayNav } from "@/components/DayNav";
 import { FeedingDay } from "@/components/FeedingDay";
 import { ApplyPlan } from "@/components/FeedingForms";
 import { ApplyList } from "@/components/FeedingLists";
@@ -78,10 +78,10 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
     <Shell title="Takarmánynapló" active="feeding" user={user} helper={await feedingHelper((await moduleLevel(prisma, user.id, user.role, "DOSING")) !== "NONE")}>
       <div className="toolbar">
         <DayNav path="/etetes" day={day} today={today} />
+        {/* Lili 2026-10-27 12:32 and 12:36 UTC (item 7): the jump calendar beside the arrows, as on the eating log */}
+        <DayJump path="/etetes" day={day} today={today} />
         <span className="spacer" />
-        <span className={`badge ${view.listState === "FINALIZED" ? "badge-valid" : "badge-pending"}`} data-testid="list-state">
-          {view.listState === "FINALIZED" ? "Lista kész" : "Lista nincs kész"}
-        </span>
+        {/* Lili 2026-10-27 (item 5): the list's state moved to the "Takarmánylap kész" button at the bottom of the choice */}
         {/* Lili 2026-10-26 (item 1): the named lists in the header, beside the weekly plan's button */}
         {editable && lists.length > 0 && (
           <ApplyList
