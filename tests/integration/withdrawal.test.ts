@@ -50,6 +50,28 @@ describe("withdrawal items (KIV-01, KIV-02, T-08, T-10)", () => {
     await expectCode(invalidateWithdrawalItem(f.aq2, r.itemId, { requestId: rid(), expectedVersion: 2, reason: "nem az enyém" }, at(d, "09:00")), "NOT_OWN");
   });
 
+  // Lili 2026-10-27 15:43 UTC: on one day a withdrawal for that day's feeding, then another for the next day's. The cell is
+  // (day, feed, other name, USE DAY): two use days are two items; the same use day twice is still one cell (T-02).
+  it("the same feed twice on a day, for two use days; the same use day twice is still taken", async () => {
+    const d = "2026-07-24";
+    await take(d, { feedId: feed["Teszt hal"], useDay: d, quantities: [{ value: "100", unitId: unit.g }] });
+    await take(d, { feedId: feed["Teszt hal"], quantities: [{ value: "150", unitId: unit.g }] });
+    const view = await withdrawalDayView(d);
+    expect(view.items.map((i) => [i.useDay, i.quantities[0]?.value])).toEqual([[d, "100"], ["2026-07-25", "150"]]);
+    expect(view.totals).toEqual({ g: 250 });
+    await expectCode(take(d, { feedId: feed["Teszt hal"], useDay: d, quantities: [{ value: "1", unitId: unit.g }] }, f.aq2), "CELL_TAKEN");
+    // an other feed by the same name, for both use days; it is still one name of the day's five (KIV-04)
+    await take(d, { feedId: feed["Egyéb"], otherName: "tintahal", useDay: d, quantities: [{ value: "10", unitId: unit.g }] });
+    await take(d, { feedId: feed["Egyéb"], otherName: "Tintahal", quantities: [{ value: "20", unitId: unit.g }] });
+    await expectCode(take(d, { feedId: feed["Egyéb"], otherName: "TINTAHAL", useDay: d, quantities: [{ value: "5", unitId: unit.g }] }), "CELL_TAKEN");
+    // changing the first item onto the second one's use day meets the taken cell
+    const first = (await withdrawalDayView(d)).items.find((i) => i.feed === "Teszt hal" && i.useDay === d)!;
+    await expectCode(
+      take(d, { itemId: first.id, expectedVersion: first.version, feedId: feed["Teszt hal"], useDay: "2026-07-25", quantities: [{ value: "100", unitId: unit.g }] }),
+      "CELL_TAKEN",
+    );
+  });
+
   it("at most 5 different other feeds a day (KIV-04)", async () => {
     const d = "2026-07-08";
     for (let i = 1; i <= 5; i++) await take(d, { feedId: feed["Egyéb"], otherName: `egyéb-${i}`, quantities: [{ value: "10", unitId: unit.g }] });

@@ -20,6 +20,8 @@ import { addDays, businessDayOf, dateToDay, dayToDate } from "./time";
 
 export const OTHER_MAX = 5; // KIV-04, setting egyéb_takarmány_max
 const USE_DAY_MAX_AHEAD = 7; // temporary: a use day at most a week after the withdrawal
+// one valid item per (day, feed, other name, use day): a second withdrawal of a feed for another use day is its own item
+const CELL_TAKEN = "Ebből a takarmányból erre a felhasználási napra ma már van kivételi tétel: azt módosítsd.";
 
 const requestId = z.string().min(8).max(100);
 const reason = z.string().trim().min(3, "Az indoklás legalább 3 karakter legyen.").max(500);
@@ -100,12 +102,12 @@ export async function saveWithdrawalItem(actor: Actor, raw: WithdrawalInput, ser
         // KIV-04: at most 5 different other names a day
         const names = await tx.withdrawalItem.findMany({
           where: { withdrawalDayId: f.wd.id, status: "VALID", otherName: { not: null }, ...(prior ? { id: { not: prior.id } } : {}) },
-          select: { otherName: true, feedId: true },
+          select: { otherName: true, feedId: true, useDay: true },
         });
         // one name whatever its case (review note on #13). Checked here, not only by the index: the
-        // database's lower() folds ASCII only, "É" and "é" would pass it
-        if (names.some((x) => x.feedId === feed.id && x.otherName!.toLowerCase() === otherName.toLowerCase())) {
-          throw new AppError(409, "CELL_TAKEN", "Ebből a takarmányból ma már van kivételi tétel: azt módosítsd.");
+        // database's lower() folds ASCII only, "É" and "é" would pass it. The cell has the use day too (Lili 2026-10-27)
+        if (names.some((x) => x.feedId === feed.id && dateToDay(x.useDay) === useDay && x.otherName!.toLowerCase() === otherName.toLowerCase())) {
+          throw new AppError(409, "CELL_TAKEN", CELL_TAKEN);
         }
         const distinct = new Set(names.map((n) => n.otherName!.toLowerCase()));
         if (!distinct.has(otherName.toLowerCase()) && distinct.size >= OTHER_MAX) {
@@ -151,7 +153,7 @@ export async function saveWithdrawalItem(actor: Actor, raw: WithdrawalInput, ser
       return { replayed: false, itemId: item.id, version: item.version };
     });
   } catch (e) {
-    if (isUniqueViolation(e)) throw new AppError(409, "CELL_TAKEN", "Ebből a takarmányból ma már van kivételi tétel: azt módosítsd.");
+    if (isUniqueViolation(e)) throw new AppError(409, "CELL_TAKEN", CELL_TAKEN);
     throw e;
   }
 }
