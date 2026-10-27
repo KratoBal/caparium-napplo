@@ -347,11 +347,6 @@ export function InitialAnimalsLoader(p: { total: number; loaded: number; switchO
         {/* outside the button's condition: after the refresh the button is gone, the result stays readable */}
         <Msg msg={msg} />
       </p>
-      <p className="hint">
-        A hiányzókat a medencéjükbe és csoportjukba veszi fel, a megadott napi érkezéssel: azt a napot add meg, amikor az
-        állatok valóban megérkeztek (vagy amikortól a nyilvántartás indul). Kétszer nem tölt be semmit; egy azonos nevű,
-        kézzel felvett állat másik állatnak számít.
-      </p>
     </div>
   );
 }

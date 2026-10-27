@@ -6,14 +6,13 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { knownOtherNames, listFeeds } from "@/lib/feeds";
 import { dayStatus } from "@/lib/journal";
+import { plainNumber as num, rowForDisplay } from "@/lib/mass-display";
 import { moduleLevel } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
 import { addDays, businessDayOf, isValidDay } from "@/lib/time";
 import { takenVersusGiven, withdrawalDayView } from "@/lib/withdrawal";
 
 export const dynamic = "force-dynamic";
-
-const num = (v: number) => String(Math.round(v * 10000) / 10000).replace(".", ",");
 
 // KIV-01..KIV-05, TAK-06: what goes out of the freezer on a day, for which day; the day's total in the
 // corner; the "Lezárás" button; taken against given for a period; the Excel after the template.
@@ -98,15 +97,18 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
               <tr><th>Takarmány</th><th>Egység</th><th>Kivett</th><th>Kiosztott</th><th>Különbség</th></tr>
             </thead>
             <tbody>
-              {compare.map((r) => (
-                <tr key={r.key}>
-                  <td>{r.feed}{r.paired ? "" : " (nem párosított)"}</td>
-                  <td>{r.unit}</td>
-                  <td>{num(r.taken)}</td>
-                  <td>{num(r.given)}</td>
-                  <td>{num(r.taken - r.given)}</td>
-                </tr>
-              ))}
+              {compare.map((r) => {
+                const shown = rowForDisplay(r.unit, [r.taken, r.given, r.taken - r.given]);
+                return (
+                  <tr key={r.key}>
+                    <td>{r.feed}{r.paired ? "" : " (nem párosított)"}</td>
+                    <td>{shown.unit}</td>
+                    {shown.values.map((v, i) => (
+                      <td key={i}>{v}</td>
+                    ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
