@@ -14,7 +14,7 @@ import { diffFields, writeAudit } from "./audit";
 import { manualRowsOutsideLife, recomputeClosedDaysFrom } from "./feeding";
 import { prisma, type Tx } from "./db";
 import { AppError, isUniqueViolation } from "./errors";
-import { moduleLevel, pickValid, validAt } from "./master";
+import { FIRST_NAME_FROM, moduleLevel, nameAt, pickValid, validAt } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { canCreate, canModify, effectiveNow } from "./permissions";
@@ -299,7 +299,8 @@ export const groupSchema = z.object({ requestId: z.string().min(8).max(100), nam
 export async function createGroup(actor: Actor, input: z.infer<typeof groupSchema>, now = new Date()) {
   await requireAdmin(actor);
   return prisma.$transaction(async (tx) => {
-    const g = await tx.animalGroup.create({ data: { names: { create: { name: input.name, validFrom: now } } } });
+    // the first name from the beginning of time, as a pool's (FIRST_NAME_FROM): its members may be recorded on earlier days
+    const g = await tx.animalGroup.create({ data: { names: { create: { name: input.name, validFrom: FIRST_NAME_FROM } } } });
     await writeAudit(tx, {
       userId: actor.id,
       action: "MASTER_CHANGE",
@@ -548,7 +549,7 @@ export async function listAnimals(at = new Date()): Promise<AnimalRow[]> {
       poolName: p ? pickValid(p.pool.names, at)?.displayName ?? p.pool.code : null,
       poolEmoji: p ? p.pool.emoji : null,
       groupId: m?.groupId ?? null,
-      groupName: m ? pickValid(m.group.names, at)?.name ?? "?" : null,
+      groupName: m ? nameAt(m.group.names, at)?.name ?? "?" : null,
       alive: !!arrival && arrival.occurredAt <= at && !end,
       arrived: arrival ? businessDayOf(arrival.occurredAt) : null,
       ended: end ? { type: end.type, day: businessDayOf(end.occurredAt) } : null,
@@ -617,6 +618,6 @@ export async function animalEvents(animalId: string) {
 export async function listGroupsWithNames(at = new Date()) {
   const groups = await prisma.animalGroup.findMany({ where: { active: true }, include: { names: true } });
   return groups
-    .map((g) => ({ id: g.id, name: pickValid(g.names, at)?.name ?? "?" }))
+    .map((g) => ({ id: g.id, name: nameAt(g.names, at)?.name ?? "?" }))
     .sort((a, b) => a.name.localeCompare(b.name, "hu"));
 }
