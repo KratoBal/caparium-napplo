@@ -9,6 +9,13 @@
   --c-line: #dae5e8;
   --c-bg: #f3f7f8;
   --c-field: #eff5f7;
+  /* THE SECONDARY CONTROLS (Lili 2026-10-26, Caparium channel msg 1564411331891830885): a soft button, a dropdown, a field, a tab.
+     Their background was almost the page's own, so it was not clear what could be clicked. One place, one set of tokens: a pale but
+     visible border (the text color at 28%), a shade darker background, a darker one still on hover; the focus ring is the primary
+     color. Not strong, only clear. */
+  --c-control-bg: #e3ecef;
+  --c-control-bg-hover: #d6e3e8;
+  --c-control-line: rgba(17, 47, 62, 0.28);
   --c-white: #ffffff;
   --c-error: #df5b5b;
   --c-error-soft: #fbe9e9;
@@ -74,10 +81,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn { display: inline-flex; align-items: center; justify-content: center; min-height: var(--touch); padding: 0 22px; border-radius: var(--radius-sm); border: 0; background: var(--c-primary); color: var(--c-white); font-weight: 600; font-size: 16px; cursor: pointer; text-decoration: none; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-dark { background: var(--c-ink); }
-.btn-soft { background: var(--c-field); color: var(--c-ink); }
+.btn-soft { background: var(--c-control-bg); color: var(--c-ink); border: 1px solid var(--c-control-line); }
+.btn-soft:hover:not(:disabled) { background: var(--c-control-bg-hover); }
+.btn-soft:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 1px; }
 .tabs { display: flex; gap: 10px; flex-wrap: wrap; }
-.tab { min-height: var(--touch); display: inline-flex; align-items: center; padding: 0 20px; border-radius: var(--radius-sm); background: var(--c-field); color: var(--c-ink); font-weight: 600; text-decoration: none; }
-.tab.active { background: var(--c-primary-soft); color: var(--c-primary); }
+.tab { min-height: var(--touch); display: inline-flex; align-items: center; padding: 0 20px; border-radius: var(--radius-sm); background: var(--c-control-bg); border: 1px solid var(--c-control-line); color: var(--c-ink); font-weight: 600; text-decoration: none; }
+.tab:hover:not(.active) { background: var(--c-control-bg-hover); }
+.tab:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 1px; }
+.tab.active { background: var(--c-primary-soft); color: var(--c-primary); border-color: transparent; }
 /* Picture buttons (daily water page): the picture is as wide as the text and keeps its aspect ratio; the labels
    line up at the bottom of the row. The picture box takes no width of its own (width 0, min-width 100%), so the
    label decides the width. */
@@ -89,7 +100,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .toolbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 18px 0; }
 .toolbar .spacer { flex: 1; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--c-muted); font-weight: 600; }
-.input { height: var(--touch); border: 1px solid transparent; background: var(--c-field); border-radius: var(--radius-sm); padding: 0 14px; font-size: 16px; color: var(--c-ink); }
+.input { height: var(--touch); border: 1px solid var(--c-control-line); background: var(--c-control-bg); border-radius: var(--radius-sm); padding: 0 14px; font-size: 16px; color: var(--c-ink); }
+.input:hover:not(:disabled):not(:focus) { background: var(--c-control-bg-hover); }
 .input:focus { outline: 2px solid var(--c-primary); }
 /* One height for every field, button and dropdown (2026-10-20): WebKit (Safari, the iPad) keeps a native
    <select> at its own platform height whatever height says, so selects draw their own arrow instead. */
@@ -103,10 +115,10 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .pick-items { display: flex; flex-wrap: wrap; gap: 4px 18px; }
 /* one small on/off switch instead of two buttons: on = all, off = none */
 .switch-wrap { display: inline-flex; align-items: center; gap: 8px; }
-.check .switch, .switch { appearance: none; -webkit-appearance: none; width: 34px; height: 20px; border-radius: 10px; background: var(--c-line); position: relative; cursor: pointer; flex: none; transition: background 0.15s; margin: 0; }
-.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--c-white); box-shadow: 0 1px 2px rgba(0,0,0,0.3); transition: left 0.15s; }
+.check .switch, .switch { appearance: none; -webkit-appearance: none; width: 34px; height: 20px; border-radius: 10px; background: var(--c-control-bg-hover); border: 1px solid var(--c-control-line); position: relative; cursor: pointer; flex: none; transition: background 0.15s; margin: 0; }
+.switch::after { content: ""; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%; background: var(--c-white); box-shadow: 0 1px 2px rgba(0,0,0,0.3); transition: left 0.15s; }
 .switch:checked { background: var(--c-primary); }
-.switch:checked::after { left: 16px; }
+.switch:checked::after { left: 15px; }
 .switch:disabled { opacity: 0.5; cursor: not-allowed; }
 .switch:focus-visible { outline: 3px solid var(--c-primary); outline-offset: 2px; }
 .banner { border-radius: var(--radius-sm); padding: 12px 18px; font-weight: 600; font-size: 15px; }
