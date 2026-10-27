@@ -67,6 +67,25 @@ describe("the water report", () => {
   });
 });
 
+// Lili 2026-10-26 (Caparium channel msg 1564418747047874581): the pools stand in a fixed order in the PDF, whatever their codes
+// say: Nagymedence, Karantén, Kismedence, Ragadozós, Korallos, Inkubátor. A pool added later comes at the end.
+describe("the pools' order in the report", () => {
+  const day = "2027-09-22";
+  it("follows the fixed order, not the codes' alphabet", async () => {
+    // measured in the "wrong" order on purpose: the codes alphabet would give INKUBATOR, KARANTEN, KIS, KORALLOS, NAGY
+    await measure("NAPI_KIS", "INKUBATOR", "TEMP", "24", `${day}T07:00`);
+    await measure("NAPI_KIS", "KORALLOS", "TEMP", "25", `${day}T07:01`);
+    await measure("NAPI_NAGY", "KIS", "TEMP", "24", `${day}T07:02`);
+    await measure("NAPI_NAGY", "KARANTEN", "TEMP", "24", `${day}T07:03`);
+    await measure("NAPI_NAGY", "NAGY", "TEMP", "24", `${day}T07:04`);
+    const r = await waterReport(day);
+    expect(r.pools.map((p) => p.pool)).toEqual(["Nagymedence", "Karantén", "Kismedence", "Korallos", "Inkubátor"]);
+    // the stored positions are the starting values
+    const placed = await prisma.pool.findMany({ where: { code: { in: ["NAGY", "KARANTEN", "KIS", "RAGADOZOS", "KORALLOS", "INKUBATOR"] } }, orderBy: { sortOrder: "asc" } });
+    expect(placed.map((p) => [p.code, p.sortOrder])).toEqual([["NAGY", 0], ["KARANTEN", 1], ["KIS", 2], ["RAGADOZOS", 3], ["KORALLOS", 4], ["INKUBATOR", 5]]);
+  });
+});
+
 describe("the recipient and the sending", () => {
   it("no recipient: refused before anything is built; an aquarist cannot set it; a settings admin can, audited", async () => {
     Object.assign(process.env, SMTP);
