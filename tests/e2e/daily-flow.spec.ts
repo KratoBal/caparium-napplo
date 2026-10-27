@@ -514,6 +514,14 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   // step 3. Lili 2026-10-21 11:44 UTC (a): a feed weighed AND counted takes both units
   const sheet = page.getByTestId("feeding-sheet");
   await expect(sheet.getByRole("columnheader", { name: "Litopenaeus vannamei (g + db)" })).toBeVisible();
+  // Lili 2026-10-26 (msg 1564403940320346223): "Mai tételek" is last, as a summary
+  const headings = await page.locator("main h2").allTextContents();
+  const place = (start: string) => headings.findIndex((h) => h.startsWith(start));
+  expect(place("Ki eszik ma")).toBeGreaterThanOrEqual(0);
+  expect(place("A nap takarmányai")).toBeGreaterThan(place("Ki eszik ma"));
+  expect(place("Takarmánylap")).toBeGreaterThan(place("A nap takarmányai"));
+  expect(place("Új tétel")).toBeGreaterThan(place("Takarmánylap"));
+  expect(place("Mai tételek"), "last").toBeGreaterThan(place("Új tétel"));
   const row = sheet.getByRole("row").filter({ hasText: name });
   const otherRow = sheet.getByRole("row").filter({ hasText: other });
   await row.getByRole("cell", { name, exact: true }).click();
@@ -841,7 +849,8 @@ test("the feeding timetable: every animal's days on one screen, saved together, 
   const short = new Date().toLocaleDateString("en-GB", { weekday: "short", timeZone: "Europe/Budapest" });
   const today = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(short);
   const day = labels[(today + (info.project.name === "tablet" ? 2 : 3)) % 7]!;
-  await login(page, "teszt.akvarista1");
+  // Lili 2026-10-26 (msg 1564404799359946884): the timetable is the admin's for now
+  await login(page, "teszt.admin");
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
   await page.getByRole("link", { name: "Etetési rend" }).click();
   const table = page.getByTestId("timetable");
@@ -1160,7 +1169,7 @@ test("eating log: the jump calendar opens the chosen day, and back to today open
 // Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 1; Balázs "Mehet" 1564357004217159823): the named feeding
 // lists. The admin composes one on the timetable page; in the feeding page's header a dropdown picks it, which ticks its
 // animals and adds its feeds; "Lista a terv szerint" stays beside it. The list is archived at the end.
-test("feeding lists: the admin composes one, the header's dropdown ticks its animals and adds its feeds", async ({ page }, info) => {
+test("feeding lists: the admin composes one, the header's switch and dropdown make the day's selection that list, the switch off takes it all off", async ({ page }, info) => {
   const name = `E2E lista ${info.project.name}`;
   await login(page, "teszt.admin");
   await page.goto("/etetes/rend");
@@ -1178,18 +1187,38 @@ test("feeding lists: the admin composes one, the header's dropdown ticks its ani
   await expect(editor.locator("details", { hasText: name })).toHaveCount(1);
 
   await page.goto("/etetes");
+  await page.waitForLoadState("networkidle");
   await expect(page.getByRole("button", { name: "Lista a terv szerint" }), "the weekly plan's button stays").toBeVisible();
   const pick = page.getByTestId("apply-list");
+  // taking an animal off the day's list that already has an item asks first (R-3); this run may find items from the tests before
+  page.on("dialog", (d) => void d.accept());
+  // Lili 2026-10-26 (msg 1564404481708265704): the switch before the dropdown: on = a list can be chosen, off = everything off
+  const power = pick.getByRole("switch", { name: "Etetési listák" });
+  await power.check();
+  await expect(pick.getByLabel("Névvel ellátott lista")).toBeEnabled();
   await pick.getByLabel("Névvel ellátott lista").selectOption({ label: name });
   await expect(pick.getByRole("status")).toContainText(`${name}:`);
+  // (msg 1564405423417593988) the day's selection IS the list: only its animal is ticked and only its feed is chosen
   await expect(page.getByLabel("Teszt Egy a mai listán")).toBeChecked();
+  await expect(page.getByLabel("Teszt Kettő a mai listán")).not.toBeChecked();
   await expect(page.getByTestId("day-feeds").getByLabel("A nap takarmánya: Mysis")).toBeChecked();
+  await expect(page.getByTestId("day-feeds").getByLabel("A nap takarmánya: Litopenaeus vannamei")).not.toBeChecked();
+  // by hand afterwards stays: tick another animal
+  await page.getByLabel("Teszt Kettő a mai listán").check();
+  await expect(page.getByLabel("Teszt Kettő a mai listán")).toBeChecked();
+
+  // the switch off: the whole selection goes (the dialog handler above accepts the confirmation)
+  await power.uncheck();
+  await expect(pick.getByRole("status")).toHaveText("Minden kijelölés kivéve.");
+  await expect(pick.getByLabel("Névvel ellátott lista")).toBeDisabled();
+  await expect(page.getByLabel("Teszt Egy a mai listán")).not.toBeChecked();
+  await expect(page.getByLabel("Teszt Kettő a mai listán")).not.toBeChecked();
+  await expect(page.getByTestId("day-feeds").getByLabel("A nap takarmánya: Mysis")).not.toBeChecked();
 
   // archived: the list leaves the dropdown
   await page.goto("/etetes/rend");
   const row = page.getByTestId("feeding-lists").locator("details", { hasText: name });
   await row.locator("summary").click();
-  page.once("dialog", (d) => void d.accept());
   await row.getByRole("button", { name: "Archiválás" }).click();
   await expect(page.getByTestId("feeding-lists").locator("details", { hasText: name })).toHaveCount(0);
 });
@@ -1248,4 +1277,16 @@ test("the admin's animal order: a drag handle, a place number and the highlighte
   await page.getByRole("button", { name: "Elvetés" }).click();
   expect(await names()).toEqual(start);
   await expect(save).toBeDisabled();
+});
+
+
+// Lili 2026-10-26 (Caparium channel msg 1564404799359946884): the timetable ("Etetési rend") is the admin's for now. An aquarist
+// does not see the entry, the page sends them to the no-access page, and "Lista a terv szerint" still works for them.
+test("the feeding timetable is the admin's: an aquarist has no entry, is sent away, and keeps the plan button", async ({ page }) => {
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Lista a terv szerint" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Etetési rend" })).toHaveCount(0);
+  await page.goto("/etetes/rend");
+  await expect(page).toHaveURL(/nincs-jogosultsag/);
 });

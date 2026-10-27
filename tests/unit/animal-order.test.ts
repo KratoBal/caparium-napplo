@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { byAnimalOrder, moveBy, moveTo, orderAssignments, parsePlace, rowAt } from "@/lib/animal-order";
+import { byAnimalOrder, compareAnimals, moveBy, moveTo, orderAssignments, parsePlace, rowAt, sortAnimals } from "@/lib/animal-order";
 
 type A = { name: string; sortOrder: number | null };
 const byName = (a: A, b: A) => a.name.localeCompare(b.name, "hu");
@@ -93,5 +93,27 @@ describe("parsePlace: the place typed into a row", () => {
   });
   it("takes nothing else: a typo moves no animal", () => {
     for (const bad of ["", "0", "6", "-1", "2,5", "2.5", "két", "1e1", "12345"]) expect(parsePlace(bad, 5), `"${bad}"`).toBeNull();
+  });
+});
+
+// Lili 2026-10-26 (msg 1564402506396598303): one order for every list
+describe("compareAnimals and sortAnimals: the one order", () => {
+  const list = [
+    { name: "Zita", sortOrder: null },
+    { name: "Béla", sortOrder: 1 },
+    { name: "Ádám", sortOrder: null },
+    { name: "Anna", sortOrder: 0 },
+  ];
+  it("the admin's order first, the never-placed after them by name (Hungarian collation)", () => {
+    expect(sortAnimals(list).map((x) => x.name)).toEqual(["Anna", "Béla", "Ádám", "Zita"]);
+  });
+  it("nothing placed: by name, as before the feature; the input is not touched", () => {
+    const none = list.map((x) => ({ ...x, sortOrder: null }));
+    const copy = [...none];
+    expect(sortAnimals(none).map((x) => x.name)).toEqual(["Ádám", "Béla", "Anna", "Zita"].sort((x, y) => x.localeCompare(y, "hu")));
+    expect(none).toEqual(copy);
+  });
+  it("works as a sort comparator", () => {
+    expect([...list].sort(compareAnimals).map((x) => x.name)).toEqual(["Anna", "Béla", "Ádám", "Zita"]);
   });
 });

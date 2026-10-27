@@ -5,7 +5,7 @@
 // what is typed (not saved yet) to the row's saved total, per base unit, never pieces to grams.
 import { useCallback, useState } from "react";
 import { deviates } from "@/lib/calc-math";
-import { chooserPools } from "@/lib/day-animals";
+import { chooserPools, sortDayAnimals } from "@/lib/day-animals";
 import { GIVEN } from "@/lib/eating-labels";
 import type { DayAnimal } from "@/lib/feeding";
 import { DayFeeds, FinalizeList, GroupSwitch, InvalidateButton, ItemForm, SelectBox, type FeedOpt, type FeedTypeOpt, type Recipient } from "./FeedingForms";
@@ -53,7 +53,7 @@ export function FeedingDay(props: {
   const onDraft = useCallback((d: Record<string, number>) => setDraft(d), []);
   const names = new Map(animals.map((a) => [a.id, a.name]));
   // the chooser's lines (Lili 2026-10-26, card f67b1a06): one line per POOL, the animals arrive sorted by pool, then by name
-  const chooserGroups = chooserPools(animals);
+  const chooserGroups = chooserPools(sortDayAnimals(animals));
   const itemsFor = (key: string) => items.filter((i) => (i.animalId ?? `g:${i.groupId}`) === key);
   const isRecipient = (key: string) => recipients.some((r) => r.key === key);
   const rowProps = (key: string) =>
@@ -118,7 +118,24 @@ export function FeedingDay(props: {
           <DayFeeds day={day} types={props.feedTypes} chosen={props.dayFeedIds ?? []} editable={editable} />
         </div>
       )}
-      {/* Lili 2026-10-26 (card f67b1a06, item 2): "Mai tételek" comes below "A nap takarmányai" */}
+      {/* keyed by the day: DayNav changes ?nap= on the same route, which keeps a client component's state, so a
+          draft typed on one day would show (and save) on the next; a new day is a new sheet (barracuda #45) */}
+      <FeedingSheet key={day} day={day} editable={editable} recipients={recipients} feeds={props.sheetFeeds ?? []} items={items} active={active} onActive={setActive} />
+      {editable && (
+        <div className="card">
+          <h2>Új tétel</h2>
+          <p className="hint">Kattints a takarmánylapon vagy a lent álló Mai tételek listában egy állat vagy csoport sorára: a tétel annak szól. A darab és a tömeg külön mennyiség, sosem adódik össze.</p>
+          {activeLabel && (
+            <p className="banner banner-ok" data-testid="live-total">
+              {activeLabel}: eddig {fmt(saved) || "semmi"}
+              {Object.keys(draft).length > 0 && ` · most beírva ${fmt(draft)} · együtt ${fmt(together)}`}
+            </p>
+          )}
+          <ItemForm day={day} recipients={recipients} feeds={feeds} otherNames={props.otherNames} active={active} onActive={setActive} onDraft={onDraft} />
+        </div>
+      )}
+      {/* Lili 2026-10-26 (Caparium channel msg 1564403940320346223): "Mai tételek" is LAST, as a summary. The order of the page: Ki eszik
+          ma, A nap takarmányai, Takarmánylap, Új tétel, Mai tételek (before: Mai tételek stood between the feeds and the sheet) */}
       <div className="card">
         <h2>Mai tételek</h2>
         <p className="hint">Az aznapi állatok tételei, összege és referenciája. Kattints egy sorra: az új tétel annak szól.</p>
@@ -174,23 +191,6 @@ export function FeedingDay(props: {
           </table>
         </div>
       </div>
-
-      {/* keyed by the day: DayNav changes ?nap= on the same route, which keeps a client component's state, so a
-          draft typed on one day would show (and save) on the next; a new day is a new sheet (barracuda #45) */}
-      <FeedingSheet key={day} day={day} editable={editable} recipients={recipients} feeds={props.sheetFeeds ?? []} items={items} active={active} onActive={setActive} />
-      {editable && (
-        <div className="card">
-          <h2>Új tétel</h2>
-          <p className="hint">Kattints a listában egy állat vagy csoport sorára: a tétel annak szól. A darab és a tömeg külön mennyiség, sosem adódik össze.</p>
-          {activeLabel && (
-            <p className="banner banner-ok" data-testid="live-total">
-              {activeLabel}: eddig {fmt(saved) || "semmi"}
-              {Object.keys(draft).length > 0 && ` · most beírva ${fmt(draft)} · együtt ${fmt(together)}`}
-            </p>
-          )}
-          <ItemForm day={day} recipients={recipients} feeds={feeds} otherNames={props.otherNames} active={active} onActive={setActive} onDraft={onDraft} />
-        </div>
-      )}
     </>
   );
 }

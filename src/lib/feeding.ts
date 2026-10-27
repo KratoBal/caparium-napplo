@@ -5,7 +5,7 @@
 // Quantities are per dimension (pieces and grams never add up, DN-16); a group item keeps the
 // group's quantity and a snapshot of who was selected (R-8: no equal split is invented).
 
-import { sortDayAnimals } from "./day-animals";
+import { sortAnimals } from "./animal-order";
 import type { Dimension, FeedingItem, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
@@ -599,8 +599,9 @@ export async function feedingDayView(d: string) {
         sortOrder: a.sortOrder,
       };
     });
-  // by pool, then the admin's order, then by name (Lili 2026-10-26, card f67b1a06)
-  const list = sortDayAnimals(unsorted);
+  // the one order (Lili 2026-10-26, msg 1564402506396598303): the admin's order, the never-placed after them by name. The tick
+  // list groups them by pool itself (day-animals.ts); the sheet, the items, the eating log and the timetable follow this order
+  const list = sortAnimals(unsorted);
   // row totals per recipient in the base unit of each dimension (EGY-06, EGY-08): 1 kg and 500 g are
   // 1500 g, pieces and grams never add up
   const baseOf = new Map((await prisma.unit.findMany({ where: { isBase: true } })).map((u) => [u.dimension, u.symbol]));

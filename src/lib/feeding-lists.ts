@@ -1,18 +1,20 @@
 // NAMED FEEDING LISTS (Lili 2026-10-26, Caparium channel msg 1564356412946124921, item 1; Balázs "Mehet" 1564357004217159823):
 // an admin composes a list under a name ("Puhatestű nap": animals and feeds) with checkboxes; a user picks it in the feeding
-// page's header and it ticks the list's animals on the day's list and adds its feeds to the day's feeds. Afterwards the user
-// adds or removes as usual. A template, not a fact (V-15): it only ADDS, like "Lista a terv szerint" (the weekly timetable),
-// which stays beside it; removing stays a person's step. The day's permissions are setSelection's and setDayFeeds'.
+// page's header and the day's selection BECOMES that list: its animals ticked, its feeds chosen, and everything else on the
+// day's list and among the day's feeds taken off (Lili, msg 1564405423417593988: "az etetési lista választása NE halmozzon: vagy
+// ez, vagy az"). Afterwards the user adds or removes by hand as usual; picking again returns to the list. With no list (the
+// header's switch off) the whole selection is taken off. A template, not a fact (V-15); "Lista a terv szerint" (the weekly
+// timetable) stays beside it and only adds. The day's permissions are setSelection's and setDayFeeds'; an animal that already
+// has an item or a status that day is taken off only after the usual confirmation (R-3).
 
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
 import { prisma } from "./db";
 import { AppError, isUniqueViolation } from "./errors";
-import { dayFeedsSchema, setDayFeeds } from "./feeding";
+import { dayFeedsSchema, ensureFeedingDay, selectedOn, selectionSchema, setDayFeeds, setSelection } from "./feeding";
 import { addAnimalsToDay } from "./feeding-plan";
 import { moduleLevel } from "./master";
 import type { Actor } from "./measurements";
-import { dayToDate } from "./time";
 
 const requestId = z.string().min(8).max(100);
 const members = {
@@ -27,11 +29,13 @@ export const createListSchema = z.object({ requestId, name, ...members }).refine
 export const updateListSchema = z.object({ requestId, listId: z.uuid(), name, ...members }).refine(needMembers, { message: NEED_MEMBERS });
 export const archiveListSchema = z.object({ requestId, listId: z.uuid() });
 export const applyListSchema = z.object({
-  // shorter than the usual 100: the feeds step adds ":feeds" to it, and a longer one would fail after the animals went on
+  // shorter than the usual 100: the later steps add ":off" and ":feeds", and a longer id would fail half way
   requestId: z.string().min(8).max(90),
   clientTimestamp: z.iso.datetime({ offset: true }).optional(),
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  listId: z.uuid(),
+  /** null: no list, the day's whole selection is taken off (the header's switch off) */
+  listId: z.uuid().nullable(),
+  confirmCascade: z.boolean().optional(),
   reason: z.string().trim().min(3).max(500).optional(),
 });
 
@@ -147,30 +151,35 @@ export async function archiveFeedingList(actor: Actor, raw: z.input<typeof archi
 }
 
 /**
- * Picks a list for a day: its animals (alive that day, not on the list yet, no manual fasting day) are ticked, and its
- * active feeds are added to the day's feeds. It only adds: nothing on the day is taken off, and a day with no feeds chosen
- * (every feed offered) is narrowed to the list's feeds only when the list has feeds.
+ * Picks a list for a day, or none: the day's selection becomes exactly the list's. The animals of the list that are alive that
+ * day and have no manual fasting day are ticked (the fasting ones are named, a person's decision stands), every other animal on
+ * the day's list is taken off, and the day's feeds become the list's active feeds (none: the day's feeds are cleared, every feed
+ * is offered again). Order: take off, tick, feeds; a confirmation the take-off needs stops before anything is changed.
  */
 export async function applyFeedingList(actor: Actor, raw: z.input<typeof applyListSchema>, serverNow = new Date()) {
   const input = applyListSchema.parse(raw);
-  const list = await prisma.feedingList.findFirst({ where: { id: input.listId, active: true }, include: { animals: true, feeds: { include: { feed: true } } } });
-  if (!list) throw new AppError(404, "LIST_NOT_FOUND", "A lista nem található.");
-  const animalIds = list.animals.map((a) => a.animalId);
-  const feedIds = list.feeds.filter((f) => f.feed.active).map((f) => f.feedId);
+  const list = input.listId
+    ? await prisma.feedingList.findFirst({ where: { id: input.listId, active: true }, include: { animals: true, feeds: { include: { feed: true } } } })
+    : null;
+  if (input.listId && !list) throw new AppError(404, "LIST_NOT_FOUND", "A lista nem található.");
+  const animalIds = list ? list.animals.map((a) => a.animalId) : [];
+  const feedIds = list ? list.feeds.filter((f) => f.feed.active).map((f) => f.feedId) : [];
   const base = { clientTimestamp: input.clientTimestamp, day: input.day, reason: input.reason };
+
+  const { fd } = await prisma.$transaction((tx) => ensureFeedingDay(tx, input.day));
+  const current = await selectedOn(prisma, fd.id);
+  const toRemove = [...current].filter((id) => !animalIds.includes(id));
+  let removed = 0;
+  if (toRemove.length) {
+    const body = selectionSchema.parse({ requestId: `${input.requestId}:off`, ...base, animalIds: toRemove, selected: false, confirmCascade: input.confirmCascade });
+    removed = (await setSelection(actor, body, serverNow)).changed;
+  }
   const animals = animalIds.length
     ? await addAnimalsToDay(actor, { requestId: input.requestId, ...base }, animalIds, serverNow)
     : { replayed: false, added: 0, skipped: [] as string[] };
-  let feedsAdded = 0;
-  if (feedIds.length) {
-    const fd = await prisma.feedingDay.findUnique({ where: { businessDay: dayToDate(input.day) } });
-    const current = fd?.feedIds ?? [];
-    const next = [...new Set([...current, ...feedIds])];
-    feedsAdded = next.length - current.length;
-    if (feedsAdded > 0) {
-      const body = dayFeedsSchema.parse({ requestId: `${input.requestId}:feeds`, ...base, feedIds: next });
-      await setDayFeeds(actor, body, serverNow);
-    }
+  const before = [...fd.feedIds].sort().join();
+  if (before !== [...feedIds].sort().join()) {
+    await setDayFeeds(actor, dayFeedsSchema.parse({ requestId: `${input.requestId}:feeds`, ...base, feedIds }), serverNow);
   }
-  return { replayed: animals.replayed, name: list.name, added: animals.added, skipped: animals.skipped, feedsAdded };
+  return { replayed: animals.replayed, name: list?.name ?? null, added: animals.added, removed, skipped: animals.skipped, feeds: feedIds.length };
 }

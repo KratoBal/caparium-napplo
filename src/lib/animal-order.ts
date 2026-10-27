@@ -15,6 +15,20 @@ export function byAnimalOrder<T extends Orderable>(fallback: (a: T, b: T) => num
   };
 }
 
+/**
+ * THE ONE ORDER of the animals in every list (Lili 2026-10-26, msg 1564402506396598303; memory 2496: "a sorrendet minden lista
+ * követi"): the admin's order first, the never-placed after them by name (Hungarian collation). Where a list shows its animals in
+ * pool lines (the "Ki eszik ma" tick list), the lines keep their pool and this order is the one inside each line.
+ */
+export function compareAnimals<T extends Orderable & { name: string }>(a: T, b: T): number {
+  return byAnimalOrder<T>((x, y) => x.name.localeCompare(y.name, "hu"))(a, b);
+}
+
+/** A new array of the animals in the one order; the input is not touched. */
+export function sortAnimals<T extends Orderable & { name: string }>(animals: readonly T[]): T[] {
+  return [...animals].sort(compareAnimals);
+}
+
 /** One position up (-1) or down (+1); at the edge nothing moves. A new array, the input is not touched. */
 export function moveBy(ids: readonly string[], id: string, delta: -1 | 1): string[] {
   const from = ids.indexOf(id);

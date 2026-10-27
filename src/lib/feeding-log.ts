@@ -3,7 +3,7 @@
 // the same animals. A group item counts for an animal it was given to (its participant snapshot, R-8),
 // and for a pool if any participant was there that day. Names are the ones valid on the day (K3).
 
-import { byAnimalOrder } from "./animal-order";
+import { compareAnimals } from "./animal-order";
 import { prisma } from "./db";
 import { GIVEN } from "./eating-labels";
 import { AppError } from "./errors";
@@ -66,6 +66,8 @@ export async function feedingLog(f: LogFilter) {
 
   const rows: LogRow[] = [];
   const entries: LogEntry[] = [];
+  // the admin's position of each recipient (null: a group, or never placed), for the order of the rows and the reports
+  const recipientOrder = new Map<string, number | null>();
   // R-8 invents no split of a group item: under a filter its whole amount is shown apart, so an
   // animal's (or a pool's) total never reads as if it ate the group's food alone (review of #11)
   const totals: Record<string, number> = {};
@@ -87,6 +89,7 @@ export async function feedingLog(f: LogFilter) {
     }
     const feed = pickValid(it.feed.names, at)?.name ?? it.feed.names.at(-1)?.name ?? "?";
     const recipient = it.animal ? pickValid(it.animal.names, at)?.name ?? "?" : `${pickValid(it.group!.names, at)?.name ?? "?"} (csoport)`;
+    recipientOrder.set(recipient, it.animal ? it.animal.sortOrder : null);
     for (const q of it.quantities) {
       entries.push({
         day,
@@ -108,6 +111,11 @@ export async function feedingLog(f: LogFilter) {
       quantities: it.quantities.map((q) => `${Number(q.quantity).toString().replace(".", ",")} ${q.unit.symbol}`).join(" + ") || GIVEN,
     });
   }
+
+  // within a day the rows follow the animals' order (Lili 2026-10-26, msg 1564402506396598303), the items of one recipient in the
+  // order they were given (the sort is stable, the rows came in by day and time); a group, with no position, follows by name
+  const orderOf = (recipient: string) => ({ name: recipient, sortOrder: recipientOrder.get(recipient) ?? null });
+  rows.sort((a, b) => a.day.localeCompare(b.day) || compareAnimals(orderOf(a.recipient), orderOf(b.recipient)));
 
   // the eating pattern of the same filter: one row per animal, one cell per day. A day the animal lived without a
   // stored status is a fasting day when it was not on the day's list (DN-03, eating-pattern.ts), as in the Excel
@@ -153,7 +161,7 @@ export async function feedingLog(f: LogFilter) {
       ]);
       return { id, name: pickValid(own, new Date(end.getTime() - 1))?.name ?? own.at(-1)?.name ?? "?", sortOrder: placedAt.get(id) ?? null, cells };
     })
-    .sort(byAnimalOrder((a, b) => a.name.localeCompare(b.name, "hu")));
+    .sort(compareAnimals);
 
-  return { days, rows, entries, totals, own, group, filtered: f.animalId !== null || f.poolId !== null, pattern };
+  return { days, rows, entries, totals, own, group, filtered: f.animalId !== null || f.poolId !== null, pattern, recipientOrder };
 }

@@ -37,9 +37,9 @@ async function expectCode(p: Promise<unknown>, code: string) {
 describe("the feeding plan (JAV-08)", () => {
   it("a new version per change, one open; it only adds the planned animals of the weekday to the list", async () => {
     const id = a["Teszt Három"];
-    await setFeedingPlan(f.aq1, { requestId: rid(), animalId: id, weekdays: [1, 3] }, at("2026-12-01", "08:00"));
-    await setFeedingPlan(f.aq1, { requestId: rid(), animalId: id, weekdays: [3, 1, 1] }, at("2026-12-01", "08:01")); // the same plan: nothing new
-    await setFeedingPlan(f.aq1, { requestId: rid(), animalId: id, weekdays: [1, 4] }, at("2026-12-01", "08:02"));
+    await setFeedingPlan(f.admin, { requestId: rid(), animalId: id, weekdays: [1, 3] }, at("2026-12-01", "08:00"));
+    await setFeedingPlan(f.admin, { requestId: rid(), animalId: id, weekdays: [3, 1, 1] }, at("2026-12-01", "08:01")); // the same plan: nothing new
+    await setFeedingPlan(f.admin, { requestId: rid(), animalId: id, weekdays: [1, 4] }, at("2026-12-01", "08:02"));
     expect(await prisma.feedingPlan.count({ where: { animalId: id } })).toBe(2);
     expect((await currentPlans())[id]).toEqual([1, 4]);
 
@@ -57,8 +57,8 @@ describe("the feeding plan (JAV-08)", () => {
 describe("the feeding plan and a manual fasting day (JAV-08, review of #18)", () => {
   it("the plan leaves out an animal with a manual fasting day, names it, and adds the others", async () => {
     const thursday = "2026-12-17";
-    await setFeedingPlan(f.aq1, { requestId: rid(), animalId: a["Teszt Három"], weekdays: [4] }, at("2026-12-14", "08:00"));
-    await setFeedingPlan(f.aq1, { requestId: rid(), animalId: a["Teszt Négy"], weekdays: [4] }, at("2026-12-14", "08:00"));
+    await setFeedingPlan(f.admin, { requestId: rid(), animalId: a["Teszt Három"], weekdays: [4] }, at("2026-12-14", "08:00"));
+    await setFeedingPlan(f.admin, { requestId: rid(), animalId: a["Teszt Négy"], weekdays: [4] }, at("2026-12-14", "08:00"));
     await setEatingStatus(f.aq1, { requestId: rid(), day: thursday, animalId: a["Teszt Négy"], state: "FASTING" }, at(thursday, "07:30"));
     expect(await applyPlan(f.aq1, { requestId: rid(), day: thursday }, at(thursday, "08:00"))).toMatchObject({ added: 1, skipped: ["Teszt Négy"] });
     const view = (await feedingDayView(thursday)).animals;
@@ -67,6 +67,22 @@ describe("the feeding plan and a manual fasting day (JAV-08, review of #18)", ()
     // the fasting day stays: the plan did not override a person's decision
     const fd = await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: dayToDate(thursday) } });
     expect(await prisma.eatingStatus.count({ where: { feedingDayId: fd.id, animalId: a["Teszt Négy"], status: "VALID", state: "FASTING" } })).toBe(1);
+  });
+});
+
+// Lili 2026-10-26 (Caparium channel msg 1564404799359946884): the timetable is the admin's for now. The server refuses everyone else;
+// "Lista a terv szerint" only reads the plan and stays open to every aquarist.
+describe("the feeding plan is the admin's to change", () => {
+  it("an aquarist is refused on both writes (403) and nothing is stored; the aquarist's 'Lista a terv szerint' still works on the admin's plan", async () => {
+    const before = await prisma.feedingPlan.count();
+    await expectCode(setFeedingPlan(f.aq1, { requestId: rid(), animalId: a["Teszt Egy"], weekdays: [1] }, at("2026-12-28", "08:00")), "ADMIN_ONLY");
+    await expectCode(setFeedingPlans(f.aq1, { requestId: rid(), plans: [{ animalId: a["Teszt Egy"], weekdays: [1] }] }, at("2026-12-28", "08:00")), "ADMIN_ONLY");
+    expect(await prisma.feedingPlan.count()).toBe(before);
+    // the admin sets a plan for a Monday; the aquarist applies it
+    const monday = "2026-12-28";
+    await setFeedingPlan(f.admin, { requestId: rid(), animalId: a["Teszt Kettő"], weekdays: [1] }, at("2026-12-27", "08:00"));
+    expect(await applyPlan(f.aq1, { requestId: rid(), day: monday }, at(monday, "08:00"))).toMatchObject({ added: expect.any(Number) });
+    expect((await feedingDayView(monday)).animals.find((x) => x.id === a["Teszt Kettő"])?.selected).toBe(true);
   });
 });
 
@@ -107,7 +123,7 @@ describe("the feeding timetable (6fe63c9b, item 4)", () => {
     expect(planless, "an animal without a plan").toBeDefined();
     const req = rid();
     const r = await setFeedingPlans(
-      f.aq1,
+      f.admin,
       {
         requestId: req,
         plans: [
@@ -122,11 +138,11 @@ describe("the feeding timetable (6fe63c9b, item 4)", () => {
     expect(r).toEqual({ replayed: false, changed: 2 });
     expect((await currentPlans())[two]).toEqual([2, 7]);
     expect(await prisma.feedingPlan.count()).toBe(before + 2);
-    expect(await setFeedingPlans(f.aq1, { requestId: req, plans: [{ animalId: one, weekdays: [1] }] }, at("2026-12-20", "08:01"))).toEqual({ replayed: true, changed: 0 });
+    expect(await setFeedingPlans(f.admin, { requestId: req, plans: [{ animalId: one, weekdays: [1] }] }, at("2026-12-20", "08:01"))).toEqual({ replayed: true, changed: 0 });
     // the same days again: no new version
-    expect((await setFeedingPlans(f.aq1, { requestId: rid(), plans: [{ animalId: one, weekdays: [7, 6, 5, 3, 2] }] }, at("2026-12-20", "08:02"))).changed).toBe(0);
+    expect((await setFeedingPlans(f.admin, { requestId: rid(), plans: [{ animalId: one, weekdays: [7, 6, 5, 3, 2] }] }, at("2026-12-20", "08:02"))).changed).toBe(0);
     await expectCode(
-      setFeedingPlans(f.aq1, { requestId: rid(), plans: [{ animalId: one, weekdays: [1] }, { animalId: one, weekdays: [2] }] }, at("2026-12-20", "08:03")),
+      setFeedingPlans(f.admin, { requestId: rid(), plans: [{ animalId: one, weekdays: [1] }, { animalId: one, weekdays: [2] }] }, at("2026-12-20", "08:03")),
       "DUPLICATE_ANIMAL",
     );
   });
