@@ -299,11 +299,85 @@ export function FeedActive({ id, active }: { id: string; active: boolean }) {
   const { msg, busy, call } = useApi();
   return (
     <>
-      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void call(`/api/admin/feeds/${id}`, "PATCH", { active: !active }, active ? "Inaktiválva." : "Újra aktív.")}>
+      <button className="btn btn-row" type="button" disabled={busy} onClick={() => void call(`/api/admin/feeds/${id}`, "PATCH", { active: !active }, active ? "Inaktiválva." : "Újra aktív.")}>
         {active ? "Inaktiválás" : "Aktiválás"}
-      </button>{" "}
+      </button>
       <Msg msg={msg} />
     </>
+  );
+}
+
+export type FeedRow = { id: string; name: string; dimensions: string[]; defaultUnitId: string; uses: number };
+
+/**
+ * Lili 2026-10-27 22:42 and 22:45 UTC: a feed of the list can be changed, a small quiet "Módosítás" beside the
+ * activation, as on the withdrawal rows. The name is a CORRECTION: it shows on every day, the earlier ones too (the
+ * ZIMS export does not carry feed names, Lili 22:48 UTC). The unit and the dimensions only while nothing was recorded
+ * with the feed; the server checks it again.
+ */
+export function FeedEdit({ feed, units }: { feed: FeedRow; units: { id: string; symbol: string; dimension: string }[] }) {
+  const usable = units.filter((u) => ["MASS", "COUNT", "VOLUME"].includes(u.dimension));
+  const start = { name: feed.name, unit: feed.defaultUnitId, count: feed.dimensions.includes("COUNT") };
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState(start);
+  const { msg, busy, call } = useApi();
+  const reasonsOn = useReasonsOn();
+  const unit = usable.find((u) => u.id === f.unit);
+  const locked = feed.uses > 0;
+  if (!open)
+    return (
+      <button
+        className="btn btn-row"
+        type="button"
+        aria-label={`${feed.name}: módosítás`}
+        onClick={() => {
+          setF(start);
+          setOpen(true);
+        }}
+      >
+        Módosítás
+      </button>
+    );
+  const renamed = f.name.trim() !== feed.name;
+  const dimensions = unit ? [...new Set([unit.dimension, ...(f.count ? ["COUNT"] : [])])] : [];
+  const unitChanged = f.unit !== feed.defaultUnitId || [...dimensions].sort().join() !== [...feed.dimensions].sort().join();
+  async function save() {
+    const body: Record<string, unknown> = {};
+    if (renamed) {
+      const asked = askReason(
+        reasonsOn,
+        "Az átnevezés oka (a korábbi napokon is az új név áll):",
+        `Átnevezed: ${feed.name} -> ${f.name.trim()}? A korábbi napokon is az új név fog állni.`,
+      );
+      if (!asked) return;
+      Object.assign(body, { name: f.name.trim(), mode: "correction" }, asked);
+    }
+    if (unitChanged) Object.assign(body, { defaultUnitId: f.unit, dimensions });
+    if (await call(`/api/admin/feeds/${feed.id}`, "PATCH", body, "Takarmány módosítva.")) setOpen(false);
+  }
+  return (
+    <div className="toolbar" data-testid={`feed-edit-${feed.id}`}>
+      <input className="input" aria-label="Takarmány új neve" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+      <select className="input" aria-label="Alapértelmezett egység" value={f.unit} disabled={locked} onChange={(e) => setF({ ...f, unit: e.target.value })}>
+        {usable.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.symbol}
+          </option>
+        ))}
+      </select>
+      <label className="check">
+        <input type="checkbox" checked={f.count} disabled={locked} onChange={(e) => setF({ ...f, count: e.target.checked })} />
+        darabban is
+      </label>
+      {locked && <span className="hint">Tétel van rá, a mértékegysége nem változtatható.</span>}
+      <button className="btn" type="button" disabled={busy || !f.name.trim() || !unit || (!renamed && !unitChanged)} onClick={() => void save()}>
+        Mentés
+      </button>
+      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => setOpen(false)}>
+        Mégse
+      </button>
+      <Msg msg={msg} />
+    </div>
   );
 }
 
