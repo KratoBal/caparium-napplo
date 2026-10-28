@@ -452,6 +452,8 @@ export async function saveFeedingItem(actor: Actor, input: z.infer<typeof itemSc
         await enforce(tx, canCreate(f.level, { day: f.d, today: f.today, closed: f.closed }), input.reason);
       }
 
+      // the feed's row FOR SHARE: a change of its unit (feeds.ts) waits for this save, and this one for it
+      await tx.$queryRaw`SELECT "id" FROM "feed" WHERE "id" = ${input.feedId}::uuid FOR SHARE`;
       const feed = await tx.feed.findUnique({ where: { id: input.feedId }, include: { type: true } });
       if (!feed || !feed.active) throw new AppError(422, "FEED_NOT_FOUND", "A takarmány nem található vagy nem aktív.");
       if (feed.type.code === "EGYEB" && !input.otherName) throw new AppError(422, "OTHER_NAME", "Az „Egyéb” takarmányhoz a nevét is meg kell adni (EGY-12).");

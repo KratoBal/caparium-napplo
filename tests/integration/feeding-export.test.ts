@@ -89,7 +89,11 @@ describe("the feeding Excel (EGY-10, D-30)", () => {
     const byUnit = Object.fromEntries(sums.map((c) => [ws.getRow(2).getCell(c).value, val(egy.getCell(c))]));
     expect(byUnit).toMatchObject({ g: 62.5, db: 6 });
     const gSum = sums.find((c) => ws.getRow(2).getCell(c).value === "g")!;
-    expect((egy.getCell(gSum).value as { formula: string }).formula).not.toContain(`${ws.getColumn(lit).letter}${egy.number}`);
+    // the formula's cells one by one: a substring check took "AK42" for "K42" once the sheet ran to column AK
+    // (more feeds from an earlier test file; vitest orders the files by their last duration)
+    const gCells = (egy.getCell(gSum).value as { formula: string }).formula.replace(/^SUM\(|\)$/g, "").split(",");
+    expect(gCells).not.toContain(`${ws.getColumn(lit).letter}${egy.number}`);
+    expect(gCells).toContain(`${ws.getColumn(lit + 1).letter}${egy.number}`);
 
     expect(val(rowOf(ws, 3, "Teszt Három").getCell(colOf(ws, 1, "Teszt hal")))).toBe(1000); // 1 kg in grams
     // EGY-05: an animal not fed that day has its row, its cells empty and coloured; a fed row's gaps too

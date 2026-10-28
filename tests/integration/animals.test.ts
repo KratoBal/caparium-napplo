@@ -2,10 +2,11 @@
 // Days in February 2026: no other test file writes there.
 import { beforeAll, describe, expect, it } from "vitest";
 import { createLifecycleEvent, editAnimal, invalidateLifecycleEvent, listAnimals, rebuildAnimal, renameEntity, setAnimalOrder } from "@/lib/animals";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { saveFeedingItem, setSelection } from "@/lib/feeding";
-import { createFeed, listFeeds, updateFeed } from "@/lib/feeds";
+import { createFeed, createFeedSchema, listFeeds, updateFeed, updateFeedSchema } from "@/lib/feeds";
 import { fixtures, rid, withReasons } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -283,6 +284,72 @@ describe("feeds (DAT-02, TAK-07, T-08)", () => {
     await withReasons(async () => {
       await expectCode(updateFeed(f.admin, r.id, { requestId: rid(), name: "Procambarus sp.", mode: "correction" }), "REASON_REQUIRED");
     });
+  });
+
+  it("a dimension list names each dimension once (barracuda on #84)", () => {
+    const base = { requestId: rid(), typeId: "00000000-0000-4000-8000-000000000001", name: "Teszt", defaultUnitId: "00000000-0000-4000-8000-000000000002" };
+    expect(createFeedSchema.safeParse({ ...base, dimensions: ["MASS", "MASS"] }).success).toBe(false);
+    expect(createFeedSchema.safeParse({ ...base, dimensions: ["MASS", "COUNT"] }).success).toBe(true);
+    expect(updateFeedSchema.safeParse({ requestId: rid(), dimensions: ["COUNT", "COUNT"] }).success).toBe(false);
+  });
+
+  it("a unit change and an item save wait for each other on the feed's row (barracuda on #84)", async () => {
+    const type = await prisma.feedType.findUniqueOrThrow({ where: { code: "RAK" } });
+    const unitId = async (symbol: string) => (await prisma.unit.findUniqueOrThrow({ where: { symbol } })).id;
+    const [g, db] = [await unitId("g"), await unitId("db")];
+    const r = await createFeed(f.admin, { requestId: rid(), typeId: type.id, name: "Teszt zárolt rák", dimensions: ["MASS"], defaultUnitId: g });
+    const d = "2026-10-06";
+    const animalId = (await prisma.animalName.findFirstOrThrow({ where: { name: "Teszt Egy" } })).animalId;
+    const now = new Date(`${d}T09:00:00+02:00`);
+    await setSelection(f.aq1, { requestId: rid(), day: d, animalIds: [animalId], selected: true }, now);
+    const feedingDayId = (await prisma.feedingDay.findFirstOrThrow({ where: { businessDay: new Date(`${d}T00:00:00Z`) } })).id;
+    const pause = (ms: number) => new Promise((res) => setTimeout(res, ms));
+    // one side in flight, holding the row as it does; the other side must not finish until it commits
+    const inFlight = async (lock: "FOR SHARE" | "FOR NO KEY UPDATE", feedId: string, inside: (tx: Prisma.TransactionClient) => Promise<unknown>, other: () => Promise<unknown>) => {
+      let release!: () => void;
+      const gate = new Promise<void>((res) => (release = res));
+      let locked!: () => void;
+      const taken = new Promise<void>((res) => (locked = res));
+      const holder = prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRawUnsafe(`SELECT "id" FROM "feed" WHERE "id" = $1::uuid ${lock}`, feedId);
+          await inside(tx);
+          locked();
+          await gate;
+        },
+        { timeout: 15_000 },
+      );
+      await taken;
+      let finished = false;
+      const run = other().then(
+        () => ((finished = true), "ok"),
+        (e: unknown) => ((finished = true), (e as AppError).code ?? String(e)),
+      );
+      await pause(700);
+      const whileHeld = finished;
+      release();
+      await holder;
+      return { whileHeld, outcome: await run };
+    };
+    // an item save in flight: its row inserted, not committed yet. The unit change waits, then counts it and refuses;
+    // without the lock it would count 0 and change the unit under the item
+    expect(
+      await inFlight(
+        "FOR SHARE",
+        r.id,
+        (tx) => tx.feedingItem.create({ data: { feedingDayId, animalId, feedId: r.id, requestId: rid(), createdById: f.aq1.id, updatedById: f.aq1.id } }),
+        () => updateFeed(f.admin, r.id, { requestId: rid(), defaultUnitId: db, dimensions: ["MASS", "COUNT"] }),
+      ),
+    ).toEqual({ whileHeld: false, outcome: "FEED_IN_USE" });
+    // a unit change in flight: an item save waits for it, then reads the feed as it is after it
+    const other = await createFeed(f.admin, { requestId: rid(), typeId: type.id, name: "Teszt zárolt rák kettő", dimensions: ["MASS"], defaultUnitId: g });
+    const held = await inFlight(
+      "FOR NO KEY UPDATE",
+      other.id,
+      async () => undefined,
+      () => saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId, feedId: other.id, quantities: [{ value: "2", unitId: g }] }, now),
+    );
+    expect(held.whileHeld).toBe(false);
   });
 
   it("an aquarist who records feeding may add an Egyéb feed, no other type; a read-only one may not (caparium-hibak-4)", async () => {

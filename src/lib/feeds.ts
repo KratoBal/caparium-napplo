@@ -19,13 +19,20 @@ const name = z
   .max(80)
   .refine((v) => !/^[=+\-@]/.test(v), "A név nem kezdődhet =, +, -, @ jellel.");
 
+// A dimension once: ["MASS", "MASS"] is no list of dimensions (barracuda on #84)
+const dimensionList = z
+  .array(z.enum(["MASS", "COUNT", "VOLUME"]))
+  .min(1)
+  .max(3)
+  .refine((d) => new Set(d).size === d.length, "Egy dimenzió csak egyszer szerepelhet.");
+
 // The two choices of the form say what is missing, not "Invalid UUID": an empty select sends an empty
 // string, and the raw zod message reached the user (Balázs, 2026-10-19, the stage had no feed type).
 export const createFeedSchema = z.object({
   requestId: z.string().min(8).max(100),
   typeId: z.uuid({ error: "Válassz takarmánytípust." }),
   name,
-  dimensions: z.array(z.enum(["MASS", "COUNT", "VOLUME"])).min(1).max(3),
+  dimensions: dimensionList,
   defaultUnitId: z.uuid({ error: "Válassz alapértelmezett egységet." }),
 });
 
@@ -35,7 +42,7 @@ export const updateFeedSchema = z.object({
   mode: z.enum(["change", "correction"]).optional(),
   active: z.boolean().optional(),
   // Lili 2026-10-27 22:42 UTC: the default unit and the dimensions too, but only on a feed nothing was recorded with
-  dimensions: z.array(z.enum(["MASS", "COUNT", "VOLUME"])).min(1).max(3).optional(),
+  dimensions: dimensionList.optional(),
   defaultUnitId: z.uuid({ error: "Válassz alapértelmezett egységet." }).optional(),
   reason: z.string().trim().min(3).max(500).optional(),
 });
@@ -100,6 +107,10 @@ export async function updateFeed(actor: Actor, id: string, input: z.infer<typeof
   await requireAdmin(actor);
   await requireReason(prisma, Boolean(input.name) && input.mode === "correction", input.reason, "A helyesbítés a régi naplókban is átírja a nevet, ezért indoklás kell.");
   return prisma.$transaction(async (tx) => {
+    // the feed's row first: an item or withdrawal being saved holds it FOR SHARE (feeding.ts, withdrawal.ts), so the
+    // use count below cannot miss one that commits meanwhile (barracuda on #84). NO KEY: an insert's foreign-key
+    // check on the feed is not held up by it
+    await tx.$queryRaw`SELECT "id" FROM "feed" WHERE "id" = ${id}::uuid FOR NO KEY UPDATE`;
     const f = await tx.feed.findUnique({ where: { id } });
     if (!f) throw new AppError(404, "NOT_FOUND", "A takarmány nem található.");
     const before: Record<string, unknown> = { active: f.active };
