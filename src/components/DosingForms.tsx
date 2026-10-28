@@ -4,6 +4,7 @@
 // admin's intake, correction and new chemical. The server decides every permission.
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { askReason, useReasonsOn } from "./ReasonSwitch";
 
 type Opt = { id: string; name: string };
 export type ChemicalOpt = { id: string; name: string; units: { id: string; symbol: string }[] };
@@ -24,12 +25,12 @@ function useSend() {
   const router = useRouter();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  async function run(url: string, body: Record<string, unknown>, okText: string) {
+  async function run(url: string, body: Record<string, unknown>, okText: string, method = "POST") {
     setBusy(true);
     setMsg(null);
     try {
       const res = await fetch(url, {
-        method: "POST",
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ requestId: requestId(), clientTimestamp: new Date().toISOString(), ...body }),
       });
@@ -168,6 +169,90 @@ export function MovementForm({ chemicals }: { chemicals: ChemicalOpt[] }) {
         }
       >
         Rögzítés
+      </button>
+      <Msg msg={msg} />
+    </div>
+  );
+}
+
+export type ChemicalRow = { id: string; name: string; unitId: string; active: boolean; uses: number };
+
+/** Lili 2026-10-28 16:06 UTC: an inactive chemical is not offered for a dosing or a stock line; its history stays. */
+export function ChemicalActive({ chem }: { chem: ChemicalRow }) {
+  const { msg, busy, run } = useSend();
+  return (
+    <>
+      <button
+        className="btn btn-row"
+        type="button"
+        disabled={busy}
+        aria-label={`${chem.name}: ${chem.active ? "inaktiválás" : "aktiválás"}`}
+        onClick={() => void run(`/api/admin/chemicals/${chem.id}`, { active: !chem.active }, chem.active ? "Inaktiválva." : "Újra aktív.", "PATCH")}
+      >
+        {chem.active ? "Inaktiválás" : "Aktiválás"}
+      </button>
+      <Msg msg={msg} />
+    </>
+  );
+}
+
+/**
+ * A chemical of the list changed, the feeds' way (FeedEdit): the name is a CORRECTION, it shows on the earlier days too;
+ * the stock unit only while nothing was recorded with the chemical, and the server checks it again.
+ */
+export function ChemicalEdit({ chem, units }: { chem: ChemicalRow; units: Opt[] }) {
+  const start = { name: chem.name, unit: chem.unitId };
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState(start);
+  const { msg, busy, run } = useSend();
+  const reasonsOn = useReasonsOn();
+  const locked = chem.uses > 0;
+  if (!open)
+    return (
+      <button
+        className="btn btn-row"
+        type="button"
+        aria-label={`${chem.name}: módosítás`}
+        onClick={() => {
+          setF(start);
+          setOpen(true);
+        }}
+      >
+        Módosítás
+      </button>
+    );
+  const renamed = f.name.trim() !== chem.name;
+  const unitChanged = f.unit !== chem.unitId;
+  async function save() {
+    const body: Record<string, unknown> = {};
+    if (renamed) {
+      const asked = askReason(
+        reasonsOn,
+        "Az átnevezés oka (a korábbi napokon is az új név áll):",
+        `Átnevezed: ${chem.name} -> ${f.name.trim()}? A korábbi napokon is az új név fog állni.`,
+      );
+      if (!asked) return;
+      Object.assign(body, { name: f.name.trim(), mode: "correction" }, asked);
+    }
+    if (unitChanged) body.stockUnitId = f.unit;
+    if (await run(`/api/admin/chemicals/${chem.id}`, body, "Vegyszer módosítva.", "PATCH")) setOpen(false);
+  }
+  return (
+    <div className="toolbar" data-testid={`chemical-edit-${chem.id}`}>
+      <input className="input" aria-label="Vegyszer új neve" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+      <select className="input" aria-label="Készlet egysége" value={f.unit} disabled={locked} onChange={(e) => setF({ ...f, unit: e.target.value })}>
+        {units.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.name}
+          </option>
+        ))}
+      </select>
+      {locked && <span className="hint">Tétel van rá, a készlet egysége nem változtatható.</span>}
+      <button className="btn" type="button" disabled={busy || !f.name.trim() || (!renamed && !unitChanged)} onClick={() => void save()}>
+        Mentés
+      </button>
+      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => setOpen(false)}>
+        Mégse
       </button>
       <Msg msg={msg} />
     </div>

@@ -7,11 +7,11 @@
 
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { writeAudit } from "./audit";
+import { diffFields, writeAudit } from "./audit";
 import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError } from "./errors";
-import { ensureJournalDay, moduleLevel, monogramResolver, pickValid } from "./master";
+import { ensureJournalDay, moduleLevel, monogramResolver, pickValid, validAt } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { closedAt } from "./measurements";
@@ -185,6 +185,8 @@ export async function recordMovement(actor: Actor, raw: z.input<typeof intakeSch
   if (input.type === "INTAKE" && input.negative) throw new AppError(422, "INTAKE_NEGATIVE", "A bevételezés nem lehet negatív; a csökkentés korrekció.");
   return prisma.$transaction(async (tx) => {
     const { chem, unit, value, inStock } = await toStockUnit(tx, input.chemicalId, input.quantity, input.unitId);
+    // an inactive chemical takes no new stock line either (Lili 2026-10-28 16:06 UTC); its past ones stay
+    if (!chem.active) throw new AppError(422, "CHEMICAL_INACTIVE", "Ez a vegyszer nem aktív.");
     const row = await tx.stockMovement.create({
       data: {
         chemicalId: chem.id,
@@ -229,10 +231,77 @@ export async function createChemical(actor: Actor, raw: z.input<typeof chemicalS
   });
 }
 
+export const updateChemicalSchema = z.object({
+  requestId,
+  name: safeText(80).optional(),
+  mode: z.enum(["change", "correction"]).optional(),
+  active: z.boolean().optional(),
+  // only on a chemical nothing was recorded with: a dosing or a stock line is read in its unit
+  stockUnitId: z.uuid().optional(),
+  reason: reason.optional(),
+});
+
+/**
+ * A chemical of the list changed (Lili 2026-10-28 16:06 UTC, caparium-vegyszer-inaktival), the feeds' way (feeds.ts
+ * updateFeed): its name, its stock unit while nothing was recorded with it, and its activity. An inactive chemical is
+ * not offered for a dosing or a stock line and the server refuses both; its history stays. Nothing is ever deleted.
+ */
+export async function updateChemical(actor: Actor, id: string, raw: z.input<typeof updateChemicalSchema>, serverNow = new Date()) {
+  const input = updateChemicalSchema.parse(raw);
+  await requireDosingAdmin(actor);
+  if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true };
+  await requireReason(prisma, Boolean(input.name) && input.mode === "correction", input.reason, "A helyesbítés a régi naplókban is átírja a nevet, ezért indoklás kell.");
+  return prisma.$transaction(async (tx) => {
+    // the row first: a dosing or a stock line being saved meanwhile cannot slip past the use count below
+    await tx.$queryRaw`SELECT "id" FROM "chemical" WHERE "id" = ${id}::uuid FOR NO KEY UPDATE`;
+    const c = await tx.chemical.findUnique({ where: { id }, include: { stockUnit: true } });
+    if (!c) throw new AppError(404, "NOT_FOUND", "A vegyszer nem található.");
+    const before: Record<string, unknown> = { active: c.active };
+    const after: Record<string, unknown> = { active: c.active };
+    if (input.name) {
+      const cur = await tx.chemicalName.findFirst({ where: { chemicalId: id, ...validAt(serverNow) } });
+      const taken = await tx.chemicalName.findMany({ where: { validTo: null, chemicalId: { not: id } } });
+      if (taken.some((n) => n.name.toLowerCase() === input.name!.toLowerCase())) throw new AppError(409, "NAME_TAKEN", "Ilyen nevű vegyszer már van.");
+      before.name = cur?.name ?? null;
+      after.name = input.name;
+      if (cur && input.mode === "correction") await tx.chemicalName.update({ where: { id: cur.id }, data: { name: input.name } });
+      else {
+        if (cur) await tx.chemicalName.update({ where: { id: cur.id }, data: { validTo: serverNow } });
+        await tx.chemicalName.create({ data: { chemicalId: id, name: input.name, validFrom: serverNow } });
+      }
+    }
+    if (input.stockUnitId !== undefined && input.stockUnitId !== c.stockUnitId) {
+      const unit = await tx.unit.findUnique({ where: { id: input.stockUnitId } });
+      if (!unit || !["MASS", "VOLUME", "COUNT"].includes(unit.dimension)) throw new AppError(422, "UNIT", "A készlet egysége tömeg, térfogat vagy darab legyen.");
+      const uses = (await tx.dosing.count({ where: { chemicalId: id } })) + (await tx.stockMovement.count({ where: { chemicalId: id } }));
+      if (uses > 0) throw new AppError(409, "CHEMICAL_IN_USE", `A készlet egysége csak olyan vegyszernél változtatható, amire még nincs tétel; erre ${uses} van.`);
+      before.stockUnit = c.stockUnit.symbol;
+      after.stockUnit = unit.symbol;
+      await tx.chemical.update({ where: { id }, data: { stockUnitId: unit.id } });
+    }
+    if (input.active !== undefined && input.active !== c.active) {
+      await tx.chemical.update({ where: { id }, data: { active: input.active } });
+      after.active = input.active;
+    }
+    const changes = diffFields(before, after);
+    if (Object.keys(changes).length === 0) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: input.name && input.mode === "correction" ? "MASTER_CORRECTION" : "MASTER_CHANGE",
+      entityType: "Chemical",
+      entityId: id,
+      changes,
+      reason: input.reason ?? null,
+      requestId: input.requestId,
+    });
+    return { replayed: false };
+  });
+}
+
 /** ADA-06: the level of each chemical (the sum of its valid movements) and its usage of the last 7 and 30 days. */
 export async function stockLevels(now = new Date()) {
   const today = businessDayOf(now);
-  const chems = await prisma.chemical.findMany({ include: { names: true, stockUnit: true } });
+  const chems = await prisma.chemical.findMany({ include: { names: true, stockUnit: true, _count: { select: { dosings: true, movements: true } } } });
   const sums = await prisma.stockMovement.groupBy({ by: ["chemicalId"], where: { status: "VALID" }, _sum: { quantity: true } });
   const usage = async (days: number) =>
     prisma.stockMovement.groupBy({
@@ -252,6 +321,8 @@ export async function stockLevels(now = new Date()) {
         unitId: c.stockUnitId,
         dimension: c.stockUnit.dimension,
         active: c.active,
+        /** dosings and stock lines recorded with it: the stock unit changes only at zero */
+        uses: c._count.dosings + c._count.movements,
         level: Math.round(level * 10000) / 10000,
         negative: level < 0,
         week: Math.round(-val(w, c.id) * 10000) / 10000,

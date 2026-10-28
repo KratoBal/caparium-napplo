@@ -933,6 +933,43 @@ test("dosing: a dose in g, the log, the stock kept in kg, printable", async ({ p
   await expect(page.getByTestId("print")).toBeVisible();
 });
 
+test("dosing: an admin changes and inactivates a chemical; it is not offered while inactive, its stock row stays", async ({ page }, info) => {
+  // Lili 2026-10-28 16:06 UTC (caparium-vegyszer-inaktival). Each project its own chemical, so the second run meets none.
+  const name = `Inaktiv proba ${info.project.name}`;
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Vegyszeradagolás" }).click();
+  const fresh = page.getByTestId("new-chemical");
+  if ((await page.getByTestId("stock").getByRole("row").filter({ hasText: name }).count()) === 0) {
+    await fresh.getByLabel("Új vegyszer neve").fill(name);
+    await fresh.getByRole("button", { name: "Felvétel" }).click();
+    await expect(fresh.getByRole("status")).toHaveText("Vegyszer felvéve.");
+  }
+  const offered = () => page.getByTestId("dosing-form").getByLabel("Szer", { exact: true }).locator("option", { hasText: name });
+  const row = page.getByTestId("stock").getByRole("row").filter({ hasText: name });
+  await expect(offered()).toHaveCount(1);
+  // a rename, the same way as a feed's (with the reasons off only a confirmation)
+  page.once("dialog", (dialog) => void (dialog.type() === "prompt" ? dialog.accept("elirtam a nevet") : dialog.accept()));
+  await row.getByRole("button", { name: `${name}: módosítás` }).click();
+  await row.getByLabel("Vegyszer új neve").fill(`${name} uj`);
+  await row.getByRole("button", { name: "Mentés" }).click();
+  const renamed = page.getByTestId("stock").getByRole("row").filter({ hasText: `${name} uj` });
+  await expect(renamed).toHaveCount(1);
+  await renamed.getByRole("button", { name: `${name} uj: inaktiválás` }).click();
+  await expect(renamed.getByRole("button", { name: `${name} uj: aktiválás` })).toBeVisible();
+  // not offered for a dosing nor a stock line; the row stays, marked
+  await expect(page.getByTestId("dosing-form").getByLabel("Szer", { exact: true }).locator("option", { hasText: `${name} uj` })).toHaveCount(0);
+  await expect(page.getByTestId("movement-form").locator("option", { hasText: `${name} uj` })).toHaveCount(0);
+  await expect(renamed).toHaveClass(/invalid/);
+  // active again, and back to the first name: a second run starts where this one did
+  await renamed.getByRole("button", { name: `${name} uj: aktiválás` }).click();
+  await expect(page.getByTestId("dosing-form").getByLabel("Szer", { exact: true }).locator("option", { hasText: `${name} uj` })).toHaveCount(1);
+  page.once("dialog", (dialog) => void (dialog.type() === "prompt" ? dialog.accept("vissza az eredeti nevre") : dialog.accept()));
+  await renamed.getByRole("button", { name: `${name} uj: módosítás` }).click();
+  await renamed.getByLabel("Vegyszer új neve").fill(name);
+  await renamed.getByRole("button", { name: "Mentés" }).click();
+  await expect(offered()).toHaveCount(1);
+});
+
 test("a pool's own band and volume in the settings; the chemical calculator under dosing works with them", async ({ page }, info) => {
   // caparium-hibak-3; each project its own pool, so the second run does not meet the first one's values
   const pool = info.project.name === "tablet" ? "Ragadozós" : "Inkubátor";

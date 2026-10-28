@@ -1,5 +1,5 @@
 import { ChemistryCalculator } from "@/components/ChemistryCalculator";
-import { DosingForm, MovementForm, NewChemical, type ChemicalOpt } from "@/components/DosingForms";
+import { ChemicalActive, ChemicalEdit, DosingForm, MovementForm, NewChemical, type ChemicalOpt } from "@/components/DosingForms";
 import { InvalidateButton } from "@/components/FeedingForms";
 import { PrintButton } from "@/components/PrintButton";
 import { Shell } from "@/components/Shell";
@@ -133,7 +133,7 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
         <p className="hint">A készlet a mozgások összege; kezdőkészlet nélkül negatív lehet, ez jelzés, nem hiba. Bevételezést és leltárkorrekciót adminisztrátor rögzít.</p>
         <table className="log-table" data-testid="stock">
           <thead>
-            <tr><th>Szer</th><th>Készlet</th><th>Fogyás, 7 nap</th><th>Fogyás, 30 nap</th></tr>
+            <tr><th>Szer</th><th>Készlet</th><th>Fogyás, 7 nap</th><th>Fogyás, 30 nap</th>{isAdmin && <th className="no-print" />}</tr>
           </thead>
           <tbody>
             {stock.map((c) => (
@@ -150,6 +150,11 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
                 <td>
                   {num(c.month)} {c.unit}
                 </td>
+                {isAdmin && (
+                  <td className="keep no-print">
+                    <ChemicalEdit chem={c} units={units.map((u) => ({ id: u.id, name: u.symbol }))} /> <ChemicalActive chem={c} />
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
