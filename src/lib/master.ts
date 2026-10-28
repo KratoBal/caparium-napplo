@@ -26,6 +26,15 @@ export function pickValid<T extends Versioned>(rows: T[], at: Date): T | undefin
   return rows.find((r) => r.validFrom <= at && (r.validTo === null || r.validTo > at));
 }
 
+/**
+ * The name row valid at `at`, or, before the first one began, that first one (Lili 2026-10-27 23:07 UTC: a day
+ * recorded back in time, before the group's name was given, read "? (csoport)"). Whatever was named on a day
+ * existed then; its first name is the one it is known by, not a question mark.
+ */
+export function nameAt<T extends Versioned>(rows: T[], at: Date): T | undefined {
+  return pickValid(rows, at) ?? [...rows].sort((a, b) => a.validFrom.getTime() - b.validFrom.getTime()).find((r) => r.validFrom > at);
+}
+
 export const SETTING_DEFAULTS = {
   late_save_grace_minutes: "30",
   late_save_max_hours: "48",

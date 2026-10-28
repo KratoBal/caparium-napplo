@@ -363,6 +363,28 @@ test("animals: the list from the events, a transfer recorded, the history kept; 
   await page.getByRole("link", { name: "Takarmánylista" }).click();
   await expect(page.getByTestId("feeds-RAK")).toContainText("Litopenaeus vannamei");
   await expect(page.getByTestId("feeds-RAK")).toContainText("tömeg és darab");
+
+  // Lili 2026-10-27 22:42 and 22:45 UTC: a feed of the list is changed with a small quiet "Módosítás" beside the
+  // activation (both buttons the small kind); the name is a correction, the unit only while nothing was recorded
+  const feedName = `E2E rák ${info.project.name}`;
+  const newFeed = page.getByTestId("new-feed");
+  await newFeed.getByLabel("Takarmány neve").fill(feedName);
+  await newFeed.getByLabel("Alapértelmezett egység").selectOption({ label: "g" });
+  await newFeed.getByRole("button", { name: "Felvétel" }).click();
+  await expect(newFeed.getByRole("status")).toHaveText("Takarmány felvéve.");
+  const feedRow = page.getByRole("row").filter({ hasText: feedName });
+  const edit = feedRow.getByRole("button", { name: `${feedName}: módosítás` });
+  await expect(edit).toHaveClass(/btn-row/);
+  await expect(feedRow.getByRole("button", { name: "Inaktiválás" })).toHaveClass(/btn-row/);
+  page.once("dialog", (d) => void d.accept());
+  await edit.click();
+  const editor = feedRow.locator('[data-testid^="feed-edit-"]');
+  await editor.getByLabel("Takarmány új neve").fill(`${feedName} javított`);
+  await editor.getByLabel("darabban is").check();
+  await editor.getByRole("button", { name: "Mentés" }).click();
+  const renamed = page.getByRole("row").filter({ hasText: `${feedName} javított` });
+  await expect(renamed).toContainText("tömeg és darab");
+  await expect(renamed.locator('[data-testid^="feed-edit-"]'), "the editor closes after the save").toHaveCount(0);
 });
 
 test("feeding: the daily list, an item in pieces and grams, the list finalized; the eating log", async ({ page }, info) => {
@@ -394,16 +416,9 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   await expect(live).toContainText("most beírva 10 g");
   await expect(live).toContainText("együtt 52,5 g");
   await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("");
-  // Lili 2026-10-27 12:42 UTC (item 8): "Módosítás" loads the item into the form, and saving changes that item (no second one)
-  await row.getByRole("button", { name: "módosítás" }).click();
-  await expect(form.getByLabel("Mennyiség (tömeg)", { exact: true })).toHaveValue("42,5");
-  await expect(form.getByLabel("Mennyiség (darab)", { exact: true })).toHaveValue("6");
-  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("40");
-  await form.getByRole("button", { name: "Módosítás mentése" }).click();
-  await expect(form.getByRole("status")).toHaveText("Tétel módosítva.");
-  await expect(row).toContainText("40 g");
-  await expect(row).not.toContainText("42,5 g");
-  await expect(form.getByRole("button", { name: "Tétel mentése" })).toBeVisible();
+  // Lili 2026-10-27 23:08 UTC: no "Módosítás" on the day's items (the feeding sheet corrects them); "Érvénytelenítés" stays
+  await expect(row.getByRole("button", { name: /módosítás/i })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: /Érvénytelenítés/ }).first()).toBeVisible();
   // Lili 2026-10-27 (item 5): the one button at the bottom of the choice; once finalized, the same place shows the state
   const finalize = page.getByRole("button", { name: "Takarmánylap kész" });
   if (await finalize.count()) await finalize.click();
@@ -492,6 +507,38 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
 
 // 6fe63c9b (Lili's request; Balázs 2026-10-21 "mehet"): the list in two steps and the feeding sheet. Each layout
 // fills its own animal's row; the day's feeds are shared, so the second run finds them saved already.
+test("one button: \"Takarmánylap kész\" saves the day's feeds ticked above and finalizes; a failed save does not finalize", async ({ page }, info) => {
+  // Lili 2026-10-27 22:47 UTC: the two buttons were one in the plan; finalizing alone lost the fresh ticks. A day of its
+  // own per project, in the past (an admin may write there), so no other test has finalized it
+  const day = budapestDay(info.project.name === "tablet" ? -30 : -31);
+  page.on("dialog", (d) => void d.accept());
+  await login(page, "teszt.admin");
+  await page.goto(`/etetes?nap=${day}`);
+  const dayFeeds = page.getByTestId("day-feeds");
+  const ready = dayFeeds.getByRole("button", { name: "Takarmánylap kész" });
+  await expect(ready).toBeVisible();
+  await expect(page.getByRole("button", { name: "A nap takarmányainak mentése" }), "no second button before the list is ready").toHaveCount(0);
+  await page.getByLabel("Teszt Egy a mai listán").check();
+  await expect(page.getByLabel("Teszt Egy a mai listán")).toBeChecked();
+  await dayFeeds.getByLabel("A nap takarmánya: Mysis").check();
+  // the save fails: nothing is finalized, the tick stays to try again
+  await page.route("**/api/feeding/day-feeds", (route) => route.abort());
+  await ready.click();
+  await expect(dayFeeds.getByRole("status")).toHaveText("Nincs kapcsolat a szerverrel.");
+  await expect(ready).toBeVisible();
+  await expect(page.getByTestId("list-state")).toHaveCount(0);
+  await expect(dayFeeds.getByLabel("A nap takarmánya: Mysis")).toBeChecked();
+  await page.unroute("**/api/feeding/day-feeds");
+  // one click: the tick saved, the list finalized, the sheet's column there
+  await ready.click();
+  await expect(dayFeeds.getByTestId("list-state")).toHaveText("Takarmánylap kész");
+  await expect(ready).toHaveCount(0);
+  await expect(page.getByTestId("feeding-sheet").getByRole("columnheader", { name: /^Mysis/ })).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId("day-feeds").getByLabel("A nap takarmánya: Mysis"), "the tick was saved, not only shown").toBeChecked();
+  await expect(page.getByTestId("list-state")).toHaveText("Takarmánylap kész");
+});
+
 test("feeding sheet: a group selected from its header, the day's feeds, drafts kept on leaving a row, one save, corrections", async ({ page }, info) => {
   const name = info.project.name === "tablet" ? "Teszt Egy" : "Teszt Kettő";
   const other = info.project.name === "tablet" ? "Teszt Kettő" : "Teszt Egy";
@@ -517,10 +564,15 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   // step 2: the day's feeds
   const dayFeeds = page.getByTestId("day-feeds");
   for (const feed of ["Litopenaeus vannamei", "Mysis", "AF Power elixir"]) await dayFeeds.getByLabel(`A nap takarmánya: ${feed}`).check();
+  // the earlier test finalized today, so a changed choice has its own save button; run alone, the one button does it
   const saveFeeds = dayFeeds.getByRole("button", { name: "A nap takarmányainak mentése" });
-  if (await saveFeeds.isEnabled()) {
+  const ready = dayFeeds.getByRole("button", { name: "Takarmánylap kész" });
+  if (await saveFeeds.count()) {
     await saveFeeds.click();
     await expect(dayFeeds.getByRole("status")).toHaveText("A nap takarmányai mentve.");
+  } else if (await ready.count()) {
+    await ready.click();
+    await expect(dayFeeds.getByTestId("list-state")).toHaveText("Takarmánylap kész");
   }
   await expect(page.getByTestId("item-form").getByLabel("Takarmány", { exact: true }).locator("option", { hasText: "Mytilus sp." })).toHaveCount(0);
   // step 3. Lili 2026-10-21 11:44 UTC (a): a feed weighed AND counted takes both units

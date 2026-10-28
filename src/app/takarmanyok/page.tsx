@@ -1,4 +1,4 @@
-import { FeedActive, NewFeed } from "@/components/AnimalForms";
+import { FeedActive, FeedEdit, NewFeed } from "@/components/AnimalForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { listFeeds } from "@/lib/feeds";
@@ -16,6 +16,7 @@ export default async function FeedsPage() {
   const isAdmin = user.role === "ADMIN";
   // caparium-hibak-4: an aquarist who records feeding may add an "Egyéb" feed; the other types stay the admin's
   const canRecord = level === "RECORD" || level === "ADMIN";
+  const unitOpts = units.map((u) => ({ id: u.id, symbol: u.symbol, dimension: u.dimension }));
   const addable = isAdmin ? types : canRecord ? types.filter((t) => t.code === "EGYEB") : [];
   return (
     <Shell title="Takarmánylista" active="feeds" user={user}>
@@ -33,7 +34,14 @@ export default async function FeedsPage() {
                     <td className="keep">{f.name}</td>
                     <td>{f.dimensions.map((d) => DIM[d] ?? d).join(" és ")}</td>
                     <td>{f.defaultUnit}</td>
-                    <td className="keep">{isAdmin && <FeedActive id={f.id} active={f.active} />}</td>
+                    <td className="keep">
+                      {isAdmin && (
+                        <span className="row-actions">
+                          <FeedEdit feed={f} units={unitOpts} />
+                          <FeedActive id={f.id} active={f.active} />
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -45,7 +53,7 @@ export default async function FeedsPage() {
         <div className="card">
           <h2>{isAdmin ? "Új takarmány" : "Új Egyéb takarmány"}</h2>
           <p className="hint">A darab és a tömeg külön összesítődik, sosem adódik össze (DN-16).</p>
-          <NewFeed types={addable.map((t) => ({ id: t.id, name: t.name }))} units={units.map((u) => ({ id: u.id, symbol: u.symbol, dimension: u.dimension }))} />
+          <NewFeed types={addable.map((t) => ({ id: t.id, name: t.name }))} units={unitOpts} />
         </div>
       )}
     </Shell>
