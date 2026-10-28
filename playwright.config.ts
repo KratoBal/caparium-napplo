@@ -6,6 +6,8 @@ const PORT = Number(process.env.E2E_PORT ?? 3100);
 
 export default defineConfig({
   testDir: "tests/e2e",
+  // a run never crosses Budapest midnight: it waits when it would start close to it (card c94d26ba)
+  globalSetup: "./tests/support/e2e-midnight.ts",
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
