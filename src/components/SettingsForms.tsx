@@ -4,6 +4,7 @@
 // the old value) or a CORRECTION (a typo, acts on the past too, reason required) — adatmodell K3.
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { SHEET_COLORS, sheetColorBg } from "@/lib/sheet-color-palette";
 import { useReasonsOn } from "./ReasonSwitch";
 
 function requestId(): string {
@@ -105,6 +106,32 @@ export function PoolVolumeForm(p: { poolId: string; name: string; volumeLiters: 
     <span className="toolbar" style={{ margin: 0 }}>
       <input className="input small" inputMode="decimal" aria-label={`${p.name} űrtartalma (liter)`} value={v} onChange={(e) => setV(e.target.value)} />
       <button className="btn btn-soft" type="button" disabled={busy || unchanged} onClick={() => void save("/api/admin/pool-volume", "POST", { poolId: p.poolId, volumeLiters: v.trim() ? v.trim().replace(",", ".") : null })}>
+        Mentés
+      </button>
+      <Msg msg={msg} />
+    </span>
+  );
+}
+
+/** The feeding sheet's row colour of an animal or a group: none, or one of the narrow palette; the sample shows it. */
+export function SheetColorForm(p: { target: "animal" | "group"; id: string; name: string; color: string | null }) {
+  const [v, setV] = useState(sheetColorBg(p.color) ? p.color! : "");
+  const { msg, busy, save } = useSave();
+  const bg = sheetColorBg(v);
+  return (
+    <span className="toolbar" style={{ margin: 0 }}>
+      <select className="input" aria-label={`${p.name} sorszíne`} value={v} onChange={(e) => setV(e.target.value)}>
+        <option value="">Nincs szín</option>
+        {SHEET_COLORS.map((c) => (
+          <option key={c.key} value={c.key}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+      <span className="sheet-color-sample" style={{ background: bg ?? undefined }} data-testid={`sheet-color-sample-${p.id}`}>
+        {p.name}
+      </span>
+      <button className="btn btn-soft" type="button" disabled={busy || v === (p.color ?? "")} onClick={() => void save("/api/admin/sheet-color", "POST", { target: p.target, id: p.id, color: v })}>
         Mentés
       </button>
       <Msg msg={msg} />

@@ -662,14 +662,16 @@ model Species {
 
 // DN-04: every animal is an individual with its own id, also inside a group
 model Animal {
-  id        String   @id @default(uuid()) @db.Uuid
-  speciesId String   @db.Uuid
-  sex       Sex      @default(UNKNOWN)
-  note      String?
+  id         String   @id @default(uuid()) @db.Uuid
+  speciesId  String   @db.Uuid
+  sex        Sex      @default(UNKNOWN)
+  note       String?
   // the admin's own order of the animals (Lili 2026-10-26, card f67b1a06 item 4): lists and exports follow it,
   // an animal never placed (null) comes after the placed ones, by name
-  sortOrder Int?
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  sortOrder  Int?
+  // the row's background on the feeding sheet, a key of sheet-color-palette.ts; display only, none by default
+  sheetColor String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
 
   species        Species                 @relation(fields: [speciesId], references: [id])
   names          AnimalName[]
@@ -705,6 +707,8 @@ model AnimalName {
 model AnimalGroup {
   id           String                  @id @default(uuid()) @db.Uuid
   active       Boolean                 @default(true)
+  // as Animal.sheetColor: the group's row on the feeding sheet
+  sheetColor   String?
   createdAt    DateTime                @default(now()) @db.Timestamptz(3)
   names        AnimalGroupName[]
   memberships  AnimalGroupMembership[]

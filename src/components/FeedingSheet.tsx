@@ -18,7 +18,8 @@
 // someone else is a conflict on that cell, never silently overwritten (barracuda #45). Unsaved drafts ask before the
 // page is left, as the measurement page does (#38). A cell keeps one request id per change until it is saved (#42).
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
+import { sheetColorBg } from "@/lib/sheet-color-palette";
 import { Msg, parseAmount, useSend, type FeedOpt, type Recipient } from "./FeedingForms";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 import { useLeaveWarning } from "./useLeaveWarning";
@@ -306,10 +307,13 @@ export function FeedingSheet({
               <tbody>
                 {recipients.map((r) => {
                   const isActive = editable && r.key === active;
+                  const bg = sheetColorBg(r.color);
                   return (
                     <tr
                       key={r.key}
                       className={editable ? `clickable${isActive ? " active-row" : ""}` : undefined}
+                      style={bg ? ({ "--row-bg": bg } as CSSProperties) : undefined}
+                      data-color={bg ? r.color ?? undefined : undefined}
                       aria-selected={isActive}
                       onClick={editable ? () => onActive(r.key) : undefined}
                     >

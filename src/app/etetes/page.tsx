@@ -37,17 +37,17 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
   const canRecord = level === "RECORD" || level === "ADMIN";
   const isAdmin = level === "ADMIN";
   const editable = canRecord && (isAdmin || (day === today && lock.state === "OPEN"));
-  const groups = new Map<string, { name: string; members: string[]; selected: number }>();
+  const groups = new Map<string, { name: string; members: string[]; selected: number; color: string | null }>();
   for (const a of view.animals) {
     if (!a.groupId) continue;
-    const g = groups.get(a.groupId) ?? { name: a.groupName ?? "?", members: [], selected: 0 };
+    const g = groups.get(a.groupId) ?? { name: a.groupName ?? "?", members: [], selected: 0, color: a.groupSheetColor };
     g.members.push(a.id);
     if (a.selected) g.selected += 1;
     groups.set(a.groupId, g);
   }
   const recipients: Recipient[] = [
-    ...view.animals.filter((a) => a.selected).map((a) => ({ key: a.id, label: a.name, animalId: a.id })),
-    ...[...groups].filter(([, g]) => g.selected > 0).map(([id, g]) => ({ key: `g:${id}`, label: `${g.name} (csoport)`, groupId: id })),
+    ...view.animals.filter((a) => a.selected).map((a) => ({ key: a.id, label: a.name, animalId: a.id, color: a.sheetColor })),
+    ...[...groups].filter(([, g]) => g.selected > 0).map(([id, g]) => ({ key: `g:${id}`, label: `${g.name} (csoport)`, groupId: id, color: g.color })),
   ];
   const feeds: FeedOpt[] = types.flatMap((t) =>
     t.feeds

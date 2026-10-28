@@ -573,6 +573,9 @@ export type DayAnimal = {
   /** the pool's place, for the "Ki eszik ma" pool lines (day-animals.ts) */
   poolSortOrder: number | null;
   selected: boolean;
+  /** the feeding sheet's row colour of the animal and of its group (sheet-color-palette.ts) */
+  sheetColor: string | null;
+  groupSheetColor: string | null;
 };
 
 export async function feedingDayView(d: string) {
@@ -609,6 +612,8 @@ export async function feedingDayView(d: string) {
         poolEmoji: p?.pool.emoji ?? null,
         poolSortOrder: p?.pool.sortOrder ?? null,
         selected: selected.has(a.id),
+        sheetColor: a.sheetColor,
+        groupSheetColor: m?.group.sheetColor ?? null,
         sortOrder: a.sortOrder,
       };
     });
