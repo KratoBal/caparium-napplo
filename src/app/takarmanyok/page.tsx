@@ -1,4 +1,5 @@
 import { FeedActive, FeedEdit, NewFeed } from "@/components/AnimalForms";
+import { OrderList } from "@/components/AnimalOrder";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { listFeeds } from "@/lib/feeds";
@@ -46,6 +47,24 @@ export default async function FeedsPage() {
                 ))}
               </tbody>
             </table>
+          )}
+          {/* Lili 2026-10-28 (acrobot 37529): the feeds' order inside the type, as the animals'; every list follows it */}
+          {isAdmin && t.feeds.length > 1 && (
+            <details className="no-print" data-testid={`feed-order-box-${t.code}`}>
+              <summary>Sorrend</summary>
+              <p className="hint">
+                Húzd a sort a helyére (érintőképernyőn a Fel és Le gombokkal), majd mentsd. Az etetés, a kivétel, a kimutatások és az
+                Excel-exportok a típuson belül ezt a sorrendet követik.
+              </p>
+              <OrderList
+                key={t.feeds.map((x) => x.id).join()}
+                rows={t.feeds.map((x) => ({ id: x.id, name: x.name, detail: x.active ? "" : "inaktív" }))}
+                saveUrl="/api/feeds/order"
+                extra={{ typeId: t.id }}
+                testId={`feed-order-${t.code}`}
+                saveTestId={`save-feed-order-${t.code}`}
+              />
+            </details>
           )}
         </div>
       ))}

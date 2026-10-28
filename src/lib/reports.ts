@@ -5,6 +5,7 @@
 // total in #11): a day's sum must not read as if the animal had eaten the group's food alone.
 
 import { compareAnimals } from "./animal-order";
+import { byFeedOrder, type FeedPlace } from "./feed-order";
 import type { LogEntry } from "./feeding-log";
 
 export const GROUP_MARK = " [csoportos tétel]";
@@ -27,7 +28,13 @@ function line(label: string, entries: LogEntry[], split: boolean): ReportLine {
 }
 
 /** `filtered`: an animal or pool filter is on, so the group items are kept apart. */
-export function breakdown(entries: LogEntry[], days: string[], filtered = false, recipientOrder?: ReadonlyMap<string, number | null>) {
+export function breakdown(
+  entries: LogEntry[],
+  days: string[],
+  filtered = false,
+  recipientOrder?: ReadonlyMap<string, number | null>,
+  feedOrder?: ReadonlyMap<string, FeedPlace>,
+) {
   const columns: Column[] = [
     ...new Map(
       entries.map((e) => {
@@ -36,7 +43,15 @@ export function breakdown(entries: LogEntry[], days: string[], filtered = false,
         return [`${feed}|${e.unit}`, { key: `${feed}|${e.unit}`, feed, unit: e.unit, group: apart }];
       }),
     ).values(),
-  ].sort((a, b) => Number(a.group) - Number(b.group) || a.feed.localeCompare(b.feed, "hu") || a.unit.localeCompare(b.unit));
+  ].sort(
+    (a, b) =>
+      Number(a.group) - Number(b.group) ||
+      // the feeds in the admin's order (Lili 2026-10-28, acrobot 37529); without the places, by name as before
+      byFeedOrder<Column>(
+        (c) => feedOrder?.get(c.group ? c.feed.slice(0, -GROUP_MARK.length) : c.feed),
+        (x, y) => x.feed.localeCompare(y.feed, "hu") || x.unit.localeCompare(y.unit),
+      )(a, b),
+  );
   const byDay = days.map((d) => line(d, entries.filter((e) => e.day === d), filtered));
   // the animals in the admin's order (Lili 2026-10-26, msg 1564402506396598303); without the positions, by name as before
   const recipients = [...new Set(entries.map((e) => e.recipient))].sort((a, b) =>

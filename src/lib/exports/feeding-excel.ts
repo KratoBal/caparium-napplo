@@ -414,7 +414,7 @@ export async function buildWithdrawalWorkbook(f: FeedingExcelFilter): Promise<{ 
 /** EGY-13: the report as Excel: one sheet by day, one by recipient, per feed and base unit. */
 export async function buildReportWorkbook(f: { from: string; to: string; poolId: string | null; animalId: string | null }): Promise<{ buffer: Buffer; rows: number }> {
   const log = await feedingLog(f);
-  const r = breakdown(log.entries, log.days, log.filtered, log.recipientOrder);
+  const r = breakdown(log.entries, log.days, log.filtered, log.recipientOrder, log.feedOrder);
   const units = [...new Set(r.columns.filter((c) => !c.group).map((c) => c.unit))];
   const groupUnits = [...new Set(r.columns.filter((c) => c.group).map((c) => c.unit))];
   const wb = new ExcelJS.Workbook();

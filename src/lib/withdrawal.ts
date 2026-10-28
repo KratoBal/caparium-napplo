@@ -4,6 +4,7 @@
 // aquarist, today) or at midnight; reopening is admin work with a reason (KIV-03, the journal days).
 // NY-07 default (temporary, documented): no feed stock, only usage; the withdrawal items are the usage.
 
+import { byFeedOrder, type FeedPlace } from "./feed-order";
 import type { Dimension, WithdrawalItem } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
@@ -265,15 +266,17 @@ export async function takenVersusGiven(from: string, to: string): Promise<Compar
   const [taken, given, baseOf] = await Promise.all([
     prisma.withdrawalItem.findMany({
       where: { status: "VALID", useDay: range },
-      include: { quantities: { include: { unit: true } }, feed: { include: { names: true } } },
+      include: { quantities: { include: { unit: true } }, feed: { include: { names: true, type: { select: { sortOrder: true } } } } },
     }),
     prisma.feedingItem.findMany({
       where: { status: "VALID", feedingDay: { businessDay: range } },
-      include: { quantities: { include: { unit: true } }, feed: { include: { names: true } } },
+      include: { quantities: { include: { unit: true } }, feed: { include: { names: true, type: { select: { sortOrder: true } } } } },
     }),
     baseUnits(),
   ]);
   const rows = new Map<string, CompareRow>();
+  // each row's feed place (its type's order, then its own; Lili 2026-10-28, acrobot 37529)
+  const placeOf = new Map<string, FeedPlace>();
   const add = (side: "taken" | "given", it: (typeof taken)[number] | (typeof given)[number]) => {
     const name = pickValid(it.feed.names, new Date(end.getTime() - 1))?.name ?? it.feed.names.at(-1)?.name ?? "?";
     for (const q of it.quantities) {
@@ -284,9 +287,17 @@ export async function takenVersusGiven(from: string, to: string): Promise<Compar
       const row = rows.get(key) ?? { key, feed: paired ? name : `${name}: ${it.otherName}`, unit, taken: 0, given: 0, paired };
       row[side] += Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
       rows.set(key, row);
+      placeOf.set(key, [it.feed.type.sortOrder, it.feed.sortOrder]);
     }
   };
   for (const it of taken) add("taken", it);
   for (const it of given) add("given", it);
-  return [...rows.values()].sort((a, b) => Number(b.paired) - Number(a.paired) || a.feed.localeCompare(b.feed, "hu") || a.unit.localeCompare(b.unit));
+  return [...rows.values()].sort(
+    (a, b) =>
+      Number(b.paired) - Number(a.paired) ||
+      byFeedOrder<CompareRow>(
+        (r) => placeOf.get(r.key),
+        (x, y) => x.feed.localeCompare(y.feed, "hu") || x.unit.localeCompare(y.unit),
+      )(a, b),
+  );
 }

@@ -8,6 +8,7 @@ import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
 import { prisma } from "./db";
 import { AppError } from "./errors";
+import { orderAssignments } from "./animal-order";
 import { moduleLevel, pickValid, validAt } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
@@ -209,4 +210,54 @@ export async function knownOtherNames(limit = 30): Promise<string[]> {
     if (!seen.has(key)) seen.set(key, r.otherName!);
   }
   return [...seen.values()].slice(0, limit);
+}
+
+// ---------------------------------------------------------------------------
+// The admin's order of the feeds inside a type (Lili 2026-10-28 13:22 UTC, acrobot 37529)
+// ---------------------------------------------------------------------------
+
+export const feedOrderSchema = z.object({
+  requestId: z.string().min(8).max(100),
+  typeId: z.uuid(),
+  /** the type's feeds in the order the admin gave; the ones not listed follow them in their old order */
+  ids: z.array(z.uuid()).min(1).max(1000),
+});
+export type FeedOrderInput = z.input<typeof feedOrderSchema>;
+
+/** The animals' rule (lib/animals setAnimalOrder) for one feed type: the admin only, one audit row, no gaps. */
+export async function setFeedOrder(actor: Actor, raw: FeedOrderInput) {
+  const input = feedOrderSchema.parse(raw);
+  if (new Set(input.ids).size !== input.ids.length) throw new AppError(422, "ORDER_DUPLICATE", "Egy takarmány csak egyszer szerepelhet a sorrendben.");
+  if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true };
+  if ((await moduleLevel(prisma, actor.id, actor.role, "FEEDING")) !== "ADMIN") {
+    throw new AppError(403, "ADMIN_ONLY", "A takarmányok sorrendjét csak adminisztrátor állíthatja.");
+  }
+  return prisma.$transaction(async (tx) => {
+    const type = await tx.feedType.findUnique({ where: { id: input.typeId }, select: { id: true, name: true } });
+    if (!type) throw new AppError(404, "FEED_TYPE_NOT_FOUND", "A takarmánytípus nem található.");
+    const feeds = await tx.feed.findMany({ where: { typeId: type.id }, select: { id: true, sortOrder: true, names: true } });
+    const known = new Set(feeds.map((x) => x.id));
+    // a feed of another type cannot be ordered here: each type has its own order
+    if (input.ids.some((id) => !known.has(id))) throw new AppError(404, "FEED_NOT_FOUND", "Az egyik takarmány nem ebbe a típusba tartozik, vagy nem található.");
+    const nameOf = (x: (typeof feeds)[number]) => pickValid(x.names, new Date())?.name ?? x.names.at(-1)?.name ?? "?";
+    const current = [...feeds].sort((a, b) => a.sortOrder - b.sortOrder || nameOf(a).localeCompare(nameOf(b), "hu"));
+    const next = orderAssignments(
+      input.ids,
+      current.map((x) => x.id),
+    );
+    const before = new Map(feeds.map((x) => [x.id, x.sortOrder]));
+    const changed = next.filter((n) => before.get(n.id) !== n.sortOrder);
+    if (changed.length === 0) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
+    for (const n of changed) await tx.feed.update({ where: { id: n.id }, data: { sortOrder: n.sortOrder } });
+    const nameById = new Map(feeds.map((x) => [x.id, nameOf(x)]));
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: "MASTER_CHANGE",
+      entityType: "FeedOrder",
+      entityId: type.id,
+      changes: diffFields({ order: current.map((x) => nameById.get(x.id)) }, { order: next.map((n) => nameById.get(n.id)) }),
+      requestId: input.requestId,
+    });
+    return { replayed: false, changed: changed.length };
+  });
 }
