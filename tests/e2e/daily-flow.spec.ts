@@ -496,6 +496,10 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   await expect(page.getByTestId("feeding-log")).toContainText(name);
   await expect(page.getByTestId("eating-pattern")).toContainText(name);
   await expect(page.getByTestId("print")).toBeVisible();
+  // Lili 2026-10-28: the two Excel buttons stand between the dates and the eating pattern, not after the growing lists
+  const exportsBox = await page.getByTestId("feedlog-exports").boundingBox();
+  const patternBox = await page.getByTestId("eating-pattern").boundingBox();
+  expect(exportsBox && patternBox && exportsBox.y < patternBox.y).toBe(true);
 
   // EGY-10, EVE-07: both Excel files are real downloads from the export page
   await page.getByRole("link", { name: "Export" }).click();

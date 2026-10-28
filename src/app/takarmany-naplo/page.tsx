@@ -80,6 +80,21 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
       {error && <div className="banner banner-error">{error}</div>}
       {log && (
         <>
+          {/* Lili 2026-10-28: above the lists, which grow; not at the page's end */}
+          {exportLevel !== "NONE" && (
+            <div className="toolbar no-print" data-testid="feedlog-exports">
+              {(["etetes", "evesi"] as const).map((kind) => (
+                <form key={kind} method="post" action="/api/exports/feeding">
+                  <input type="hidden" name="kind" value={kind} />
+                  <input type="hidden" name="from" value={from} />
+                  <input type="hidden" name="to" value={to} />
+                  <button className="btn" type="submit">
+                    {kind === "etetes" ? "Egyedi takarmánynapló" : "Evési minta"} (Excel)
+                  </button>
+                </form>
+              ))}
+            </div>
+          )}
           <div className="card">
             <h2>Evési minta</h2>
             <div className="table-scroll">
@@ -144,20 +159,6 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
               </table>
             </div>
           </div>
-          {exportLevel !== "NONE" && (
-            <div className="toolbar no-print">
-              {(["etetes", "evesi"] as const).map((kind) => (
-                <form key={kind} method="post" action="/api/exports/feeding">
-                  <input type="hidden" name="kind" value={kind} />
-                  <input type="hidden" name="from" value={from} />
-                  <input type="hidden" name="to" value={to} />
-                  <button className="btn" type="submit">
-                    {kind === "etetes" ? "Egyedi takarmánynapló" : "Evési minta"} (Excel)
-                  </button>
-                </form>
-              ))}
-            </div>
-          )}
         </>
       )}
     </Shell>
