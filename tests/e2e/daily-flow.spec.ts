@@ -416,16 +416,9 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   await expect(live).toContainText("most beírva 10 g");
   await expect(live).toContainText("együtt 52,5 g");
   await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("");
-  // Lili 2026-10-27 12:42 UTC (item 8): "Módosítás" loads the item into the form, and saving changes that item (no second one)
-  await row.getByRole("button", { name: "módosítás" }).click();
-  await expect(form.getByLabel("Mennyiség (tömeg)", { exact: true })).toHaveValue("42,5");
-  await expect(form.getByLabel("Mennyiség (darab)", { exact: true })).toHaveValue("6");
-  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("40");
-  await form.getByRole("button", { name: "Módosítás mentése" }).click();
-  await expect(form.getByRole("status")).toHaveText("Tétel módosítva.");
-  await expect(row).toContainText("40 g");
-  await expect(row).not.toContainText("42,5 g");
-  await expect(form.getByRole("button", { name: "Tétel mentése" })).toBeVisible();
+  // Lili 2026-10-27 23:08 UTC: no "Módosítás" on the day's items (the feeding sheet corrects them); "Érvénytelenítés" stays
+  await expect(row.getByRole("button", { name: /módosítás/i })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: /Érvénytelenítés/ }).first()).toBeVisible();
   // Lili 2026-10-27 (item 5): the one button at the bottom of the choice; once finalized, the same place shows the state
   const finalize = page.getByRole("button", { name: "Takarmánylap kész" });
   if (await finalize.count()) await finalize.click();
