@@ -3,6 +3,7 @@
 // the same animals. A group item counts for an animal it was given to (its participant snapshot, R-8),
 // and for a pool if any participant was there that day. Names are the ones valid on the day (K3).
 
+import type { FeedPlace } from "./feed-order";
 import { compareAnimals } from "./animal-order";
 import { prisma } from "./db";
 import { GIVEN } from "./eating-labels";
@@ -42,7 +43,7 @@ export async function feedingLog(f: LogFilter) {
       include: {
         feedingDay: true,
         quantities: { include: { unit: true } },
-        feed: { include: { names: true } },
+        feed: { include: { names: true, type: { select: { sortOrder: true } } } },
         animal: { include: { names: true } },
         group: { include: { names: true } },
         participants: true,
@@ -68,6 +69,8 @@ export async function feedingLog(f: LogFilter) {
   const entries: LogEntry[] = [];
   // the admin's position of each recipient (null: a group, or never placed), for the order of the rows and the reports
   const recipientOrder = new Map<string, number | null>();
+  // the place of each feed column (its type's order, then its own; Lili 2026-10-28, acrobot 37529), for the reports
+  const feedOrder = new Map<string, FeedPlace>();
   // R-8 invents no split of a group item: under a filter its whole amount is shown apart, so an
   // animal's (or a pool's) total never reads as if it ate the group's food alone (review of #11)
   const totals: Record<string, number> = {};
@@ -90,6 +93,7 @@ export async function feedingLog(f: LogFilter) {
     const feed = pickValid(it.feed.names, at)?.name ?? it.feed.names.at(-1)?.name ?? "?";
     const recipient = it.animal ? nameAt(it.animal.names, at)?.name ?? "?" : `${nameAt(it.group!.names, at)?.name ?? "?"} (csoport)`;
     recipientOrder.set(recipient, it.animal ? it.animal.sortOrder : null);
+    feedOrder.set(it.otherName ? `${feed}: ${it.otherName}` : feed, [it.feed.type.sortOrder, it.feed.sortOrder]);
     for (const q of it.quantities) {
       entries.push({
         day,
@@ -163,5 +167,5 @@ export async function feedingLog(f: LogFilter) {
     })
     .sort(compareAnimals);
 
-  return { days, rows, entries, totals, own, group, filtered: f.animalId !== null || f.poolId !== null, pattern, recipientOrder };
+  return { days, rows, entries, totals, own, group, filtered: f.animalId !== null || f.poolId !== null, pattern, recipientOrder, feedOrder };
 }

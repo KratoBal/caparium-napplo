@@ -33,7 +33,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   let error: string | null = null;
   try {
     const log = await feedingLog({ from, to, poolId, animalId });
-    report = breakdown(log.entries, log.days, log.filtered, log.recipientOrder);
+    report = breakdown(log.entries, log.days, log.filtered, log.recipientOrder, log.feedOrder);
   } catch (e) {
     if (!(e instanceof AppError)) throw e;
     error = e.message;
