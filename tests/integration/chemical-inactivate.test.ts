@@ -5,7 +5,8 @@
 // writes twice; a change is not audited. Days in August 2025: no other file writes there.
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
-import { createChemical, dosingLog, recordMovement, saveDosing, stockLevels, updateChemical } from "@/lib/dosing";
+import type { Prisma } from "@prisma/client";
+import { createChemical, dosingLog, recordMovement, saveDosing, stockLevels, toStockUnit, updateChemical } from "@/lib/dosing";
 import { AppError } from "@/lib/errors";
 import { fixtures, rid } from "./fixtures";
 
@@ -79,5 +80,64 @@ describe("a chemical inactivated, changed, reactivated", () => {
     // a unit that is not a stock dimension (the seed's measurement units, e.g. a temperature) is refused
     const other = await prisma.unit.findFirstOrThrow({ where: { dimension: { notIn: ["MASS", "VOLUME", "COUNT"] } } });
     await expectCode(updateChemical(f.admin, fresh, { requestId: rid(), stockUnitId: other.id }, at(d, "09:04")), "UNIT");
+  });
+
+  // barracuda on #92: the lock on one side only does not lock. The save side is the real toStockUnit, stopped inside
+  // its transaction; the other side must not finish until it commits.
+  it("a stock unit change or an inactivation and a save in flight wait for each other on the chemical's row", async () => {
+    const d = "2025-08-14";
+    const pause = (ms: number) => new Promise((res) => setTimeout(res, ms));
+    const inFlight = async (inside: (tx: Prisma.TransactionClient) => Promise<unknown>, other: () => Promise<unknown>) => {
+      let release!: () => void;
+      const gate = new Promise<void>((res) => (release = res));
+      let reached!: () => void;
+      const there = new Promise<void>((res) => (reached = res));
+      const holder = prisma.$transaction(
+        async (tx) => {
+          await inside(tx);
+          reached();
+          await gate;
+        },
+        { timeout: 15_000 },
+      );
+      await there;
+      let finished = false;
+      const run = other().then(
+        () => ((finished = true), "ok"),
+        (e: unknown) => ((finished = true), (e as AppError).code ?? String(e)),
+      );
+      await pause(700);
+      const whileHeld = finished;
+      release();
+      await holder;
+      return { whileHeld, outcome: await run };
+    };
+    const make = async (name: string) => ((await createChemical(f.admin, { requestId: rid(), name, stockUnitId: unit.kg }, at(d, "07:00"))) as { id: string }).id;
+
+    // a stock line being saved: through toStockUnit, its row inserted, not committed. The unit change waits, counts it,
+    // and refuses; without the save side's lock it would count 0 and move the unit to l under a kg line
+    const a = await make("Zarolt szer egy");
+    expect(
+      await inFlight(
+        async (tx) => {
+          const { inStock } = await toStockUnit(tx, a, "1", unit.kg);
+          await tx.stockMovement.create({ data: { chemicalId: a, type: "INTAKE", quantity: inStock, originalQuantity: "1", originalUnitId: unit.kg, at: at(d, "08:00"), businessDay: new Date(`${d}T00:00:00Z`), requestId: rid(), createdById: f.admin.id } });
+        },
+        () => updateChemical(f.admin, a, { requestId: rid(), stockUnitId: unit.l }, at(d, "08:01")),
+      ),
+    ).toEqual({ whileHeld: false, outcome: "CHEMICAL_IN_USE" });
+    expect((await prisma.chemical.findUniqueOrThrow({ where: { id: a } })).stockUnitId).toBe(unit.kg);
+
+    // an inactivation in flight (the row held as updateChemical holds it): a dosing waits, then finds it inactive
+    const b = await make("Zarolt szer ketto");
+    expect(
+      await inFlight(
+        async (tx) => {
+          await tx.$queryRaw`SELECT "id" FROM "chemical" WHERE "id" = ${b}::uuid FOR NO KEY UPDATE`;
+          await tx.chemical.update({ where: { id: b }, data: { active: false } });
+        },
+        () => saveDosing(f.admin, { requestId: rid(), performedAtLocal: `${d}T09:00`, poolId: f.pool("SOZO"), chemicalId: b, quantity: "1", unitId: unit.kg }, at(d, "09:00")),
+      ),
+    ).toEqual({ whileHeld: false, outcome: "CHEMICAL_INACTIVE" });
   });
 });

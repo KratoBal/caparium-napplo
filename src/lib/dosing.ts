@@ -22,8 +22,14 @@ const requestId = z.string().min(8).max(100);
 const reason = z.string().trim().min(3, "Az indoklás legalább 3 karakter legyen.").max(500);
 const safeText = (max: number) => z.string().trim().min(1).max(max).refine((v) => !/^[=+\-@\t\r]/.test(v), "A szöveg nem kezdődhet =, +, -, @ jellel.");
 
-/** The amount in the chemical's stock unit (JAV-09): only within one dimension. */
-async function toStockUnit(tx: Tx, chemicalId: string, quantity: string, unitId: string) {
+/**
+ * The amount in the chemical's stock unit (JAV-09): only within one dimension. The chemical's row FOR SHARE first, in
+ * the save's own transaction (a dosing, its change, a stock line): a change of its stock unit or its activity
+ * (updateChemical, FOR NO KEY UPDATE) waits for this save, and this one for it. The foreign key of the inserted row
+ * holds only FOR KEY SHARE, which does not meet FOR NO KEY UPDATE (barracuda on #92). Exported for that test.
+ */
+export async function toStockUnit(tx: Tx, chemicalId: string, quantity: string, unitId: string) {
+  await tx.$queryRaw`SELECT "id" FROM "chemical" WHERE "id" = ${chemicalId}::uuid FOR SHARE`;
   const chem = await tx.chemical.findUnique({ where: { id: chemicalId }, include: { stockUnit: true } });
   if (!chem) throw new AppError(404, "CHEMICAL_NOT_FOUND", "A vegyszer nem található.");
   const unit = await tx.unit.findUnique({ where: { id: unitId } });
@@ -252,7 +258,8 @@ export async function updateChemical(actor: Actor, id: string, raw: z.input<type
   if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true };
   await requireReason(prisma, Boolean(input.name) && input.mode === "correction", input.reason, "A helyesbítés a régi naplókban is átírja a nevet, ezért indoklás kell.");
   return prisma.$transaction(async (tx) => {
-    // the row first: a dosing or a stock line being saved meanwhile cannot slip past the use count below
+    // the row first, FOR NO KEY UPDATE: a dosing or a stock line being saved holds it FOR SHARE (toStockUnit), so the
+    // use count below cannot miss one that commits meanwhile, nor can one be saved on the old unit or activity
     await tx.$queryRaw`SELECT "id" FROM "chemical" WHERE "id" = ${id}::uuid FOR NO KEY UPDATE`;
     const c = await tx.chemical.findUnique({ where: { id }, include: { stockUnit: true } });
     if (!c) throw new AppError(404, "NOT_FOUND", "A vegyszer nem található.");
