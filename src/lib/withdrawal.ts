@@ -93,6 +93,8 @@ export async function saveWithdrawalItem(actor: Actor, raw: WithdrawalInput, ser
       } else {
         await enforce(tx, canCreate(f.level, { day: input.day, today: f.today, closed: f.closed }), input.reason);
       }
+      // the feed's row FOR SHARE: a change of its unit (feeds.ts) waits for this save, and this one for it
+      await tx.$queryRaw`SELECT "id" FROM "feed" WHERE "id" = ${input.feedId}::uuid FOR SHARE`;
       const feed = await tx.feed.findUnique({ where: { id: input.feedId }, include: { type: true } });
       if (!feed || !feed.active) throw new AppError(422, "FEED_NOT_FOUND", "A takarmány nem található vagy nem aktív.");
       const isOther = feed.type.code === "EGYEB";
