@@ -604,10 +604,30 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
     el.style.maxHeight = "";
     el.scrollTop = 0;
   });
+  // Lili 2026-10-28 13:49 UTC: the Állat column stays at the left while the other columns scroll sideways, the header
+  // cell with it; made narrow here so that this run's few columns scroll. It covers what passes under it.
+  const firstCell = sheet.getByRole("row").filter({ hasText: name }).locator("td").first();
+  const sideways = await box.evaluate((el) => {
+    el.style.maxWidth = "300px";
+    el.scrollLeft = el.scrollWidth;
+    return el.scrollLeft;
+  });
+  expect(sideways, "the narrow box did scroll sideways").toBeGreaterThan(0);
+  const [boxLeft, cellLeft, headLeft] = await Promise.all(
+    [box, firstCell, animalHead].map((l) => l.evaluate((el) => el.getBoundingClientRect().left)),
+  );
+  expect(Math.abs(cellLeft - boxLeft), "the animal's name stays at the left of the scrolled box").toBeLessThan(1);
+  expect(Math.abs(headLeft - boxLeft), "and so does its header").toBeLessThan(1);
+  expect(await firstCell.evaluate((el) => getComputedStyle(el).backgroundColor), "the stuck name covers the cells under it").not.toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
+  await box.evaluate((el) => {
+    el.style.maxWidth = "";
+    el.scrollLeft = 0;
+  });
   // printed, the sheet is the whole table: no scroll box, the header a plain row
   await page.emulateMedia({ media: "print" });
   expect(await box.evaluate((el) => [getComputedStyle(el).overflowY, getComputedStyle(el).maxHeight])).toEqual(["visible", "none"]);
   expect(await animalHead.evaluate((el) => getComputedStyle(el).position)).toBe("static");
+  expect(await firstCell.evaluate((el) => getComputedStyle(el).position)).toBe("static");
   await page.emulateMedia({ media: "screen" });
   // Lili 2026-10-26 (msg 1564403940320346223): "Mai tételek" is last, as a summary
   const headings = await page.locator("main h2").allTextContents();
@@ -739,6 +759,52 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   page.once("dialog", (d) => void d.accept());
   await leave.click();
   await expect(page.getByTestId("withdrawal-form")).toBeVisible();
+});
+
+test("feeding sheet: a row colour set in the settings colours that animal's or group's row, the highlighted row keeps its ink", async ({ page }) => {
+  // Lili 2026-10-28 13:49 UTC (acrobot 37542). Teszt Egy and Teszt Kettő are in Nagymedence and in Teszt csoport.
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Beállítások" }).click();
+  const colours = page.getByTestId("sheet-colors");
+  const setColour = async (label: string, colour: string) => {
+    const form = colours.getByRole("row").filter({ has: page.getByLabel(`${label} sorszíne`, { exact: true }) });
+    await form.getByLabel(`${label} sorszíne`, { exact: true }).selectOption({ label: colour });
+    // already that colour (a run before this one): nothing to save, the button stays off
+    const save = form.getByRole("button", { name: "Mentés" });
+    if (!(await save.isEnabled())) return;
+    await save.click();
+    await expect(form.getByRole("status")).toHaveText("Mentve.");
+  };
+  await setColour("Teszt Egy", "Zöld");
+  await setColour("Teszt Kettő", "Zöld");
+  await setColour("Teszt csoport (csoport)", "Lila");
+  await page.reload();
+  await expect(colours.getByLabel("Teszt Egy sorszíne", { exact: true })).toHaveValue("GREEN");
+  const GREEN = "rgb(217, 236, 217)";
+  const PURPLE = "rgb(228, 219, 242)";
+
+  await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
+  await page.getByRole("switch", { name: "Nagymedence: mind kijelölve" }).check();
+  const dayFeeds = page.getByTestId("day-feeds");
+  await dayFeeds.getByLabel("A nap takarmánya: Mysis").check();
+  const saveFeeds = dayFeeds.getByRole("button", { name: "A nap takarmányainak mentése" });
+  if (await saveFeeds.count()) await saveFeeds.click();
+  else if (await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).count()) await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).click();
+  const sheet = page.getByTestId("feeding-sheet");
+  const row = (label: string) => sheet.getByRole("row").filter({ has: page.getByRole("cell", { name: label, exact: true }) });
+  const cells = (label: string) => row(label).locator("td").evaluateAll((tds) => [...new Set(tds.map((td) => getComputedStyle(td).backgroundColor))]);
+  await row("Teszt Kettő").click();
+  expect(await cells("Teszt Egy"), "every cell of the row, the stuck name too").toEqual([GREEN]);
+  expect(await cells("Teszt csoport (csoport)")).toEqual([PURPLE]);
+  expect(await cells("Teszt Kettő"), "the highlighted row keeps its ink").not.toContain(GREEN);
+  await row("Teszt Egy").click();
+  expect(await cells("Teszt Kettő")).toEqual([GREEN]);
+  // the eating log is not coloured: the colour is the feeding sheet's only
+  expect(await page.locator('table:not([data-testid="feeding-sheet-table"]) td').evaluateAll((tds) => tds.some((td) => ["rgb(217, 236, 217)", "rgb(228, 219, 242)"].includes(getComputedStyle(td).backgroundColor)))).toBe(false);
+
+  // back to none: the later runs start from no colour
+  await page.getByRole("link", { name: "Beállítások" }).click();
+  for (const label of ["Teszt Egy", "Teszt Kettő", "Teszt csoport (csoport)"]) await setColour(label, "Nincs szín");
 });
 
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {

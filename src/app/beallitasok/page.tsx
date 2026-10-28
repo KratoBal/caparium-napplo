@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
-import { NewPoolForm, NewUserForm, PoolRow, PoolVolumeForm, ReferenceRow, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
+import { NewPoolForm, NewUserForm, PoolRow, PoolVolumeForm, ReferenceRow, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
+import { listAnimals, listGroupsWithNames } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { canonicalDecimal } from "@/lib/decimal";
 import { getSetting, moduleLevel, pickValid, validAt } from "@/lib/master";
@@ -16,7 +17,7 @@ export default async function SettingsPage() {
   if ((await moduleLevel(prisma, user.id, user.role, "SETTINGS")) !== "ADMIN") redirect("/nincs-jogosultsag");
   const now = new Date();
   const reasons = await reasonsRequired(prisma);
-  const [params, pools, users, feedTypes, groups] = await Promise.all([
+  const [params, pools, users, feedTypes, groups, animals, animalGroups] = await Promise.all([
     prisma.parameter.findMany({
       where: { active: true },
       orderBy: { sortOrder: "asc" },
@@ -41,6 +42,8 @@ export default async function SettingsPage() {
       : Promise.resolve([]),
     prisma.feedType.findMany({ orderBy: { sortOrder: "asc" } }),
     prisma.measurementGroup.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
+    listAnimals(now),
+    listGroupsWithNames(now),
   ]);
   return (
     <Shell title="Beállítások" active="settings" user={user}>
@@ -191,6 +194,30 @@ export default async function SettingsPage() {
               <tr key={t.id}>
                 <td>{t.name} (takarmánytípus)</td>
                 <td className="keep"><IconForm target="feedType" id={t.id} name={t.name} emoji={t.emoji} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Lili 2026-10-28 13:49 UTC: a row colour per animal and group, shown on the feeding sheet only */}
+      <div className="card" data-testid="sheet-colors">
+        <h2>Sorszínek a takarmánylapon</h2>
+        <p className="hint">Az állat vagy a csoport sora ezzel a háttérszínnel jelenik meg a takarmánylapon, máshol nem. Csak megjelenítés, exportba nem kerül. Alapból nincs szín.</p>
+        <table className="log-table">
+          <tbody>
+            {animals
+              .filter((a) => a.alive)
+              .map((a) => (
+                <tr key={a.id}>
+                  <td>{a.name}</td>
+                  <td className="keep"><SheetColorForm target="animal" id={a.id} name={a.name} color={a.sheetColor} /></td>
+                </tr>
+              ))}
+            {animalGroups.map((g) => (
+              <tr key={g.id}>
+                <td>{g.name} (csoport)</td>
+                <td className="keep"><SheetColorForm target="group" id={g.id} name={`${g.name} (csoport)`} color={g.sheetColor} /></td>
               </tr>
             ))}
           </tbody>

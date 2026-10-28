@@ -522,6 +522,8 @@ export type AnimalRow = {
   ended: { type: LifecycleType; day: string } | null;
   /** the admin's position (item 4 of card f67b1a06); null = never placed */
   sortOrder: number | null;
+  /** the feeding sheet's row colour (sheet-color-palette.ts); display only */
+  sheetColor: string | null;
 };
 
 /** Every animal as of an instant, alive ones first (EVE-10: the dead stay listed with their end). */
@@ -554,6 +556,7 @@ export async function listAnimals(at = new Date()): Promise<AnimalRow[]> {
       arrived: arrival ? businessDayOf(arrival.occurredAt) : null,
       ended: end ? { type: end.type, day: businessDayOf(end.occurredAt) } : null,
       sortOrder: a.sortOrder,
+      sheetColor: a.sheetColor,
     };
   });
   return rows.sort((x, y) => Number(y.alive) - Number(x.alive) || compareAnimals(x, y));
@@ -618,6 +621,6 @@ export async function animalEvents(animalId: string) {
 export async function listGroupsWithNames(at = new Date()) {
   const groups = await prisma.animalGroup.findMany({ where: { active: true }, include: { names: true } });
   return groups
-    .map((g) => ({ id: g.id, name: nameAt(g.names, at)?.name ?? "?" }))
+    .map((g) => ({ id: g.id, name: nameAt(g.names, at)?.name ?? "?", sheetColor: g.sheetColor }))
     .sort((a, b) => a.name.localeCompare(b.name, "hu"));
 }
