@@ -1259,9 +1259,19 @@ test("a pool's own band and volume in the settings; the chemical calculator unde
   await page.getByRole("link", { name: "Beállítások" }).click();
   const volumes = page.getByTestId("pool-volumes");
   await volumes.getByLabel(`${pool} űrtartalma (liter)`).fill("1000");
-  await volumes.getByRole("row").filter({ hasText: pool }).getByRole("button", { name: "Mentés" }).click();
-  await expect(volumes.getByRole("row").filter({ hasText: pool }).getByRole("status")).toHaveText("Mentve.");
+  // the row has two forms since package item 5b: the volume's Mentés first, the system's last
+  const poolRow = volumes.getByRole("row").filter({ hasText: pool });
+  await poolRow.getByRole("button", { name: "Mentés" }).first().click();
+  await expect(poolRow.getByRole("status").first()).toHaveText("Mentve.");
   await page.waitForLoadState("networkidle");
+  // Lili 2026-10-29 (package item 5b): the pool's system, coral; a rerun finds it set already and saves nothing
+  const system = poolRow.getByLabel(`${pool} rendszere`);
+  if ((await system.inputValue()) !== "CORAL") {
+    await system.selectOption({ label: "korallos" });
+    await poolRow.getByRole("button", { name: "Mentés" }).last().click();
+    await expect(poolRow.getByRole("status").last()).toHaveText("Mentve.");
+    await page.waitForLoadState("networkidle");
+  }
 
   const block = page.getByTestId(`pool-ref-${pool}`);
   await block.locator("summary").click();
@@ -1286,6 +1296,14 @@ test("a pool's own band and volume in the settings; the chemical calculator unde
   await card.getByLabel("Kalcium emelése: célérték").fill("420");
   // the OS module's own hand-computed case: 1000 l, 380 -> 420 mg/l is about 146,7 g CaCl2·2H2O
   await expect(calc.getByTestId("chem-CA-result")).toHaveText("Szükséges mennyiség: 146,7 g");
+  // package item 5b: the pool's system comes with it (coral: at most 10 mg/l a day), so +40 mg/l is 4 days
+  await expect(calc.getByLabel("Rendszer")).toHaveValue("CORAL");
+  await expect(calc.getByTestId("chem-CA-daily")).toHaveText("Ajánlott: 4 nap alatt, naponta 36,7 g (+10 mg/l/nap; korallos rendszer: legfeljebb 10 mg/l naponta).");
+  // a fish system takes 20 mg/l a day: 2 days; without a system it asks, it does not guess
+  await calc.getByLabel("Rendszer").selectOption({ label: "halas" });
+  await expect(calc.getByTestId("chem-CA-daily")).toContainText("Ajánlott: 2 nap alatt, naponta 73,4 g");
+  await calc.getByLabel("Rendszer").selectOption({ label: "nincs megadva" });
+  await expect(calc.getByTestId("chem-CA-daily")).toContainText("válaszd ki a rendszert");
   await card.getByLabel("Kalcium emelése: célérték").fill("370");
   await expect(calc.getByTestId("chem-CA-result")).toHaveText("A célérték nem magasabb a jelenlegi értéknél, nincs szükség adagolásra.");
   // Lili 2026-10-29 (package item 5a): every card's result stays inside its card, the longest text included, at her

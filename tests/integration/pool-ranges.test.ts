@@ -2,7 +2,7 @@
 // pool volume, and what the chemical calculator offers per pool. Dated 2027-08, a month no other spec uses: the
 // shared database keeps what one file writes (a range valid from then on would judge another file's measurements).
 import { beforeAll, describe, expect, it } from "vitest";
-import { setPoolVolume, setReference } from "@/lib/admin";
+import { setPoolSystem, setPoolVolume, setReference } from "@/lib/admin";
 import { chemistryCalcPools } from "@/lib/chemistry-calc";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
@@ -84,6 +84,20 @@ describe("the pool volume", () => {
     expect((await prisma.pool.findUniqueOrThrow({ where: { id: f.pool("SOZO") } })).volumeLiters).toBeNull();
     // the database refuses a non-positive volume even past the application
     await expect(prisma.$executeRawUnsafe(`UPDATE "pool" SET "volumeLiters" = -1 WHERE "code" = 'SOZO'`)).rejects.toThrow(/pool_volume_positive/);
+  });
+});
+
+describe("the pool's system (Lili 2026-10-29, package item 5b)", () => {
+  it("an admin sets coral or fish, audited; no change and an aquarist are refused; clearing is allowed; the calculator gets it", async () => {
+    const poolId = f.pool("KARANTEN");
+    expect(await code(setPoolSystem(f.aq1, { requestId: rid(), poolId, systemType: "CORAL" }))).toBe("ADMIN_ONLY");
+    await setPoolSystem(f.admin, { requestId: rid(), poolId, systemType: "CORAL" });
+    expect(await code(setPoolSystem(f.admin, { requestId: rid(), poolId, systemType: "CORAL" }))).toBe("NO_CHANGE");
+    const audit = await prisma.auditEntry.findFirstOrThrow({ where: { entityType: "Pool", entityId: poolId }, orderBy: { at: "desc" } });
+    expect(audit.changes).toEqual({ systemType: { before: null, after: "CORAL" } });
+    expect((await chemistryCalcPools()).find((p) => p.id === poolId)?.systemType).toBe("CORAL");
+    await setPoolSystem(f.admin, { requestId: rid(), poolId, systemType: null });
+    expect((await chemistryCalcPools()).find((p) => p.id === poolId)?.systemType).toBeNull();
   });
 });
 

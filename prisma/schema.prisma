@@ -124,6 +124,9 @@ model Pool {
   sortOrder    Int?
   // caparium-hibak-3: the pool's volume in litres, the chemical calculator works with it; null = not given yet
   volumeLiters Decimal?  @db.Decimal(14, 4)
+  // Lili 2026-10-29 (package item 5b): a coral or a fish system; the chemical calculator's daily limit follows it (Balázs's
+  // decision, 18:59 UTC). null = not set yet: the calculator then asks, it does not guess
+  systemType   PoolSystemType?
   active       Boolean   @default(true)
   createdAt    DateTime  @default(now()) @db.Timestamptz(3)
   closedAt     DateTime? @db.Timestamptz(3)
@@ -150,6 +153,11 @@ model PoolName {
 
   @@index([poolId, validFrom])
   @@map("pool_name")
+}
+
+enum PoolSystemType {
+  CORAL
+  FISH
 }
 
 enum Frequency {
