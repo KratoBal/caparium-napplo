@@ -12,7 +12,11 @@
 #     dumps land in the db-backups volume, each one restore-checked.
 services:
   db:
-    image: postgres:17
+    # postgres:17 with the backup script inside (Dockerfile.db): no file of the repository is bind-mounted, a
+    # Coolify app deployed from git does not keep them beside the compose file
+    build:
+      context: .
+      dockerfile: Dockerfile.db
     restart: unless-stopped
     environment:
       POSTGRES_DB: caparium
@@ -22,7 +26,6 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
       - db-backups:/backups
-      - ./scripts/db-backup.sh:/usr/local/bin/caparium-backup:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U caparium -d caparium"]
       interval: 5s
