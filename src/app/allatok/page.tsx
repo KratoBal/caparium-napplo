@@ -2,9 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AnimalOrder } from "@/components/AnimalOrder";
 import { AnimalActions, AnimalEditForm, InitialAnimalsLoader, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
-import { PlanForm } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
-import { currentPlans } from "@/lib/feeding-plan";
 import { withIcon } from "@/lib/icons";
 import { animalEvents, listAnimals, listGroupsWithNames } from "@/lib/animals";
 import { prisma } from "@/lib/db";
@@ -39,7 +37,6 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
   // caparium-hibak-5: the edit form needs the animal's species and its valid arrival
   const editable = selected && level === "ADMIN" ? await prisma.animal.findUnique({ where: { id: selected.id }, select: { speciesId: true } }) : null;
   const arrival = events.find((e) => e.type === "ARRIVAL" && e.status === "VALID");
-  const plans = await currentPlans();
   const canRecord = level === "RECORD" || level === "ADMIN";
   const isAdmin = user.role === "ADMIN";
   // Lili 2026-10-27 20:44 UTC (acrobot 37043): the list, the open animal, a new animal, the starting list, the order last.
@@ -113,7 +110,6 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
               groups={groups}
             />
           )}
-          {canRecord && selected.alive && <PlanForm animalId={selected.id} weekdays={plans[selected.id] ?? []} />}
         </div>
       )}
 

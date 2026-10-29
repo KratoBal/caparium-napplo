@@ -1,16 +1,23 @@
 import Link from "next/link";
-import { addDays, formatDayLong } from "@/lib/time";
+import { addDays, formatDayLong, weekdayName } from "@/lib/time";
 
-/** Previous and next day of a dated page; no step past today. */
+/**
+ * Previous and next day of a dated page; no step past today. Lili 2026-10-29 (package item 2, msg
+ * 1565432942686244978): the day of the week small under the date, and the two step buttons smaller (one mostly
+ * moves with the calendar beside them).
+ */
 export function DayNav({ path, day, today }: { path: string; day: string; today: string }) {
   return (
-    <span className="toolbar" style={{ margin: 0 }}>
-      <Link className="btn btn-soft" href={`${path}?nap=${addDays(day, -1)}`}>
+    <span className="toolbar day-nav" style={{ margin: 0 }} data-testid="day-nav">
+      <Link className="btn btn-soft btn-day" href={`${path}?nap=${addDays(day, -1)}`}>
         ‹ előző nap
       </Link>
-      <strong data-testid="shown-day">{formatDayLong(day)}</strong>
+      <span className="day-shown">
+        <strong data-testid="shown-day">{formatDayLong(day)}</strong>
+        <small data-testid="shown-weekday">{weekdayName(day)}</small>
+      </span>
       {day < today && (
-        <Link className="btn btn-soft" href={`${path}?nap=${addDays(day, 1)}`}>
+        <Link className="btn btn-soft btn-day" href={`${path}?nap=${addDays(day, 1)}`}>
           következő nap ›
         </Link>
       )}

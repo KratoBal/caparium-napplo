@@ -8,7 +8,7 @@ import { feedingLog } from "@/lib/feeding-log";
 import { listAnimals } from "@/lib/animals";
 import { moduleLevel, pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
-import { addDays, businessDayOf, isValidDay } from "@/lib/time";
+import { addDays, businessDayOf, isValidDay, weekdayLetter } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -98,13 +98,17 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
           <div className="card">
             <h2>Evési minta</h2>
             <div className="table-scroll">
-              <table className="log-table" data-testid="eating-pattern">
+              {/* Lili 2026-10-29 (package item 7): the day's letter above the date, firmer colours, thicker bars */}
+              <table className="log-table eat-pattern" data-testid="eating-pattern">
                 <thead>
                   <tr>
                     <th>Állat</th>
                     {log.days.map((d) => (
                       // EVE-08: the weeks in two alternating colours
                       <th key={d} style={{ background: `#${weekShade(log!.days[0], d).slice(2)}` }}>
+                        <small className="day-letter" data-testid={`pattern-letter-${d}`}>
+                          {weekdayLetter(d)}
+                        </small>
                         {d.slice(5).replace("-", ".")}
                       </th>
                     ))}
@@ -119,7 +123,7 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
                         return (
                           <td key={d} className="keep">
                             {c && (
-                              <span className={`badge eat-${c.state}`} title={EAT_LABEL[c.state]}>
+                              <span className={`badge eat-${c.state}${c.vitamin || c.medicine ? "" : " eat-bar"}`} title={EAT_LABEL[c.state]}>
                                 {[c.vitamin ? "V" : "", c.medicine ? "Gy" : ""].filter(Boolean).join(" ") || " "}
                               </span>
                             )}
