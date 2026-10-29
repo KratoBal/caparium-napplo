@@ -69,7 +69,7 @@ export async function setEatingStatus(actor: Actor, raw: EatingInput, serverNow 
 
       const data = { state: input.state, vitamin: input.vitamin, medicine: input.medicine, medicineNote: note };
       if (current?.source === "MANUAL") {
-        await enforce(tx, canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: current.createdById === actor.id }), input.reason);
+        await enforce(tx, canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: current.createdById === actor.id, othersToo: true }), input.reason);
         const res = await tx.eatingStatus.updateMany({
           where: { id: current.id, version: current.version, status: "VALID" },
           data: { ...data, version: { increment: 1 }, updatedById: actor.id, updatedAt: serverNow },
@@ -127,7 +127,7 @@ export async function invalidateEatingStatus(actor: Actor, id: string, raw: z.in
       throw new AppError(409, "AUTOMATIC", "Az automatikus koplalónap a listát követi: az állatot a listára véve vagy kézi állapottal lehet felülírni.");
     }
     const { f } = await facts(tx, actor, dateToDay(st.feedingDay.businessDay), serverNow, null);
-    await enforce(tx, canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: st.createdById === actor.id }), input.reason);
+    await enforce(tx, canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: st.createdById === actor.id, othersToo: true }), input.reason);
     await requireReason(tx, true, input.reason, "Az érvénytelenítéshez indoklás kell.");
     const res = await tx.eatingStatus.updateMany({
       where: { id, version: input.expectedVersion, status: "VALID" },

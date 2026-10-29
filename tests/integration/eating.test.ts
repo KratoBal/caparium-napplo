@@ -8,7 +8,7 @@ import { eatingDayView, invalidateEatingStatus, setEatingStatus } from "@/lib/ea
 import { AppError } from "@/lib/errors";
 import { finalizeList, recomputeFasting, setSelection } from "@/lib/feeding";
 import { recloseDay, reopenDay } from "@/lib/journal";
-import { dayToDate } from "@/lib/time";
+import { addDays, dayToDate } from "@/lib/time";
 import { fixtures, rid, withReasons } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -83,10 +83,19 @@ describe("eating statuses (EVE-01, EVE-02, EVE-04, EVE-05)", () => {
     await expectCode(eat(d, "Teszt Három", "EATEN"), "NOT_SELECTED");
     await expectCode(eat(d, "Teszt Kettő", "NOT_EATEN", f.aq1, { medicineNote: "fél tabletta" }), "NOTE_WITHOUT_MEDICINE");
     await expectCode(eat(d, "Teszt Egy", "NOT_EATEN", f.aq2), "CELL_TAKEN");
-    await expectCode(eat(d, "Teszt Egy", "NOT_EATEN", f.aq2, { statusId: ok.statusId, expectedVersion: 1 }), "NOT_OWN");
-    await eat(d, "Teszt Egy", "PARTIAL", f.aq1, { statusId: ok.statusId, expectedVersion: 1, medicine: true, medicineNote: "fél tabletta" });
-    await expectCode(eat(d, "Teszt Egy", "EATEN", f.aq1, { statusId: ok.statusId, expectedVersion: 1 }), "VERSION_CONFLICT");
-    expect((await statuses(d, "Teszt Egy")).map((s) => [s.state, s.vitamin, s.medicine, s.medicineNote, s.version])).toEqual([["PARTIAL", false, true, "fél tabletta", 2]]);
+    // Lili 2026-10-29 ("Legyen javítható nyugodtan.", acrobot 37985): another aquarist corrects it too, audited under them
+    const other = rid();
+    await setEatingStatus(f.aq2, { requestId: other, day: d, animalId: a["Teszt Egy"], state: "NOT_EATEN", statusId: ok.statusId, expectedVersion: 1 }, at(d, "10:00"));
+    expect((await prisma.auditEntry.findFirstOrThrow({ where: { requestId: other } })).userId).toBe(f.aq2.id);
+    await eat(d, "Teszt Egy", "PARTIAL", f.aq1, { statusId: ok.statusId, expectedVersion: 2, medicine: true, medicineNote: "fél tabletta" });
+    await expectCode(eat(d, "Teszt Egy", "EATEN", f.aq1, { statusId: ok.statusId, expectedVersion: 2 }), "VERSION_CONFLICT");
+    expect((await statuses(d, "Teszt Egy")).map((s) => [s.state, s.vitamin, s.medicine, s.medicineNote, s.version])).toEqual([["PARTIAL", false, true, "fél tabletta", 3]]);
+    // ...and invalidates it; a past day stays the admin's
+    const st = (await statuses(d, "Teszt Egy"))[0]!;
+    await expectCode(invalidateEatingStatus(f.aq2, st.id, { requestId: rid(), expectedVersion: st.version, reason: "masnap" }, at(addDays(d, 1), "08:00")), "NOT_TODAY");
+    await invalidateEatingStatus(f.aq2, st.id, { requestId: rid(), expectedVersion: st.version, reason: "rossz allat" }, at(d, "10:30"));
+    expect(await statuses(d, "Teszt Egy")).toEqual([]);
+    await eat(d, "Teszt Egy", "EATEN", f.aq1);
 
     // R-3: removing the animal from the list takes its status too, after a confirmation
     await expectCode(select(d, ["Teszt Egy"], false), "HAS_RECORDS");
