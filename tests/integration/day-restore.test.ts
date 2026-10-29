@@ -91,6 +91,9 @@ describe("a day put back as it stood before a list switch", () => {
     const run = rid();
     await restoreDay(f.admin, { requestId: run, day: d, mode: "run", op: off }, at(d, "12:00"));
     expect(await prisma.auditEntry.count({ where: { requestId: run, reason: { not: null } } })).toBe(0);
+    // ...but every row of the run names the point the day went back to, as a fact
+    const runRows = await prisma.auditEntry.findMany({ where: { requestId: run } });
+    expect(runRows.map((r) => (r.changes as { restoredBefore?: { after?: string } }).restoredBefore?.after?.startsWith(`${off} @ `))).toEqual(runRows.map(() => true));
     expect({ selected: await selected(d), feeds: await dayFeedIds(d), valid: await valid(d) }).toEqual(before);
     expect(await prisma.auditEntry.count({ where: { requestId: run } })).toBe(8);
     expect(await restoreDay(f.admin, { requestId: run, day: d, mode: "run", op: off })).toEqual({ replayed: true });
