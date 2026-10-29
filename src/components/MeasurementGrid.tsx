@@ -213,9 +213,13 @@ export function MeasurementGrid({
 
   // A pool tick (visszamosás, rátöltés, vízcsere) saves on its own click, apart from the values and the Mentés button:
   // it is a fact of the pool and the day, not a measurement. Shown at once, put back with the reason if the server refuses.
+  const [tickBusy, setTickBusy] = useState<Record<string, true>>({});
   const toggleTick = useCallback(
     async (poolId: string, kind: TickKind, done: boolean) => {
       const key = `${poolId}:${kind}`;
+      // one request per box at a time: a quick on and off could otherwise arrive in the other order and leave the page
+      // showing something else than the table holds
+      setTickBusy((b) => ({ ...b, [key]: true }));
       const put = (on: boolean) =>
         setGrid((g) => {
           const ticks = { ...g.ticks };
@@ -237,6 +241,12 @@ export function MeasurementGrid({
       } catch {
         put(!done);
         setBanner({ kind: "error", text: "Nincs kapcsolat: a jelölő nem mentődött. Próbáld újra." });
+      } finally {
+        setTickBusy((b) => {
+          const next = { ...b };
+          delete next[key];
+          return next;
+        });
       }
     },
     [],
@@ -642,7 +652,7 @@ export function MeasurementGrid({
                               <input
                                 type="checkbox"
                                 checked={!!grid.ticks[`${pool.id}:${kind}`]}
-                                disabled={readOnly || !pool.active}
+                                disabled={readOnly || !pool.active || !!tickBusy[`${pool.id}:${kind}`]}
                                 onChange={(e) => void toggleTick(pool.id, kind, e.target.checked)}
                                 data-testid={`tick-${pool.name}-${kind}`}
                               />

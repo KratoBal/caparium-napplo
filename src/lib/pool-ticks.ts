@@ -58,9 +58,12 @@ export async function setPoolTick(actor: Actor, raw: z.input<typeof poolTickSche
     // a tick of a past or a closed day is an admin's: no reason box here, the audit entry keeps who did it
     const businessDay = dayToDate(input.day);
     const key = { poolId_businessDay_kind: { poolId: input.poolId, businessDay, kind: input.kind } };
+    // no read-then-write: two people ticking the same box at once, or a quick on and off, must not turn into a key clash
+    // (the second request would show an error for something that is on). createMany skips a row that exists, deleteMany
+    // removes none that is not there; `existing` is only for the audit entry.
     const existing = await tx.poolTick.findUnique({ where: key });
-    if (input.done && !existing) await tx.poolTick.create({ data: { poolId: input.poolId, businessDay, kind: input.kind, createdById: actor.id } });
-    if (!input.done && existing) await tx.poolTick.delete({ where: key });
+    if (input.done) await tx.poolTick.createMany({ data: [{ poolId: input.poolId, businessDay, kind: input.kind, createdById: actor.id }], skipDuplicates: true });
+    else await tx.poolTick.deleteMany({ where: { poolId: input.poolId, businessDay, kind: input.kind } });
     await writeAudit(tx, {
       userId: actor.id,
       action: "UPDATE",
