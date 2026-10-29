@@ -1,7 +1,7 @@
 // The feeding log on screen (TAK-04): a period filtered by pool and animal, totals in base units, a
 // group item counted for its participants, the eating pattern of the same filter. Days in June 2026.
 import { beforeAll, describe, expect, it } from "vitest";
-import { renamePool } from "@/lib/admin";
+import { createPool, renamePool } from "@/lib/admin";
 import { createGroup, createLifecycleEvent } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { setEatingStatus } from "@/lib/eating";
@@ -64,23 +64,30 @@ describe("the feeding log (TAK-04)", () => {
   });
 
   it("the pool's name is the one valid on the day, not today's (review of #11: a rename after the day)", async () => {
-    // its own animal and its own rename, in a pool no other file renames: the file order cannot matter
+    // its own animal, its own pool and its own rename: a rename of a seeded pool reaches every later day of every file (the
+    // Inkubátor rename turned water-mail's pool order red whenever this file ran first, card 72966953), so the file order
+    // cannot matter only with a pool nobody else reads; without water measurement it enters no report
+    const pool = (
+      (await createPool(f.admin, { requestId: rid(), name: "Etetési napló medence", code: "FEEDING_LOG_POOL", volumeLiters: "100", groupIds: [], noWaterMeasurement: true }, at("2026-06-03", "08:00"))) as {
+        id: string;
+      }
+    ).id;
     const species = (await prisma.species.findFirstOrThrow({ where: { active: true } })).id;
     const lako = (
       await createLifecycleEvent(
         f.admin,
-        { requestId: rid(), type: "ARRIVAL", newAnimal: { speciesId: species, name: "Inkubátor Lakó", sex: "MALE" }, toPoolId: f.pool("INKUBATOR"), occurredAtLocal: "2026-06-04T09:00", reason: "teszt" },
+        { requestId: rid(), type: "ARRIVAL", newAnimal: { speciesId: species, name: "Inkubátor Lakó", sex: "MALE" }, toPoolId: pool, occurredAtLocal: "2026-06-04T09:00", reason: "teszt" },
         at("2026-06-04", "10:00"),
       )
     ).animalId;
     const d = "2026-06-05";
     await setSelection(f.aq1, { requestId: rid(), day: d, animalIds: [lako], selected: true }, at(d, "09:00"));
     await saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId: lako, feedId: feed["Teszt hal"], quantities: [{ value: "10", unitId: unit.g }] }, at(d, "09:00"));
-    const before = (await prisma.poolName.findMany({ where: { poolId: f.pool("INKUBATOR") } })).find((n) => n.validTo === null)!.displayName;
-    await renamePool(f.admin, { requestId: rid(), poolId: f.pool("INKUBATOR"), name: "Inkubátor (átnevezve)", mode: "change" }, at("2026-06-10", "08:00"));
+    const before = (await prisma.poolName.findMany({ where: { poolId: pool } })).find((n) => n.validTo === null)!.displayName;
+    await renamePool(f.admin, { requestId: rid(), poolId: pool, name: "Etetési napló medence (átnevezve)", mode: "change" }, at("2026-06-10", "08:00"));
     const log = await feedingLog({ from: d, to: d, poolId: null, animalId: lako });
     expect(log.rows.map((r) => r.pools)).toEqual([before]);
-    expect(before).not.toBe("Inkubátor (átnevezve)");
+    expect(before).toBe("Etetési napló medence");
   });
 
   it("the eating pattern of the same filter; a period over the limit is refused", async () => {
