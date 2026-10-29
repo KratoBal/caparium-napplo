@@ -511,6 +511,18 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   expect(letters.every((l) => ["H", "K", "Sze", "Cs", "P", "Szo", "V"].includes(l))).toBe(true);
   const bars = page.getByTestId("eating-pattern").locator(".eat-bar");
   if ((await bars.count()) > 0) expect((await bars.first().boundingBox())!.height).toBeGreaterThanOrEqual(12);
+  // Lili 2026-10-29 (package item 11): no empty band after the Állat column: the first day column starts right after
+  // the longest name (its own padding and a little more), not where a page-wide table would put it
+  const gap = await page.getByTestId("eating-pattern").evaluate((t) => {
+    const names = Array.from(t.querySelectorAll("tbody tr > td:first-child")).map((c) => {
+      const r = document.createRange();
+      r.selectNodeContents(c);
+      return r.getBoundingClientRect().right;
+    });
+    const firstDay = t.querySelector("thead tr > th:nth-child(2)")!.getBoundingClientRect().left;
+    return firstDay - Math.max(...names);
+  });
+  expect(gap).toBeLessThanOrEqual(40);
 
   // EGY-10, EVE-07: both Excel files are real downloads from the export page
   await page.getByRole("link", { name: "Export" }).click();
