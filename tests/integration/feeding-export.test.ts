@@ -8,6 +8,7 @@ import { setEatingStatus } from "@/lib/eating";
 import { buildEatingWorkbook, buildFeedingWorkbook } from "@/lib/exports/feeding-excel";
 import { finalizeList, saveFeedingItem, setSelection } from "@/lib/feeding";
 import { feedingLog } from "@/lib/feeding-log";
+import { otherLabel } from "@/lib/other-name";
 import { recloseDay } from "@/lib/journal";
 import { fixtures, rid } from "./fixtures";
 
@@ -83,7 +84,7 @@ describe("the feeding Excel (EGY-10, D-30)", () => {
     const egy = rowOf(ws, 3, "Teszt Egy");
     expect([val(egy.getCell(lit)), val(egy.getCell(lit + 1))]).toEqual([6, 42.5]);
     // Lili 2026-10-29 (package item 13): no "Egyéb 1..5" and no note columns; the other name has a column of its own
-    const other1 = colOf(ws, 1, "tintahal-fej");
+    const other1 = colOf(ws, 1, "Tintahal-fej"); // the fixed shown form: a capital first letter
     expect(val(egy.getCell(other1))).toBe(20);
     const heads = ws.getRow(1).values as unknown[];
     expect(heads.filter((v) => typeof v === "string" && /^Egyéb \d/.test(v))).toEqual([]);
@@ -124,9 +125,10 @@ describe("the feeding Excel's other feeds (Lili 2026-10-29, package item 13)", (
     }
     await saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId: a["Teszt Egy"], feedId: feed["Teszt hal"], quantities: [{ value: "10", unitId: unit.g }] }, now);
     const ws = await sheet((await buildFeedingWorkbook({ from: d, to: d })).buffer);
-    const cols = names.map((n) => colOf(ws, 1, n));
+    const labels = names.map((n) => otherLabel(n)); // the headers show the fixed form (capital first letter)
+    const cols = labels.map((n) => colOf(ws, 1, n));
     // by name (hu), next to each other, after every feed of the other types (Egyéb is the last type)
-    const sortedNames = [...names].sort((x, y) => x.localeCompare(y, "hu"));
+    const sortedNames = [...labels].sort((x, y) => x.localeCompare(y, "hu"));
     expect(sortedNames.map((n) => colOf(ws, 1, n))).toEqual([...cols].sort((x, y) => x - y));
     expect(Math.max(...cols) - Math.min(...cols)).toBe(names.length - 1);
     expect(Math.min(...cols)).toBeGreaterThan(colOf(ws, 1, "Teszt hal"));
