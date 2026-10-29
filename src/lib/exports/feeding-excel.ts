@@ -6,6 +6,7 @@
 // row (K3, K4); feed and animal lists come from the data, so a new feed or animal does not break the
 // layout (D-22).
 
+import { otherKey } from "../other-name";
 import type { Dimension } from "@prisma/client";
 import ExcelJS from "exceljs";
 import { prisma } from "../db";
@@ -95,10 +96,15 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
   // admin's order. An "Egyéb" feed has no fixed column: every other name given in the period gets its own, in the
   // Egyéb type's place, by name (Lili 2026-10-29, package item 13: the template's "Egyéb 1..5" and its note columns go,
   // and with them the limit of five a row)
-  const usedKey = (feedId: string, other: string | null) => `${feedId}|${other ?? ""}`;
+  // The name is ONE column whatever its case or the spaces in it (acrobot 38155, nautilus 38181): the key is trimmed,
+  // single-spaced, lower case (other-name.ts), the header shows the form first met, as the Kivétel page does.
+  const usedKey = (feedId: string, other: string | null) => `${feedId}|${other === null ? "" : otherKey(other)}`;
   const used = new Map<string, Set<Dimension>>();
+  const shown = new Map<string, string>(); // usedKey -> the form first met
   for (const it of items) {
-    const k = usedKey(it.feedId, it.feed.type.code === "EGYEB" ? it.otherName ?? "" : null);
+    const isOther = it.feed.type.code === "EGYEB";
+    const k = usedKey(it.feedId, isOther ? it.otherName ?? "" : null);
+    if (isOther && it.otherName?.trim() && !shown.has(k)) shown.set(k, it.otherName.trim().replace(/\s+/g, " "));
     if (!used.has(k)) used.set(k, new Set());
     for (const q of it.quantities) used.get(k)!.add(q.unit.dimension);
   }
@@ -110,10 +116,10 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
   for (const t of types) {
     if (t.code === "EGYEB") {
       const named = t.feeds.flatMap((feed) =>
-        [...used.entries()].filter(([k]) => k.startsWith(`${feed.id}|`)).map(([k, dims]) => ({ feedId: feed.id, other: k.slice(feed.id.length + 1), dims, allowed: feed.allowedDimensions })),
+        [...used.entries()].filter(([k]) => k.startsWith(`${feed.id}|`)).map(([k, dims]) => ({ feedId: feed.id, other: k.slice(feed.id.length + 1), shown: shown.get(k) ?? "", dims, allowed: feed.allowedDimensions })),
       );
       for (const n of named.sort((a, b) => a.other.localeCompare(b.other, "hu"))) {
-        push(n.feedId, n.other, n.other || "Egyéb", n.dims.size ? n.dims : new Set(n.allowed));
+        push(n.feedId, n.other, n.shown || "Egyéb", n.dims.size ? n.dims : new Set(n.allowed));
       }
       continue;
     }
@@ -145,7 +151,7 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       rows.set(key, row);
     }
     // EGY-12: an "Egyéb" item in the column of its own name (package item 13)
-    const other = it.feed.type.code === "EGYEB" ? it.otherName ?? "" : null;
+    const other = it.feed.type.code === "EGYEB" ? otherKey(it.otherName ?? "") : null;
     if (it.quantities.length === 0) {
       const i = colOf(it.feedId, other);
       if (i >= 0) row.ticks.add(i);

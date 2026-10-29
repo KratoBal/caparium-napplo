@@ -5,6 +5,7 @@
 
 import type { FeedPlace } from "./feed-order";
 import { withIcon } from "./icons";
+import { otherKey } from "./other-name";
 import { compareAnimals } from "./animal-order";
 import { prisma } from "./db";
 import { GIVEN } from "./eating-labels";
@@ -79,6 +80,14 @@ export async function feedingLog(f: LogFilter) {
   const totals: Record<string, number> = {};
   const own: Record<string, number> = {};
   const group: Record<string, number> = {};
+  // an "Egyéb" feed's name is one column whatever its case or spacing: the form first met stands (Lili's package, item 12 follow-up)
+  const otherFirst = new Map<string, string>();
+  const labelOf = (feed: string, other: string | null) => {
+    if (!other) return feed;
+    const k = `${feed}|${otherKey(other)}`;
+    if (!otherFirst.has(k)) otherFirst.set(k, other.trim().replace(/\s+/g, " "));
+    return `${feed}: ${otherFirst.get(k)}`;
+  };
   for (const it of items) {
     const day = dateToDay(it.feedingDay.businessDay);
     const at = dayBounds(day).start;
@@ -96,13 +105,14 @@ export async function feedingLog(f: LogFilter) {
     const feed = pickValid(it.feed.names, at)?.name ?? it.feed.names.at(-1)?.name ?? "?";
     const recipient = it.animal ? nameAt(it.animal.names, at)?.name ?? "?" : `${nameAt(it.group!.names, at)?.name ?? "?"} (csoport)`;
     recipientOrder.set(recipient, it.animal ? it.animal.sortOrder : null);
-    feedOrder.set(it.otherName ? `${feed}: ${it.otherName}` : feed, [it.feed.type.sortOrder, it.feed.sortOrder]);
-    feedType.set(it.otherName ? `${feed}: ${it.otherName}` : feed, withIcon(it.feed.type.emoji, it.feed.type.name));
+    const label = labelOf(feed, it.otherName);
+    feedOrder.set(label, [it.feed.type.sortOrder, it.feed.sortOrder]);
+    feedType.set(label, withIcon(it.feed.type.emoji, it.feed.type.name));
     for (const q of it.quantities) {
       entries.push({
         day,
         recipient,
-        feed: it.otherName ? `${feed}: ${it.otherName}` : feed,
+        feed: label,
         unit: baseOf.get(q.unit.dimension) ?? q.unit.symbol,
         value: Number(q.quantity) * Number(q.unit.factorToBase ?? 1),
         group: !it.animalId,
@@ -115,7 +125,7 @@ export async function feedingLog(f: LogFilter) {
         ? nameAt(it.animal.names, at)?.name ?? "?"
         : `${nameAt(it.group!.names, at)?.name ?? "?"} (csoport)`,
       pools: [...new Set(pools.map((p) => p.name))].join(", "),
-      feed: it.otherName ? `${feed}: ${it.otherName}` : feed,
+      feed: label,
       quantities: it.quantities.map((q) => `${Number(q.quantity).toString().replace(".", ",")} ${q.unit.symbol}`).join(" + ") || GIVEN,
     });
   }
