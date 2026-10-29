@@ -43,7 +43,6 @@ export function weekShade(first: string, day: string): string {
   return WEEK_FILLS[(monday(day) - monday(first)) % 2];
 }
 
-const OTHER_SLOTS = 5; // the template's "Egyéb 1..5" (setting egyéb_takarmány_max)
 const DIM_ORDER: Dimension[] = ["COUNT", "MASS", "VOLUME"]; // the template: Litopenaeus db, then g
 
 function fill(cell: ExcelJS.Cell, argb: string) {
@@ -92,25 +91,43 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
   ]);
   const baseOf = new Map(baseUnits.map((u) => [u.dimension, u.symbol]));
 
-  // feed columns: every active feed and every feed that occurs in the period, one per dimension
+  // feed columns: every active feed and every feed that occurs in the period, one per dimension, in the types' and the
+  // admin's order. An "Egyéb" feed has no fixed column: every other name given in the period gets its own, in the
+  // Egyéb type's place, by name (Lili 2026-10-29, package item 13: the template's "Egyéb 1..5" and its note columns go,
+  // and with them the limit of five a row)
+  const usedKey = (feedId: string, other: string | null) => `${feedId}|${other ?? ""}`;
   const used = new Map<string, Set<Dimension>>();
-  for (const it of items) for (const q of it.quantities) used.set(it.feedId, (used.get(it.feedId) ?? new Set()).add(q.unit.dimension));
-  type Col = { feedId: string; dimension: Dimension; name: string; unit: string };
+  for (const it of items) {
+    const k = usedKey(it.feedId, it.feed.type.code === "EGYEB" ? it.otherName ?? "" : null);
+    if (!used.has(k)) used.set(k, new Set());
+    for (const q of it.quantities) used.get(k)!.add(q.unit.dimension);
+  }
+  type Col = { feedId: string; other: string | null; dimension: Dimension; name: string; unit: string };
   const cols: Col[] = [];
-  for (const t of types.filter((x) => x.code !== "EGYEB")) {
-    for (const feed of t.feeds.filter((x) => x.active || used.has(x.id))) {
-      const dims = new Set([...feed.allowedDimensions, ...(used.get(feed.id) ?? [])]);
-      for (const dimension of DIM_ORDER.filter((d) => dims.has(d))) {
-        cols.push({ feedId: feed.id, dimension, name: pickValid(feed.names, endOfPeriod)?.name ?? feed.names.at(-1)?.name ?? "?", unit: baseOf.get(dimension) ?? "?" });
+  const push = (feedId: string, other: string | null, name: string, dims: Set<Dimension>) => {
+    for (const dimension of DIM_ORDER.filter((d) => dims.has(d))) cols.push({ feedId, other, dimension, name, unit: baseOf.get(dimension) ?? "?" });
+  };
+  for (const t of types) {
+    if (t.code === "EGYEB") {
+      const named = t.feeds.flatMap((feed) =>
+        [...used.entries()].filter(([k]) => k.startsWith(`${feed.id}|`)).map(([k, dims]) => ({ feedId: feed.id, other: k.slice(feed.id.length + 1), dims, allowed: feed.allowedDimensions })),
+      );
+      for (const n of named.sort((a, b) => a.other.localeCompare(b.other, "hu"))) {
+        push(n.feedId, n.other, n.other || "Egyéb", n.dims.size ? n.dims : new Set(n.allowed));
       }
+      continue;
+    }
+    for (const feed of t.feeds.filter((x) => x.active || used.has(usedKey(x.id, null)))) {
+      push(feed.id, null, pickValid(feed.names, endOfPeriod)?.name ?? feed.names.at(-1)?.name ?? "?", new Set([...feed.allowedDimensions, ...(used.get(usedKey(feed.id, null)) ?? [])]));
     }
   }
-  const otherUnit = baseOf.get("MASS") ?? "g";
-  const sumUnits = [...new Set([...cols.map((c) => c.unit), otherUnit])];
+  const sumUnits = [...new Set(cols.map((c) => c.unit))];
+  const colOf = (feedId: string, other: string | null, dimension?: Dimension) =>
+    cols.findIndex((c) => c.feedId === feedId && c.other === other && (dimension === undefined || c.dimension === dimension));
 
   // rows: one per day and recipient (an animal, or a group with its group item)
   // ticks: the feed columns of an item without a quantity (a coral feed ticked on the sheet): "adva", not a number
-  type Row = { day: string; species: string; name: string; sortOrder: number | null; values: Map<number, number>; ticks: Set<number>; other: { qty: number | string; name: string }[] };
+  type Row = { day: string; species: string; name: string; sortOrder: number | null; values: Map<number, number>; ticks: Set<number> };
   const rows = new Map<string, Row>();
   for (const it of items) {
     const day = dateToDay(it.feedingDay.businessDay);
@@ -124,26 +141,18 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       const name = it.animal
         ? pickValid(it.animal.names, at)?.name ?? it.animal.names.at(-1)?.name ?? "?"
         : `${pickValid(it.group!.names, at)?.name ?? it.group!.names.at(-1)?.name ?? "?"} (csoport)`;
-      row = { day, species, name, sortOrder: it.animal?.sortOrder ?? null, values: new Map(), ticks: new Set(), other: [] };
+      row = { day, species, name, sortOrder: it.animal?.sortOrder ?? null, values: new Map(), ticks: new Set() };
       rows.set(key, row);
     }
-    if (it.feed.type.code === "EGYEB") {
-      // EGY-12: the name of the other feed goes to its own note column, nothing else
-      const mass = it.quantities.find((q) => q.unit.dimension === "MASS");
-      const qty = mass ? Number(mass.quantity) * Number(mass.unit.factorToBase ?? 1) : it.quantities.map((q) => `${Number(q.quantity)} ${q.unit.symbol}`).join(" + ");
-      row.other.push({ qty, name: it.otherName ?? "" });
-      if (row.other.length > OTHER_SLOTS) {
-        throw new AppError(422, "TOO_MANY_OTHER", `${day}: ${row.name} több mint ${OTHER_SLOTS} egyéb takarmányt kapott; az Excel-sablon ennyit tud.`);
-      }
-      continue;
-    }
+    // EGY-12: an "Egyéb" item in the column of its own name (package item 13)
+    const other = it.feed.type.code === "EGYEB" ? it.otherName ?? "" : null;
     if (it.quantities.length === 0) {
-      const i = cols.findIndex((c) => c.feedId === it.feedId);
+      const i = colOf(it.feedId, other);
       if (i >= 0) row.ticks.add(i);
       continue;
     }
     for (const q of it.quantities) {
-      const i = cols.findIndex((c) => c.feedId === it.feedId && c.dimension === q.unit.dimension);
+      const i = colOf(it.feedId, other, q.unit.dimension);
       row.values.set(i, (row.values.get(i) ?? 0) + Number(q.quantity) * Number(q.unit.factorToBase ?? 1));
     }
   }
@@ -163,19 +172,17 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       const r = life.get(a.id)!;
       if (!r.arrived || r.arrived >= end || (r.ended && r.ended < start) || rows.has(`${d}|${a.id}`)) continue;
       const name = pickValid(a.names, start)?.name ?? a.names.at(-1)?.name ?? "?";
-      rows.set(`${d}|${a.id}`, { day: d, species: a.species.scientificName, name, sortOrder: a.sortOrder, values: new Map(), ticks: new Set(), other: [] });
+      rows.set(`${d}|${a.id}`, { day: d, species: a.species.scientificName, name, sortOrder: a.sortOrder, values: new Map(), ticks: new Set() });
     }
   }
   // per day: the admin's order (card f67b1a06, item 4); a group row has no position of its own and, like the
   // never-placed animals, follows by name
   const sorted = [...rows.values()].sort((a, b) => a.day.localeCompare(b.day) || compareAnimals(a, b));
 
-  // column layout: A date, B species, C name, D label column, feeds, Egyéb 1..5, SUM/Állat per unit, notes
+  // column layout: A date, B species, C name, D label column, feeds (the other names among them), SUM/Állat per unit
   const FIRST = 5;
-  const otherCol = (k: number) => FIRST + cols.length + k;
-  const sumCol = (k: number) => FIRST + cols.length + OTHER_SLOTS + k;
-  const noteCol = (k: number) => FIRST + cols.length + OTHER_SLOTS + sumUnits.length + k;
-  const last = noteCol(OTHER_SLOTS - 1);
+  const sumCol = (k: number) => FIRST + cols.length + k;
+  const last = sumCol(sumUnits.length - 1);
 
   const wb = new ExcelJS.Workbook();
   wb.creator = "Cápárium nAPPló";
@@ -193,14 +200,10 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
   // a feed with two units: its name over both columns (the template's J1:K1)
   for (let i = 0; i < cols.length; ) {
     let j = i;
-    while (j + 1 < cols.length && cols[j + 1].feedId === cols[i].feedId) j++;
+    // the same feed AND the same other name: two "Egyéb" names share their feed and must not merge
+    while (j + 1 < cols.length && cols[j + 1].feedId === cols[i].feedId && cols[j + 1].other === cols[i].other) j++;
     if (j > i) ws.mergeCells(1, FIRST + i, 1, FIRST + j);
     i = j + 1;
-  }
-  for (let k = 0; k < OTHER_SLOTS; k++) {
-    r1.getCell(otherCol(k)).value = `Egyéb ${k + 1}`;
-    r2.getCell(otherCol(k)).value = otherUnit;
-    r1.getCell(noteCol(k)).value = `Egyéb ${k + 1} megjegyzés`;
   }
   sumUnits.forEach((u, k) => {
     r1.getCell(sumCol(k)).value = "SUM/Állat";
@@ -227,16 +230,12 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
     for (const [i, v] of row.values) r.getCell(FIRST + i).value = v;
     for (const i of row.ticks) if (!row.values.has(i)) r.getCell(FIRST + i).value = GIVEN;
     // EGY-05: what the animal did not get that day stays empty and coloured
-    for (let c = FIRST; c < otherCol(OTHER_SLOTS); c++) {
+    for (let c = FIRST; c < FIRST + cols.length; c++) {
       const cell = r.getCell(c);
       if (cell.value === null || cell.value === undefined) fill(cell, EMPTY);
     }
-    row.other.forEach((o, k) => {
-      r.getCell(otherCol(k)).value = o.qty;
-      r.getCell(noteCol(k)).value = o.name;
-    });
     sumUnits.forEach((u, k) => {
-      const members = [...cols.map((c, i) => (c.unit === u ? FIRST + i : 0)), ...(u === otherUnit ? [...Array(OTHER_SLOTS).keys()].map(otherCol) : [])].filter(Boolean);
+      const members = cols.map((c, i) => (c.unit === u ? FIRST + i : 0)).filter(Boolean);
       const result = members.reduce((s, c) => s + (typeof r.getCell(c).value === "number" ? (r.getCell(c).value as number) : 0), 0);
       r.getCell(sumCol(k)).value = { formula: `SUM(${members.map((c) => `${colLetter(c)}${r.number}`).join(",")})`, result };
     });
@@ -248,7 +247,7 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
   ws.mergeCells(sumRow.number, 1, sumRow.number, 3);
   for (let c = 1; c <= 3; c++) fill(sumRow.getCell(c), FILL.head);
   sumRow.font = { bold: true };
-  for (let c = FIRST; c < noteCol(0); c++) {
+  for (let c = FIRST; c <= last; c++) {
     let result = 0;
     for (let n = firstData; n < sumRow.number; n++) {
       const v = ws.getRow(n).getCell(c).value;

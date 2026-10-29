@@ -81,9 +81,11 @@ describe("the feeding Excel (EGY-10, D-30)", () => {
 
     const egy = rowOf(ws, 3, "Teszt Egy");
     expect([val(egy.getCell(lit)), val(egy.getCell(lit + 1))]).toEqual([6, 42.5]);
-    const other1 = colOf(ws, 1, "Egyéb 1");
+    // Lili 2026-10-29 (package item 13): no "Egyéb 1..5" and no note columns; the other name has a column of its own
+    const other1 = colOf(ws, 1, "tintahal-fej");
     expect(val(egy.getCell(other1))).toBe(20);
-    expect(egy.getCell(colOf(ws, 1, "Egyéb 1 megjegyzés")).value).toBe("tintahal-fej");
+    const heads = ws.getRow(1).values as unknown[];
+    expect(heads.filter((v) => typeof v === "string" && /^Egyéb \d/.test(v))).toEqual([]);
     // D-30: one SUM/Állat per unit; the grams of the row are 42.5 + 20, the pieces stay apart
     const sums = [colOf(ws, 1, "SUM/Állat", 0), colOf(ws, 1, "SUM/Állat", 1)];
     const byUnit = Object.fromEntries(sums.map((c) => [ws.getRow(2).getCell(c).value, val(egy.getCell(c))]));
@@ -107,6 +109,30 @@ describe("the feeding Excel (EGY-10, D-30)", () => {
     expect(last.getCell(1).value).toBe("SUM/Takarmány");
     expect(val(last.getCell(lit))).toBe(6);
     expect(val(last.getCell(gSum))).toBe(62.5 + 1000 + 300);
+  });
+});
+
+describe("the feeding Excel's other feeds (Lili 2026-10-29, package item 13)", () => {
+  it("every other name its own column, by name, in the Egyéb type's place; more than five a row is no error; SUM counts them", async () => {
+    const d = "2028-04-03";
+    const now = at(d, "09:00");
+    await setSelection(f.aq1, { requestId: rid(), day: d, animalIds: [a["Teszt Egy"]], selected: true }, now);
+    const names = ["zsálya", "alga", "békalencse", "csiga", "dafnia", "ecetmuslica"];
+    for (const otherName of names) {
+      await saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId: a["Teszt Egy"], feedId: feed["Egyéb"], otherName, quantities: [{ value: "2", unitId: unit.g }] }, now);
+    }
+    await saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId: a["Teszt Egy"], feedId: feed["Teszt hal"], quantities: [{ value: "10", unitId: unit.g }] }, now);
+    const ws = await sheet((await buildFeedingWorkbook({ from: d, to: d })).buffer);
+    const cols = names.map((n) => colOf(ws, 1, n));
+    // by name (hu), next to each other, after every feed of the other types (Egyéb is the last type)
+    const sortedNames = [...names].sort((x, y) => x.localeCompare(y, "hu"));
+    expect(sortedNames.map((n) => colOf(ws, 1, n))).toEqual([...cols].sort((x, y) => x - y));
+    expect(Math.max(...cols) - Math.min(...cols)).toBe(names.length - 1);
+    expect(Math.min(...cols)).toBeGreaterThan(colOf(ws, 1, "Teszt hal"));
+    const egy = rowOf(ws, 3, "Teszt Egy");
+    expect(cols.map((c) => val(egy.getCell(c)))).toEqual(names.map(() => 2));
+    const gSum = [0, 1].map((k) => colOf(ws, 1, "SUM/Állat", k)).find((c) => ws.getRow(2).getCell(c).value === "g")!;
+    expect(val(egy.getCell(gSum))).toBe(10 + 2 * names.length);
   });
 });
 
