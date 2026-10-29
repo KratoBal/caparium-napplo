@@ -1400,8 +1400,14 @@ test("conveniences: a feeding plan, the list from it, the feed type icons", asyn
   await page.getByRole("link", { name: "Etetési rend" }).click();
   const table = page.getByTestId("timetable");
   for (const d of ["H", "K", "Sze", "Cs", "P", "Szo", "V"]) await table.getByLabel(`Teszt Három: ${d}`).check();
-  await table.getByRole("button", { name: /Etetési rend mentése/ }).click();
-  await expect(table.getByRole("status")).toHaveText(/^Mentve: \d+ állat terve\.$/);
+  // the other layout's run may have saved this very plan already: then nothing changed and the button stays off
+  const save = table.getByRole("button", { name: /Etetési rend mentése/ });
+  if (await save.isEnabled()) {
+    await save.click();
+    await expect(table.getByRole("status")).toHaveText(/^Mentve: \d+ állat terve\.$/);
+  }
+  await page.reload();
+  for (const d of ["H", "K", "Sze", "Cs", "P", "Szo", "V"]) await expect(page.getByTestId("timetable").getByLabel(`Teszt Három: ${d}`)).toBeChecked();
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
   await page.getByRole("button", { name: "Mai Terv" }).click();
   await expect(page.getByLabel("Teszt Három a mai listán")).toBeChecked();
