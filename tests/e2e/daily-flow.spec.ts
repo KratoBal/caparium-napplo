@@ -1408,6 +1408,24 @@ test("the helper: it speaks unasked without taking a click, the quick questions 
   await form.getByLabel("Egység", { exact: true }).selectOption({ label: "g" });
   await form.getByRole("button", { name: "+ Adagolás mentése" }).click();
   await expect(form.getByRole("status")).toHaveText("Adagolás mentve.");
+  // barracuda on #109: what is shown follows the refreshed data. A fresh session here: the alert speaks; one more
+  // dose refreshes the page, the key stays, and the notice on show takes the new level instead of keeping the old.
+  // The save's router.refresh must land first: landing after the clear, it marks the alert seen again on this page
+  // just before the reload (measured locally, 2026-10-29)
+  await page.waitForLoadState("networkidle");
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  const shown = page.getByTestId("helper-notice");
+  await expect(shown).toContainText("Teszt só");
+  const before = await shown.textContent();
+  await form.getByLabel("Medence", { exact: true }).selectOption({ label: "Sózó" });
+  await form.getByLabel("Szer", { exact: true }).selectOption({ label: "Teszt só" });
+  await form.getByLabel("Mennyiség", { exact: true }).fill("100");
+  await form.getByLabel("Egység", { exact: true }).selectOption({ label: "g" });
+  await form.getByRole("button", { name: "+ Adagolás mentése" }).click();
+  await expect(form.getByRole("status")).toHaveText("Adagolás mentve.");
+  await expect(shown).not.toHaveText(before!);
+  await expect(shown).toContainText("Teszt só");
   // a fresh session on the overview: the pages before may already have shown the alert
   await page.getByRole("link", { name: "START", exact: true }).click();
   // Lili 2026-10-27 13:02 UTC: the start page has no "Mai áttekintés" title; what is under the bar stays

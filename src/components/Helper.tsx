@@ -13,16 +13,15 @@
 // tablet e2e of #109, where the greeting sat on "Tétel mentése"; barracuda on #109: in the afternoon the
 // measurement alert would open on every water page). The bubble with the questions opens only from the
 // figure, and starts with the alert.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { HelperData } from "@/lib/helpers";
+import { followAnswer, followNotice, type Notice } from "@/lib/helper-notice";
 import { readOff, SWITCH_EVENT } from "@/lib/helper-switch";
 
 const SEEN_KEY = "caparium-segito-latta";
 const GREETED_KEY = "caparium-segito-koszont";
 const FIGURE = { water: { emoji: "🐠", name: "Antennarius" }, feeding: { emoji: "🦈", name: "Zebracápa" } } as const;
 const GREETING_MS = 8000;
-
-type Notice = { kind: "alert" | "greeting"; text: string };
 
 export function Helper({ data }: { data: HelperData }) {
   const [off, setOff] = useState(false);
@@ -33,6 +32,8 @@ export function Helper({ data }: { data: HelperData }) {
   // set once the stored state is read: before that a click could race the auto-open below
   const [ready, setReady] = useState(false);
   const figure = FIGURE[data.who];
+  // the alert the shown texts were taken from: a refresh (a save) may change or end it
+  const shownAlert = useRef(data.alert);
 
   /** AST-03: the alert speaks once per key and session; true when it did. It is also the figure's hello:
    * the next page does not greet after it (an alert, then a hello, would speak on every page) */
@@ -67,6 +68,11 @@ export function Helper({ data }: { data: HelperData }) {
 
   useEffect(() => {
     setReady(true);
+    // what is already shown follows the refreshed data; the key rule below decides only whether it speaks again
+    setNotice((n) => followNotice(n, data.alert));
+    const previous = shownAlert.current;
+    setAnswer((a) => followAnswer(a, previous, data.alert));
+    shownAlert.current = data.alert;
     const isOff = readOff();
     setOff(isOff);
     // switched off, the alert is not marked as seen: switched back on, it still speaks once
