@@ -1548,6 +1548,10 @@ test("the helper: it speaks unasked without taking a click, the quick questions 
 test("the feed list: the admin sets the tick's base amount, an aquarist sees it", async ({ page }) => {
   await login(page, "teszt.admin");
   await page.getByRole("link", { name: "Takarmánylista" }).click();
+  // package item 15: banded rows, paler than the reports' band (--c-field) and not the plain white
+  const apro = page.getByTestId("feeds-APRO").locator("tbody tr");
+  const bgOf = (n: number) => apro.nth(n).locator("td").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect([await bgOf(0), await bgOf(1)]).toEqual(["rgba(0, 0, 0, 0)", "rgb(246, 249, 250)"]);
   const row = page.getByRole("row").filter({ hasText: "Homárikra" });
   // the other layout's run (or an earlier run) may have set 30 already: then it is a change to 35, or "Mentés" stays off
   const target = (await row.locator('[data-testid^="feed-dose-"]').textContent()) === "30 g" ? "35" : "30";
