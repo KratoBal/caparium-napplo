@@ -66,7 +66,8 @@ export async function moduleLevel(tx: Tx, userId: string, role: Role, module: Ap
   return effectiveLevel(role, override?.level ?? null);
 }
 
-export type LayoutPool = { id: string; name: string };
+/** `active`: an inactive pool (a renovation) takes no new measurement; its earlier ones stay */
+export type LayoutPool = { id: string; name: string; active: boolean };
 export type LayoutParameter = {
   id: string;
   code: string;
@@ -98,7 +99,7 @@ export async function groupLayout(
     }),
   ]);
   return {
-    pools: memberships.map((m) => ({ id: m.pool.id, name: pickValid(m.pool.names, at)?.displayName ?? m.pool.code })),
+    pools: memberships.map((m) => ({ id: m.pool.id, name: pickValid(m.pool.names, at)?.displayName ?? m.pool.code, active: m.pool.active })),
     parameters: params.map((gp) => ({
       id: gp.parameter.id,
       code: gp.parameter.code,

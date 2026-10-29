@@ -16,7 +16,8 @@ export async function missedMeasurements(now = new Date()) {
   const day = businessDayOf(now);
   if (localTimeOf(now) < MEASUREMENT_DEADLINE) return { day, due: false, pools: [] as string[] };
   const memberships = await prisma.groupMembership.findMany({
-    where: { group: { active: true, frequency: "DAILY" }, ...validAt(now) },
+    // an inactive pool (a renovation) takes no measurement: a notice about it could never go (barracuda on #101)
+    where: { group: { active: true, frequency: "DAILY" }, pool: { active: true }, ...validAt(now) },
     include: { pool: { include: { names: true } } },
   });
   const measured = new Set(
@@ -46,4 +47,22 @@ export async function runningOut(now = new Date()) {
       return { name: c.name, unit: c.unit, level: c.level, daysLeft: daysLeft === null ? null : Math.round(daysLeft * 10) / 10 };
     })
     .filter((c) => c.level <= 0 || (c.daysLeft !== null && c.daysLeft <= RUN_OUT_DAYS));
+}
+
+/** The home page's daily count: the active pools of the daily groups measured today, of all of them. */
+export async function dailyProgress(day: string) {
+  const now = new Date();
+  const memberships = await prisma.groupMembership.findMany({
+    // an inactive pool (a renovation) takes no measurement, so it is not waited for (barracuda on #101)
+    where: { group: { active: true, frequency: "DAILY" }, pool: { active: true }, ...validAt(now) },
+    select: { poolId: true },
+  });
+  const pools = new Set(memberships.map((m) => m.poolId));
+  const measured = await prisma.measurement.findMany({
+    where: { businessDay: dayToDate(day), status: "VALID", round: { group: { frequency: "DAILY" } } },
+    distinct: ["poolId"],
+    select: { poolId: true },
+  });
+  const done = measured.filter((m) => pools.has(m.poolId)).length;
+  return { done, total: pools.size };
 }

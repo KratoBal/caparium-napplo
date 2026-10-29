@@ -2,28 +2,13 @@ import Link from "next/link";
 import { Shell } from "@/components/Shell";
 import { feedingHelper, waterHelper } from "@/lib/helpers";
 import { prisma } from "@/lib/db";
-import { moduleLevel, validAt } from "@/lib/master";
+import { moduleLevel } from "@/lib/master";
 import { requireUser } from "@/lib/session";
-import { missedMeasurements, MEASUREMENT_DEADLINE, RUN_OUT_DAYS, runningOut } from "@/lib/notices";
-import { businessDayOf, dateToDay, dayToDate } from "@/lib/time";
+import { dailyProgress, missedMeasurements, MEASUREMENT_DEADLINE, RUN_OUT_DAYS, runningOut } from "@/lib/notices";
+import { businessDayOf, dateToDay } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
-async function dailyProgress(day: string) {
-  const now = new Date();
-  const memberships = await prisma.groupMembership.findMany({
-    where: { group: { active: true, frequency: "DAILY" }, ...validAt(now) },
-    select: { poolId: true },
-  });
-  const pools = new Set(memberships.map((m) => m.poolId));
-  const measured = await prisma.measurement.findMany({
-    where: { businessDay: dayToDate(day), status: "VALID", round: { group: { frequency: "DAILY" } } },
-    distinct: ["poolId"],
-    select: { poolId: true },
-  });
-  const done = measured.filter((m) => pools.has(m.poolId)).length;
-  return { done, total: pools.size };
-}
 
 type HomeCard = { id: string; href: string; caption: string[]; module: "water" | "feeding" | "dosing" };
 // the captions and the order of the customer's sample (exchange/caparium/kezdolap-csempek-minta-2026-10-20.jpg)
