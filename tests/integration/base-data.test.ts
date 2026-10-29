@@ -205,7 +205,7 @@ describe("the basic data, without a password", () => {
     expect([await db.feed.count(), (await feedsNamed("Artemia")).length, (await feedsNamed("Artemia táblás")).map((x) => x.id)]).toEqual([before, 0, [artemia]]);
   }, 120_000);
 
-  it("the copies the old name lookup made after a correction: removed when unused, made inactive when not, audited", async () => {
+  it("the copies the old name lookup made after a correction: the start marks the original and leaves the copies alone", async () => {
     // a database from before the marks: the old start already made the copies
     const mysis = await correct("Mysis", "Mysis táblás");
     const krill = await correct("Krill", "Krill táblás");
@@ -215,16 +215,18 @@ describe("the basic data, without a password", () => {
     const copy = async (n: string) => (await db.feed.create({ data: { typeId: type.id, allowedDimensions: ["MASS"], defaultUnitId: g.id, sortOrder: 999, names: { create: { name: n, validFrom: new Date() } } } })).id;
     const mysisCopy = await copy("Mysis");
     const krillCopy = await copy("Krill");
-    // the Krill copy has something on it (a base amount): it must not be deleted
-    await db.coralFeedDose.create({ data: { feedId: krillCopy, dose: "5", unitId: g.id, validFrom: new Date() } });
+    // the removal is an admin's operation with a dry run (src/lib/feed-copies.ts), never the start's (barracuda, acrobot
+    // on #121): the start marks the corrected originals, makes nothing, and does not touch the copies
+    const feeds = await db.feed.count();
     start();
     const marks = await db.baseDataMark.findMany({ where: { key: { in: ["initial-feed:APRO:Mysis", "initial-feed:APRO:Krill"] } }, orderBy: { key: "asc" } });
     expect([
-      await db.feed.findUnique({ where: { id: mysisCopy } }),
+      await db.feed.count(),
+      (await db.feed.findUniqueOrThrow({ where: { id: mysisCopy } })).active,
       (await db.feed.findUniqueOrThrow({ where: { id: krillCopy } })).active,
       marks.map((m) => m.entityId),
-      await db.auditEntry.count({ where: { entityId: { in: [mysisCopy, krillCopy] }, action: "MASTER_CHANGE", userId: "00000000-0000-0000-0000-000000000001" } }),
-    ]).toEqual([null, false, [krill, mysis], 2]);
+      await db.auditEntry.count({ where: { entityId: { in: [mysisCopy, krillCopy] } } }),
+    ]).toEqual([feeds, true, true, [krill, mysis], 0]);
     // and a third start changes nothing more
     const settled = await db.feed.count();
     start();

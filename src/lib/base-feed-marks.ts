@@ -4,59 +4,30 @@
 // more and the next start created a new one (on the stage: Artemia, Mysis and Krill came back after the evening's
 // deploys). Now a list entry, once created or found, is marked (base_data_mark) and never created again.
 //
-// The first start with this code claims what is there, and repairs what the old lookup did:
-//   1. a feed corrected away from the entry's name (the MASTER_CORRECTION audit row's before.name) is the entry's
-//      feed; the copies the old lookup made after that correction (same name, another feed, created later) go: deleted
-//      when nothing refers to them, made inactive when something does, each with an audit row; nothing recorded is lost;
-//   2. else a feed that carries or carried the name is the entry's feed;
+// The step only marks and creates, it never removes: the copies the old lookup made are an admin's operation with a
+// dry run (src/lib/feed-copies.ts; barracuda and acrobot on #121: no deletion without a person, at a start).
+//   1. a feed corrected away from the entry's name (the MASTER_CORRECTION audit row's before.name) is the entry's feed;
+//   2. else a feed that carries or carried the name;
 //   3. else the entry's feed is created.
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { SYSTEM_USER_ID } from "./db";
 
-/** Anything that refers to the feed: an item, a withdrawal, a named list, a base amount, a day's chosen feeds. */
-async function feedInUse(prisma: PrismaClient, feedId: string): Promise<boolean> {
-  const [items, withdrawals, lists, doses, days] = await Promise.all([
-    prisma.feedingItem.count({ where: { feedId } }),
-    prisma.withdrawalItem.count({ where: { feedId } }),
-    prisma.feedingListFeed.count({ where: { feedId } }),
-    prisma.coralFeedDose.count({ where: { feedId } }),
-    // feeding_day.feedIds has no foreign key: a deleted feed would leave its id behind there
-    prisma.feedingDay.count({ where: { feedIds: { has: feedId } } }),
-  ]);
-  return items + withdrawals + lists + doses + days > 0;
+/** The audit row of a feed's name corrected away from `name`, the first one: the feed the list entry was. */
+export async function correctedFrom(prisma: Pick<PrismaClient, "auditEntry">, name: string) {
+  const corrections = await prisma.auditEntry.findMany({ where: { entityType: "Feed", action: "MASTER_CORRECTION" }, orderBy: { at: "asc" } });
+  return corrections.find((c) => {
+    const n = (c.changes as Prisma.JsonObject | null)?.name as Prisma.JsonObject | undefined;
+    return n?.before === name;
+  });
 }
 
-/** The entry's feed: marked, found, repaired or created (`create` makes it and returns its id). */
-export async function ensureListFeed(prisma: PrismaClient, key: string, name: string, create: () => Promise<string>): Promise<"marked" | "claimed" | "repaired" | "created"> {
+/** The entry's feed: marked, found or created (`create` makes it and returns its id). */
+export async function ensureListFeed(prisma: PrismaClient, key: string, name: string, create: () => Promise<string>): Promise<"marked" | "claimed" | "created"> {
   if (await prisma.baseDataMark.findUnique({ where: { key } })) return "marked";
   const mark = (entityId: string) => prisma.baseDataMark.create({ data: { key, entityId } });
-
-  const corrections = await prisma.auditEntry.findMany({ where: { entityType: "Feed", action: "MASTER_CORRECTION" }, orderBy: { at: "asc" } });
-  const renamed = corrections.find((c) => (c.changes as Prisma.JsonObject | null)?.name && ((c.changes as Prisma.JsonObject).name as Prisma.JsonObject).before === name);
+  const renamed = await correctedFrom(prisma, name);
   if (renamed) {
-    const copies = await prisma.feed.findMany({ where: { id: { not: renamed.entityId }, createdAt: { gt: renamed.at }, names: { some: { name } } } });
-    for (const copy of copies) {
-      const used = await feedInUse(prisma, copy.id);
-      await prisma.$transaction(async (tx) => {
-        if (used) await tx.feed.update({ where: { id: copy.id }, data: { active: false } });
-        else {
-          await tx.feedName.deleteMany({ where: { feedId: copy.id } });
-          await tx.feed.delete({ where: { id: copy.id } });
-        }
-        await tx.auditEntry.create({
-          data: {
-            userId: SYSTEM_USER_ID,
-            action: "MASTER_CHANGE",
-            entityType: "Feed",
-            entityId: copy.id,
-            changes: used ? { active: { before: copy.active, after: false } } : { removed: { before: name, after: null } },
-            reason: `Az alapadat-betöltés másodpéldánya (${name}): a takarmányt korábban átnevezték, és a régi, név szerinti betöltés újra létrehozta.`,
-          },
-        });
-      });
-    }
     await mark(renamed.entityId);
-    return "repaired";
+    return "claimed";
   }
   const named = await prisma.feedName.findFirst({ where: { name }, orderBy: { validFrom: "asc" } });
   if (named) {

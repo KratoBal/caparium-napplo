@@ -1559,6 +1559,17 @@ test("the feed list: the admin sets the tick's base amount, an aquarist sees it"
   const seen = page.getByRole("row").filter({ hasText: "Homárikra" });
   await expect(seen.locator('[data-testid^="feed-dose-"]')).toHaveText(`${target} g`);
   await expect(seen.getByRole("button", { name: "Homárikra: módosítás" })).toHaveCount(0);
+  // package item 14: the basic data's copies are an admin's operation; an aquarist has no such box
+  await expect(page.getByTestId("feed-copies")).toHaveCount(0);
+});
+
+test("the feed list: the admin's dry run for the basic data's copies finds none on a clean start", async ({ page }) => {
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Takarmánylista" }).click();
+  const box = page.getByTestId("feed-copies");
+  await box.getByRole("button", { name: "Másodpéldányok keresése (próba)" }).click();
+  await expect(box.getByTestId("feed-copies-none")).toHaveText("Nincs másodpéldány.");
+  await expect(box.getByRole("button", { name: /inaktiválása/ })).toHaveCount(0);
 });
 
 // Lili 2026-10-29 (package item 2): the day of the week small under the date wherever the day picker is, and the row on
