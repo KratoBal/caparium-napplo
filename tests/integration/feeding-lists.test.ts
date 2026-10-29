@@ -1,5 +1,6 @@
 // Named feeding lists (Lili 2026-10-26, Caparium channel msg 1564356412946124921, item 1; Balázs "Mehet" 1564357004217159823):
-// an admin composes them, a user applies one to the day: it ticks its animals and adds its feeds, and only adds.
+// an admin composes them, a user applies one to the day: the day's selection becomes the list, except that an animal with a
+// record that day is never taken off by a list.
 // Days in November 2027, a month no other spec uses (the shared database).
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
@@ -105,18 +106,47 @@ describe("picking a list: the day's selection becomes that list; no list takes e
     expect(await dayFeedIds(monday)).toEqual([]);
   });
 
-  it("an animal that already has an item is taken off only after the confirmation, and nothing changes before it", async () => {
+  // the 10-21 loss (Lili 2026-10-28, msg 1565150977861095475; acrobot 37935, 37938): a list operation never takes off an
+  // animal with a record that day, on any day, and never asks for a confirmation; it names who stayed. By hand, one animal
+  // unticked still asks first (R-3). WHAT TURNS RED: the keep filter gone (HAS_RECORDS, or with the old confirmCascade passed
+  // on the entries invalidated); an own item, a manual eating status or a group item not counted as a record; `kept` not
+  // naming them; the hand untick no longer asking.
+  it("an animal with an own item or a manual eating status stays on the day through a list and the switch off, and is named", async () => {
     const tuesday = "2027-11-09";
-    const keep = await mk("Keddi lista", ["Teszt Egy"], ["Teszt hal"]);
-    await setSelection(f.aq1, { requestId: rid(), day: tuesday, animalIds: [a["Teszt Kettő"]], selected: true }, at(tuesday, "07:50"));
-    await saveFeedingItem(f.aq1, { requestId: rid(), day: tuesday, animalId: a["Teszt Kettő"], feedId: feed["Teszt hal"], quantities: [{ value: "10", unitId: unit.g }] } as Parameters<typeof saveFeedingItem>[1], at(tuesday, "07:55"));
-    await expectCode(applyFeedingList(f.aq1, { requestId: rid(), day: tuesday, listId: keep }, at(tuesday, "08:00")), "HAS_RECORDS");
-    expect(await selected(tuesday)).toEqual(["Teszt Kettő"]);
+    const keep = await mk("Keddi lista", ["Teszt Négy"], ["Teszt hal"]);
+    await setSelection(f.aq1, { requestId: rid(), day: tuesday, animalIds: [a["Teszt Egy"], a["Teszt Kettő"], a["Teszt Három"]], selected: true }, at(tuesday, "07:50"));
+    await saveFeedingItem(f.aq1, { requestId: rid(), day: tuesday, animalId: a["Teszt Egy"], feedId: feed["Teszt kagyló"], quantities: [{ value: "10", unitId: unit.g }] } as Parameters<typeof saveFeedingItem>[1], at(tuesday, "07:55"));
+    await setEatingStatus(f.aq1, { requestId: rid(), day: tuesday, animalId: a["Teszt Három"], state: "EATEN" }, at(tuesday, "07:56"));
+    const records = async () => {
+      const fd = await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: dayToDate(tuesday) } });
+      return {
+        items: await prisma.feedingItem.count({ where: { feedingDayId: fd.id, status: "VALID" } }),
+        manual: await prisma.eatingStatus.count({ where: { feedingDayId: fd.id, status: "VALID", source: "MANUAL" } }),
+      };
+    };
+    const r = await applyFeedingList(f.aq1, { requestId: rid(), day: tuesday, listId: keep }, at(tuesday, "08:00"));
+    expect(r).toMatchObject({ added: 1, removed: 1, kept: ["Teszt Egy", "Teszt Három"], feeds: 1 });
+    expect(await selected(tuesday)).toEqual(["Teszt Egy", "Teszt Három", "Teszt Négy"]);
+    expect(await records()).toEqual({ items: 1, manual: 1 });
+    // the switch off, even with the client's old confirmation: the list's animal goes, the recorded ones stay
+    const off = await applyFeedingList(f.aq1, { requestId: rid(), day: tuesday, listId: null, confirmCascade: true }, at(tuesday, "08:01"));
+    expect(off).toMatchObject({ name: null, removed: 1, kept: ["Teszt Egy", "Teszt Három"], feeds: 0 });
+    expect(await selected(tuesday)).toEqual(["Teszt Egy", "Teszt Három"]);
+    expect(await records()).toEqual({ items: 1, manual: 1 });
     expect(await dayFeedIds(tuesday)).toEqual([]);
-    const r = await applyFeedingList(f.aq1, { requestId: rid(), day: tuesday, listId: keep, confirmCascade: true }, at(tuesday, "08:01"));
-    expect(r).toMatchObject({ added: 1, removed: 1 });
-    expect(await selected(tuesday)).toEqual(["Teszt Egy"]);
-    expect(await prisma.feedingItem.count({ where: { animalId: a["Teszt Kettő"], status: "VALID", feedingDay: { businessDay: dayToDate(tuesday) } } })).toBe(0);
+    // by hand, one animal: the usual confirmation, unchanged
+    await expectCode(setSelection(f.aq1, { requestId: rid(), day: tuesday, animalIds: [a["Teszt Egy"]], selected: false }, at(tuesday, "08:02")), "HAS_RECORDS");
+  });
+
+  it("an animal that only took part in a group item stays too, and the group item with it", async () => {
+    const d = "2027-11-15";
+    await setSelection(f.aq1, { requestId: rid(), day: d, animalIds: [a["Teszt Egy"], a["Teszt Kettő"], a["Teszt Négy"]], selected: true }, at(d, "07:50"));
+    const groupId = (await prisma.animalGroupName.findFirstOrThrow({ where: { name: "Teszt csoport" } })).groupId;
+    await saveFeedingItem(f.aq1, { requestId: rid(), day: d, groupId, feedId: feed["Teszt hal"], quantities: [{ value: "300", unitId: unit.g }] } as Parameters<typeof saveFeedingItem>[1], at(d, "07:55"));
+    const r = await applyFeedingList(f.aq1, { requestId: rid(), day: d, listId: null }, at(d, "08:00"));
+    expect(r).toMatchObject({ removed: 1, kept: ["Teszt Egy", "Teszt Kettő"] });
+    expect(await selected(d)).toEqual(["Teszt Egy", "Teszt Kettő"]);
+    expect(await prisma.feedingItem.count({ where: { groupId, status: "VALID", feedingDay: { businessDay: dayToDate(d) } } })).toBe(1);
   });
 
   it("a day with feeds chosen and a list with none: the day's feeds are cleared (every feed is offered again)", async () => {

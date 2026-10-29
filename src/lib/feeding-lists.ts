@@ -4,17 +4,20 @@
 // day's list and among the day's feeds taken off (Lili, msg 1564405423417593988: "az etetési lista választása NE halmozzon: vagy
 // ez, vagy az"). Afterwards the user adds or removes by hand as usual; picking again returns to the list. With no list (the
 // header's switch off) the whole selection is taken off. A template, not a fact (V-15); "Lista a terv szerint" (the weekly
-// timetable) stays beside it and only adds. The day's permissions are setSelection's and setDayFeeds'; an animal that already
-// has an item or a status that day is taken off only after the usual confirmation (R-3).
+// timetable) stays beside it and only adds. The day's permissions are setSelection's and setDayFeeds'. A list operation never
+// takes off an animal that already has a record that day (its own item, a manual eating status, or a group item it took part
+// in): it stays on the day and the response names it (the 10-21 loss: the switch turned off on a day with entries took them
+// away, and the confirmation spoke of one animal, not the whole day). Unticking one animal by hand still asks first (R-3).
 
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
 import { prisma } from "./db";
 import { AppError, isUniqueViolation } from "./errors";
 import { dayFeedsSchema, ensureFeedingDay, selectedOn, selectionSchema, setDayFeeds, setSelection } from "./feeding";
-import { addAnimalsToDay } from "./feeding-plan";
+import { addAnimalsToDay, animalNames } from "./feeding-plan";
 import { moduleLevel } from "./master";
 import type { Actor } from "./measurements";
+import { dayToDate } from "./time";
 
 const requestId = z.string().min(8).max(100);
 const members = {
@@ -33,8 +36,9 @@ export const applyListSchema = z.object({
   requestId: z.string().min(8).max(90),
   clientTimestamp: z.iso.datetime({ offset: true }).optional(),
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  /** null: no list, the day's whole selection is taken off (the header's switch off) */
+  /** null: no list, the day's whole selection is taken off (the header's switch off), except the animals with a record */
   listId: z.uuid().nullable(),
+  /** still accepted (the client's usual retry after a HAS_RECORDS), never passed on: a list operation does not invalidate */
   confirmCascade: z.boolean().optional(),
   reason: z.string().trim().min(3).max(500).optional(),
 });
@@ -153,8 +157,9 @@ export async function archiveFeedingList(actor: Actor, raw: z.input<typeof archi
 /**
  * Picks a list for a day, or none: the day's selection becomes exactly the list's. The animals of the list that are alive that
  * day and have no manual fasting day are ticked (the fasting ones are named, a person's decision stands), every other animal on
- * the day's list is taken off, and the day's feeds become the list's active feeds (none: the day's feeds are cleared, every feed
- * is offered again). Order: take off, tick, feeds; a confirmation the take-off needs stops before anything is changed.
+ * the day's list is taken off unless it already has a record that day (kept, named in `kept`), and the day's feeds become the
+ * list's active feeds (none: the day's feeds are cleared, every feed is offered again). Order: take off, tick, feeds. A record
+ * written between the check and the take-off makes setSelection refuse (HAS_RECORDS, nothing changed): the retry keeps it.
  */
 export async function applyFeedingList(actor: Actor, raw: z.input<typeof applyListSchema>, serverNow = new Date()) {
   const input = applyListSchema.parse(raw);
@@ -168,10 +173,13 @@ export async function applyFeedingList(actor: Actor, raw: z.input<typeof applyLi
 
   const { fd } = await prisma.$transaction((tx) => ensureFeedingDay(tx, input.day));
   const current = await selectedOn(prisma, fd.id);
-  const toRemove = [...current].filter((id) => !animalIds.includes(id));
+  const notInList = [...current].filter((id) => !animalIds.includes(id));
+  const recorded = await withRecordsOn(fd.id, notInList);
+  const toRemove = notInList.filter((id) => !recorded.has(id));
+  const kept = await animalNames([...recorded], dayToDate(input.day));
   let removed = 0;
   if (toRemove.length) {
-    const body = selectionSchema.parse({ requestId: `${input.requestId}:off`, ...base, animalIds: toRemove, selected: false, confirmCascade: input.confirmCascade });
+    const body = selectionSchema.parse({ requestId: `${input.requestId}:off`, ...base, animalIds: toRemove, selected: false });
     removed = (await setSelection(actor, body, serverNow)).changed;
   }
   const animals = animalIds.length
@@ -181,5 +189,23 @@ export async function applyFeedingList(actor: Actor, raw: z.input<typeof applyLi
   if (before !== [...feedIds].sort().join()) {
     await setDayFeeds(actor, dayFeedsSchema.parse({ requestId: `${input.requestId}:feeds`, ...base, feedIds }), serverNow);
   }
-  return { replayed: animals.replayed, name: list?.name ?? null, added: animals.added, removed, skipped: animals.skipped, feeds: feedIds.length };
+  return { replayed: animals.replayed, name: list?.name ?? null, added: animals.added, removed, kept, skipped: animals.skipped, feeds: feedIds.length };
+}
+
+/** The animals among `ids` with a record that day: what setSelection would ask a confirmation for (R-3, R-8). */
+async function withRecordsOn(feedingDayId: string, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const [items, statuses, groupItems] = await Promise.all([
+    prisma.feedingItem.findMany({ where: { feedingDayId, status: "VALID", animalId: { in: ids } }, select: { animalId: true } }),
+    prisma.eatingStatus.findMany({ where: { feedingDayId, status: "VALID", source: "MANUAL", animalId: { in: ids } }, select: { animalId: true } }),
+    prisma.feedingItem.findMany({
+      where: { feedingDayId, status: "VALID", groupId: { not: null }, participants: { some: { animalId: { in: ids } } } },
+      select: { participants: { select: { animalId: true } } },
+    }),
+  ]);
+  const inIds = new Set(ids);
+  const out = new Set<string>();
+  for (const r of [...items, ...statuses]) if (r.animalId) out.add(r.animalId);
+  for (const g of groupItems) for (const p of g.participants) if (inIds.has(p.animalId)) out.add(p.animalId);
+  return out;
 }

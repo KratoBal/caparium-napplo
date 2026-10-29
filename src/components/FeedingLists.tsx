@@ -1,8 +1,8 @@
 "use client";
 
 // NAMED FEEDING LISTS (Lili 2026-10-26, Caparium channel msg 1564356412946124921, item 1): the dropdown in the feeding page's
-// header (ApplyList) and the admin's editor on the timetable page (FeedingListsEditor). The list ticks and adds, never takes
-// off; the server decides every permission.
+// header (ApplyList) and the admin's editor on the timetable page (FeedingListsEditor). The server decides every permission, and
+// never lets a list take off an animal that already has a record that day.
 import { useEffect, useState } from "react";
 import { chooserPools, sortDayAnimals, type ChooserAnimal } from "@/lib/day-animals";
 import { Msg, useSend, type FeedTypeOpt } from "./FeedingForms";
@@ -16,11 +16,16 @@ function newRequestId(): string {
   return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
 
+const keptOf = (res: Record<string, unknown>) => (Array.isArray(res.kept) ? (res.kept as string[]) : []);
+
 function appliedText(res: Record<string, unknown>): string {
   const skipped = Array.isArray(res.skipped) ? (res.skipped as string[]) : [];
-  const tail = skipped.length ? ` Kézi koplalónap miatt kimaradt: ${skipped.join(", ")}.` : "";
-  // Lili 2026-10-27 (item 4): the switch turned off says nothing; the unchecked boxes show it
-  if (res.name === null || res.name === undefined) return "";
+  const kept = keptOf(res);
+  // an animal with a record that day stays on the list (the 10-21 loss): said every time, also when the switch went off
+  const keptText = kept.length ? `A listán maradt, mert ezen a napon már van beírt etetése: ${kept.join(", ")}.` : "";
+  const tail = `${skipped.length ? ` Kézi koplalónap miatt kimaradt: ${skipped.join(", ")}.` : ""}${keptText ? ` ${keptText}` : ""}`;
+  // Lili 2026-10-27 (item 4): the switch turned off says nothing but who stayed; the unchecked boxes show the rest
+  if (res.name === null || res.name === undefined) return keptText;
   const removed = Number(res.removed ?? 0);
   return `${String(res.name)}: ${Number(res.added ?? 0)} állat kijelölve${removed ? `, ${removed} kivéve` : ""}, ${Number(res.feeds ?? 0)} takarmány.${tail}`;
 }
@@ -29,8 +34,8 @@ function appliedText(res: Record<string, unknown>): string {
  * The header's switch and dropdown (Lili 2026-10-26, msg 1564404481708265704 and 1564405423417593988): the same kind of switch as
  * the pool's in the feeding list. On: a list can be chosen, and choosing one makes the day's selection exactly that list (it does not
  * pile up on the one before: the animals and feeds of the list are ticked, everything else is taken off; by-hand changes
- * afterwards are fine, choosing again returns to the list). Off: the whole selection is taken off. The server asks for the usual
- * confirmation when an animal already has an item that day.
+ * afterwards are fine, choosing again returns to the list). Off: the whole selection is taken off. An animal that already has a
+ * record that day stays, and the message names it; unticking it by hand is the way to take it off (with the usual confirmation).
  */
 export function ApplyList({ day, lists, selectedAnimalIds, dayFeedIds }: { day: string; lists: ListOpt[]; selectedAnimalIds: string[]; dayFeedIds: string[] }) {
   const { msg, busy, run } = useSend();
@@ -50,13 +55,16 @@ export function ApplyList({ day, lists, selectedAnimalIds, dayFeedIds }: { day: 
         checked={on}
         disabled={busy}
         aria-label="Etetési listák"
-        title={on ? "Bekapcsolva: lista választható. Kikapcsolva az összes kijelölés kikerül." : "Kikapcsolva: kapcsold be a lista választásához."}
+        title={on ? "Bekapcsolva: lista választható. Kikapcsolva a kijelölés kikerül, kivéve akinek aznap már van beírt etetése." : "Kikapcsolva: kapcsold be a lista választásához."}
         onChange={(e) => {
           const next = e.target.checked;
           setOn(next);
           if (next) return;
-          void run("/api/feeding/lists/apply", { day, listId: null }, appliedText).then((ok) => {
-            if (!ok) setOn(true);
+          let kept = 0;
+          const text = (res: Record<string, unknown>) => ((kept = keptOf(res).length), appliedText(res));
+          // the animals with a record stay ticked, so the switch stays on beside them
+          void run("/api/feeding/lists/apply", { day, listId: null }, text).then((ok) => {
+            if (!ok || kept) setOn(true);
           });
         }}
       />
