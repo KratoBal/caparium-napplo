@@ -337,6 +337,14 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .order-list { list-style: none; padding: 0; margin: 0; }
 .order-row { display: flex; align-items: center; gap: 12px; padding: 4px 10px; border-radius: var(--radius-sm); border: 2px solid transparent; }
 .order-row:nth-child(even) { background: var(--c-field); }
+/* the reports' tables (Lili 2026-10-29, package item 12): banded rows, a group header per feed type, the total line
+   apart at the bottom; the bands and the total keep their background on paper too */
+.report-table tbody tr:nth-child(even) td { background: var(--c-field); }
+.report-table .report-groups th { text-align: center; color: var(--c-ink); font-weight: 700; border-bottom: 1px solid var(--c-control-line); }
+.report-table .report-groups th:first-child { text-align: left; vertical-align: bottom; }
+.report-table .report-groups th + th { border-left: 1px solid var(--c-line); }
+.report-table tfoot td { background: var(--c-control-bg); font-weight: 700; border-top: 2px solid var(--c-control-line); }
+.report-table tbody td, .report-table tfoot td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .order-row.touched { background: var(--c-primary-soft); border-color: var(--c-primary); }
 .order-row.dragging { background: #cfe9ee; border-color: var(--c-primary); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); }
 .order-row.drop-target { background: #fdf0c8; border-color: #e0a526; }
