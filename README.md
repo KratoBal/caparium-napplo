@@ -50,6 +50,11 @@ repository: `CAPARIUM_SMTP_HOST`, `CAPARIUM_SMTP_PORT` (587 = STARTTLS required,
 `CAPARIUM_SMTP_USER`, `CAPARIUM_SMTP_PASSWORD` (secret), `CAPARIUM_MAIL_FROM`. Without them the button names
 the missing variables and sends nothing. The recipient is set in Beállítások.
 
+**Monthly ZIMS package by e-mail:** the hourly job mails the previous month's package (or a warning that there is none) to
+the "Havi ZIMS-csomag levélben" recipients of Beállítások, once per month. It runs ONLY where
+`CAPARIUM_MONTHLY_ZIMS_MAIL=on` is set (and the SMTP variables above are): set it on the production instance, never on a
+stage or test instance that holds a copy of the production data and its settings.
+
 Test users (password: `SERVICE_PASSWORD_SEED`): `teszt.admin` (adminisztrátor),
 `teszt.akvarista1`, `teszt.akvarista2` (akvarista). All seed data is synthetic.
 

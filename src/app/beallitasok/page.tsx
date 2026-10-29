@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { NewPoolForm, NewUserForm, PoolList, PoolVolumeForm, ReferenceRow, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
+import { MonthlyZimsRecipient, NewPoolForm, NewUserForm, PoolList, PoolVolumeForm, ReferenceRow, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
 import { SettingsCard } from "@/components/SettingsCard";
 import { Shell } from "@/components/Shell";
@@ -172,6 +172,11 @@ export default async function SettingsPage() {
       <SettingsCard id="vizmeres-kikuldes" title="Vízmérés kiküldése">
         <p className="hint">Erre a címre küldi az Export oldal „Vízmérés kiküldése” gombja a mai és az e heti eredményeket, PDF-ben.</p>
         <WaterReportRecipient email={await getSetting(prisma, "water_report_recipient", now)} />
+      </SettingsCard>
+
+      <SettingsCard id="havi-zims-level" title="Havi ZIMS-csomag levélben">
+        <p className="hint">Erre a címre megy az előző hónap ZIMS-csomagja az új hónap első órájában, medencénként egy CSV-vel. Ha a hónapra nem készül csomag, figyelmeztető levél megy. Üresen hagyva nem megy levél. Ha a címet hónap közben adod meg, az előző hónap csomagja is egyszer kimegy.</p>
+        <MonthlyZimsRecipient email={await getSetting(prisma, "monthly_zims_recipient", now)} />
       </SettingsCard>
 
       {/* the page is for a SETTINGS admin already; the icon is master data of the same kind */}

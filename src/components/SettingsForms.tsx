@@ -349,27 +349,36 @@ export function NewUserForm() {
   );
 }
 
-/** caparium-hibak-4: where "Vízmérés kiküldése" sends (one address). */
-export function WaterReportRecipient({ email }: { email: string }) {
+/** The recipients of one mail kind in Beállítások: the water report's (caparium-hibak-4) or the monthly ZIMS package's. */
+function RecipientForm({ email, endpoint, label, testId }: { email: string; endpoint: string; label: string; testId: string }) {
   const [v, setV] = useState(email);
   const { msg, busy, save } = useSave();
   return (
-    <div className="toolbar" data-testid="water-report-recipient">
+    <div className="toolbar" data-testid={testId}>
       {/* several recipients (Lili, card c2e15128): separated by commas; the server checks each one */}
       <input
         className="input"
         type="text"
         inputMode="email"
-        aria-label="A vízmérés címzettjei"
+        aria-label={label}
         placeholder="nev@pelda.hu, masik@pelda.hu"
         value={v}
         onChange={(e) => setV(e.target.value)}
       />
-      <button className="btn" type="button" disabled={busy || v.trim() === email} onClick={() => void save("/api/admin/water-report-recipient", "POST", { email: v.trim() })}>
+      <button className="btn" type="button" disabled={busy || v.trim() === email} onClick={() => void save(endpoint, "POST", { email: v.trim() })}>
         Mentés
       </button>
       <Msg msg={msg} />
       <span className="hint">Több címzett vesszővel elválasztva (legfeljebb 10).</span>
     </div>
   );
+}
+
+export function WaterReportRecipient({ email }: { email: string }) {
+  return <RecipientForm email={email} endpoint="/api/admin/water-report-recipient" label="A vízmérés címzettjei" testId="water-report-recipient" />;
+}
+
+/** Lili's package, item 1: where the monthly ZIMS package's mail goes; empty = no mail. */
+export function MonthlyZimsRecipient({ email }: { email: string }) {
+  return <RecipientForm email={email} endpoint="/api/admin/monthly-zims-recipient" label="A havi ZIMS-csomag címzettjei" testId="monthly-zims-recipient" />;
 }

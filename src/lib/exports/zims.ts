@@ -53,14 +53,26 @@ export function rowHash(row: ZimsRow): string {
   return createHash("sha256").update(row.join("\u001f")).digest("hex");
 }
 
-/** A file name a ZIMS user can recognise: system, period. Ascii only. */
-export function fileName(poolName: string, from: string, to: string): string {
-  const ascii = poolName
+function asciiName(poolName: string): string {
+  return poolName
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^A-Za-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-  return `ZIMS-${ascii || "medence"}-${from}${from === to ? "" : `_${to}`}.csv`;
+}
+
+/** A file name a ZIMS user can recognise: system, period. Ascii only. */
+export function fileName(poolName: string, from: string, to: string): string {
+  return `ZIMS-${asciiName(poolName) || "medence"}-${from}${from === to ? "" : `_${to}`}.csv`;
+}
+
+/**
+ * The monthly package's file name (Lili 2026-10-29, Caparium channel): year, pool, month, "ZIMSimport", for example
+ * "2026_Nagymedence_10_ZIMSimport.csv". Two-digit month, the pool's name without accents, a hyphen for a space
+ * (Lili confirmed these defaults, acrobot msg 38074). `from` is the month's first day.
+ */
+export function monthlyFileName(poolName: string, from: string): string {
+  return `${from.slice(0, 4)}_${asciiName(poolName) || "medence"}_${from.slice(5, 7)}_ZIMSimport.csv`;
 }
 
 type MeasurementFull = Prisma.MeasurementGetPayload<{
@@ -149,7 +161,7 @@ async function loadMeasurements(from: string, to: string, poolIds: string[] | nu
   });
 }
 
-async function activeProfile() {
+export async function activeProfile() {
   const p = await prisma.zimsExportProfile.findFirst({ where: { active: true }, orderBy: { version: "desc" } });
   if (!p) throw new AppError(409, "NO_PROFILE", "Nincs aktív ZIMS-exportprofil.");
   return p;
@@ -175,7 +187,7 @@ async function requireLevel(actor: Actor, admin: boolean) {
  * Builds the files of one ZIMS export run and stores the run, the files (with their exact
  * content) and one item per measurement with the hash of the row written for it.
  */
-export async function createZimsExport(actor: Actor, input: ZimsExportInput, opts: { system?: boolean } = {}) {
+export async function createZimsExport(actor: Actor, input: ZimsExportInput, opts: { system?: boolean; monthlyNames?: boolean } = {}) {
   // the monthly package (VIZ-20) is the System user's, without a person's EXPORT right; only a PREVIEW
   if (opts.system) {
     if (actor.id !== SYSTEM_USER_ID || input.purpose !== "PREVIEW") throw new AppError(403, "NO_ACCESS", "Csak a rendszer előnézeti csomagja.");
@@ -241,7 +253,7 @@ export async function createZimsExport(actor: Actor, input: ZimsExportInput, opt
         data: {
           exportRunId: run.id,
           poolId,
-          fileName: fileName(p.name, input.from, input.to),
+          fileName: opts.monthlyNames ? monthlyFileName(p.name, input.from) : fileName(p.name, input.from, input.to),
           sha256: createHash("sha256").update(content, "utf8").digest("hex"),
           rowCount: p.lines.length,
           content,
@@ -394,7 +406,7 @@ export async function monthlyPackage(now = new Date()): Promise<{ created: boole
   });
   if (existing) return { created: false, runId: existing.id };
   try {
-    const r = await createZimsExport({ id: SYSTEM_USER_ID, role: "SYSTEM" }, { requestId: `havi-zims-${from}`, from, to, poolIds: null, purpose: "PREVIEW" }, { system: true });
+    const r = await createZimsExport({ id: SYSTEM_USER_ID, role: "SYSTEM" }, { requestId: `havi-zims-${from}`, from, to, poolIds: null, purpose: "PREVIEW" }, { system: true, monthlyNames: true });
     return { created: !r.replayed, runId: r.runId };
   } catch (e) {
     if (e instanceof AppError) return { created: false, reason: e.code };
