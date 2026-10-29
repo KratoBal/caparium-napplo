@@ -8,6 +8,7 @@ import { setEatingStatus } from "@/lib/eating";
 import { buildEatingWorkbook, buildFeedingWorkbook } from "@/lib/exports/feeding-excel";
 import { finalizeList, saveFeedingItem, setSelection } from "@/lib/feeding";
 import { feedingLog } from "@/lib/feeding-log";
+import { otherLabel } from "@/lib/other-name";
 import { recloseDay } from "@/lib/journal";
 import { fixtures, rid } from "./fixtures";
 
@@ -83,7 +84,7 @@ describe("the feeding Excel (EGY-10, D-30)", () => {
     const egy = rowOf(ws, 3, "Teszt Egy");
     expect([val(egy.getCell(lit)), val(egy.getCell(lit + 1))]).toEqual([6, 42.5]);
     // Lili 2026-10-29 (package item 13): no "Egyéb 1..5" and no note columns; the other name has a column of its own
-    const other1 = colOf(ws, 1, "tintahal-fej");
+    const other1 = colOf(ws, 1, "Tintahal-fej"); // the fixed shown form: a capital first letter
     expect(val(egy.getCell(other1))).toBe(20);
     const heads = ws.getRow(1).values as unknown[];
     expect(heads.filter((v) => typeof v === "string" && /^Egyéb \d/.test(v))).toEqual([]);
@@ -124,9 +125,10 @@ describe("the feeding Excel's other feeds (Lili 2026-10-29, package item 13)", (
     }
     await saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId: a["Teszt Egy"], feedId: feed["Teszt hal"], quantities: [{ value: "10", unitId: unit.g }] }, now);
     const ws = await sheet((await buildFeedingWorkbook({ from: d, to: d })).buffer);
-    const cols = names.map((n) => colOf(ws, 1, n));
+    const labels = names.map((n) => otherLabel(n)); // the headers show the fixed form (capital first letter)
+    const cols = labels.map((n) => colOf(ws, 1, n));
     // by name (hu), next to each other, after every feed of the other types (Egyéb is the last type)
-    const sortedNames = [...names].sort((x, y) => x.localeCompare(y, "hu"));
+    const sortedNames = [...labels].sort((x, y) => x.localeCompare(y, "hu"));
     expect(sortedNames.map((n) => colOf(ws, 1, n))).toEqual([...cols].sort((x, y) => x - y));
     expect(Math.max(...cols) - Math.min(...cols)).toBe(names.length - 1);
     expect(Math.min(...cols)).toBeGreaterThan(colOf(ws, 1, "Teszt hal"));
@@ -140,7 +142,7 @@ describe("the feeding Excel's other feeds (Lili 2026-10-29, package item 13)", (
 // Lili's package, item 12 follow-up (acrobot 38155, nautilus 38181): the same other name in another case or with other spaces is ONE
 // column in the Excel and ONE feed in the report's log; the form first met is the header.
 describe("the other feeds' names, normalized", () => {
-  it("'Spirulina', ' spirulina ' and 'SPIRULINA' are one column and one report feed, under the first form", async () => {
+  it("'Spirulina', ' spirulina ' and 'SPIRULINA' are one column and one report feed, under the one fixed form (capital first letter)", async () => {
     const d = "2028-04-04";
     const now = at(d, "09:00");
     await setSelection(f.aq1, { requestId: rid(), day: d, animalIds: [a["Teszt Egy"], a["Teszt Három"]], selected: true }, now);
@@ -148,11 +150,12 @@ describe("the other feeds' names, normalized", () => {
       saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId: a[animal], feedId: feed["Egyéb"], otherName, quantities: [{ value, unitId: unit.g }] }, at(d, time));
     await give("Teszt Egy", "Spirulina", "2", "09:00");
     await give("Teszt Három", "spirulina", "3", "09:05");
-    await give("Teszt Egy", "ALGA", "1", "09:10"); // another name, to show the difference
+    await give("Teszt Egy", "ALGA", "1", "09:10"); // another name, to show the difference: shown "Alga", not "ALGA"
     const ws = await sheet((await buildFeedingWorkbook({ from: d, to: d })).buffer);
     const heads: string[] = [];
     ws.getRow(1).eachCell((c) => heads.push(String(c.value)));
-    expect(heads.filter((h) => h.toLowerCase() === "spirulina")).toEqual(["Spirulina"]); // one column, the first form
+    expect(heads.filter((h) => h.toLowerCase() === "spirulina")).toEqual(["Spirulina"]); // one column, the fixed form
+    expect(heads).toContain("Alga"); // not as typed ("ALGA"): the form does not depend on what was met first
     const col = colOf(ws, 1, "Spirulina");
     expect(val(rowOf(ws, 3, "Teszt Egy").getCell(col))).toBe(2);
     expect(val(rowOf(ws, 3, "Teszt Három").getCell(col))).toBe(3);

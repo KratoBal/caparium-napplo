@@ -5,7 +5,7 @@
 
 import type { FeedPlace } from "./feed-order";
 import { withIcon } from "./icons";
-import { otherKey } from "./other-name";
+import { otherLabel } from "./other-name";
 import { compareAnimals } from "./animal-order";
 import { prisma } from "./db";
 import { GIVEN } from "./eating-labels";
@@ -80,14 +80,8 @@ export async function feedingLog(f: LogFilter) {
   const totals: Record<string, number> = {};
   const own: Record<string, number> = {};
   const group: Record<string, number> = {};
-  // an "Egyéb" feed's name is one column whatever its case or spacing: the form first met stands (Lili's package, item 12 follow-up)
-  const otherFirst = new Map<string, string>();
-  const labelOf = (feed: string, other: string | null) => {
-    if (!other) return feed;
-    const k = `${feed}|${otherKey(other)}`;
-    if (!otherFirst.has(k)) otherFirst.set(k, other.trim().replace(/\s+/g, " "));
-    return `${feed}: ${otherFirst.get(k)}`;
-  };
+  // an "Egyéb" feed's name is one column whatever its case or spacing, shown with a capital first letter (acrobot 38234)
+  const labelOf = (feed: string, other: string | null) => (other ? `${feed}: ${otherLabel(other)}` : feed);
   for (const it of items) {
     const day = dateToDay(it.feedingDay.businessDay);
     const at = dayBounds(day).start;
