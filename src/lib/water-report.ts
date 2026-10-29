@@ -7,10 +7,12 @@
 //   round of the day wins, as in the grid);
 // - this week's WEEKLY values: the latest valid measurement per parameter in a weekly group from Monday to today
 //   (the weekly measurement may be done on any day of the week), with its day, dilution and RO/SW.
+import type { PoolTickKind } from "@prisma/client";
 import { prisma } from "./db";
 import { canonicalDecimal } from "./decimal";
 import { dayBounds } from "./feeding";
 import { monogramResolver, pickValid } from "./master";
+import { TICK_ORDER } from "./pool-ticks";
 import { referenceOf } from "./queries";
 import type { ReferenceStatus } from "./reference";
 import { addDays, dateToDay, dayToDate, localTimeOf } from "./time";
@@ -31,7 +33,8 @@ export type ReportValue = {
   dilution: number | null;
   diluentWater: string | null;
 };
-export type PoolReport = { pool: string; daily: ReportValue[]; weekly: ReportValue[] };
+/** `ticks`: the pool ticks of the report's day, in the fixed order (Lili 2026-10-29, item 8; PoolTickKind values). */
+export type PoolReport = { pool: string; daily: ReportValue[]; weekly: ReportValue[]; ticks: PoolTickKind[] };
 export type WaterReport = { day: string; weekFrom: string; pools: PoolReport[] };
 
 /** Monday of the week of a business day ("YYYY-MM-DD"). */
@@ -93,6 +96,7 @@ export async function waterReport(day: string): Promise<WaterReport> {
     include: { names: true },
     orderBy: [{ sortOrder: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }, { code: "asc" }],
   })).filter((p) => p.active || measured.has(p.id));
+  const tickRows = await prisma.poolTick.findMany({ where: { businessDay: dayToDate(day) } });
   const sortOf = new Map(rows.map((m) => [m.parameterId, m.parameter.sortOrder]));
   const ordered = (list: (typeof rows)[number][]) => list.sort((a, b) => (sortOf.get(a.parameterId) ?? 0) - (sortOf.get(b.parameterId) ?? 0)).map(view);
   return {
@@ -103,6 +107,7 @@ export async function waterReport(day: string): Promise<WaterReport> {
         pool: pickValid(p.names, at)?.displayName ?? p.code,
         daily: ordered([...daily.values()].filter((m) => m.poolId === p.id)),
         weekly: ordered([...weekly.values()].filter((m) => m.poolId === p.id)),
+        ticks: TICK_ORDER.filter((kind) => tickRows.some((t) => t.poolId === p.id && t.kind === kind)),
       }))
       // a pool with nothing measured this week is left out: the report is about results
       .filter((p) => p.daily.length > 0 || p.weekly.length > 0),

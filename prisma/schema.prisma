@@ -135,6 +135,7 @@ model Pool {
   arrivals     LifecycleEvent[]
   dosings      Dosing[]
   references   ReferenceRange[]
+  ticks        PoolTick[]
 
   @@map("pool")
 }
@@ -327,6 +328,29 @@ model MeasurementRound {
 
   @@unique([groupId, businessDay, seq])
   @@map("measurement_round")
+}
+
+// Lili 2026-10-29 (Caparium channel msg 1565439824826077305 and 1565439885244895296; task caparium-lili-nagyobb-m, item 8):
+// on the daily water measurement a small tick under the pool's name says that the pool was backwashed or topped up
+// (the big pools, group NAPI_NAGY) or had a water change (the small tanks, group NAPI_KIS). A fact of the pool and the
+// business day, not of a measurement, and it never reaches the ZIMS export. A row exists while the tick is on; unticking
+// deletes it (the audit entry keeps who ticked and unticked).
+enum PoolTickKind {
+  BACKWASH
+  TOPUP
+  WATER_CHANGE
+}
+
+model PoolTick {
+  poolId      String       @db.Uuid
+  businessDay DateTime     @db.Date
+  kind        PoolTickKind
+  createdById String       @db.Uuid
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  pool        Pool         @relation(fields: [poolId], references: [id])
+
+  @@id([poolId, businessDay, kind])
+  @@map("pool_tick")
 }
 
 model Measurement {

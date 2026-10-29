@@ -4,7 +4,7 @@ import ExcelJS from "exceljs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { buildWaterWorkbook, EXTRA_HEADER, TEMPLATE_HEADER } from "@/lib/exports/excel";
+import { buildWaterWorkbook, EXTRA_HEADER, TEMPLATE_HEADER, TICK_HEADER } from "@/lib/exports/excel";
 import { createZimsExport, divergence, setSubmissionState } from "@/lib/exports/zims";
 import { createMeasurement, invalidateMeasurement, updateMeasurement } from "@/lib/measurements";
 import { fixtures, rid } from "./fixtures";
@@ -139,13 +139,13 @@ describe("ZIMS CSV (VIZ-16..VIZ-19)", () => {
 });
 
 describe("Excel (VIZ-11)", () => {
-  it("a real workbook: the summary and one sheet per system, the template header plus dilution and RO/SW", async () => {
+  it("a real workbook: the summary and one sheet per system, the template header plus dilution, RO/SW and the pool ticks", async () => {
     const { buffer, rows } = await buildWaterWorkbook({ from: DAY, to: DAY, poolIds: null });
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as unknown as ArrayBuffer);
     expect(wb.worksheets.map((w) => w.name)).toEqual(["Vízmérés teljes", "Kismedence", "Nagymedence"]);
     const summary = wb.getWorksheet("Vízmérés teljes")!;
-    expect((summary.getRow(1).values as unknown[]).slice(1)).toEqual([...TEMPLATE_HEADER, ...EXTRA_HEADER]);
+    expect((summary.getRow(1).values as unknown[]).slice(1)).toEqual([...TEMPLATE_HEADER, ...EXTRA_HEADER, ...TICK_HEADER]);
     expect(summary.rowCount - 1).toBe(rows);
     // the invalidated salinity is not in the export; the corrected pH is
     const values = summary.getSheetValues().slice(2) as unknown[][];

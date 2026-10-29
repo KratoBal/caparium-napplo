@@ -9,12 +9,16 @@ import ExcelJS from "exceljs";
 import { prisma } from "../db";
 import { canonicalDecimal } from "../decimal";
 import { pickValid } from "../master";
+import { TICK_LABEL, TICK_ORDER } from "../pool-ticks";
 import { evaluateReference } from "../reference";
-import { BUSINESS_TZ, dayToDate, resolveLocalDateTime, wallClock } from "../time";
+import { BUSINESS_TZ, dateToDay, dayToDate, resolveLocalDateTime, wallClock } from "../time";
 
 // letter by letter from the template's header row (forras-kivonat/vizmeres-template-fejlecek.json)
 export const TEMPLATE_HEADER = ["Dátum", "Idő", "Akvárium", "Vízparaméter", "Mérés", "Mértékegység", "Mérést végezte", "Gyakornok"];
 export const EXTRA_HEADER = ["Hígítás", "RO/SW"];
+// Lili 2026-10-29 (task caparium-lili-nagyobb-m, item 8): after the last column, one column per pool tick; "volt" where it
+// was ticked. A plain Excel fact, not part of the ZIMS export. On the FIRST row of the pool and the day, once.
+export const TICK_HEADER = TICK_ORDER.map((k) => TICK_LABEL[k]);
 export const SUMMARY_SHEET = "Vízmérés teljes";
 
 const RED = "FFDF5B5B";
@@ -71,12 +75,17 @@ export async function buildWaterWorkbook(f: ExcelFilter): Promise<{ buffer: Buff
   for (const [poolId, name] of [...poolNames].sort((a, b) => a[1].localeCompare(b[1], "hu"))) {
     perPool.set(poolId, wb.addWorksheet(sheetName(name, taken)));
   }
-  const header = [...TEMPLATE_HEADER, ...EXTRA_HEADER];
+  const header = [...TEMPLATE_HEADER, ...EXTRA_HEADER, ...TICK_HEADER];
   for (const ws of [summary, ...perPool.values()]) {
     ws.addRow(header).font = { bold: true };
-    ws.columns = [12, 8, 16, 16, 10, 13, 15, 11, 9, 8].map((width) => ({ width }));
+    ws.columns = [12, 8, 16, 16, 10, 13, 15, 11, 9, 8, 12, 10, 10].map((width) => ({ width }));
     ws.views = [{ state: "frozen", ySplit: 1 }];
   }
+  const ticked = await prisma.poolTick.findMany({
+    where: { businessDay: { gte: dayToDate(f.from), lte: dayToDate(f.to) }, ...(f.poolIds ? { poolId: { in: f.poolIds } } : {}) },
+  });
+  const tickAt = new Set(ticked.map((t) => `${t.poolId}:${dateToDay(t.businessDay)}:${t.kind}`));
+  const tickShown = new Set<string>();
   for (const m of rows) {
     const value = canonicalDecimal(m.value);
     const r = m.referenceRange;
@@ -103,6 +112,12 @@ export async function buildWaterWorkbook(f: ExcelFilter): Promise<{ buffer: Buff
       m.traineePerformed ? "igen" : "",
       m.dilution ?? "",
       m.diluentWater ?? "",
+      ...TICK_ORDER.map((kind) => {
+        const key = `${m.poolId}:${dateToDay(m.businessDay)}:${kind}`;
+        if (!tickAt.has(key) || tickShown.has(key)) return "";
+        tickShown.add(key);
+        return "volt";
+      }),
     ];
     for (const ws of [summary, perPool.get(m.poolId)!]) {
       const row = ws.addRow(cells);
