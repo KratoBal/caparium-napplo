@@ -12,12 +12,14 @@ beforeAll(async () => {
   f = await fixtures();
 });
 
-const order = async () => (await groupLayout(prisma, f.group("NAPI_KIS"), new Date())).pools.map((p) => p.name);
+// by pool, not by name: another file renames a pool (a name is not the row)
+const order = async () => (await groupLayout(prisma, f.group("NAPI_KIS"), new Date())).pools.map((p) => p.id);
+const want = () => [f.pool("RAGADOZOS"), f.pool("INKUBATOR"), f.pool("KORALLOS")];
 const SQL = readFileSync(new URL("../../prisma/migrations/20261029150000_small_tanks_order/migration.sql", import.meta.url), "utf8");
 
 describe("the small tanks' daily order", () => {
   it("a new database starts Ragadozós, Inkubátor, Korallos", async () => {
-    expect(await order()).toEqual(["Ragadozós", "Inkubátor", "Korallos"]);
+    expect(await order()).toEqual(want());
   });
 
   it("the migration swaps a database in the old order, and only the two rows' places", async () => {
@@ -28,9 +30,9 @@ describe("the small tanks' daily order", () => {
     const pos = Object.fromEntries(now.map((r) => [r[0], r[1]]));
     await ownerPrisma.groupMembership.updateMany({ where: { groupId: f.group("NAPI_KIS"), pool: { code: "RAGADOZOS" }, validTo: null }, data: { sortOrder: pos.KORALLOS as number } });
     await ownerPrisma.groupMembership.updateMany({ where: { groupId: f.group("NAPI_KIS"), pool: { code: "KORALLOS" }, validTo: null }, data: { sortOrder: pos.RAGADOZOS as number } });
-    expect(await order()).toEqual(["Korallos", "Inkubátor", "Ragadozós"]);
+    expect(await order()).toEqual([f.pool("KORALLOS"), f.pool("INKUBATOR"), f.pool("RAGADOZOS")]);
     await ownerPrisma.$executeRawUnsafe(SQL);
-    expect(await order()).toEqual(["Ragadozós", "Inkubátor", "Korallos"]);
+    expect(await order()).toEqual(want());
     // the same rows, pools and dates: only the places moved
     expect(await rows()).toEqual(now);
   });
