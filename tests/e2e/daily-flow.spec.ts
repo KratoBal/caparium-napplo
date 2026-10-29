@@ -1538,6 +1538,29 @@ test("the helper: it speaks unasked without taking a click, the quick questions 
   expect(await topIs(page, "save-all")).toBe(true);
 });
 
+// Lili 2026-10-29 (package item 3): a ticked feed's base amount. Only the admin sets it, on the feed list's
+// "Módosítás"; an aquarist sees it and has no form. (The tick recording it is the server's: tests/integration/feed-dose.)
+// Homárikra: no other e2e test uses it, so the amount does not reach their sheets.
+test("the feed list: the admin sets the tick's base amount, an aquarist sees it", async ({ page }) => {
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Takarmánylista" }).click();
+  const row = page.getByRole("row").filter({ hasText: "Homárikra" });
+  // the other layout's run (or an earlier run) may have set 30 already: then it is a change to 35, or "Mentés" stays off
+  const target = (await row.locator('[data-testid^="feed-dose-"]').textContent()) === "30 g" ? "35" : "30";
+  await row.getByRole("button", { name: "Homárikra: módosítás" }).click();
+  const form = page.locator('[data-testid^="feed-edit-"]');
+  await form.getByLabel("Alapmennyiség a pipához").fill(target);
+  await form.getByLabel("Az alapmennyiség egysége").selectOption({ label: "g" });
+  await form.getByRole("button", { name: "Mentés" }).click();
+  await expect(row.locator('[data-testid^="feed-dose-"]')).toHaveText(`${target} g`);
+  await page.context().clearCookies();
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Takarmánylista" }).click();
+  const seen = page.getByRole("row").filter({ hasText: "Homárikra" });
+  await expect(seen.locator('[data-testid^="feed-dose-"]')).toHaveText(`${target} g`);
+  await expect(seen.getByRole("button", { name: "Homárikra: módosítás" })).toHaveCount(0);
+});
+
 // Lili 2026-10-29 (package item 2): the day of the week small under the date wherever the day picker is, and the row on
 // one line: the step buttons, the calendar field and its button share a vertical centre (the "Nap" label above the
 // field pushed it below the buttons). MI PIROSÍT: a missing weekday, or a centre more than 2 px off on any of the pages.

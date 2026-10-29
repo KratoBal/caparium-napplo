@@ -28,13 +28,15 @@ export default async function FeedsPage() {
             <p className="hint">Nincs takarmány ebben a típusban.</p>
           ) : (
             <table className="log-table" data-testid={`feeds-${t.code}`}>
-              <thead><tr><th>Név</th><th>Mérhető</th><th>Alapegység</th><th></th></tr></thead>
+              <thead><tr><th>Név</th><th>Mérhető</th><th>Alapegység</th><th>Pipa</th><th></th></tr></thead>
               <tbody>
                 {t.feeds.map((f) => (
                   <tr key={f.id} className={f.active ? undefined : "invalid"}>
                     <td className="keep">{f.name}</td>
                     <td>{f.dimensions.map((d) => DIM[d] ?? d).join(" és ")}</td>
                     <td>{f.defaultUnit}</td>
+                    {/* package item 3: the amount the feeding sheet's tick records; everyone sees it, only the admin sets it */}
+                    <td data-testid={`feed-dose-${f.id}`}>{f.dose ? `${f.dose.value.replace(".", ",")} ${f.dose.symbol}` : "–"}</td>
                     <td className="keep">
                       {isAdmin && (
                         <span className="row-actions">

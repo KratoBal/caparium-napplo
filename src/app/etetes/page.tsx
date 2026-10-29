@@ -58,7 +58,9 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         id: f.id,
         name: f.name,
         isOther: t.code === "EGYEB",
-        ...(f.sheetTick ? { tick: true as const } : {}),
+        // package item 3: a feed with a base amount is a tick too, and the tick records that amount (the server sets it)
+        ...(f.sheetTick || f.dose ? { tick: true as const } : {}),
+        ...(f.dose ? { dose: `${f.dose.value.replace(".", ",")} ${f.dose.symbol}` } : {}),
         dims: f.dimensions.map((d) => ({
           dimension: d,
           base: units.find((u) => u.dimension === d && u.isBase)?.symbol ?? "?",

@@ -307,7 +307,7 @@ export function FeedActive({ id, active }: { id: string; active: boolean }) {
   );
 }
 
-export type FeedRow = { id: string; name: string; dimensions: string[]; defaultUnitId: string; uses: number };
+export type FeedRow = { id: string; name: string; dimensions: string[]; defaultUnitId: string; uses: number; dose?: { value: string; unitId: string } | null };
 
 /**
  * Lili 2026-10-27 22:42 and 22:45 UTC: a feed of the list can be changed, a small quiet "Módosítás" beside the
@@ -317,7 +317,15 @@ export type FeedRow = { id: string; name: string; dimensions: string[]; defaultU
  */
 export function FeedEdit({ feed, units }: { feed: FeedRow; units: { id: string; symbol: string; dimension: string }[] }) {
   const usable = units.filter((u) => ["MASS", "COUNT", "VOLUME"].includes(u.dimension));
-  const start = { name: feed.name, unit: feed.defaultUnitId, count: feed.dimensions.includes("COUNT") };
+  // package item 3: the base amount the feeding sheet's tick records, in one of the feed's own dimensions
+  const doseUnits = usable.filter((u) => feed.dimensions.includes(u.dimension));
+  const start = {
+    name: feed.name,
+    unit: feed.defaultUnitId,
+    count: feed.dimensions.includes("COUNT"),
+    dose: feed.dose ? feed.dose.value.replace(".", ",") : "",
+    doseUnit: feed.dose?.unitId ?? feed.defaultUnitId,
+  };
   const [open, setOpen] = useState(false);
   const [f, setF] = useState(start);
   const { msg, busy, call } = useApi();
@@ -341,6 +349,7 @@ export function FeedEdit({ feed, units }: { feed: FeedRow; units: { id: string; 
   const renamed = f.name.trim() !== feed.name;
   const dimensions = unit ? [...new Set([unit.dimension, ...(f.count ? ["COUNT"] : [])])] : [];
   const unitChanged = f.unit !== feed.defaultUnitId || [...dimensions].sort().join() !== [...feed.dimensions].sort().join();
+  const doseChanged = f.dose.trim() !== start.dose || (f.dose.trim() !== "" && f.doseUnit !== start.doseUnit);
   async function save() {
     const body: Record<string, unknown> = {};
     if (renamed) {
@@ -353,10 +362,11 @@ export function FeedEdit({ feed, units }: { feed: FeedRow; units: { id: string; 
       Object.assign(body, { name: f.name.trim(), mode: "correction" }, asked);
     }
     if (unitChanged) Object.assign(body, { defaultUnitId: f.unit, dimensions });
+    if (doseChanged) body.dose = f.dose.trim() ? { value: f.dose.trim(), unitId: f.doseUnit } : null;
     if (await call(`/api/admin/feeds/${feed.id}`, "PATCH", body, "Takarmány módosítva.")) setOpen(false);
   }
   return (
-    <div className="toolbar" data-testid={`feed-edit-${feed.id}`}>
+    <div className="toolbar toolbar-end" data-testid={`feed-edit-${feed.id}`}>
       <input className="input" aria-label="Takarmány új neve" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
       <select className="input" aria-label="Alapértelmezett egység" value={f.unit} disabled={locked} onChange={(e) => setF({ ...f, unit: e.target.value })}>
         {usable.map((u) => (
@@ -370,7 +380,18 @@ export function FeedEdit({ feed, units }: { feed: FeedRow; units: { id: string; 
         darabban is
       </label>
       {locked && <span className="hint">Tétel van rá, a mértékegysége nem változtatható.</span>}
-      <button className="btn" type="button" disabled={busy || !f.name.trim() || !unit || (!renamed && !unitChanged)} onClick={() => void save()}>
+      <label className="field">
+        Pipa = alapmennyiség
+        <input className="input" inputMode="decimal" aria-label="Alapmennyiség a pipához" placeholder="nincs" value={f.dose} onChange={(e) => setF({ ...f, dose: e.target.value })} />
+      </label>
+      <select className="input" aria-label="Az alapmennyiség egysége" value={f.doseUnit} onChange={(e) => setF({ ...f, doseUnit: e.target.value })}>
+        {doseUnits.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.symbol}
+          </option>
+        ))}
+      </select>
+      <button className="btn" type="button" disabled={busy || !f.name.trim() || !unit || (!renamed && !unitChanged && !doseChanged)} onClick={() => void save()}>
         Mentés
       </button>
       <button className="btn btn-soft" type="button" disabled={busy} onClick={() => setOpen(false)}>

@@ -12,6 +12,7 @@ import { diffFields, writeAudit } from "./audit";
 import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
+import { doseAt, doseInstant } from "./feed-dose";
 import { ensureJournalDay, moduleLevel, nameAt, pickValid } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
@@ -458,7 +459,13 @@ export async function saveFeedingItem(actor: Actor, input: z.infer<typeof itemSc
       if (!feed || !feed.active) throw new AppError(422, "FEED_NOT_FOUND", "A takarmány nem található vagy nem aktív.");
       if (feed.type.code === "EGYEB" && !input.otherName) throw new AppError(422, "OTHER_NAME", "Az „Egyéb” takarmányhoz a nevét is meg kell adni (EGY-12).");
 
-      if (input.quantities.length === 0 && !feed.sheetTick) throw new AppError(422, "QUANTITY_REQUIRED", "Adj meg mennyiséget.");
+      // Lili 2026-10-29 (package item 3): an item without a quantity (the sheet's tick) takes the feed's base amount
+      // valid that day, when it has one; the server sets it, so the tick records it whoever sends it
+      if (input.quantities.length === 0) {
+        const dose = await doseAt(tx, feed.id, doseInstant(dayBounds(input.day).end, serverNow));
+        if (dose) input = { ...input, quantities: [{ value: dose.value, unitId: dose.unitId }] };
+        else if (!feed.sheetTick) throw new AppError(422, "QUANTITY_REQUIRED", "Adj meg mennyiséget.");
+      }
       // quantities: one per dimension, only the feed's dimensions (T-08)
       const units = await tx.unit.findMany({ where: { id: { in: input.quantities.map((q) => q.unitId) } } });
       const seen = new Set<Dimension>();

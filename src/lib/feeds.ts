@@ -9,6 +9,8 @@ import { diffFields, writeAudit } from "./audit";
 import { prisma } from "./db";
 import { AppError } from "./errors";
 import { orderAssignments } from "./animal-order";
+import { canonicalDecimal } from "./decimal";
+import { doseAt, setDose } from "./feed-dose";
 import { moduleLevel, pickValid, validAt } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
@@ -45,6 +47,8 @@ export const updateFeedSchema = z.object({
   // Lili 2026-10-27 22:42 UTC: the default unit and the dimensions too, but only on a feed nothing was recorded with
   dimensions: dimensionList.optional(),
   defaultUnitId: z.uuid({ error: "Válassz alapértelmezett egységet." }).optional(),
+  // Lili 2026-10-29 (package item 3): the base amount the feeding sheet's tick records; null ends it
+  dose: z.object({ value: z.string().trim().min(1).max(32), unitId: z.uuid({ error: "Válassz egységet az alapmennyiséghez." }) }).nullable().optional(),
   reason: z.string().trim().min(3).max(500).optional(),
 });
 
@@ -116,6 +120,9 @@ export async function updateFeed(actor: Actor, id: string, input: z.infer<typeof
     if (!f) throw new AppError(404, "NOT_FOUND", "A takarmány nem található.");
     const before: Record<string, unknown> = { active: f.active };
     const after: Record<string, unknown> = { active: f.active };
+    // the dimensions after this change: the base amount is checked against these, not the ones read above
+    // (barracuda on #113: a PATCH may change both, and a stale check would let a tick fail T-08 later)
+    let dimensionsNow = f.allowedDimensions as Dimension[];
     if (input.name) {
       const cur = await tx.feedName.findFirst({ where: { feedId: id, ...validAt(now) } });
       before.name = cur?.name ?? null;
@@ -144,6 +151,23 @@ export async function updateFeed(actor: Actor, id: string, input: z.infer<typeof
         after.defaultUnit = unit.symbol;
         after.dimensions = dimensions;
         await tx.feed.update({ where: { id }, data: { defaultUnitId: unit.id, allowedDimensions: dimensions } });
+        dimensionsNow = dimensions;
+      }
+    }
+    if (input.dose !== undefined) {
+      const d = await setDose(tx, { id, allowedDimensions: dimensionsNow }, input.dose, now);
+      if (d) {
+        before.dose = d.before;
+        after.dose = d.after;
+      }
+    }
+    // a base amount left open in a dimension the feed no longer has would make every tick fail T-08 at the aquarist:
+    // refused, the admin changes or ends it in the same step (barracuda on #113)
+    if (input.dose === undefined && dimensionsNow !== f.allowedDimensions) {
+      const open = await doseAt(tx, id, now);
+      const openUnit = open ? await tx.unit.findUnique({ where: { id: open.unitId } }) : null;
+      if (openUnit && !dimensionsNow.includes(openUnit.dimension)) {
+        throw new AppError(422, "DOSE_UNIT", `Az alapmennyiség (${open!.value} ${open!.symbol}) egysége nem marad a takarmány dimenziói között: módosítsd vagy töröld vele együtt.`);
       }
     }
     if (input.active !== undefined && input.active !== f.active) {
@@ -166,6 +190,9 @@ export async function updateFeed(actor: Actor, id: string, input: z.infer<typeof
 }
 
 export async function listFeeds(at = new Date()) {
+  const doses = new Map(
+    (await prisma.coralFeedDose.findMany({ where: validAt(at), include: { unit: true } })).map((d) => [d.feedId, { value: canonicalDecimal(d.dose), unitId: d.unitId, symbol: d.unit.symbol }]),
+  );
   const types = await prisma.feedType.findMany({
     orderBy: { sortOrder: "asc" },
     include: {
@@ -191,6 +218,8 @@ export async function listFeeds(at = new Date()) {
       active: f.active,
       temporary: f.temporary,
       sheetTick: f.sheetTick,
+      /** the base amount the tick records (package item 3), or null */
+      dose: doses.get(f.id) ?? null,
     })),
   }));
 }

@@ -266,6 +266,8 @@ export type FeedOpt = {
   isOther: boolean;
   /** a tick on the feeding sheet (given or not), no quantity there; the item form still takes one (6fe63c9b, 7) */
   tick?: true;
+  /** the base amount the tick records ("500 g", package item 3); without it a tick is "adva" */
+  dose?: string;
   /** per dimension: the base unit's symbol and the units with their factor to it */
   dims: { dimension: string; base: string; units: { id: string; symbol: string; factor: number }[] }[];
 };
