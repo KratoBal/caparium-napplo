@@ -109,6 +109,23 @@ export function MeasurementGrid({
 }) {
   const router = useRouter();
   const [grid, setGrid] = useState<Grid>(initial);
+  // Lili 2026-10-29 (caparium-finomitas-1, item 4): the header row and the pool column stay put, like the feeding
+  // sheet's, but ONLY when the table is wider than its place (a phone); where it fits (tablet, desktop) it looks as
+  // before. The box is marked while it overflows, and the stickiness lives under that mark (globals.css).
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [overflow, setOverflow] = useState(false);
+  useEffect(() => {
+    const box = scrollRef.current;
+    const table = tableRef.current;
+    if (!box || !table || typeof ResizeObserver === "undefined") return;
+    const measure = () => setOverflow(table.offsetWidth > box.clientWidth + 1);
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    ro.observe(table);
+    measure();
+    return () => ro.disconnect();
+  }, []);
   const [activePool, setActivePool] = useState<string>(initial.layout.pools.find((p) => p.active)?.id ?? "");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [metaDrafts, setMetaDrafts] = useState<Record<string, Meta>>({});
@@ -513,8 +530,8 @@ export function MeasurementGrid({
             </label>
           </div>
         )}
-        <div className="table-scroll">
-          <table className="grid-table">
+        <div ref={scrollRef} className={`table-scroll${overflow ? " grid-overflow" : ""}`} data-testid="grid-scroll">
+          <table ref={tableRef} className="grid-table">
             <thead>
               <tr>
                 <th>Medence</th>

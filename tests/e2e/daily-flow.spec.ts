@@ -977,6 +977,37 @@ test("settings: a pool goes off for a renovation and comes back", async ({ page 
   await expect(row.getByRole("button", { name: "Ragadozós: inaktiválás" })).toBeVisible();
 });
 
+for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti vízmérés"]] as const) {
+  test(`water measurement (${name}): header row and pool column stay put only when the table is wider than the screen`, async ({ page }) => {
+    // Lili 2026-10-29 (caparium-finomitas-1, item 4)
+    await login(page, "teszt.akvarista1");
+    await page.getByRole("link", { name: link, exact: true }).first().click();
+    const box = page.getByTestId("grid-scroll");
+    const head = box.locator("thead th").first();
+    const firstCell = box.locator("tbody tr").first().locator("td").first();
+    // where it fits (this project's tablet or desktop size), nothing changes
+    if (!(await box.evaluate((el) => (el.querySelector("table") as HTMLElement).offsetWidth > el.clientWidth + 1))) {
+      await expect(box).not.toHaveClass(/grid-overflow/);
+      expect(await head.evaluate((el) => getComputedStyle(el).position)).toBe("static");
+    }
+    // a phone: the table is wider than the screen, the header and the pool column stick
+    await page.setViewportSize({ width: 390, height: 760 });
+    await expect(box).toHaveClass(/grid-overflow/);
+    expect(await head.evaluate((el) => getComputedStyle(el).position)).toBe("sticky");
+    const scrolled = await box.evaluate((el) => {
+      el.scrollLeft = el.scrollWidth;
+      return el.scrollLeft;
+    });
+    expect(scrolled, "the table scrolls sideways").toBeGreaterThan(0);
+    const [boxLeft, cellLeft] = await Promise.all([box.evaluate((el) => el.getBoundingClientRect().left), firstCell.evaluate((el) => el.getBoundingClientRect().left)]);
+    expect(Math.abs(cellLeft - boxLeft), "the pool name stays at the left").toBeLessThan(1);
+    expect(await firstCell.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
+    // wide again: as before
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(box).not.toHaveClass(/grid-overflow/);
+  });
+}
+
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
   // each layout takes out its own feed: one item per feed and day
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";
