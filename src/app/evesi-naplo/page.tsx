@@ -51,6 +51,7 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
           key={day}
           day={day}
           editable={editable}
+          lock={{ kind: "FEEDING", day, status: lock, isAdmin }}
           rows={feed.animals.map((a) => {
             const r = rows.get(a.id);
             return {

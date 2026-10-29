@@ -186,7 +186,7 @@ export function FeedingListsEditor({ lists, animals, types }: { lists: ListView[
       <p className="hint">
         Egy lista állatokat és takarmányokat gyűjt egy név alá (például „Puhatestű nap”). A takarmánynapló fejlécében legördülőből választható:
         a napi lista pontosan a lista állatai és takarmányai lesz (nem halmozódik az előző listára). Utána kézzel bővíthető és szűkíthető;
-        a „Lista a terv szerint” mellette marad. A fejléc kapcsolója kikapcsolva az összes kijelölést kiveszi.
+        a „Mai Terv” mellette marad. A fejléc kapcsolója kikapcsolva az összes kijelölést kiveszi.
       </p>
       {lists.map((l) => (
         <details key={l.id} className="pick-details">

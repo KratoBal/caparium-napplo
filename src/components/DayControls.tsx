@@ -14,18 +14,29 @@ function requestId(): string {
   return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
 
+export type DayLock = { kind: "WATER" | "FEEDING" | "WITHDRAWAL"; day: string; status: Status; isAdmin: boolean };
+
+/**
+ * `bottom` (Lili 2026-10-29 08:29 UTC, msg 1565281522519375953): the same close action under a page's save button too,
+ * so nobody scrolls back up. Only the buttons there (the state badge stays on top); it beside an unsaved draft asks
+ * first, which the top one cannot, as it does not see the draft (`unsaved`, the count of unsaved cells or rows).
+ */
 export function DayControls({
   groupId,
   kind = "WATER",
   day,
   status,
   isAdmin,
+  bottom = false,
+  unsaved = 0,
 }: {
   groupId?: string;
   kind?: "WATER" | "FEEDING" | "WITHDRAWAL";
   day: string;
   status: Status;
   isAdmin: boolean;
+  bottom?: boolean;
+  unsaved?: number;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +51,7 @@ export function DayControls({
 
   async function act(path: "reopen" | "close") {
     setError(null);
+    if (path === "close" && unsaved > 0 && !window.confirm(`${unsaved} mentetlen változás van ezen a lapon. Előbb mentsd el, mert a lezárás után csak újranyitással írható. Lezárod most, mentés nélkül?`)) return;
     let reason: string | undefined;
     if (path === "reopen") {
       const asked = askReason(reasonsOn, "A nap újranyitásának oka:", "Újranyitod ezt a napot?");
@@ -59,6 +71,16 @@ export function DayControls({
     router.refresh();
   }
 
+  const closable = isAdmin && (status.reopened || (kind !== "WATER" && status.state === "OPEN"));
+  if (bottom)
+    return closable ? (
+      <div className="day-controls no-print" data-testid="day-status-bottom">
+        <button className="btn btn-soft" type="button" onClick={() => void act("close")}>
+          Nap lezárása
+        </button>
+        {error && <span className="err">{error}</span>}
+      </div>
+    ) : null;
   return (
     <div className="day-controls" data-testid="day-status">
       <span className={`badge ${status.state === "CLOSED" && !status.reopened ? "badge-invalid" : "badge-valid"}`}>{label}</span>
@@ -67,7 +89,7 @@ export function DayControls({
           Nap újranyitása
         </button>
       )}
-      {isAdmin && (status.reopened || (kind !== "WATER" && status.state === "OPEN")) && (
+      {closable && (
         <button className="btn btn-soft" type="button" onClick={() => void act("close")}>
           Nap lezárása
         </button>

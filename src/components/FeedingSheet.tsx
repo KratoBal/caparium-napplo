@@ -20,6 +20,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type CSSProperties } from "react";
 import { sheetColorBg } from "@/lib/sheet-color-palette";
+import { DayControls, type DayLock } from "./DayControls";
 import { Msg, parseAmount, useSend, type FeedOpt, type Recipient } from "./FeedingForms";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 import { useLeaveWarning } from "./useLeaveWarning";
@@ -74,6 +75,7 @@ export function FeedingSheet({
   day,
   editable,
   recipients,
+  lock,
   feeds,
   items,
   active,
@@ -82,6 +84,8 @@ export function FeedingSheet({
   day: string;
   editable: boolean;
   recipients: Recipient[];
+  /** the day's lock: the close action under the save button too (Lili 2026-10-29) */
+  lock?: DayLock;
   /** the columns: the day's feeds (step 2), or the feeds already given that day if none were chosen */
   feeds: FeedOpt[];
   items: SheetItem[];
@@ -396,6 +400,7 @@ export function FeedingSheet({
               )}
             </div>
           )}
+          {lock && <DayControls {...lock} bottom unsaved={editable ? changed.length : 0} />}
         </>
       )}
     </div>

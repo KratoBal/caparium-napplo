@@ -29,7 +29,7 @@ test("secondary controls are visible: a border, a background unlike the page's, 
       const c = getComputedStyle(el);
       return { width: c.borderTopWidth, style: c.borderTopStyle, color: c.borderTopColor, bg: c.backgroundColor };
     });
-  const plan = page.getByRole("button", { name: "Lista a terv szerint" });
+  const plan = page.getByRole("button", { name: "Mai Terv" });
   const list = page.getByLabel("Névvel ellátott lista");
   // the day control's soft button is "Nap lezárása" or "Nap újranyitása", whichever the day's state offers
   const dayButton = page.locator(".day-controls button.btn-soft");
