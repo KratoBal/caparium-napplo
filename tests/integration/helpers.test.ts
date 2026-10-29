@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { createChemical, saveDosing } from "@/lib/dosing";
 import { setEatingStatus } from "@/lib/eating";
 import { saveFeedingItem, setSelection } from "@/lib/feeding";
-import { feedingHelper, waterHelper } from "@/lib/helpers";
+import { feedingHelper, greetingFor, waterHelper } from "@/lib/helpers";
 import { createMeasurement } from "@/lib/measurements";
 import { fixtures, rid } from "./fixtures";
 
@@ -31,7 +31,22 @@ describe("Antennarius, the water helper", () => {
     expect(answer(h, "Mi van még hátra ma?")).not.toContain("Nagymedence");
     expect(answer(h, "Melyik érték lóg ki ma?")).toMatch(/Nagymedence .*5 \(alacsony\)/);
     expect(answer(h, "Késésben vagyunk?")).toContain("Elmúlt a határidő");
-    expect(h.alert).toBeUndefined();
+    // card 8b22c3c2: after the deadline the missed measurement is urgent, without the stock right too
+    expect(h.alert).toMatch(/^14:00 elmúlt, és ma még nincs napi mérés: .*Kismedence/);
+    expect(h.alertKey).toBe("meres:2028-08-12");
+    const before = await waterHelper(false, at("2028-08-12T13:59"));
+    expect([before.alert, before.alertKey]).toEqual([undefined, undefined]);
+    // a pool measured since changes the text, not the key: the alert does not speak again on the water page
+    // while the missing ones are being recorded (barracuda on #109; the stock alert's rule, review of #20 b)
+    const missing = h.alert!.slice(h.alert!.indexOf(":") + 1, -1).split(",").map((x) => x.trim());
+    expect(missing.length).toBeGreaterThan(1);
+    const kis = await prisma.groupMembership.findMany({ where: { groupId: f.group("NAPI_KIS") }, include: { pool: { include: { names: true } } } });
+    const one = kis.find((m) => missing.includes(m.pool.names[0]?.displayName ?? ""))!;
+    await createMeasurement(f.aq1, { requestId: rid(), groupId: f.group("NAPI_KIS"), poolId: one.poolId, parameterId: f.param("SAL"), value: "35", measuredAtLocal: "2028-08-12T15:10" }, at("2028-08-12T15:10"));
+    const later = await waterHelper(false, at("2028-08-12T15:20"));
+    expect(later.alertKey).toBe(h.alertKey);
+    expect(later.alert).not.toContain(one.pool.names[0]!.displayName);
+    expect(later.alert).toContain(missing.find((n) => n !== one.pool.names[0]!.displayName)!);
     // AST-03: a chemical below zero speaks up, for someone who may see the stock
     await createChemical(f.admin, { requestId: rid(), name: "Teszt segítő-só", stockUnitId: unit.kg }, at("2028-08-12T08:00"));
     const chem = (await prisma.chemicalName.findFirstOrThrow({ where: { name: "Teszt segítő-só" } })).chemicalId;
@@ -39,13 +54,28 @@ describe("Antennarius, the water helper", () => {
     const first = await waterHelper(true, at("2028-08-12T15:00"));
     expect(first.alert).toContain("Teszt segítő-só");
     expect(first.alertKey).toContain("Teszt segítő-só");
+    // both urgent notices in one alert, the measurement first; their keys joined
+    expect(first.alert).toMatch(/^14:00 elmúlt.*Fogyóban: .*Teszt segítő-só/);
+    expect(first.alertKey).toMatch(/^meres:2028-08-12#.*Teszt segítő-só/);
     const off = await waterHelper(false, at("2028-08-12T15:00"));
-    expect([off.alert, off.alertKey]).toEqual([undefined, undefined]);
+    expect(off.alert).not.toContain("Teszt segítő-só");
+    expect(off.alertKey).not.toContain("Teszt segítő-só");
     // another dose moves the level and so the text, not the key: it does not open again (review of #20, b)
     await saveDosing(f.aq1, { requestId: rid(), performedAtLocal: "2028-08-12T16:00", poolId: f.pool("SOZO"), chemicalId: chem, quantity: "1", unitId: unit.kg }, at("2028-08-12T16:00"));
     const second = await waterHelper(true, at("2028-08-12T17:00"));
     expect(second.alert).not.toBe(first.alert);
     expect(second.alertKey).toBe(first.alertKey);
+  });
+});
+
+describe("the greeting (card 8b22c3c2)", () => {
+  it("by the local hour, naming the figure; never part of the urgent alert", async () => {
+    expect(greetingFor("water", at("2028-08-14T09:59"))).toMatch(/^Jó reggelt! Antennarius vagyok/);
+    expect(greetingFor("feeding", at("2028-08-14T10:00"))).toMatch(/^Szép napot! Zebracápa vagyok/);
+    expect(greetingFor("water", at("2028-08-14T18:00"))).toMatch(/^Jó estét!/);
+    const h = await feedingHelper(false, at("2028-08-14T11:00"));
+    expect(h.greeting).toMatch(/^Szép napot! Zebracápa vagyok/);
+    expect(h.alert ?? "").not.toContain("Zebracápa vagyok");
   });
 });
 

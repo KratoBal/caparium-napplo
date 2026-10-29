@@ -1383,7 +1383,21 @@ test("conveniences: a feeding plan, the list from it, the feed type icons", asyn
   await expect(page.getByRole("heading", { name: "🦐 Rákok" })).toBeVisible();
 });
 
-test("the helper: a quick question about the page, switched off and on", async ({ page }) => {
+// card 8b22c3c2 and barracuda on #109: what the helper says by itself (an alert, a greeting) and the strip it
+// leaves when switched off take no click. Measured at the point, not by a click that may land elsewhere: the
+// element under the centre of the notice is the page's, and the save button's centre is the save button.
+async function passesClicks(page: Page, testId: string): Promise<boolean> {
+  const box = (await page.getByTestId(testId).boundingBox())!;
+  return page.evaluate(([x, y]) => !document.elementFromPoint(x, y)?.closest(".helper, .helper-urgent"), [box.x + box.width / 2, box.y + box.height / 2]);
+}
+async function topIs(page: Page, testId: string): Promise<boolean> {
+  const target = page.getByTestId(testId);
+  await target.scrollIntoViewIfNeeded();
+  const box = (await target.boundingBox())!;
+  return page.evaluate(([x, y, id]) => !!document.elementFromPoint(x as number, y as number)?.closest(`[data-testid="${id}"]`), [box.x + box.width / 2, box.y + box.height / 2, testId]);
+}
+
+test("the helper: it speaks unasked without taking a click, the quick questions from the figure, switched in the header, the urgent notice stays", async ({ page }) => {
   await login(page, "teszt.akvarista1");
   // its own dose leaves "Teszt só" below zero, whatever ran before (review of #21)
   await page.getByRole("link", { name: "Vegyszeradagolás" }).click();
@@ -1394,6 +1408,24 @@ test("the helper: a quick question about the page, switched off and on", async (
   await form.getByLabel("Egység", { exact: true }).selectOption({ label: "g" });
   await form.getByRole("button", { name: "+ Adagolás mentése" }).click();
   await expect(form.getByRole("status")).toHaveText("Adagolás mentve.");
+  // barracuda on #109: what is shown follows the refreshed data. A fresh session here: the alert speaks; one more
+  // dose refreshes the page, the key stays, and the notice on show takes the new level instead of keeping the old.
+  // The save's router.refresh must land first: landing after the clear, it marks the alert seen again on this page
+  // just before the reload (measured locally, 2026-10-29)
+  await page.waitForLoadState("networkidle");
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  const shown = page.getByTestId("helper-notice");
+  await expect(shown).toContainText("Teszt só");
+  const before = await shown.textContent();
+  await form.getByLabel("Medence", { exact: true }).selectOption({ label: "Sózó" });
+  await form.getByLabel("Szer", { exact: true }).selectOption({ label: "Teszt só" });
+  await form.getByLabel("Mennyiség", { exact: true }).fill("100");
+  await form.getByLabel("Egység", { exact: true }).selectOption({ label: "g" });
+  await form.getByRole("button", { name: "+ Adagolás mentése" }).click();
+  await expect(form.getByRole("status")).toHaveText("Adagolás mentve.");
+  await expect(shown).not.toHaveText(before!);
+  await expect(shown).toContainText("Teszt só");
   // a fresh session on the overview: the pages before may already have shown the alert
   await page.getByRole("link", { name: "START", exact: true }).click();
   // Lili 2026-10-27 13:02 UTC: the start page has no "Mai áttekintés" title; what is under the bar stays
@@ -1401,11 +1433,13 @@ test("the helper: a quick question about the page, switched off and on", async (
   await expect(page.getByRole("heading", { name: "Mai áttekintés" })).toHaveCount(0);
   await page.evaluate(() => sessionStorage.clear());
   await page.reload();
-  // AST-03: the overview's helper opens by itself, once
+  // AST-03: the overview's helper speaks by itself, once, as a notice: the bubble with the buttons stays closed
   const first = page.getByTestId("helper");
   await expect(first).toHaveAttribute("data-ready", "1");
-  await expect(first.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "true");
-  await expect(first.getByTestId("helper-answer")).toContainText("Teszt só");
+  await expect(first.getByTestId("helper-notice")).toHaveAttribute("data-kind", "alert");
+  await expect(first.getByTestId("helper-notice")).toContainText("Teszt só");
+  await expect(first.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "false");
+  expect(await passesClicks(page, "helper-notice")).toBe(true);
   await page.getByRole("link", { name: "Napi vízmérés", exact: true }).click();
   // the overview has a helper too: wait for the new page, or the clicks below land on the old one
   await expect(page).toHaveURL(/\/vizmeres/);
@@ -1413,21 +1447,36 @@ test("the helper: a quick question about the page, switched off and on", async (
   const helper = page.getByTestId("helper");
   // wait until the component has read its stored state, or the click races the auto-open
   await expect(helper).toHaveAttribute("data-ready", "1");
-  // the same alert again: it stays closed on the next page (review of #20, c)
-  await expect(helper.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "false");
+  // the same alert again: it stays silent on the next page (review of #20, c), and it does not greet either
+  await expect(helper.getByTestId("helper-notice")).toHaveCount(0);
+  // from the figure: the bubble starts with the alert, then a quick question
   await helper.getByTestId("helper-button").click();
+  await expect(helper.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "true");
+  await expect(helper.getByTestId("helper-answer")).toContainText("Teszt só");
   await helper.getByRole("button", { name: "Mi van még hátra ma?" }).click();
   await expect(helper.getByTestId("helper-answer")).not.toBeEmpty();
-  await helper.getByRole("button", { name: "Segítő kikapcsolása" }).click();
-  await expect(page.getByTestId("helper-on")).toBeVisible();
+  await helper.getByTestId("helper-button").click();
+  // card 8b22c3c2: the switch is in the header; off, the figure goes and the urgent notice stays in a strip
+  const toggle = page.getByTestId("helper-toggle");
+  await expect(toggle).toHaveText("Segítő: be");
+  await toggle.click();
+  await expect(toggle).toHaveText("Segítő: ki");
+  await expect(page.getByTestId("helper")).toHaveCount(0);
+  await expect(page.getByTestId("helper-urgent")).toContainText("Teszt só");
+  expect(await passesClicks(page, "helper-urgent")).toBe(true);
+  expect(await topIs(page, "save-all")).toBe(true);
   // a new session while switched off: the alert must not be marked seen behind the closed helper (review of #20, a)
   await page.evaluate(() => sessionStorage.clear());
   await page.reload();
-  await expect(page.getByTestId("helper-on")).toBeVisible();
-  await page.getByTestId("helper-on").click();
-  // switched back on, the alert not seen in this session opens right here, not only on the next page (review of #21)
-  await expect(page.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByTestId("helper-answer")).toContainText("Teszt só");
+  await expect(page.getByTestId("helper-toggle")).toHaveText("Segítő: ki");
+  await expect(page.getByTestId("helper-urgent")).toContainText("Teszt só");
+  await page.getByTestId("helper-toggle").click();
+  // switched back on, the alert not seen in this session speaks right here, not only on the next page (review of #21)
+  await expect(page.getByTestId("helper-urgent")).toHaveCount(0);
+  await expect(page.getByTestId("helper-notice")).toContainText("Teszt só");
+  await expect(page.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "false");
+  expect(await passesClicks(page, "helper-notice")).toBe(true);
+  expect(await topIs(page, "save-all")).toBe(true);
 });
 
 test("water measurements by e-mail: the recipient in the settings, the button first on the export page", async ({ page }, info) => {

@@ -40,7 +40,7 @@ const PAGES = [
 // (Lili 2026-10-26, msg 1564366690601664713: "a fel/le gomb maradjon, de kisebb méretben").
 // .btn-row: the "Módosítás" and "Érvénytelenítés" buttons inside a list row, small and quiet on purpose (Lili 2026-10-27 12:46 UTC).
 // .clear-x: the small corner X that empties an amount field, quiet and inside the field on purpose (Lili 2026-10-29).
-const OWN_SIZE = ".cell-input, .meta-select, .helper, .helper *, .helper-on, .tab-picture, .btn-mini, .order-place, .btn-row, .clear-x";
+const OWN_SIZE = ".cell-input, .meta-select, .helper, .helper *, .tab-picture, .btn-mini, .order-place, .btn-row, .clear-x";
 
 type Control = { what: string; height: number; ownSize: boolean; native: boolean };
 
