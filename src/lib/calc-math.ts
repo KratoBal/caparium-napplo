@@ -21,6 +21,15 @@ export function calculate(bwKg: number, frWeekPct: number, nWeek: number): CalcR
   return { frDayPct: round4(frWeekPct / 7), fKg: round4(fKg), fG: round4(fKg * 1000), fwG: round4(fKg * 1000 * nWeek) };
 }
 
+/**
+ * The feeding log's reference mark (Lili 2026-10-29, package item 4): "off" (red) when a given amount deviates,
+ * "ok" (green) when it is within the reference, "none" while nothing is given (fasting, not on the list).
+ */
+export function referenceState(givenG: number | undefined, referenceG: number): "off" | "ok" | "none" {
+  if (givenG === undefined || !(givenG > 0)) return "none";
+  return deviates(givenG, referenceG) ? "off" : "ok";
+}
+
 /** EGY-08: does a day's amount deviate roughly from the reference? */
 export function deviates(givenG: number, referenceG: number, threshold = DEVIATION): boolean {
   if (!(referenceG > 0)) return false;

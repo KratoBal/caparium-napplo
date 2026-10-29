@@ -69,4 +69,11 @@ describe("the eating Excel's weeks (EVE-08)", () => {
     // E1 = Sunday 11-01, F1 = Monday 11-02 (a new week), L1 = Sunday 11-08, M1 = Monday 11-09
     expect([fillOf(5), fillOf(6), fillOf(12), fillOf(13)]).toEqual([WEEK_FILLS[0], WEEK_FILLS[1], WEEK_FILLS[1], WEEK_FILLS[0]]);
   });
+  it("the day's letter under each date (Lili 2026-10-29, package item 7)", async () => {
+    const wb = await load((await buildEatingWorkbook({ from: "2026-11-01", to: "2026-11-09" })).buffer);
+    const r2 = wb.worksheets[0].getRow(2);
+    // E = Sunday 11-01 .. M = Monday 11-09; the first three cells keep their headers
+    expect([5, 6, 7, 8, 9, 10, 11, 12, 13].map((c) => r2.getCell(c).value)).toEqual(["V", "H", "K", "Sze", "Cs", "P", "Szo", "V", "H"]);
+    expect([1, 2, 3].map((c) => r2.getCell(c).value)).toEqual(["Állatfaj", "Név", "Csoport"]);
+  });
 });

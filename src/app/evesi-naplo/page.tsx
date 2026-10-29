@@ -26,7 +26,7 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
   const rows = new Map(eat.rows.map((r) => [r.animalId, r]));
   return (
     <Shell title="Evési napló" active="eating" user={user} helper={await feedingHelper((await moduleLevel(prisma, user.id, user.role, "DOSING")) !== "NONE")}>
-      <div className="toolbar">
+      <div className="toolbar toolbar-end">
         <DayNav path="/evesi-naplo" day={day} today={today} />
         {/* Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 4): the jump calendar, as on the water measurement
             and withdrawal pages: the chosen day opens, and jumping back to today opens today's */}

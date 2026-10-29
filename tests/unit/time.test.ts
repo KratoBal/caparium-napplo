@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, businessDayOf, formatDayLong, localTimeOf, resolveLocalDateTime } from "@/lib/time";
+import { addDays, businessDayOf, formatDayLong, localTimeOf, resolveLocalDateTime, weekdayLetter } from "@/lib/time";
 
 describe("business day (K2: Europe/Budapest, midnight boundary)", () => {
   it("summer: 23:59 local is still the same day, 00:00 local is the next", () => {
@@ -48,4 +48,10 @@ describe("local wall clock -> instant", () => {
 describe("day helpers", () => {
   it("addDays crosses month ends", () => expect(addDays("2026-02-28", 1)).toBe("2026-03-01"));
   it("Hungarian long date", () => expect(formatDayLong("2026-10-15")).toBe("2026. október 15."));
+});
+
+describe("the day's letter (Lili 2026-10-29, package item 7)", () => {
+  it("as the timetable writes it, Monday first", () => {
+    expect(["2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31", "2026-11-01"].map(weekdayLetter)).toEqual(["H", "K", "Sze", "Cs", "P", "Szo", "V"]);
+  });
 });
