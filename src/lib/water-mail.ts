@@ -45,7 +45,10 @@ export const recipientSchema = z.object({
     }),
 });
 
-export async function setWaterReportRecipient(actor: Actor, raw: z.input<typeof recipientSchema>, now = new Date()) {
+/** The recipient setting of one mail kind: the water report's, or the monthly ZIMS package's. */
+export type RecipientKey = "water_report_recipient" | "monthly_zims_recipient";
+
+export async function setRecipientSetting(actor: Actor, raw: z.input<typeof recipientSchema>, key: RecipientKey, now = new Date()) {
   // parsed here too, not only in the route: an unchecked address would be where the report goes
   const input = recipientSchema.parse(raw);
   if ((await moduleLevel(prisma, actor.id, actor.role, "SETTINGS")) !== "ADMIN") {
@@ -55,20 +58,23 @@ export async function setWaterReportRecipient(actor: Actor, raw: z.input<typeof 
   const parsed = parseRecipients(input.email);
   const email = parsed.ok ? parsed.list.join(", ") : "";
   return prisma.$transaction(async (tx) => {
-    const before = await getSetting(tx, "water_report_recipient", now);
+    const before = await getSetting(tx, key, now);
     if (before === email) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
-    const row = await tx.setting.create({ data: { key: "water_report_recipient", value: email, validFrom: now, changedById: actor.id } });
+    const row = await tx.setting.create({ data: { key, value: email, validFrom: now, changedById: actor.id } });
     await writeAudit(tx, {
       userId: actor.id,
       action: "MASTER_CHANGE",
       entityType: "Setting",
       entityId: row.id,
-      changes: { water_report_recipient: { before: before || null, after: email || null } },
+      changes: { [key]: { before: before || null, after: email || null } },
       requestId: input.requestId,
     });
     return { replayed: false };
   });
 }
+
+export const setWaterReportRecipient = (actor: Actor, raw: z.input<typeof recipientSchema>, now = new Date()) =>
+  setRecipientSetting(actor, raw, "water_report_recipient", now);
 
 export const sendSchema = z.object({ requestId });
 

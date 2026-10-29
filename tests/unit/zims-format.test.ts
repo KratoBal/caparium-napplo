@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sheetName } from "@/lib/exports/excel";
-import { csvField, fileName, inRepeatedHour, rowHash, zimsDate, zimsTime, zimsValue } from "@/lib/exports/zims";
+import { csvField, fileName, inRepeatedHour, monthlyFileName, rowHash, zimsDate, zimsTime, zimsValue } from "@/lib/exports/zims";
 
 const TZ = "Europe/Budapest";
 
@@ -39,6 +39,11 @@ describe("ZIMS formats (profile v1, VIZ-18)", () => {
   it("ascii file names per system and period", () => {
     expect(fileName("Karantén", "2026-10-01", "2026-10-31")).toBe("ZIMS-Karanten-2026-10-01_2026-10-31.csv");
     expect(fileName("Nagymedence", "2026-10-15", "2026-10-15")).toBe("ZIMS-Nagymedence-2026-10-15.csv");
+  });
+  it("the monthly package's file name: year, pool without accents, two-digit month, ZIMSimport (Lili 2026-10-29)", () => {
+    expect(monthlyFileName("Nagymedence", "2026-10-01")).toBe("2026_Nagymedence_10_ZIMSimport.csv");
+    expect(monthlyFileName("Karantén medence", "2027-01-01")).toBe("2027_Karanten-medence_01_ZIMSimport.csv");
+    expect(monthlyFileName("???", "2026-03-01")).toBe("2026_medence_03_ZIMSimport.csv");
   });
 });
 
