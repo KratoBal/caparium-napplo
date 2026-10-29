@@ -57,7 +57,17 @@ export function canCreate(level: Level, f: DayFacts): Decision {
  */
 export function canModify(
   level: Level,
-  f: DayFacts & { isOwn: boolean; targetDay?: string; targetClosed?: boolean },
+  f: DayFacts & {
+    isOwn: boolean;
+    targetDay?: string;
+    targetClosed?: boolean;
+    /**
+     * Any aquarist may correct another's entry of the open day, not only their own (Lili 2026-10-29, Caparium thread
+     * 1565398519064297503: "Legyen javítható nyugodtan."; the feeding items and the water measurements). The audit keeps
+     * who changed it. The day rules (today, not closed) stay.
+     */
+    othersToo?: boolean;
+  },
 ): Decision {
   if (level === "NONE") return deny("NO_ACCESS");
   if (level === "READ") return deny("READ_ONLY");
@@ -67,7 +77,7 @@ export function canModify(
     const quiet = f.day === f.today && !f.closed && targetDay === f.today && !targetClosed;
     return quiet ? { kind: "ALLOW", reasonRequired: false } : { kind: "ALLOW", reasonRequired: true };
   }
-  if (!f.isOwn) return deny("NOT_OWN");
+  if (!f.isOwn && !f.othersToo) return deny("NOT_OWN");
   if (f.day !== f.today || targetDay !== f.today) return deny("NOT_TODAY");
   if (f.closed || targetClosed) return deny("DAY_CLOSED");
   return { kind: "ALLOW", reasonRequired: false };

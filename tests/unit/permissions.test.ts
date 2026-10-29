@@ -39,6 +39,14 @@ describe("modify (ÁLT-05, ÁLT-16, R-6)", () => {
     expect(canModify("RECORD", { day: today, today, closed: false, isOwn: false })).toMatchObject({ code: "NOT_OWN" });
     expect(canModify("RECORD", { day: yesterday, today, closed: false, isOwn: true })).toMatchObject({ code: "NOT_TODAY" });
   });
+  // Lili 2026-10-29 ("Legyen javítható nyugodtan."): where a module says so, another aquarist's entry too, but only on
+  // the open day; a module that does not say so keeps "only own"
+  it("aquarist with othersToo: another's entry too, still only today and open", () => {
+    expect(canModify("RECORD", { day: today, today, closed: false, isOwn: false, othersToo: true })).toEqual({ kind: "ALLOW", reasonRequired: false });
+    expect(canModify("RECORD", { day: yesterday, today, closed: false, isOwn: false, othersToo: true })).toMatchObject({ code: "NOT_TODAY" });
+    expect(canModify("RECORD", { day: today, today, closed: true, isOwn: false, othersToo: true })).toMatchObject({ code: "DAY_CLOSED" });
+    expect(canModify("READ", { day: today, today, closed: false, isOwn: false, othersToo: true })).toMatchObject({ code: "READ_ONLY" });
+  });
   it("aquarist cannot move a measurement to another day (R-6)", () => {
     expect(canModify("RECORD", { day: today, today, closed: false, isOwn: true, targetDay: yesterday })).toMatchObject({
       code: "NOT_TODAY",

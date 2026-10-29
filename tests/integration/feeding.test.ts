@@ -104,13 +104,21 @@ describe("feeding items (EGY-02, EGY-06, TAK-07, T-08)", () => {
     expect(it).toMatchObject({ status: "INVALIDATED", invalidationReason: "kivéve a napi listából" });
   });
 
-  it("an aquarist invalidates only an own item of today", async () => {
+  // Lili 2026-10-29 (Caparium thread 1565398519064297503: "Legyen javítható nyugodtan."): another aquarist's item of today
+  // is correctable and can be emptied too, audited under the one who did it; a past day stays the admin's
+  it("an aquarist corrects and invalidates another's item of today too, audited; not on a past day", async () => {
     const d = "2026-01-14";
     await select(d, ["Teszt Négy"]);
     const r = (await saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId: a["Teszt Négy"], feedId: feed["Teszt hal"], quantities: [{ value: "10", unitId: unit.g }] }, at(d, "09:00"))) as { itemId: string };
-    await expectCode(invalidateFeedingItem(f.aq2, r.itemId, { requestId: rid(), expectedVersion: 1, reason: "nem az enyém" }, at(d, "10:00")), "NOT_OWN");
-    await invalidateFeedingItem(f.aq1, r.itemId, { requestId: rid(), expectedVersion: 1, reason: "elírás" }, at(d, "10:00"));
+    await expectCode(invalidateFeedingItem(f.aq2, r.itemId, { requestId: rid(), expectedVersion: 1, reason: "másnap" }, at("2026-01-15", "08:00")), "NOT_TODAY");
+    const fix = rid();
+    await saveFeedingItem(f.aq2, { requestId: fix, day: d, itemId: r.itemId, expectedVersion: 1, animalId: a["Teszt Négy"], feedId: feed["Teszt hal"], quantities: [{ value: "12", unitId: unit.g }] } as Parameters<typeof saveFeedingItem>[1], at(d, "09:30"));
+    const off = rid();
+    await invalidateFeedingItem(f.aq2, r.itemId, { requestId: off, expectedVersion: 2, reason: "rossz helyen" }, at(d, "10:00"));
     expect((await feedingDayView(d)).items).toHaveLength(0);
+    const by = await prisma.auditEntry.findMany({ where: { requestId: { in: [fix, off] } }, select: { userId: true } });
+    expect(by.length).toBeGreaterThan(0);
+    expect(by.every((x) => x.userId === f.aq2.id)).toBe(true);
   });
 
   it("removing a member of a group item: counted in the confirmation, the item and its snapshot stay; a group left without a selected member is shown (R-8)", async () => {

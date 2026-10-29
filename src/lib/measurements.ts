@@ -429,6 +429,7 @@ export async function updateMeasurement(
             today,
             closed: closedAt(oldJournal, at),
             isOwn: cur.createdById === actor.id,
+            othersToo: true,
             targetDay: newDay,
             targetClosed: closedAt(newJournal, at),
           }),
@@ -534,7 +535,7 @@ export async function invalidateMeasurement(
     const journal = await ensureJournalDay(tx, "WATER", cur.round.groupId, day);
     const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
     const { decision } = decideWithLateRule(
-      (today, at) => canModify(level, { day, today, closed: closedAt(journal, at), isOwn: cur.createdById === actor.id }),
+      (today, at) => canModify(level, { day, today, closed: closedAt(journal, at), isOwn: cur.createdById === actor.id, othersToo: true }),
       serverNow,
       clientTs,
       grace,

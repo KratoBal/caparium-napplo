@@ -103,21 +103,22 @@ describe("day rules (DN-09, ÁLT-16)", () => {
     expect(audit.reason).toBe("papírról utólag bevitt mérés");
   });
 
-  it("an aquarist edits only their own entry of today", async () => {
+  // Lili 2026-10-29 (Caparium thread 1565398519064297503): another aquarist's value of today is correctable too, and the
+  // audit names who changed it; a past day stays the admin's
+  it("an aquarist edits another's entry of today too, audited under their name; not a past day", async () => {
     const r = await create(f.aq1, "2026-06-08", "08:00");
     const now = cest("2026-06-08T09:00");
+    const edit = rid();
+    const up = (await updateMeasurement(f.aq2, r.measurement.id, { requestId: edit, expectedVersion: 1, value: "8.2" }, now)) as { measurement: { id: string; version: number } };
+    expect((await prisma.auditEntry.findFirstOrThrow({ where: { requestId: edit } })).userId).toBe(f.aq2.id);
     await expectAppError(
-      updateMeasurement(f.aq2, r.measurement.id, { requestId: rid(), expectedVersion: 1, value: "8.2" }, now),
-      403,
-      "NOT_OWN",
-    );
-    await expectAppError(
-      updateMeasurement(f.aq1, r.measurement.id, { requestId: rid(), expectedVersion: 1, value: "8.2" }, cest("2026-06-09T08:00")),
+      updateMeasurement(f.aq1, up.measurement.id, { requestId: rid(), expectedVersion: up.measurement.version, value: "8.3" }, cest("2026-06-09T08:00")),
       403,
       "NOT_TODAY",
     );
-    const ok = await updateMeasurement(f.aq1, r.measurement.id, { requestId: rid(), expectedVersion: 1, value: "8,2" }, now);
-    expect(ok.measurement).toMatchObject({ value: "8.2", version: 2 });
+    // its author still edits it, on the version the other one left
+    const ok = await updateMeasurement(f.aq1, up.measurement.id, { requestId: rid(), expectedVersion: up.measurement.version, value: "8,4" }, now);
+    expect(ok.measurement).toMatchObject({ value: "8.4", version: up.measurement.version + 1 });
   });
 
   it("an aquarist cannot move a measurement to another day; an admin can with a reason (R-6)", async () => {

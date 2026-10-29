@@ -447,7 +447,7 @@ export async function saveFeedingItem(actor: Actor, input: z.infer<typeof itemSc
         if (!prior || prior.feedingDayId !== fd.id) throw new AppError(404, "NOT_FOUND", "A tétel nem található.");
         if (prior.status !== "VALID") throw new AppError(409, "NOT_EDITABLE", "Ez a tétel már nem érvényes.");
         if (prior.version !== input.expectedVersion) throw new AppError(409, "VERSION_CONFLICT", "A tétel időközben megváltozott.");
-        await enforce(tx, canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: prior.createdById === actor.id }), input.reason);
+        await enforce(tx, canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: prior.createdById === actor.id, othersToo: true }), input.reason);
       } else {
         await enforce(tx, canCreate(f.level, { day: f.d, today: f.today, closed: f.closed }), input.reason);
       }
@@ -547,7 +547,7 @@ export async function invalidateFeedingItem(actor: Actor, id: string, input: z.i
     const it = await tx.feedingItem.findUnique({ where: { id }, include: { feedingDay: true } });
     if (!it) throw new AppError(404, "NOT_FOUND", "A tétel nem található.");
     const { f } = await facts(tx, actor, dateToDay(it.feedingDay.businessDay), serverNow, null);
-    await enforce(tx, canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: it.createdById === actor.id }), input.reason);
+    await enforce(tx, canModify(f.level, { day: f.d, today: f.today, closed: f.closed, isOwn: it.createdById === actor.id, othersToo: true }), input.reason);
     await requireReason(tx, true, input.reason, "Az érvénytelenítéshez indoklás kell.");
     const res = await tx.feedingItem.updateMany({
       where: { id, version: input.expectedVersion, status: "VALID" },
