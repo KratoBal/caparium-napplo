@@ -1,9 +1,10 @@
 "use client";
 
 // AST-01..AST-03: a static figure in the corner with a speech bubble: fixed quick questions about the
-// page's data, never free text (D-23). The figure is drawn from an emoji, not an image: the AI-generated
-// character sheets wait for D-38 (their rights), and an image is a file swap in FIGURE below (card
-// 8b22c3c2, acrobot 38044). Switched off in the header (HelperToggle), the figure and the greeting go; the
+// page's data, never free text (D-23). The figure is Lili's own pictures (2026-10-29, item 10; the rights are
+// hers to give, D-38): one per situation, public/segito/<figure>-<situation>.webp: "feladatok" with the
+// missed-measurement alert, "vegyszer" with the chemical alert, "udv-1..3" at rest and in the greeting. Switched
+// off in the header (HelperToggle), the figure and the greeting go; the
 // URGENT notices (the missed measurement, a chemical running out) stay, in a small strip (Lili 2026-10-27
 // 13:25 UTC).
 //
@@ -20,18 +21,25 @@ import { readOff, SWITCH_EVENT } from "@/lib/helper-switch";
 
 const SEEN_KEY = "caparium-segito-latta";
 const GREETED_KEY = "caparium-segito-koszont";
-const FIGURE = { water: { emoji: "🐠", name: "Antennarius" }, feeding: { emoji: "🦈", name: "Zebracápa" } } as const;
+const FIGURE = { water: { slug: "antennarius", name: "Antennarius" }, feeding: { slug: "zebracapa", name: "Zebracápa" } } as const;
+const ALERT_PICTURE = { measurement: "feladatok", stock: "vegyszer" } as const;
+const GREETING_PICTURES = 3;
 const GREETING_MS = 8000;
 
-export function Helper({ data }: { data: HelperData }) {
+export function Helper({ data, userName }: { data: HelperData; userName?: string }) {
   const [off, setOff] = useState(false);
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [answer, setAnswer] = useState<string | null>(null);
   const [animal, setAnimal] = useState(data.perAnimal?.[0]?.name ?? "");
+  // which of the greeting pictures the figure wears while it greets; at rest it is the first
+  const [greetingPicture, setGreetingPicture] = useState(1);
   // set once the stored state is read: before that a click could race the auto-open below
   const [ready, setReady] = useState(false);
   const figure = FIGURE[data.who];
+  const picture = data.alert
+    ? ALERT_PICTURE[data.alertKind ?? "measurement"]
+    : `udv-${notice?.kind === "greeting" ? greetingPicture : 1}`;
   // the alert the shown texts were taken from: a refresh (a save) may change or end it
   const shownAlert = useRef(data.alert);
 
@@ -58,7 +66,9 @@ export function Helper({ data }: { data: HelperData }) {
     } catch {
       return; // without storage it would greet on every page: it does not greet
     }
-    setNotice({ kind: "greeting", text: data.greeting });
+    // Lili 2026-10-29 (item 10): at login, "Üdv a fedélzeten <név>!", in one of the figure's greeting pictures
+    setGreetingPicture(1 + Math.floor(Math.random() * GREETING_PICTURES));
+    setNotice({ kind: "greeting", text: userName ? `Üdv a fedélzeten ${userName}!` : "Üdv a fedélzeten!" });
   }
   useEffect(() => {
     if (notice?.kind !== "greeting") return;
@@ -145,9 +155,7 @@ export function Helper({ data }: { data: HelperData }) {
         aria-label={`${figure.name}${data.alert ? ", figyelmeztetés" : ""}`}
         data-testid="helper-button"
       >
-        <span className="helper-face" aria-hidden="true">
-          {figure.emoji}
-        </span>
+        <img className="helper-face" src={`/segito/${figure.slug}-${picture}.webp`} alt="" height={80} data-picture={picture} />
         <span className="helper-name">{figure.name}</span>
         {data.alert && (
           <span className="helper-badge" aria-hidden="true">

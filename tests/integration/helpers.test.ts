@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { createChemical, saveDosing } from "@/lib/dosing";
 import { setEatingStatus } from "@/lib/eating";
 import { saveFeedingItem, setSelection } from "@/lib/feeding";
-import { feedingHelper, greetingFor, waterHelper } from "@/lib/helpers";
+import { feedingHelper, waterHelper } from "@/lib/helpers";
 import { createMeasurement } from "@/lib/measurements";
 import { fixtures, rid } from "./fixtures";
 
@@ -32,13 +32,14 @@ describe("Antennarius, the water helper", () => {
     expect(answer(h, "Melyik érték lóg ki ma?")).toMatch(/Nagymedence .*5 \(alacsony\)/);
     expect(answer(h, "Késésben vagyunk?")).toContain("Elmúlt a határidő");
     // card 8b22c3c2: after the deadline the missed measurement is urgent, without the stock right too
-    expect(h.alert).toMatch(/^14:00 elmúlt, és ma még nincs napi mérés: .*Kismedence/);
+    expect(h.alert).toMatch(/^Még nem vagyunk kész mára! .*Kismedence/);
+    expect(h.alertKind).toBe("measurement"); // the figure takes the "feladatok" picture (Lili 2026-10-29, item 10)
     expect(h.alertKey).toBe("meres:2028-08-12");
     const before = await waterHelper(false, at("2028-08-12T13:59"));
     expect([before.alert, before.alertKey]).toEqual([undefined, undefined]);
     // a pool measured since changes the text, not the key: the alert does not speak again on the water page
     // while the missing ones are being recorded (barracuda on #109; the stock alert's rule, review of #20 b)
-    const missing = h.alert!.slice(h.alert!.indexOf(":") + 1, -1).split(",").map((x) => x.trim());
+    const missing = h.alert!.slice("Még nem vagyunk kész mára! ".length, -1).split(",").map((x) => x.trim());
     expect(missing.length).toBeGreaterThan(1);
     const kis = await prisma.groupMembership.findMany({ where: { groupId: f.group("NAPI_KIS") }, include: { pool: { include: { names: true } } } });
     const one = kis.find((m) => missing.includes(m.pool.names[0]?.displayName ?? ""))!;
@@ -55,7 +56,8 @@ describe("Antennarius, the water helper", () => {
     expect(first.alert).toContain("Teszt segítő-só");
     expect(first.alertKey).toContain("Teszt segítő-só");
     // both urgent notices in one alert, the measurement first; their keys joined
-    expect(first.alert).toMatch(/^14:00 elmúlt.*Fogyóban: .*Teszt segítő-só/);
+    expect(first.alert).toMatch(/^Még nem vagyunk kész mára!.*Vészesen fogy a\(z\) .*Teszt segítő-só.*!$/);
+    expect(first.alertKind).toBe("measurement"); // both: the measurement first, as in the text
     expect(first.alertKey).toMatch(/^meres:2028-08-12#.*Teszt segítő-só/);
     const off = await waterHelper(false, at("2028-08-12T15:00"));
     expect(off.alert).not.toContain("Teszt segítő-só");
@@ -68,14 +70,16 @@ describe("Antennarius, the water helper", () => {
   });
 });
 
-describe("the greeting (card 8b22c3c2)", () => {
-  it("by the local hour, naming the figure; never part of the urgent alert", async () => {
-    expect(greetingFor("water", at("2028-08-14T09:59"))).toMatch(/^Jó reggelt! Antennarius vagyok/);
-    expect(greetingFor("feeding", at("2028-08-14T10:00"))).toMatch(/^Szép napot! Zebracápa vagyok/);
-    expect(greetingFor("water", at("2028-08-14T18:00"))).toMatch(/^Jó estét!/);
-    const h = await feedingHelper(false, at("2028-08-14T11:00"));
-    expect(h.greeting).toMatch(/^Szép napot! Zebracápa vagyok/);
-    expect(h.alert ?? "").not.toContain("Zebracápa vagyok");
+describe("the alert's picture (Lili 2026-10-29, item 10)", () => {
+  it("a chemical alone takes the chemical picture; the feeding figure says it in the same words and never speaks of measurements", async () => {
+    // the dose of the water test above left "Teszt segítő-só" below zero
+    const w = await waterHelper(true, at("2028-08-12T12:00")); // before the deadline: only the stock
+    expect(w.alertKind).toBe("stock");
+    expect(w.alert).toMatch(/^Vészesen fogy a\(z\) .*Teszt segítő-só.*!$/);
+    const h = await feedingHelper(true, at("2028-08-12T17:00"));
+    expect(h.alertKind).toBe("stock");
+    expect(h.alert).toMatch(/^Vészesen fogy a\(z\) /);
+    expect((await feedingHelper(false, at("2028-08-12T17:00"))).alertKind).toBeUndefined();
   });
 });
 
