@@ -36,9 +36,9 @@ export function Helper({ data, userName, loginAt }: { data: HelperData; userName
   // set once the stored state is read: before that a click could race the auto-open below
   const [ready, setReady] = useState(false);
   const figure = FIGURE[data.who];
-  const picture = data.alert
-    ? ALERT_PICTURE[data.alertKind ?? "measurement"]
-    : `udv-${notice?.kind === "greeting" ? greetingPicture : 1}`;
+  // while it greets the figure wears a greeting picture, even with an alert waiting; then the alert's, else at rest the first
+  const picture =
+    notice?.kind === "greeting" ? `udv-${greetingPicture}` : data.alert ? ALERT_PICTURE[data.alertKind ?? "measurement"] : "udv-1";
   // the alert the shown texts were taken from: a refresh (a save) may change or end it
   const shownAlert = useRef(data.alert);
 
