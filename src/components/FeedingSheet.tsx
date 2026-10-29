@@ -303,7 +303,7 @@ export function FeedingSheet({
                   <th>Állat</th>
                   {feeds.map((f) => (
                     <th key={f.id}>
-                      {f.name} ({f.tick ? "adva" : cellUnits(f).map((u) => u.symbol).join(" + ")})
+                      {f.name} ({f.tick ? (f.dose ? `pipa = ${f.dose}` : "adva") : cellUnits(f).map((u) => u.symbol).join(" + ")})
                     </th>
                   ))}
                   <th>Összesen</th>
@@ -341,7 +341,7 @@ export function FeedingSheet({
                                 checked={d[TICK] === "1"}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => type(r.key, f, TICK, e.target.checked ? "1" : "")}
-                                aria-label={`${r.label}: ${f.name} (adva)`}
+                                aria-label={`${r.label}: ${f.name} (${f.dose ? `pipa = ${f.dose}` : "adva"})`}
                               />
                             ) : isActive ? (
                               cellUnits(f).map((u) => (

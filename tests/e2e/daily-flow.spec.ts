@@ -1479,6 +1479,27 @@ test("the helper: it speaks unasked without taking a click, the quick questions 
   expect(await topIs(page, "save-all")).toBe(true);
 });
 
+// Lili 2026-10-29 (package item 3): a ticked feed's base amount. Only the admin sets it, on the feed list's
+// "Módosítás"; an aquarist sees it and has no form. (The tick recording it is the server's: tests/integration/feed-dose.)
+// Homárikra: no other e2e test uses it, so the amount does not reach their sheets.
+test("the feed list: the admin sets the tick's base amount, an aquarist sees it", async ({ page }) => {
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Takarmánylista" }).click();
+  const row = page.getByRole("row").filter({ hasText: "Homárikra" });
+  await row.getByRole("button", { name: "Homárikra: módosítás" }).click();
+  const form = page.locator('[data-testid^="feed-edit-"]');
+  await form.getByLabel("Alapmennyiség a pipához").fill("30");
+  await form.getByLabel("Az alapmennyiség egysége").selectOption({ label: "g" });
+  await form.getByRole("button", { name: "Mentés" }).click();
+  await expect(row.locator('[data-testid^="feed-dose-"]')).toHaveText("30 g");
+  await page.context().clearCookies();
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Takarmánylista" }).click();
+  const seen = page.getByRole("row").filter({ hasText: "Homárikra" });
+  await expect(seen.locator('[data-testid^="feed-dose-"]')).toHaveText("30 g");
+  await expect(seen.getByRole("button", { name: "Homárikra: módosítás" })).toHaveCount(0);
+});
+
 test("water measurements by e-mail: the recipient in the settings, the button first on the export page", async ({ page }, info) => {
   // caparium-hibak-4. The e2e run has no SMTP: the button must say which variables are missing, by NAME, and send
   // nothing. The address is a test address of our own domain, never typed into the export page.
