@@ -198,9 +198,9 @@ export type PoolNameInput = z.infer<typeof poolNameSchema>;
 
 async function assertUniquePoolName(tx: Tx, poolId: string, name: string, now: Date) {
   const clash = await tx.poolName.findFirst({
-    where: { displayName: { equals: name, mode: "insensitive" }, poolId: { not: poolId }, pool: { active: true }, ...validAt(now) },
+    where: { displayName: { equals: name, mode: "insensitive" }, poolId: { not: poolId }, ...validAt(now) },
   });
-  if (clash) throw new AppError(409, "NAME_TAKEN", "Ilyen nevű aktív medence már van.");
+  if (clash) throw new AppError(409, "NAME_TAKEN", "Ilyen nevű medence már van (inaktív is lehet).");
 }
 
 export async function renamePool(actor: Actor, input: PoolNameInput, now = new Date()) {
@@ -283,9 +283,9 @@ export async function createPool(actor: Actor, raw: z.input<typeof createPoolSch
     return await prisma.$transaction(async (tx) => {
       // the same name check as a rename; there is no pool of its own to leave out yet
       const clash = await tx.poolName.findFirst({
-        where: { displayName: { equals: input.name, mode: "insensitive" }, pool: { active: true }, ...validAt(now) },
+        where: { displayName: { equals: input.name, mode: "insensitive" }, ...validAt(now) },
       });
-      if (clash) throw new AppError(409, "NAME_TAKEN", "Ilyen nevű aktív medence már van.");
+      if (clash) throw new AppError(409, "NAME_TAKEN", "Ilyen nevű medence már van (inaktív is lehet).");
       const groups = await tx.measurementGroup.findMany({ where: { id: { in: input.groupIds }, active: true }, orderBy: { sortOrder: "asc" } });
       if (groups.length !== input.groupIds.length) throw new AppError(422, "GROUP_NOT_FOUND", "A kiválasztott mérési csoport nem található.");
       // at the end of the water report's order: the next number after the highest one
