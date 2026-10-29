@@ -3,9 +3,13 @@
 // monthly ZIMS recipients: the per-pool CSVs as attachments, or a warning with the reason. The recipients are their
 // own setting (`monthly_zims_recipient`), not the water report's. A mail is PREVIEW, never a submission (R-9).
 // Once per month and kind: the audit row `MonthlyZimsMail` is the memory; a failed sending leaves no row, so the
-// next hourly try sends again. Nothing is sent where no recipient is set.
+// next hourly try sends again. Nothing is sent where no recipient is set, and nothing unless the instance is switched on
+// (CAPARIUM_MONTHLY_ZIMS_MAIL=on): a stage or a test instance on a copy of the production data has the recipient setting
+// and may have SMTP, and must not mail Lili from stage data (barracuda on #110).
+// Once-only across instances too: the check, the sending and the audit row are one transaction under an advisory lock on
+// the key, so a second instance in the same hour waits, then finds the row.
 import { writeAudit } from "./audit";
-import { prisma, SYSTEM_USER_ID } from "./db";
+import { prisma, SYSTEM_USER_ID, type Tx } from "./db";
 import { AppError } from "./errors";
 import { activeProfile, monthlyFileName, previousMonth, type monthlyPackage } from "./exports/zims";
 import { mailConfig, smtpSender, type MailSender } from "./mail";
@@ -26,17 +30,23 @@ const WHY: Record<string, string> = {
 // (a mail cannot be taken back; the row is the memory only if it exists).
 const sentThisRun = new Set<string>();
 
+/** The automatic mail is off unless this instance is switched on. */
+export const monthlyMailEnabled = (env: Record<string, string | undefined> = process.env) => env.CAPARIUM_MONTHLY_ZIMS_MAIL === "on";
+
+const alreadySent = (tx: Tx, key: string) => tx.auditEntry.findFirst({ where: { requestId: key, entityType: "MonthlyZimsMail" } });
+
 export async function mailMonthlyPackage(
   result: PackageResult,
   now = new Date(),
   sender?: MailSender,
 ): Promise<{ sent: boolean; why?: string }> {
+  if (!monthlyMailEnabled()) return { sent: false, why: "DISABLED" };
   const { from, to } = previousMonth(now);
   const kind = result.runId ? "package" : result.reason ? `warning-${result.reason}` : null;
   if (!kind) return { sent: false, why: "NOTHING_TO_SAY" };
   const key = `havi-zims-level-${from}-${kind}`;
   if (sentThisRun.has(key)) return { sent: false, why: "ALREADY_SENT" };
-  if (await prisma.auditEntry.findFirst({ where: { requestId: key, entityType: "MonthlyZimsMail" } })) return { sent: false, why: "ALREADY_SENT" };
+  if (await alreadySent(prisma, key)) return { sent: false, why: "ALREADY_SENT" };
 
   const raw = await getSetting(prisma, "monthly_zims_recipient", now);
   const recipients = raw ? parseRecipients(raw) : null;
@@ -67,25 +77,36 @@ export async function mailMonthlyPackage(
 
   const config = mailConfig();
   const send = sender ?? smtpSender(config);
-  try {
-    await send({ from: config.from, to: recipients.list.join(", "), subject, text, attachments });
-  } catch (e) {
-    // only the code goes on; the SMTP server's own words are logged, never our key
-    console.error("monthly ZIMS mail failed:", e instanceof Error ? e.message : e);
-    throw new AppError(502, "MAIL_FAILED", "A havi ZIMS-levél küldése nem sikerült.");
-  }
-  sentThisRun.add(key);
-  await writeAudit(prisma, {
-    userId: SYSTEM_USER_ID,
-    action: "EXPORT",
-    entityType: "MonthlyZimsMail",
-    entityId: result.runId ?? from,
-    changes: {
-      recipient: { before: null, after: recipients.list.join(", ") },
-      files: { before: null, after: attachments.map((a) => a.filename) },
-      kind: { before: null, after: kind },
+  const names = attachments.map((x) => x.filename);
+  // One transaction: the lock, the check, the sending, the audit row. A second instance waits at the lock and then finds
+  // the row; a failed sending throws, rolls back, and leaves no row, so the next hourly try sends again. The timeout
+  // covers a slow SMTP server.
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+      if (sentThisRun.has(key) || (await alreadySent(tx, key))) return { sent: false, why: "ALREADY_SENT" };
+      try {
+        await send({ from: config.from, to: recipients.list.join(", "), subject, text, attachments });
+      } catch (e) {
+        // only the code goes on; the SMTP server's own words are logged, never our key
+        console.error("monthly ZIMS mail failed:", e instanceof Error ? e.message : e);
+        throw new AppError(502, "MAIL_FAILED", "A havi ZIMS-levél küldése nem sikerült.");
+      }
+      sentThisRun.add(key); // the mail is out: if the commit below fails, this process does not send it again
+      await writeAudit(tx, {
+        userId: SYSTEM_USER_ID,
+        action: "EXPORT",
+        entityType: "MonthlyZimsMail",
+        entityId: result.runId ?? from,
+        changes: {
+          recipient: { before: null, after: recipients.list.join(", ") },
+          files: { before: null, after: names },
+          kind: { before: null, after: kind },
+        },
+        requestId: key,
+      });
+      return { sent: true };
     },
-    requestId: key,
-  });
-  return { sent: true };
+    { timeout: 60_000, maxWait: 10_000 },
+  );
 }

@@ -175,7 +175,7 @@ export default async function SettingsPage() {
       </SettingsCard>
 
       <SettingsCard id="havi-zims-level" title="Havi ZIMS-csomag levélben">
-        <p className="hint">Erre a címre megy az előző hónap ZIMS-csomagja az új hónap első órájában, medencénként egy CSV-vel. Ha a hónapra nem készül csomag, figyelmeztető levél megy. Üresen hagyva nem megy levél.</p>
+        <p className="hint">Erre a címre megy az előző hónap ZIMS-csomagja az új hónap első órájában, medencénként egy CSV-vel. Ha a hónapra nem készül csomag, figyelmeztető levél megy. Üresen hagyva nem megy levél. Ha a címet hónap közben adod meg, az előző hónap csomagja is egyszer kimegy.</p>
         <MonthlyZimsRecipient email={await getSetting(prisma, "monthly_zims_recipient", now)} />
       </SettingsCard>
 

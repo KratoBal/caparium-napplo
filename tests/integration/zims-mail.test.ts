@@ -24,6 +24,8 @@ beforeAll(async () => {
   f = await fixtures();
   for (const k of Object.keys(SMTP)) saved[k] = process.env[k];
   Object.assign(process.env, SMTP);
+  saved.CAPARIUM_MONTHLY_ZIMS_MAIL = process.env.CAPARIUM_MONTHLY_ZIMS_MAIL;
+  process.env.CAPARIUM_MONTHLY_ZIMS_MAIL = "on"; // the instance is switched on; the first test below switches it off
 });
 afterAll(() => {
   for (const [k, v] of Object.entries(saved)) {
@@ -42,6 +44,16 @@ const code = (p: Promise<unknown>) => p.then(() => null, (e: unknown) => (e as A
 describe("the monthly ZIMS package mail", () => {
   const now = new Date("2029-04-02T12:00:00+02:00");
   const audit = (key: string) => prisma.auditEntry.findMany({ where: { requestId: key, entityType: "MonthlyZimsMail" } });
+
+  it("an instance that is not switched on sends nothing, even with a recipient and SMTP (a stage on a copy of the data)", async () => {
+    process.env.CAPARIUM_MONTHLY_ZIMS_MAIL = "";
+    try {
+      expect(await mailMonthlyPackage({ created: false, runId: "00000000-0000-0000-0000-000000000000" }, now, fake)).toEqual({ sent: false, why: "DISABLED" });
+    } finally {
+      process.env.CAPARIUM_MONTHLY_ZIMS_MAIL = "on";
+    }
+    expect(sent).toHaveLength(0);
+  });
 
   it("no recipient: nothing is sent; a settings admin sets it (an aquarist cannot), audited", async () => {
     await createMeasurement(f.aq1, { requestId: rid(), groupId: f.group("NAPI_NAGY"), poolId: f.pool("NAGY"), parameterId: f.param("PH"), value: "8,1", measuredAtLocal: "2029-03-15T09:00" }, new Date("2029-03-15T09:00:00+01:00"));
@@ -98,5 +110,23 @@ describe("the monthly ZIMS package mail", () => {
     expect(m.attachments).toHaveLength(0);
     expect(await mailMonthlyPackage(pkg, mayDone, fake)).toEqual({ sent: false, why: "ALREADY_SENT" });
     expect(sent).toHaveLength(before + 1);
+  });
+  // barracuda on #110: two instances in the same hour. The sender stands at a barrier until both calls are inside, so
+  // without the lock both would pass the check and send. One mail and one audit row, whichever instance gets there first.
+  it("two parallel tries send ONE mail and write one audit row", async () => {
+    const aprilNow = new Date("2029-05-02T12:00:00+02:00");
+    await createMeasurement(f.aq1, { requestId: rid(), groupId: f.group("NAPI_NAGY"), poolId: f.pool("NAGY"), parameterId: f.param("PH"), value: "8,2", measuredAtLocal: "2029-04-10T09:00" }, new Date("2029-04-10T09:00:00+02:00"));
+    const pkg = await monthlyPackage(aprilNow);
+    expect(pkg.runId).toBeTruthy();
+    const mine: OutgoingMail[] = [];
+    const slow: MailSender = async (m) => {
+      mine.push(m);
+      await new Promise((r) => setTimeout(r, 700)); // the other call reaches its check meanwhile
+      return { messageId: "teszt" };
+    };
+    const results = await Promise.all([mailMonthlyPackage(pkg, aprilNow, slow), mailMonthlyPackage(pkg, aprilNow, slow)]);
+    expect(results.filter((r) => r.sent)).toHaveLength(1);
+    expect(mine).toHaveLength(1);
+    expect(await audit("havi-zims-level-2029-04-01-package")).toHaveLength(1);
   });
 });
