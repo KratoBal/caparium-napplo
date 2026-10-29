@@ -139,14 +139,14 @@ export function SheetColorForm(p: { target: "animal" | "group"; id: string; name
   );
 }
 
-export function PoolRow(p: { poolId: string; name: string; groups: string }) {
+export function PoolRow(p: { poolId: string; name: string; groups: string; active: boolean }) {
   const [name, setName] = useState(p.name);
   const [mode, setMode] = useState<"change" | "correction">("change");
   const [reason, setReason] = useState("");
   const { msg, busy, save } = useSave();
   const reasonsOn = useReasonsOn();
   return (
-    <tr data-testid={`pool-${p.name}`}>
+    <tr data-testid={`pool-${p.name}`} className={p.active ? undefined : "invalid"}>
       <td><input className="input" aria-label={`${p.name} új neve`} value={name} onChange={(e) => setName(e.target.value)} /></td>
       <td className="hint">{p.groups || "nincs vízmérés"}</td>
       <td><ModeSelect id={p.name} value={mode} onChange={setMode} /></td>
@@ -154,6 +154,19 @@ export function PoolRow(p: { poolId: string; name: string; groups: string }) {
       <td>
         <button className="btn" type="button" disabled={busy || name.trim() === p.name} onClick={() => void save("/api/admin/pool-name", "POST", { poolId: p.poolId, name: name.trim(), mode, ...(reason.trim() ? { reason: reason.trim() } : {}) })}>
           Mentés
+        </button>{" "}
+        {/* Lili 2026-10-29 (caparium-finomitas-1): off for a renovation and back, nothing lost */}
+        <button
+          className="btn btn-row"
+          type="button"
+          disabled={busy}
+          aria-label={`${p.name}: ${p.active ? "inaktiválás" : "aktiválás"}`}
+          onClick={() => {
+            if (p.active && !window.confirm(`Inaktiválod: ${p.name}? Felújítás idejére: új mérés nem rögzíthető rá, és lekerül a mérési táblából; a korábbi mérései megmaradnak, és aktiválva minden visszajön.`)) return;
+            void save("/api/admin/pool-active", "POST", { poolId: p.poolId, active: !p.active }, p.active ? "Inaktiválva." : "Újra aktív.");
+          }}
+        >
+          {p.active ? "Inaktiválás (felújítás)" : "Aktiválás"}
         </button>{" "}
         <Msg msg={msg} />
       </td>

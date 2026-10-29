@@ -314,6 +314,8 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
       if (!pool || !param) {
         throw new AppError(422, "NOT_IN_GROUP", "Ez a medence vagy paraméter ezen a napon nem tartozik a csoporthoz.");
       }
+      // a pool off for a while (a renovation) takes no new measurement; a recorded one can still be corrected
+      if (!pool.active) throw new AppError(422, "POOL_INACTIVE", "Ez a medence most inaktív (például felújítás), új mérés nem rögzíthető rá.");
       checkPlausible(value, param, input.confirmPlausibility);
       checkDilutionAllowed(param, input);
 

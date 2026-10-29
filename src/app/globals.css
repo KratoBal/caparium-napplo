@@ -232,6 +232,8 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .err { color: var(--c-error); font-weight: 600; }
 
 .input.small { width: 110px; }
+/* a pool off for a renovation, on a day it was measured: shown, not written */
+.pool-off .pool-cell button { opacity: 0.6; cursor: default; }
 /* Lili 2026-10-29: the feeding sheet's amount field empties with a small X in its top right corner, quiet until needed */
 .clearable { position: relative; display: inline-block; }
 .clearable .input, .clearable .cell-input { padding-right: 22px; }

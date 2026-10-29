@@ -92,6 +92,10 @@ export async function getGrid(groupId: string, day: string, roundSeq?: number) {
     diluentWater: m.diluentWater,
   });
 
+  // an inactive pool (a renovation) stays on the days it has a measurement, read only; on the others it is off the grid
+  const measuredPools = new Set(all.map((m) => m.poolId));
+  layout.pools = layout.pools.filter((p) => p.active || measuredPools.has(p.id));
+
   const cells: Record<string, CellView> = {};
   const daily: Record<string, CellView> = {};
   for (const m of all) {
