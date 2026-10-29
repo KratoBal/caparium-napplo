@@ -211,6 +211,11 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .eat-pattern .eat-FASTING { background: #a8c3da; color: #134a6c; }
 .eat-pattern .eat-bar { min-width: 30px; height: 14px; padding: 0; vertical-align: middle; }
 .eat-pattern .day-letter { display: block; font-size: 12px; color: var(--c-muted); font-weight: 600; }
+/* Lili 2026-10-29 (package item 11): the table as wide as its content, not the page: the Állat column as wide as the
+   longest name, the days next to it in narrow equal columns (the full-width table gave the spare room to the names) */
+.log-table.eat-pattern { width: auto; }
+.eat-pattern tr > :first-child { white-space: nowrap; padding-right: 20px; }
+.eat-pattern tr > :not(:first-child) { min-width: 52px; text-align: center; }
 .table-scroll { overflow-x: auto; }
 .sheet-color-sample { display: inline-block; padding: 6px 12px; border: 1px solid var(--c-line); border-radius: 8px; background: var(--c-white); color: var(--c-ink); font-size: 14px; }
 /* Lili 2026-10-27: the feeding sheet's header row stays on top while it scrolls down, like a frozen row in Excel
