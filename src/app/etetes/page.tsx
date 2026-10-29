@@ -16,6 +16,7 @@ import { knownOtherNames, listFeeds } from "@/lib/feeds";
 import { activeFeedingLists } from "@/lib/feeding-lists";
 import { dayStatus } from "@/lib/journal";
 import { requireModuleRead } from "@/lib/session";
+import { sheetColumnFeeds } from "@/lib/sheet-columns";
 import { businessDayOf, isValidDay } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -68,9 +69,8 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
   // 6fe63c9b, step 2: the day's feeds narrow what is offered; "Egyéb" stays (it takes its real name per item)
   const chosen = new Set(view.feedIds);
   const offered = chosen.size ? feeds.filter((f) => chosen.has(f.id) || f.isOther) : feeds;
-  // the sheet's columns: the chosen feeds, or, if none were chosen, the feeds already given that day; never "Egyéb"
-  const given = new Set(view.items.map((i) => i.feedId));
-  const sheetFeeds = feeds.filter((f) => !f.isOther && (chosen.size ? chosen.has(f.id) : given.has(f.id)));
+  // the sheet's columns: the chosen feeds and the feeds already given that day; never "Egyéb" (sheet-columns.ts)
+  const sheetFeeds = sheetColumnFeeds(feeds, chosen, view.items.map((i) => i.feedId));
   const feedTypes: FeedTypeOpt[] = types
     .filter((t) => t.code !== "EGYEB")
     .map((t) => ({ code: t.code, name: t.name, emoji: t.emoji, feeds: t.feeds.filter((f) => f.active).map((f) => ({ id: f.id, name: f.name })) }))

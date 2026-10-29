@@ -1706,6 +1706,18 @@ test("feeding lists: the admin composes one, the header's switch and dropdown ma
   // a selection is left, so the switch stays on beside it
   await expect(power).toBeChecked();
   expect(confirms, "the list operation asked nothing").toEqual([]);
+  // barracuda on #104: another feed chosen for the day afterwards: the kept item's feed stays a column of the sheet
+  const dayFeeds = page.getByTestId("day-feeds");
+  await dayFeeds.getByLabel("A nap takarmánya: Litopenaeus vannamei").check();
+  const saveFeeds = dayFeeds.getByRole("button", { name: "A nap takarmányainak mentése" });
+  if (await saveFeeds.count()) await saveFeeds.click();
+  else await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).click();
+  await expect(dayFeeds.getByLabel("A nap takarmánya: Litopenaeus vannamei")).toBeChecked();
+  const sheet = page.getByTestId("feeding-sheet");
+  await expect(sheet.getByRole("columnheader", { name: /^Litopenaeus vannamei/ })).toBeVisible();
+  await expect(sheet.getByRole("columnheader", { name: /^Mysis/ }), "the given feed stays a column").toBeVisible();
+  await sheet.getByRole("row").filter({ has: page.getByRole("cell", { name: "Teszt Kettő", exact: true }) }).click();
+  await expect(sheet.getByLabel("Teszt Kettő: Mysis (g)", { exact: true })).toHaveValue("5");
 
   // archived: the list leaves the dropdown
   await page.goto("/etetes/rend");
