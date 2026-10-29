@@ -17,6 +17,11 @@ export default async function SettingsPage() {
   if ((await moduleLevel(prisma, user.id, user.role, "SETTINGS")) !== "ADMIN") redirect("/nincs-jogosultsag");
   const now = new Date();
   const reasons = await reasonsRequired(prisma);
+  // the pools card lists the inactive ones too (a renovation), to bring them back; the other cards the active ones
+  const allPools = await prisma.pool.findMany({
+    orderBy: [{ active: "desc" }, { code: "asc" }],
+    include: { names: true, memberships: { where: validAt(now), include: { group: true } } },
+  });
   const [params, pools, users, feedTypes, groups, animals, animalGroups] = await Promise.all([
     prisma.parameter.findMany({
       where: { active: true },
@@ -131,12 +136,13 @@ export default async function SettingsPage() {
           <table className="log-table">
             <thead><tr><th>Név</th><th>Mérési csoport</th><th>Fajta</th>{reasons && <th>Indoklás</th>}<th></th></tr></thead>
             <tbody>
-              {pools.map((p) => (
+              {allPools.map((p) => (
                 <PoolRow
                   key={p.id}
                   poolId={p.id}
                   name={pickValid(p.names, now)?.displayName ?? p.code}
                   groups={p.memberships.map((m) => m.group.name).join(", ")}
+                  active={p.active}
                 />
               ))}
             </tbody>

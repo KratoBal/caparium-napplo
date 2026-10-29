@@ -156,6 +156,34 @@ export async function setPoolVolume(actor: Actor, input: z.infer<typeof poolVolu
 }
 
 // ---------------------------------------------------------------------------
+// A pool off for a while (Lili 2026-10-29, caparium-finomitas-1: a renovation): no new measurement, nothing lost.
+// Inactive, it leaves the measurement grid of the days it was not measured on and is not offered for a new
+// measurement or a dosing; its measurements, logs and reports stay, and it comes back as it was when activated.
+// ---------------------------------------------------------------------------
+
+export const poolActiveSchema = z.object({ requestId, poolId: z.uuid(), active: z.boolean() });
+
+export async function setPoolActive(actor: Actor, input: z.infer<typeof poolActiveSchema>) {
+  await requireSettingsAdmin(actor);
+  if (await replayed(input.requestId)) return { replayed: true };
+  return prisma.$transaction(async (tx) => {
+    const pool = await tx.pool.findUnique({ where: { id: input.poolId } });
+    if (!pool) throw new AppError(404, "POOL_NOT_FOUND", "A medence nem található.");
+    if (pool.active === input.active) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
+    await tx.pool.update({ where: { id: pool.id }, data: { active: input.active } });
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: "MASTER_CHANGE",
+      entityType: "Pool",
+      entityId: pool.id,
+      changes: { active: { before: pool.active, after: input.active } },
+      requestId: input.requestId,
+    });
+    return { replayed: false };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Pool display names (VIZ-22: stable id, changeable name)
 // ---------------------------------------------------------------------------
 

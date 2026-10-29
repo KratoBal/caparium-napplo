@@ -21,7 +21,7 @@ type Grid = {
   group: { id: string; name: string };
   day: string;
   layout: {
-    pools: { id: string; name: string }[];
+    pools: { id: string; name: string; active: boolean }[];
     parameters: { id: string; name: string; decimals: number; unit: { symbol: string }; dilution: boolean }[];
   };
   rounds: { id: string; seq: number }[];
@@ -109,7 +109,7 @@ export function MeasurementGrid({
 }) {
   const router = useRouter();
   const [grid, setGrid] = useState<Grid>(initial);
-  const [activePool, setActivePool] = useState<string>(initial.layout.pools[0]?.id ?? "");
+  const [activePool, setActivePool] = useState<string>(initial.layout.pools.find((p) => p.active)?.id ?? "");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [metaDrafts, setMetaDrafts] = useState<Record<string, Meta>>({});
   const [cellState, setCellState] = useState<Record<string, CellState>>({});
@@ -528,12 +528,14 @@ export function MeasurementGrid({
             </thead>
             <tbody>
               {grid.layout.pools.map((pool) => {
-                const active = pool.id === activePool && !readOnly;
+                // an inactive pool (a renovation) is here only on a day it was measured: shown, not written
+                const active = pool.id === activePool && !readOnly && pool.active;
                 return (
-                  <tr key={pool.id} className={active ? "active-row" : undefined} data-testid={`row-${pool.name}`}>
+                  <tr key={pool.id} className={active ? "active-row" : pool.active ? undefined : "pool-off"} data-testid={`row-${pool.name}`}>
                     <td className="pool-cell">
-                      <button type="button" onClick={() => setActivePool(pool.id)} aria-pressed={active}>
+                      <button type="button" onClick={() => pool.active && setActivePool(pool.id)} aria-pressed={active} disabled={!pool.active}>
                         {pool.name}
+                        {!pool.active && <span className="hint"> (inaktív)</span>}
                       </button>
                     </td>
                     {grid.layout.parameters.map((param) => {
@@ -584,7 +586,7 @@ export function MeasurementGrid({
                               // 1562020634588876821): a pick there makes its row the active one for the value
                               editable={!readOnly}
                               onChange={(m) => {
-                                if (pool.id !== activePool) setActivePool(pool.id);
+                                if (pool.id !== activePool && pool.active) setActivePool(pool.id);
                                 // a draft like the value: saved by the Mentés button, with the value
                                 setMetaDrafts((d) => ({ ...d, [key]: m }));
                               }}

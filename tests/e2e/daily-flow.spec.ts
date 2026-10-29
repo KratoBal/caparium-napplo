@@ -944,6 +944,21 @@ for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti víz
   });
 }
 
+test("settings: a pool goes off for a renovation and comes back", async ({ page }) => {
+  // Lili 2026-10-29 (caparium-finomitas-1, item 2); the rules themselves are in tests/integration/pool-inactive.test.ts
+  page.on("dialog", (d) => void d.accept());
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Beállítások" }).click();
+  const row = page.getByTestId("pool-Ragadozós");
+  await row.getByRole("button", { name: "Ragadozós: inaktiválás" }).click();
+  await expect(row.getByRole("status")).toHaveText("Inaktiválva.");
+  await expect(row).toHaveClass(/invalid/);
+  // back, within the test: the other tests measure in it
+  await row.getByRole("button", { name: "Ragadozós: aktiválás" }).click();
+  await expect(row).not.toHaveClass(/invalid/);
+  await expect(row.getByRole("button", { name: "Ragadozós: inaktiválás" })).toBeVisible();
+});
+
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
   // each layout takes out its own feed: one item per feed and day
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";

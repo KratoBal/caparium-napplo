@@ -87,11 +87,12 @@ export async function waterReport(day: string): Promise<WaterReport> {
   });
   // the pools in their fixed order (Lili 2026-10-26, msg 1564418747047874581); one without a number (made before the order existed, or
   // by hand) comes after the numbered ones, in the order it was created (acrobot 2026-10-27 01:41), not by its code
-  const pools = await prisma.pool.findMany({
-    where: { active: true },
+  // an inactive pool (a renovation) is in the report of the days it was measured on, and only those
+  const measured = new Set(rows.map((m) => m.poolId));
+  const pools = (await prisma.pool.findMany({
     include: { names: true },
     orderBy: [{ sortOrder: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }, { code: "asc" }],
-  });
+  })).filter((p) => p.active || measured.has(p.id));
   const sortOf = new Map(rows.map((m) => [m.parameterId, m.parameter.sortOrder]));
   const ordered = (list: (typeof rows)[number][]) => list.sort((a, b) => (sortOf.get(a.parameterId) ?? 0) - (sortOf.get(b.parameterId) ?? 0)).map(view);
   return {
