@@ -18,6 +18,7 @@
 
 import type { Dimension, PrismaClient, Sex } from "@prisma/client";
 import { rebuildAnimal } from "./animals";
+import { ensureListFeed } from "./base-feed-marks";
 import { SYSTEM_USER_ID } from "./db";
 import { businessDayOf, dayToDate } from "./time";
 
@@ -91,21 +92,23 @@ export async function hasTestSystemData(prisma: PrismaClient): Promise<boolean> 
 
 /** The feeds of the list no feed name has ever carried, after the sort orders already used. */
 export async function loadInitialFeeds(prisma: PrismaClient, unitId: Map<string, string>, since: Date): Promise<void> {
-  const have = new Set((await prisma.feedName.findMany()).map((n) => n.name));
+  // by a stable key, not by name (package item 14, src/lib/base-feed-marks.ts): a renamed feed is not created again
   let sortOrder = (await prisma.feed.aggregate({ _max: { sortOrder: true } }))._max.sortOrder ?? 0;
   for (const f of INITIAL_FEEDS) {
-    if (have.has(f.name)) continue;
-    const type = await prisma.feedType.findUniqueOrThrow({ where: { code: f.type } });
-    sortOrder += 1;
-    await prisma.feed.create({
-      data: {
-        typeId: type.id,
-        allowedDimensions: f.dims,
-        sheetTick: f.sheetTick ?? false,
-        defaultUnitId: unitId.get(f.unit)!,
-        sortOrder,
-        names: { create: { name: f.name, validFrom: since } },
-      },
+    await ensureListFeed(prisma, `initial-feed:${f.type}:${f.name}`, f.name, async () => {
+      const type = await prisma.feedType.findUniqueOrThrow({ where: { code: f.type } });
+      sortOrder += 1;
+      const created = await prisma.feed.create({
+        data: {
+          typeId: type.id,
+          allowedDimensions: f.dims,
+          sheetTick: f.sheetTick ?? false,
+          defaultUnitId: unitId.get(f.unit)!,
+          sortOrder,
+          names: { create: { name: f.name, validFrom: since } },
+        },
+      });
+      return created.id;
     });
   }
 }

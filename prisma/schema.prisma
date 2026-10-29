@@ -857,6 +857,17 @@ model Feed {
   @@map("feed")
 }
 
+// What the basic data step (scripts/start.sh, src/lib/base-data.ts) has created once, by the list's key: it never
+// creates that again, whatever an admin did to it since (a rename, a correction, an inactivation). Lili 2026-10-29
+// (package item 14): the feeds were looked up by NAME at every start, so a corrected name brought the feed back.
+model BaseDataMark {
+  key       String   @id
+  entityId  String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("base_data_mark")
+}
+
 model FeedName {
   id        String    @id @default(uuid()) @db.Uuid
   feedId    String    @db.Uuid

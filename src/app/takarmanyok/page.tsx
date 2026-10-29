@@ -1,4 +1,5 @@
 import { FeedActive, FeedEdit, NewFeed } from "@/components/AnimalForms";
+import { FeedCopies } from "@/components/FeedCopies";
 import { OrderList } from "@/components/AnimalOrder";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
@@ -77,6 +78,8 @@ export default async function FeedsPage() {
           <NewFeed types={addable.map((t) => ({ id: t.id, name: t.name }))} units={unitOpts} />
         </div>
       )}
+      {/* package item 14: the basic data's copies, an admin's operation with a dry run */}
+      {isAdmin && <FeedCopies />}
     </Shell>
   );
 }
