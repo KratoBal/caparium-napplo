@@ -182,4 +182,52 @@ describe("the basic data, without a password", () => {
     expect(hal.emoji, "a cleared icon does not come back at the next start").toBeNull();
     expect((await db.feedType.findUniqueOrThrow({ where: { code: "RAK" } })).emoji).toBe("🦐");
   }, 120_000);
+
+  // Lili 2026-10-29 (package item 14): the feed list's "Módosítás" renames as a CORRECTION, which overwrites the old
+  // name; the start looked the list's feeds up by NAME and made Artemia, Mysis and Krill again on the stage. WHAT TURNS
+  // THIS RED: a corrected list feed made again at the next start; a copy the old lookup made left in the list, or
+  // deleted while something refers to it.
+  const correct = async (from: string, to: string) => {
+    const row = await db.feedName.findFirstOrThrow({ where: { name: from } });
+    await db.feedName.update({ where: { id: row.id }, data: { name: to } });
+    await db.auditEntry.create({
+      data: { userId: "00000000-0000-0000-0000-000000000001", action: "MASTER_CORRECTION", entityType: "Feed", entityId: row.feedId, changes: { name: { before: from, after: to } } },
+    });
+    return row.feedId;
+  };
+  const start = () => execFileSync("npx", ["tsx", "prisma/base-data.ts"], { stdio: "pipe", env });
+  const feedsNamed = (n: string) => db.feed.findMany({ where: { names: { some: { name: n } } } });
+
+  it("a list feed corrected to another name is not made again at the next start", async () => {
+    const artemia = await correct("Artemia", "Artemia táblás");
+    const before = await db.feed.count();
+    start();
+    expect([await db.feed.count(), (await feedsNamed("Artemia")).length, (await feedsNamed("Artemia táblás")).map((x) => x.id)]).toEqual([before, 0, [artemia]]);
+  }, 120_000);
+
+  it("the copies the old name lookup made after a correction: removed when unused, made inactive when not, audited", async () => {
+    // a database from before the marks: the old start already made the copies
+    const mysis = await correct("Mysis", "Mysis táblás");
+    const krill = await correct("Krill", "Krill táblás");
+    await db.baseDataMark.deleteMany({ where: { key: { in: ["initial-feed:APRO:Mysis", "initial-feed:APRO:Krill"] } } });
+    const type = await db.feedType.findUniqueOrThrow({ where: { code: "APRO" } });
+    const g = await db.unit.findUniqueOrThrow({ where: { symbol: "g" } });
+    const copy = async (n: string) => (await db.feed.create({ data: { typeId: type.id, allowedDimensions: ["MASS"], defaultUnitId: g.id, sortOrder: 999, names: { create: { name: n, validFrom: new Date() } } } })).id;
+    const mysisCopy = await copy("Mysis");
+    const krillCopy = await copy("Krill");
+    // the Krill copy has something on it (a base amount): it must not be deleted
+    await db.coralFeedDose.create({ data: { feedId: krillCopy, dose: "5", unitId: g.id, validFrom: new Date() } });
+    start();
+    const marks = await db.baseDataMark.findMany({ where: { key: { in: ["initial-feed:APRO:Mysis", "initial-feed:APRO:Krill"] } }, orderBy: { key: "asc" } });
+    expect([
+      await db.feed.findUnique({ where: { id: mysisCopy } }),
+      (await db.feed.findUniqueOrThrow({ where: { id: krillCopy } })).active,
+      marks.map((m) => m.entityId),
+      await db.auditEntry.count({ where: { entityId: { in: [mysisCopy, krillCopy] }, action: "MASTER_CHANGE", userId: "00000000-0000-0000-0000-000000000001" } }),
+    ]).toEqual([null, false, [krill, mysis], 2]);
+    // and a third start changes nothing more
+    const settled = await db.feed.count();
+    start();
+    expect(await db.feed.count()).toBe(settled);
+  }, 120_000);
 });
