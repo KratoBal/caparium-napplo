@@ -92,7 +92,8 @@ export const GROUPS = [
     name: "Kismedencék",
     frequency: "DAILY" as const,
     active: true,
-    pools: ["KORALLOS", "INKUBATOR", "RAGADOZOS"],
+    // Ragadozós first, Korallos last (Lili 2026-10-29, migration 20261029150000_small_tanks_order)
+    pools: ["RAGADOZOS", "INKUBATOR", "KORALLOS"],
     params: ["SAL", "PH", "TEMP", "ORP"],
   },
   {

@@ -44,8 +44,10 @@ test("login, record a daily measurement, it survives a reload and shows in the l
   await page.getByTestId("save-all").click();
   await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
 
-  // persisted in the database, not in the browser
+  // persisted in the database, not in the browser; after a reload the first pool's row is the active one, so the
+  // pool is tapped again (Korallos is the small tanks' last row since 2026-10-29)
   await page.reload();
+  await page.getByRole("button", { name: p.pool, exact: true }).click();
   await expect(page.getByTestId(`cell-${p.pool}-pH`)).toHaveValue("7,88");
   await expect(page.getByTestId(`cell-${p.pool}-Sűrűség`)).toHaveValue("35");
 
@@ -82,6 +84,7 @@ test("a value is saved only by the Mentés button, leaving with it asks first, a
   await login(other, "teszt.akvarista2");
   await other.goto("/vizmeres");
   await other.getByRole("tab", { name: p.tab }).click();
+  await other.getByRole("button", { name: p.pool, exact: true }).click();
   await expect(other.getByTestId(`cell-${p.pool}-Hőmérséklet`)).toHaveValue("");
 
   // leaving through an in-app link asks; declining keeps the page and the typed value
@@ -98,6 +101,7 @@ test("a value is saved only by the Mentés button, leaving with it asks first, a
   await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
   await other.reload();
   await other.getByRole("tab", { name: p.tab }).click();
+  await other.getByRole("button", { name: p.pool, exact: true }).click();
   await expect(other.getByTestId(`cell-${p.pool}-Hőmérséklet`)).toHaveValue("24,6");
   await other.close();
   await page.close();
