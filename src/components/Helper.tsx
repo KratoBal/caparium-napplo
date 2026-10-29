@@ -1,14 +1,18 @@
 "use client";
 
-// AST-01..AST-03: a helper in the corner: fixed quick questions about the page's data, never free text
-// (D-23); simple icons, no AI-generated figure (NY-10 default); switched off per browser (a viewer's
-// convenience, kept in localStorage); it opens by itself once when there is something to say (AST-03).
+// AST-01..AST-03: a static figure in the corner with a speech bubble: fixed quick questions about the
+// page's data, never free text (D-23). The figure is drawn from an emoji, not an image: the AI-generated
+// character sheets wait for D-38 (their rights), and an image is a file swap in FIGURE below (card
+// 8b22c3c2, acrobot 38044). It greets once per session, and it opens by itself once per alert (AST-03).
+// Switched off in the header (HelperToggle), the figure and the greeting go; the URGENT notices (the
+// missed measurement, a chemical running out) stay, in a small strip (Lili 2026-10-27 13:25 UTC).
 import { useEffect, useState } from "react";
 import type { HelperData } from "@/lib/helpers";
+import { readOff, SWITCH_EVENT } from "@/lib/helper-switch";
 
-const OFF_KEY = "caparium-segito-ki";
 const SEEN_KEY = "caparium-segito-latta";
-const NAME = { water: "🐠 Antennarius", feeding: "🦈 Zebracápa" } as const;
+const GREETED_KEY = "caparium-segito-koszont";
+const FIGURE = { water: { emoji: "🐠", name: "Antennarius" }, feeding: { emoji: "🦈", name: "Zebracápa" } } as const;
 
 export function Helper({ data }: { data: HelperData }) {
   const [off, setOff] = useState(false);
@@ -17,53 +21,69 @@ export function Helper({ data }: { data: HelperData }) {
   const [animal, setAnimal] = useState(data.perAnimal?.[0]?.name ?? "");
   // set once the stored state is read: before that a click could race the auto-open below
   const [ready, setReady] = useState(false);
-  useEffect(() => {
-    setReady(true);
-    let isOff = false;
-    try {
-      isOff = localStorage.getItem(OFF_KEY) === "1";
-    } catch {
-      /* no storage: the helper stays on */
-    }
-    setOff(isOff);
-    // switched off, the alert is not marked as seen: switched back on, it still opens once
-    if (!isOff) openIfNew();
-  }, [data.alert, data.alertKey]);
-  /** AST-03: opens with the alert once per key and session */
-  function openIfNew() {
-    if (!data.alert) return;
+  const figure = FIGURE[data.who];
+
+  /** AST-03: opens with the alert once per key and session; true when it did. It is also the figure's hello:
+   * the next page does not greet after it (an alert, then a hello, would open the bubble on every page) */
+  function openIfNew(): boolean {
+    if (!data.alert) return false;
     const key = data.alertKey ?? data.alert;
     try {
-      if (sessionStorage.getItem(SEEN_KEY) === key) return;
+      if (sessionStorage.getItem(SEEN_KEY) === key) return false;
       sessionStorage.setItem(SEEN_KEY, key);
+      sessionStorage.setItem(`${GREETED_KEY}-${data.who}`, "1");
     } catch {
       /* without storage it opens on every page with an alert */
     }
     setOpen(true);
     setAnswer(data.alert);
+    return true;
   }
-  const setStored = (v: boolean) => {
-    setOff(v);
+  /** the hello, once per session and figure; an alert goes first */
+  function greetIfNew() {
     try {
-      if (v) localStorage.setItem(OFF_KEY, "1");
-      else localStorage.removeItem(OFF_KEY);
+      if (sessionStorage.getItem(`${GREETED_KEY}-${data.who}`) === "1") return;
+      sessionStorage.setItem(`${GREETED_KEY}-${data.who}`, "1");
     } catch {
-      /* not stored: it is back on the next page */
+      return; // without storage it would greet on every page: it does not greet
     }
-    // switched back on: an alert not seen yet opens on this page, not only on the next one
-    if (!v) openIfNew();
-  };
+    setOpen(true);
+    setAnswer(data.greeting);
+  }
+
+  useEffect(() => {
+    setReady(true);
+    const isOff = readOff();
+    setOff(isOff);
+    // switched off, the alert is not marked as seen: switched back on, it still opens once
+    if (!isOff && !openIfNew()) greetIfNew();
+    const onSwitch = (e: Event) => {
+      const v = (e as CustomEvent<boolean>).detail;
+      setOff(v);
+      // switched back on: an alert not seen yet opens on this page, not only on the next one
+      if (!v) openIfNew();
+    };
+    window.addEventListener(SWITCH_EVENT, onSwitch);
+    return () => window.removeEventListener(SWITCH_EVENT, onSwitch);
+  }, [data.alert, data.alertKey]);
+
   if (off) {
-    return (
-      <button className="helper-on no-print" type="button" onClick={() => setStored(false)} data-testid="helper-on" data-ready="1">
-        Segítő be
-      </button>
-    );
+    // the urgent notices are not switched off with the figure
+    return data.alert ? (
+      <div className="helper-urgent no-print" role="status" data-testid="helper-urgent" data-ready="1">
+        {data.alert}
+      </div>
+    ) : null;
   }
   return (
     <div className="helper no-print" data-testid="helper" data-ready={ready ? "1" : undefined}>
       {open && (
-        <div className="helper-panel" role="dialog" aria-label={`${NAME[data.who]} segítő`}>
+        <div className="helper-bubble" role="dialog" aria-label={`${figure.name} segítő`}>
+          {answer && (
+            <p className="helper-answer" data-testid="helper-answer">
+              {answer}
+            </p>
+          )}
           <div className="helper-qs">
             {data.questions.map((x) => (
               <button key={x.q} className="btn btn-soft" type="button" onClick={() => setAnswer(x.a)}>
@@ -85,19 +105,25 @@ export function Helper({ data }: { data: HelperData }) {
               </span>
             )}
           </div>
-          {answer && (
-            <p className="helper-answer" data-testid="helper-answer">
-              {answer}
-            </p>
-          )}
-          <button className="helper-off" type="button" onClick={() => setStored(true)}>
-            Segítő kikapcsolása
-          </button>
         </div>
       )}
-      <button className={`helper-button${data.alert ? " alert" : ""}`} type="button" onClick={() => setOpen(!open)} aria-expanded={open} data-testid="helper-button">
-        {NAME[data.who]}
-        {data.alert ? " !" : ""}
+      <button
+        className={`helper-figure${data.alert ? " alert" : ""}`}
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-label={`${figure.name}${data.alert ? ", figyelmeztetés" : ""}`}
+        data-testid="helper-button"
+      >
+        <span className="helper-face" aria-hidden="true">
+          {figure.emoji}
+        </span>
+        <span className="helper-name">{figure.name}</span>
+        {data.alert && (
+          <span className="helper-badge" aria-hidden="true">
+            !
+          </span>
+        )}
       </button>
     </div>
   );

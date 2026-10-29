@@ -1,24 +1,44 @@
 // The two helpers (AST-01..AST-03, stage 4). Not a conversational AI: fixed quick questions about the
 // page's own data (AST-02, D-23: no free text), answered from the same queries the pages use. NY-10
-// default: simple icons, no AI-generated figures. AST-03: they speak up when a chemical runs out.
+// default: simple icons, no AI-generated figures. AST-03: they speak up when a chemical runs out, and
+// Antennarius when the day's measurement is still missing after the deadline (Lili 2026-10-27 13:25 UTC,
+// card 8b22c3c2): that is the URGENT set, shown even when the figure is switched off. The greeting is not.
 
 import { eatingDayView } from "./eating";
 import { EAT_LABEL, GIVEN } from "./eating-labels";
 import { feedingDayView } from "./feeding";
-import { missedMeasurements, runningOut } from "./notices";
+import { MEASUREMENT_DEADLINE, missedMeasurements, runningOut } from "./notices";
 import { getGrid, listGroups } from "./queries";
-import { businessDayOf } from "./time";
+import { businessDayOf, localTimeOf } from "./time";
 
 export type HelperData = {
   who: "water" | "feeding";
   questions: { q: string; a: string }[];
   /** "Mit kapott ma …?": one answer per animal, picked from a list (still no free text) */
   perAnimal?: { name: string; a: string }[];
-  /** AST-03: something to say without being asked */
+  /** the figure's hello in its bubble, once per session; never urgent, so it goes with the figure */
+  greeting: string;
+  /** AST-03: something urgent to say without being asked; shown even with the figure switched off */
   alert?: string;
   /** what the alert is about; it opens by itself once per key and session */
   alertKey?: string;
 };
+
+const INTRO = { water: "Antennarius vagyok, a vízmérésben és az adagolásban segítek.", feeding: "Zebracápa vagyok, az etetésben segítek." } as const;
+
+/** The greeting by the local hour: morning until 10, evening from 18. */
+export function greetingFor(who: HelperData["who"], now = new Date()): string {
+  const t = localTimeOf(now);
+  const hello = t < "10:00" ? "Jó reggelt!" : t < "18:00" ? "Szép napot!" : "Jó estét!";
+  return `${hello} ${INTRO[who]} Kérdezz a gombokkal, ha valamire kíváncsi vagy.`;
+}
+
+/** Several urgent notices in one alert: one sentence each, and one key made of theirs. */
+function joinAlerts(parts: Pick<HelperData, "alert" | "alertKey">[]): Pick<HelperData, "alert" | "alertKey"> {
+  const some = parts.filter((p) => p.alert);
+  if (!some.length) return {};
+  return { alert: some.map((p) => p.alert).join(" "), alertKey: some.map((p) => p.alertKey ?? p.alert).join("#") };
+}
 
 const num = (v: string | number) => String(v).replace(".", ",");
 
@@ -29,6 +49,16 @@ async function stockAlert(now: Date): Promise<Pick<HelperData, "alert" | "alertK
     alert: `Fogyóban: ${low.map((c) => `${c.name} (${num(c.level)} ${c.unit})`).join(", ")}. Érdemes a raktárból hozni.`,
     // which chemicals, not their levels: a dose that moves a level does not make it a new alert
     alertKey: low.map((c) => c.name).sort().join("|"),
+  };
+}
+
+/** The day's measurement still missing after the deadline (JAV-07), as an urgent notice of the water helper. */
+function missedAlert(missed: Awaited<ReturnType<typeof missedMeasurements>>): Pick<HelperData, "alert" | "alertKey"> {
+  if (!missed.due || !missed.pools.length) return {};
+  return {
+    alert: `${MEASUREMENT_DEADLINE} elmúlt, és ma még nincs napi mérés: ${missed.pools.join(", ")}.`,
+    // which pools on which day: a pool measured since takes it off, and a new day is a new notice
+    alertKey: `meres:${missed.day}:${missed.pools.join("|")}`,
   };
 }
 
@@ -57,7 +87,8 @@ export async function waterHelper(stock: boolean, now = new Date()): Promise<Hel
       { q: "Melyik érték lóg ki ma?", a: out.length ? out.join("; ") + "." : "Ma egyik mért érték sem lóg ki a referenciából." },
       { q: "Késésben vagyunk?", a: missed.due ? (missed.pools.length ? `Elmúlt a határidő, és még vár: ${missed.pools.join(", ")}.` : "Nem: minden megvan.") : "Még nem járt le a mai határidő." },
     ],
-    ...(stock ? await stockAlert(now) : {}),
+    greeting: greetingFor("water", now),
+    ...joinAlerts([missedAlert(missed), stock ? await stockAlert(now) : {}]),
   };
 }
 
@@ -85,6 +116,7 @@ export async function feedingHelper(stock: boolean, now = new Date()): Promise<H
       { q: "Kész a mai lista?", a: feed.listState === "FINALIZED" ? "Igen, a lista kész." : "Még nincs kész: akit a kész listán nem választanak ki, a nap végén koplalónapot kap." },
     ],
     perAnimal,
+    greeting: greetingFor("feeding", now),
     ...(stock ? await stockAlert(now) : {}),
   };
 }

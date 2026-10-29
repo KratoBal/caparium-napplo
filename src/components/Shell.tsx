@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { SessionUser } from "@/lib/auth";
 import type { HelperData } from "@/lib/helpers";
 import { Helper } from "./Helper";
+import { HelperToggle } from "./HelperToggle";
 import { ReasonProvider } from "./ReasonSwitch";
 import { prisma } from "@/lib/db";
 import { navFor, type NavKey } from "@/lib/nav";
@@ -35,6 +36,8 @@ export async function Shell({
         {title && <h1>{title}</h1>}
         <span className="pill" data-testid="today">{today}</span>
         {!title && <span style={{ flex: 1 }} aria-hidden="true" />}
+        {/* the helper's switch, only on a page that has one (card 8b22c3c2) */}
+        {helper && <HelperToggle />}
         {user && (
           <div className="userbox">
             <span data-testid="current-user">

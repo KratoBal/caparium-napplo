@@ -1383,7 +1383,7 @@ test("conveniences: a feeding plan, the list from it, the feed type icons", asyn
   await expect(page.getByRole("heading", { name: "🦐 Rákok" })).toBeVisible();
 });
 
-test("the helper: a quick question about the page, switched off and on", async ({ page }) => {
+test("the helper: a quick question about the page, switched off and on in the header, the urgent notice stays", async ({ page }) => {
   await login(page, "teszt.akvarista1");
   // its own dose leaves "Teszt só" below zero, whatever ran before (review of #21)
   await page.getByRole("link", { name: "Vegyszeradagolás" }).click();
@@ -1418,14 +1418,21 @@ test("the helper: a quick question about the page, switched off and on", async (
   await helper.getByTestId("helper-button").click();
   await helper.getByRole("button", { name: "Mi van még hátra ma?" }).click();
   await expect(helper.getByTestId("helper-answer")).not.toBeEmpty();
-  await helper.getByRole("button", { name: "Segítő kikapcsolása" }).click();
-  await expect(page.getByTestId("helper-on")).toBeVisible();
+  // card 8b22c3c2: the switch is in the header; off, the figure goes and the urgent notice stays in a strip
+  const toggle = page.getByTestId("helper-toggle");
+  await expect(toggle).toHaveText("Segítő: be");
+  await toggle.click();
+  await expect(toggle).toHaveText("Segítő: ki");
+  await expect(page.getByTestId("helper")).toHaveCount(0);
+  await expect(page.getByTestId("helper-urgent")).toContainText("Teszt só");
   // a new session while switched off: the alert must not be marked seen behind the closed helper (review of #20, a)
   await page.evaluate(() => sessionStorage.clear());
   await page.reload();
-  await expect(page.getByTestId("helper-on")).toBeVisible();
-  await page.getByTestId("helper-on").click();
+  await expect(page.getByTestId("helper-toggle")).toHaveText("Segítő: ki");
+  await expect(page.getByTestId("helper-urgent")).toContainText("Teszt só");
+  await page.getByTestId("helper-toggle").click();
   // switched back on, the alert not seen in this session opens right here, not only on the next page (review of #21)
+  await expect(page.getByTestId("helper-urgent")).toHaveCount(0);
   await expect(page.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId("helper-answer")).toContainText("Teszt só");
 });
