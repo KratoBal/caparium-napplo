@@ -1966,3 +1966,27 @@ test("the feeding timetable is the admin's: an aquarist has no entry, is sent aw
   await page.goto("/etetes/rend");
   await expect(page).toHaveURL(/nincs-jogosultsag/);
 });
+
+// Lili 2026-10-29 (task caparium-lili-nagyobb-m, item 8): the small ticks under the pool's name on the daily measurement.
+// Each layout works its own group; the tick saves on its click, apart from the Mentés button, and is put back off at the end.
+test("daily measurement: the pool ticks save on their own and survive a reload; the big pools have two, the small tanks one", async ({ page }, info) => {
+  const p = plan(info.project.name);
+  const kinds = info.project.name === "tablet" ? [["WATER_CHANGE", "Vízcsere"]] : [["BACKWASH", "Visszamosás"], ["TOPUP", "Rátöltés"]];
+  const other = info.project.name === "tablet" ? "Visszamosás" : "Vízcsere";
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Napi vízmérés", exact: true }).first().click();
+  await page.getByRole("tab", { name: p.tab }).click();
+  await expect(page.getByRole("heading", { name: /Napi paraméterek/ })).toBeVisible();
+  const row = page.getByTestId(`row-${p.pool}`);
+  await expect(row.getByLabel(other)).toHaveCount(0);
+  for (const [kind] of kinds) {
+    const box = page.getByTestId(`tick-${p.pool}-${kind}`);
+    await expect(box).not.toBeChecked();
+    await box.check();
+  }
+  await page.reload();
+  for (const [kind] of kinds) await expect(page.getByTestId(`tick-${p.pool}-${kind}`)).toBeChecked();
+  for (const [kind] of kinds) await page.getByTestId(`tick-${p.pool}-${kind}`).uncheck();
+  await page.reload();
+  for (const [kind] of kinds) await expect(page.getByTestId(`tick-${p.pool}-${kind}`)).not.toBeChecked();
+});

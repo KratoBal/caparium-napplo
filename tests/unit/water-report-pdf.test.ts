@@ -28,6 +28,7 @@ describe("water report PDF", () => {
       pools: [
         {
           pool: "Kismedence ŐŰőű áéíóúöü",
+          ticks: [],
           daily: [
             v({ parameter: "Hőmérséklet", value: "24.5", unit: "°C", range: { min: "23", max: "26", unit: "°C" } }),
             v({ parameter: "Sűrűség", value: "35.1", unit: "ppt", reference: "HIGH", range: { min: "33", max: "36", unit: "ppt" } }),
@@ -57,6 +58,7 @@ describe("water report PDF", () => {
         pools: [
           {
             pool: "Korallos",
+            ticks: [],
             daily: [v({ parameter: "pH", value: "8.3", by: "LI", range: { min: "8", max: "8.4", unit: "pH" } })],
             weekly: [
               v({ parameter: "Mg", value: "1345", unit: "ppm", by: "LI", range: { min: "1250", max: "1400", unit: "ppm" } }),
@@ -86,6 +88,7 @@ describe("water report PDF", () => {
       pools: [
         {
           pool: "Nagymedence",
+          ticks: [],
           daily: [
             v({ parameter: "Alacsonyparam", value: "1.5", reference: "LOW" }),
             v({ parameter: "Normalparam", value: "8.1", reference: "IN_RANGE" }),
@@ -133,8 +136,8 @@ describe("water report PDF", () => {
           day: "2027-09-08",
           weekFrom: "2027-09-06",
           pools: [
-            { pool: "Nagymedence", daily: rows, weekly: [v({ parameter: "W", day: "2027-09-07" })] },
-            { pool: "Korallos", daily: [v({ parameter: "K" })], weekly: [] },
+            { pool: "Nagymedence", ticks: [], daily: rows, weekly: [v({ parameter: "W", day: "2027-09-07" })] },
+            { pool: "Korallos", ticks: [], daily: [v({ parameter: "K" })], weekly: [] },
           ],
         });
         const { fillPages, textPages } = await readPdfColors(pdf);
@@ -159,5 +162,25 @@ describe("the reference text", () => {
     expect(r("pH", { min: "8", max: "8.4", unit: "pH" })).toBe("8 – 8,4");
     expect(r("pH", null)).toBe("");
     expect(r("pH", { min: null, max: null, unit: "pH" })).toBe("");
+  });
+});
+
+// Lili 2026-10-29 (task caparium-lili-nagyobb-m, item 8): the pool's ticks stand at the end of its name line, in a smaller type.
+describe("the pool ticks in the water report PDF", () => {
+  it("are on the pool's own line, in the fixed order, and only for the pool that has them", async () => {
+    const lines = await readPdfLines(
+      await waterReportPdf({
+        day: "2027-09-08",
+        weekFrom: "2027-09-06",
+        pools: [
+          { pool: "Nagymedence", ticks: ["BACKWASH", "TOPUP"], daily: [v({ parameter: "pH" })], weekly: [] },
+          { pool: "Korallos", ticks: ["WATER_CHANGE"], daily: [v({ parameter: "pH" })], weekly: [] },
+          { pool: "Karantén", ticks: [], daily: [v({ parameter: "pH" })], weekly: [] },
+        ],
+      }),
+    );
+    expect(lines.find((l) => l.startsWith("Nagymedence"))).toBe("Nagymedence visszamosás, rátöltés");
+    expect(lines.find((l) => l.startsWith("Korallos"))).toBe("Korallos vízcsere");
+    expect(lines.find((l) => l.startsWith("Karantén"))).toBe("Karantén");
   });
 });
