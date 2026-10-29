@@ -1697,8 +1697,11 @@ for (const [name, path] of [["eating log", "/evesi-naplo"], ["feeding page", "/e
 // Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 1; Balázs "Mehet" 1564357004217159823): the named feeding
 // lists. The admin composes one on the timetable page; in the feeding page's header a dropdown picks it, which ticks its
 // animals and adds its feeds; "Lista a terv szerint" stays beside it. The list is archived at the end.
-test("feeding lists: the admin composes one, the header's switch and dropdown make the day's selection that list, the switch off takes it all off", async ({ page }, info) => {
+// caparium-lista-deaktivalas-nap (the 10-21 loss; acrobot 37938): the switch off never takes off an animal with a record
+// that day, asks nothing, and names who stayed. A past day of its own per project: today's earlier tests write items.
+test("feeding lists: the admin composes one, the header's switch and dropdown make the day's selection that list, the switch off keeps the recorded animal", async ({ page }, info) => {
   const name = `E2E lista ${info.project.name}`;
+  const day = info.project.name === "tablet" ? "2026-01-22" : "2026-01-23";
   await login(page, "teszt.admin");
   await page.goto("/etetes/rend");
   const editor = page.getByTestId("feeding-lists");
@@ -1714,12 +1717,16 @@ test("feeding lists: the admin composes one, the header's switch and dropdown ma
   await expect(form.getByRole("status")).toHaveText("Lista felvéve.");
   await expect(editor.locator("details", { hasText: name })).toHaveCount(1);
 
-  await page.goto("/etetes");
+  await page.goto(`/etetes?nap=${day}`);
   await page.waitForLoadState("networkidle");
   await expect(page.getByRole("button", { name: "Mai Terv" }), "the weekly plan's button stays").toBeVisible();
   const pick = page.getByTestId("apply-list");
-  // taking an animal off the day's list that already has an item asks first (R-3); this run may find items from the tests before
-  page.on("dialog", (d) => void d.accept());
+  // a list operation asks no confirmation any more; a reason prompt (the reasons switched on) is answered
+  const confirms: string[] = [];
+  page.on("dialog", (d) => {
+    if (d.type() === "confirm") confirms.push(d.message());
+    void (d.type() === "prompt" ? d.accept("e2e lista") : d.accept());
+  });
   // Lili 2026-10-26 (msg 1564404481708265704): the switch before the dropdown: on = a list can be chosen, off = everything off
   const power = pick.getByRole("switch", { name: "Etetési listák" });
   await power.check();
@@ -1731,18 +1738,38 @@ test("feeding lists: the admin composes one, the header's switch and dropdown ma
   await expect(page.getByLabel("Teszt Kettő a mai listán")).not.toBeChecked();
   await expect(page.getByTestId("day-feeds").getByLabel("A nap takarmánya: Mysis")).toBeChecked();
   await expect(page.getByTestId("day-feeds").getByLabel("A nap takarmánya: Litopenaeus vannamei")).not.toBeChecked();
-  // by hand afterwards stays: tick another animal
+  // by hand afterwards stays: tick another animal, and record an item for it
   await page.getByLabel("Teszt Kettő a mai listán").check();
   await expect(page.getByLabel("Teszt Kettő a mai listán")).toBeChecked();
+  const item = page.getByTestId("item-form");
+  await item.getByLabel("Kinek", { exact: true }).selectOption({ label: "Teszt Kettő" });
+  await item.getByLabel("Takarmány", { exact: true }).selectOption({ label: "Mysis" });
+  await item.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("5");
+  await item.getByRole("button", { name: "Tétel mentése" }).click();
+  await expect(item.getByRole("status")).toHaveText("Tétel mentve.");
 
-  // the switch off: the whole selection goes (the dialog handler above accepts the confirmation)
+  // the switch off: the list's animal and the day's feed go; the animal with an item stays, named, and its item with it
   await power.uncheck();
-  // Lili 2026-10-27 (item 4): no state text in the header bar; the unchecked boxes below show it
-  await expect(pick.getByRole("status")).toHaveCount(0);
-  await expect(pick.getByLabel("Névvel ellátott lista")).toBeDisabled();
+  await expect(pick.getByRole("status")).toHaveText("A listán maradt, mert ezen a napon már van beírt etetése: Teszt Kettő.");
   await expect(page.getByLabel("Teszt Egy a mai listán")).not.toBeChecked();
-  await expect(page.getByLabel("Teszt Kettő a mai listán")).not.toBeChecked();
+  await expect(page.getByLabel("Teszt Kettő a mai listán")).toBeChecked();
   await expect(page.getByTestId("day-feeds").getByLabel("A nap takarmánya: Mysis")).not.toBeChecked();
+  await expect(page.getByTestId("feeding-list").getByRole("row").filter({ hasText: "Teszt Kettő" })).toContainText("5 g");
+  // a selection is left, so the switch stays on beside it
+  await expect(power).toBeChecked();
+  expect(confirms, "the list operation asked nothing").toEqual([]);
+  // barracuda on #104: another feed chosen for the day afterwards: the kept item's feed stays a column of the sheet
+  const dayFeeds = page.getByTestId("day-feeds");
+  await dayFeeds.getByLabel("A nap takarmánya: Litopenaeus vannamei").check();
+  const saveFeeds = dayFeeds.getByRole("button", { name: "A nap takarmányainak mentése" });
+  if (await saveFeeds.count()) await saveFeeds.click();
+  else await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).click();
+  await expect(dayFeeds.getByLabel("A nap takarmánya: Litopenaeus vannamei")).toBeChecked();
+  const sheet = page.getByTestId("feeding-sheet");
+  await expect(sheet.getByRole("columnheader", { name: /^Litopenaeus vannamei/ })).toBeVisible();
+  await expect(sheet.getByRole("columnheader", { name: /^Mysis/ }), "the given feed stays a column").toBeVisible();
+  await sheet.getByRole("row").filter({ has: page.getByRole("cell", { name: "Teszt Kettő", exact: true }) }).click();
+  await expect(sheet.getByLabel("Teszt Kettő: Mysis (g)", { exact: true })).toHaveValue("5");
 
   // archived: the list leaves the dropdown
   await page.goto("/etetes/rend");

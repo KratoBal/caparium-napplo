@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db";
 import { restoreDay } from "@/lib/day-restore";
 import { setEatingStatus } from "@/lib/eating";
 import { AppError } from "@/lib/errors";
-import { feedingDayView, saveFeedingItem } from "@/lib/feeding";
+import { feedingDayView, saveFeedingItem, selectedOn, setDayFeeds, setSelection } from "@/lib/feeding";
 import { applyFeedingList, createFeedingList } from "@/lib/feeding-lists";
 import { dayToDate } from "@/lib/time";
 import { fixtures, rid, withReasons } from "./fixtures";
@@ -38,6 +38,13 @@ async function expectCode(p: Promise<unknown>, code: string) {
 
 const selected = async (day: string) => (await feedingDayView(day)).animals.filter((x) => x.selected).map((x) => x.name).sort();
 const dayFeedIds = async (day: string) => (await prisma.feedingDay.findUnique({ where: { businessDay: dayToDate(day) } }))?.feedIds.sort() ?? [];
+// what the header's switch off did before caparium-lista-deaktivalas-nap, under the same request ids
+const takeAllOff = async (day: string, op: string, when: Date) => {
+  const fd = await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: dayToDate(day) } });
+  const ids = [...(await selectedOn(prisma, fd.id))];
+  await setSelection(f.admin, { requestId: `${op}:off`, day, animalIds: ids, selected: false, confirmCascade: true }, when);
+  await setDayFeeds(f.admin, { requestId: `${op}:feeds`, day, feedIds: [] }, when);
+};
 const valid = async (day: string) => {
   const fd = await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: dayToDate(day) } });
   return {
@@ -57,9 +64,11 @@ describe("a day put back as it stood before a list switch", () => {
     const before = { selected: await selected(d), feeds: await dayFeedIds(d), valid: await valid(d) };
     expect(before).toEqual({ selected: ["Teszt Egy", "Teszt Kettő"], feeds: [feed["Teszt hal"]], valid: { items: 1, manual: 1 } });
 
-    // Lili's two clicks: the list off (confirmed), then another list on
+    // Lili's two clicks: the list off (confirmed), then another list on. The switch no longer takes a recorded animal off
+    // (caparium-lista-deaktivalas-nap), so its old effect is built from the same writes it made: every animal unticked
+    // with the confirmation (R:off), the day's feeds cleared (R:feeds)
     const off = rid();
-    await applyFeedingList(f.admin, { requestId: off, day: d, listId: null, confirmCascade: true }, at(d, "11:00"));
+    await takeAllOff(d, off, at(d, "11:00"));
     await applyFeedingList(f.admin, { requestId: rid(), day: d, listId: listB }, at(d, "11:01"));
     // Teszt Egy is on both lists: the second put a NEW selection of it on, so its old one can come back only after
     // the new one is off (one valid selection per animal and day)
@@ -113,7 +122,7 @@ describe("a day put back as it stood before a list switch", () => {
     await applyFeedingList(f.admin, { requestId: rid(), day: d, listId: listA }, at(d, "08:00"));
     await saveFeedingItem(f.admin, { requestId: rid(), day: d, animalId: a["Teszt Egy"], feedId: feed["Teszt hal"], quantities: [{ value: "10", unitId: unit.g }] } as Parameters<typeof saveFeedingItem>[1], at(d, "09:00"));
     const off = rid();
-    await applyFeedingList(f.admin, { requestId: off, day: d, listId: null, confirmCascade: true }, at(d, "10:00"));
+    await takeAllOff(d, off, at(d, "10:00"));
     await restoreDay(f.admin, { requestId: rid(), day: d, mode: "run", op: off, reason: "proba" }, at(d, "11:00"));
     // its first change since the switch is the switch's invalidation, the edit comes after the restore
     const fdId = (await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: dayToDate(d) } })).id;

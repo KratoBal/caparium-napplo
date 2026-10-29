@@ -138,7 +138,7 @@ export async function addAnimalsToDay(
   return { replayed: r.replayed, added: r.changed, skipped };
 }
 
-async function animalNames(ids: string[], at: Date): Promise<string[]> {
+export async function animalNames(ids: string[], at: Date): Promise<string[]> {
   if (ids.length === 0) return [];
   const animals = await prisma.animal.findMany({ where: { id: { in: ids } }, include: { names: true } });
   return animals.map((a) => pickValid(a.names, at)?.name ?? a.names.at(-1)?.name ?? "?").sort((a, b) => a.localeCompare(b, "hu"));
