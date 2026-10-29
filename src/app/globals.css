@@ -44,6 +44,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .topbar { grid-row: 1; grid-column: 2; background: var(--c-white); display: flex; align-items: center; gap: 16px; padding: 14px 28px; }
 .topbar h1 { font-size: 26px; flex: 1; }
 .pill { background: var(--c-field); border-radius: var(--radius-sm); padding: 10px 16px; font-weight: 600; font-size: 14px; white-space: nowrap; }
+/* a pill whose text is a sentence (the chemical calculator's result, Lili 2026-10-29 item 5a): it wraps in its box */
+.pill-wrap { white-space: normal; overflow-wrap: anywhere; }
 .nav { grid-row: 2; grid-column: 1; background: var(--c-nav); color: var(--c-white); padding: 24px 12px; display: flex; flex-direction: column; gap: 6px; }
 .nav a, .nav span { display: flex; align-items: center; min-height: var(--touch); padding: 0 16px; border-radius: var(--radius-sm); color: var(--c-white); text-decoration: none; font-size: 15px; }
 .nav a.active { background: var(--c-primary); font-weight: 600; }
@@ -100,6 +102,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .toolbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 18px 0; }
 .toolbar .spacer { flex: 1; }
 .toolbar-end { align-items: flex-end; }
+/* the day picker (DayNav + DayJump, Lili 2026-10-29 item 2): the weekday under the date, smaller step buttons, and
+   the row on one bottom line, so the "Nap" label above the calendar does not push it below the buttons */
+.day-shown { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.2; }
+.day-shown small { font-size: 13px; color: var(--c-muted); font-weight: 600; }
+.btn-day { min-height: 36px; padding: 0 12px; font-size: 14px; }
+.day-nav { min-height: var(--touch); }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--c-muted); font-weight: 600; }
 .input { height: var(--touch); border: 1px solid var(--c-control-line); background: var(--c-control-bg); border-radius: var(--radius-sm); padding: 0 14px; font-size: 16px; color: var(--c-ink); }
 .input:hover:not(:disabled):not(:focus) { background: var(--c-control-bg-hover); }
@@ -180,6 +188,12 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .badge-valid { background: var(--c-primary-soft); color: var(--c-primary); }
 .badge-invalid { background: var(--c-error-soft); color: var(--c-error); }
 .badge-pending { background: var(--c-warn-soft); color: var(--c-warn-ink); }
+/* the feeding log's reference (Lili 2026-10-29, package item 4): apart from the total, two sizes larger; red off the
+   reference, green (her eating green) within it, quiet while nothing is given */
+.ref-value { display: inline-block; margin-left: 14px; padding: 3px 10px; border-radius: 999px; font-size: 16px; font-weight: 600; }
+.ref-none { color: var(--c-muted); padding-left: 0; padding-right: 0; }
+.ref-ok { background: #bdd3bb; color: #19642f; }
+.ref-off { background: var(--c-error-soft); color: var(--c-error); }
 /* EVE-02: the colour of an eating state is display, not data (DN-03) */
 /* Lili, 2026-10-21: one shade stronger, less pastel; the green is hers (#bdd3bb), the others take the same step
    (lightness distance from white x2.55, saturation x0.47, hue kept), the text darkened back to 4.5:1. The Excel's
@@ -189,6 +203,14 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .eat-NOT_EATEN { background: #e9d3d3; color: #b62323; }
 .eat-FASTING { background: #c6d7e4; color: #1b608b; }
 .eat-pending { background: var(--c-field); color: #1d6694; border: 1px dashed #8fbfdf; }
+/* the feeding log's eating pattern (Lili 2026-10-29, package item 7): firmer, not loud, only in this table (the eating
+   log keeps its shades); a bar without a letter is a thick one; the day's letter above the date. The text stays 4.5:1 */
+.eat-pattern .eat-EATEN { background: #9fc29b; color: #134d24; }
+.eat-pattern .eat-PARTIAL { background: #cbb664; color: #4f3c00; }
+.eat-pattern .eat-NOT_EATEN { background: #dca8a8; color: #7a1212; }
+.eat-pattern .eat-FASTING { background: #a8c3da; color: #134a6c; }
+.eat-pattern .eat-bar { min-width: 30px; height: 14px; padding: 0; vertical-align: middle; }
+.eat-pattern .day-letter { display: block; font-size: 12px; color: var(--c-muted); font-weight: 600; }
 .table-scroll { overflow-x: auto; }
 .sheet-color-sample { display: inline-block; padding: 6px 12px; border: 1px solid var(--c-line); border-radius: 8px; background: var(--c-white); color: var(--c-ink); font-size: 14px; }
 /* Lili 2026-10-27: the feeding sheet's header row stays on top while it scrolls down, like a frozen row in Excel

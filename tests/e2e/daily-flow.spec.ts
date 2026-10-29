@@ -504,6 +504,13 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   const exportsBox = await page.getByTestId("feedlog-exports").boundingBox();
   const patternBox = await page.getByTestId("eating-pattern").boundingBox();
   expect(exportsBox && patternBox && exportsBox.y < patternBox.y).toBe(true);
+  // Lili 2026-10-29 (package item 7): every day column carries its letter above the date, and a bar without a letter
+  // is a thick one (at least 12 px), not the thin line it was
+  const letters = await page.getByTestId("eating-pattern").locator(".day-letter").allTextContents();
+  expect(letters.length).toBeGreaterThan(0);
+  expect(letters.every((l) => ["H", "K", "Sze", "Cs", "P", "Szo", "V"].includes(l))).toBe(true);
+  const bars = page.getByTestId("eating-pattern").locator(".eat-bar");
+  if ((await bars.count()) > 0) expect((await bars.first().boundingBox())!.height).toBeGreaterThanOrEqual(12);
 
   // EGY-10, EVE-07: both Excel files are real downloads from the export page
   await page.getByRole("link", { name: "Export" }).click();
@@ -1149,6 +1156,8 @@ test("calculator: general, no animal on top, saved as the reference of the anima
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
   await page.getByLabel(`${name} a mai listán`).check();
   await expect(page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name })).toContainText("ref 250 g");
+  // package item 4: nothing given yet, so the reference stays quiet (neither the green nor the red mark)
+  await expect(page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name }).locator(".ref-value")).toHaveAttribute("data-state", "none");
 });
 
 test("body weight log: hidden, not deleted; a setting row brings it back on the calculator page", async ({ page }, info) => {
@@ -1267,6 +1276,18 @@ test("a pool's own band and volume in the settings; the chemical calculator unde
   await expect(calc.getByTestId("chem-CA-result")).toHaveText("Szükséges mennyiség: 146,7 g");
   await card.getByLabel("Kalcium emelése: célérték").fill("370");
   await expect(calc.getByTestId("chem-CA-result")).toHaveText("A célérték nem magasabb a jelenlegi értéknél, nincs szükség adagolásra.");
+  // Lili 2026-10-29 (package item 5a): every card's result stays inside its card, the longest text included, at her
+  // tablet's width (on the desktop the three cards are wide enough either way, so the check would not bite there)
+  await card.getByLabel("Kalcium emelése: célérték").fill("");
+  await page.setViewportSize({ width: 1024, height: 768 });
+  for (const code of ["CA", "MG", "KH"]) {
+    const inside = await calc.getByTestId(`chem-${code}-result`).evaluate((el) => {
+      const own = el.getBoundingClientRect();
+      const box = el.parentElement!.getBoundingClientRect();
+      return el.scrollWidth <= el.clientWidth && own.right <= box.right + 0.5;
+    });
+    expect(inside, `chem-${code}-result`).toBe(true);
+  }
 });
 
 test("reports: the tables and the Excel; no daily report menu any more", async ({ page }) => {
@@ -1370,12 +1391,17 @@ test("the feeding timetable: every animal's days on one screen, saved together, 
 test("conveniences: a feeding plan, the list from it, the feed type icons", async ({ page }) => {
   // Teszt Három: the feeding test expects Teszt Négy OFF today's list, and the plan adds to it
   await login(page, "teszt.admin");
+  // Lili 2026-10-29 (package item 6): an animal's page has no "Etetési napok" row any more; the feeding timetable
+  // writes the same plan (feeding_plan), so the plan is made there
   await page.getByRole("link", { name: "Állatok" }).click();
   await page.getByTestId("animals-table").getByRole("link", { name: "Teszt Három" }).click();
-  const plan = page.getByTestId("plan-form");
-  for (const d of ["H", "K", "Sze", "Cs", "P", "Szo", "V"]) await plan.getByLabel(`Etetési nap: ${d}`).check();
-  await plan.getByRole("button", { name: "Terv mentése" }).click();
-  await expect(plan.getByRole("status")).toHaveText("Terv mentve.");
+  await expect(page.getByText("Etetési napok")).toHaveCount(0);
+  await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
+  await page.getByRole("link", { name: "Etetési rend" }).click();
+  const table = page.getByTestId("timetable");
+  for (const d of ["H", "K", "Sze", "Cs", "P", "Szo", "V"]) await table.getByLabel(`Teszt Három: ${d}`).check();
+  await table.getByRole("button", { name: /Etetési rend mentése/ }).click();
+  await expect(table.getByRole("status")).toHaveText(/^Mentve: \d+ állat terve\.$/);
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
   await page.getByRole("button", { name: "Mai Terv" }).click();
   await expect(page.getByLabel("Teszt Három a mai listán")).toBeChecked();
@@ -1477,6 +1503,29 @@ test("the helper: it speaks unasked without taking a click, the quick questions 
   await expect(page.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "false");
   expect(await passesClicks(page, "helper-notice")).toBe(true);
   expect(await topIs(page, "save-all")).toBe(true);
+});
+
+// Lili 2026-10-29 (package item 2): the day of the week small under the date wherever the day picker is, and the row on
+// one line: the step buttons, the calendar field and its button share a vertical centre (the "Nap" label above the
+// field pushed it below the buttons). MI PIROSÍT: a missing weekday, or a centre more than 2 px off on any of the pages.
+test("the day picker: the weekday under the date, the buttons and the calendar on one line", async ({ page }) => {
+  await login(page, "teszt.admin");
+  const centre = async (l: import("@playwright/test").Locator) => {
+    const b = (await l.boundingBox())!;
+    return b.y + b.height / 2;
+  };
+  for (const path of ["/etetes", "/evesi-naplo", "/kivetel"]) {
+    await page.goto(path);
+    const nav = page.getByTestId("day-nav");
+    await expect(page.getByTestId("shown-weekday")).toHaveText(/^(hétfő|kedd|szerda|csütörtök|péntek|szombat|vasárnap)$/);
+    const before = await page.getByTestId("shown-weekday").textContent();
+    const prev = nav.getByRole("link", { name: "‹ előző nap" });
+    const picker = page.getByTestId("day-picker");
+    const y = [await centre(prev), await centre(picker.locator("input[name=nap]")), await centre(picker.getByRole("button", { name: "Ugrás" }))];
+    expect(Math.max(...y) - Math.min(...y), `${path}: ${y.join(", ")}`).toBeLessThanOrEqual(2);
+    await prev.click();
+    await expect(page.getByTestId("shown-weekday")).not.toHaveText(before ?? "");
+  }
 });
 
 test("water measurements by e-mail: the recipient in the settings, the button first on the export page", async ({ page }, info) => {

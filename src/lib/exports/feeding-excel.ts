@@ -17,7 +17,7 @@ import { isDerivedFasting, listFacts } from "../eating-pattern";
 import { pickValid } from "../master";
 import { feedingLog } from "../feeding-log";
 import { breakdown, type ReportLine } from "../reports";
-import { addDays, businessDayOf, dateToDay, dayToDate, resolveLocalDateTime } from "../time";
+import { addDays, businessDayOf, dateToDay, dayToDate, resolveLocalDateTime, weekdayLetter } from "../time";
 
 // the template's theme fills, resolved (theme_note of the extracts): Excel tints in HSL lightness
 const FILL = {
@@ -321,6 +321,9 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
     r1.getCell(FIRST + i).numFmt = "mm.dd";
     // EVE-08: the weeks in two alternating colours (Monday starts a week)
     fill(r1.getCell(FIRST + i), weekShade(f.from, d));
+    // Lili 2026-10-29 (package item 7): the day's letter under the date
+    r2.getCell(FIRST + i).value = weekdayLetter(d);
+    r2.getCell(FIRST + i).alignment = { horizontal: "center" };
   });
   r2.getCell(1).value = "Állatfaj";
   r2.getCell(2).value = "Név";
