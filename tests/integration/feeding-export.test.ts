@@ -140,7 +140,7 @@ describe("the feeding Excel's other feeds (Lili 2026-10-29, package item 13)", (
 // Lili's package, item 12 follow-up (acrobot 38155, nautilus 38181): the same other name in another case or with other spaces is ONE
 // column in the Excel and ONE feed in the report's log; the form first met is the header.
 describe("the other feeds' names, normalized", () => {
-  it("'Spirulina', ' spirulina ' and 'SPIRULINA' are one column and one report feed, under the first form", async () => {
+  it("'Spirulina', ' spirulina ' and 'SPIRULINA' are one column and one report feed, under the one fixed form (capital first letter)", async () => {
     const d = "2028-04-04";
     const now = at(d, "09:00");
     await setSelection(f.aq1, { requestId: rid(), day: d, animalIds: [a["Teszt Egy"], a["Teszt Három"]], selected: true }, now);
@@ -148,11 +148,12 @@ describe("the other feeds' names, normalized", () => {
       saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId: a[animal], feedId: feed["Egyéb"], otherName, quantities: [{ value, unitId: unit.g }] }, at(d, time));
     await give("Teszt Egy", "Spirulina", "2", "09:00");
     await give("Teszt Három", "spirulina", "3", "09:05");
-    await give("Teszt Egy", "ALGA", "1", "09:10"); // another name, to show the difference
+    await give("Teszt Egy", "ALGA", "1", "09:10"); // another name, to show the difference: shown "Alga", not "ALGA"
     const ws = await sheet((await buildFeedingWorkbook({ from: d, to: d })).buffer);
     const heads: string[] = [];
     ws.getRow(1).eachCell((c) => heads.push(String(c.value)));
-    expect(heads.filter((h) => h.toLowerCase() === "spirulina")).toEqual(["Spirulina"]); // one column, the first form
+    expect(heads.filter((h) => h.toLowerCase() === "spirulina")).toEqual(["Spirulina"]); // one column, the fixed form
+    expect(heads).toContain("Alga"); // not as typed ("ALGA"): the form does not depend on what was met first
     const col = colOf(ws, 1, "Spirulina");
     expect(val(rowOf(ws, 3, "Teszt Egy").getCell(col))).toBe(2);
     expect(val(rowOf(ws, 3, "Teszt Három").getCell(col))).toBe(3);
