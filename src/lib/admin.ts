@@ -156,6 +156,37 @@ export async function setPoolVolume(actor: Actor, input: z.infer<typeof poolVolu
 }
 
 // ---------------------------------------------------------------------------
+// A pool's system, coral or fish (Lili 2026-10-29, package item 5b): the chemical calculator's daily raise limit
+// follows it. A plain value, as the volume: the calculator always uses today's.
+// ---------------------------------------------------------------------------
+
+export const poolSystemSchema = z.object({
+  requestId,
+  poolId: z.uuid(),
+  systemType: z.enum(["CORAL", "FISH"]).nullable(),
+});
+
+export async function setPoolSystem(actor: Actor, input: z.infer<typeof poolSystemSchema>) {
+  await requireSettingsAdmin(actor);
+  if (await replayed(input.requestId)) return { replayed: true };
+  return prisma.$transaction(async (tx) => {
+    const pool = await tx.pool.findUnique({ where: { id: input.poolId } });
+    if (!pool) throw new AppError(404, "POOL_NOT_FOUND", "A medence nem található.");
+    if (pool.systemType === input.systemType) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
+    await tx.pool.update({ where: { id: pool.id }, data: { systemType: input.systemType } });
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: "MASTER_CHANGE",
+      entityType: "Pool",
+      entityId: pool.id,
+      changes: { systemType: { before: pool.systemType, after: input.systemType } },
+      requestId: input.requestId,
+    });
+    return { replayed: false };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // A pool off for a while (Lili 2026-10-29, caparium-finomitas-1: a renovation): no new measurement, nothing lost.
 // Inactive, it leaves the measurement grid of the days it was not measured on and is not offered for a new
 // measurement or a dosing; its measurements, logs and reports stay, and it comes back as it was when activated.

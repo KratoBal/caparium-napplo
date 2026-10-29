@@ -28,6 +28,7 @@ export async function chemistryCalcPools(now = new Date()): Promise<CalcPool[]> 
       id: pool.id,
       name: pickValid(pool.names, now)?.displayName ?? pool.code,
       volumeLiters: pool.volumeLiters ? canonicalDecimal(pool.volumeLiters) : null,
+      systemType: pool.systemType,
       latest: {},
       band: {},
     };

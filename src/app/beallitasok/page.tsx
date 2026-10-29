@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { MonthlyZimsRecipient, NewPoolForm, NewUserForm, PoolList, PoolVolumeForm, ReferenceRow, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
+import { MonthlyZimsRecipient, NewPoolForm, NewUserForm, PoolList, PoolSystemForm, PoolVolumeForm, ReferenceRow, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
 import { SettingsCard } from "@/components/SettingsCard";
 import { Shell } from "@/components/Shell";
@@ -150,8 +150,11 @@ export default async function SettingsPage() {
             <NewPoolForm groups={groups} />
           </div>
         )}
-        <h3 style={{ marginTop: 20 }}>Űrtartalom</h3>
-        <p className="hint">Literben. A vegyszer-kalkulátor ezzel számol, amikor a medencét kiválasztod.</p>
+        <h3 style={{ marginTop: 20 }}>Űrtartalom és rendszer</h3>
+        <p className="hint">
+          Literben. A vegyszer-kalkulátor ezzel számol, amikor a medencét kiválasztod. A rendszer (korallos vagy halas) a napi emelési
+          határt adja: korallos rendszerben kisebb lépésben emeli.
+        </p>
         <table className="log-table" data-testid="pool-volumes">
           <tbody>
             {pools.map((p) => {
@@ -161,6 +164,9 @@ export default async function SettingsPage() {
                   <td>{name}</td>
                   <td className="keep">
                     <PoolVolumeForm poolId={p.id} name={name} volumeLiters={p.volumeLiters ? canonicalDecimal(p.volumeLiters) : null} />
+                  </td>
+                  <td className="keep">
+                    <PoolSystemForm poolId={p.id} name={name} systemType={p.systemType} />
                   </td>
                 </tr>
               );
