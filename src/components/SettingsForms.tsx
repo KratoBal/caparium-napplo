@@ -113,6 +113,25 @@ export function PoolVolumeForm(p: { poolId: string; name: string; volumeLiters: 
   );
 }
 
+/** Lili 2026-10-29 (package item 5b): a pool's system, coral or fish; the chemical calculator's daily limit follows it. */
+export function PoolSystemForm(p: { poolId: string; name: string; systemType: "CORAL" | "FISH" | null }) {
+  const [v, setV] = useState<string>(p.systemType ?? "");
+  const { msg, busy, save } = useSave();
+  return (
+    <span className="toolbar" style={{ margin: 0 }}>
+      <select className="input" aria-label={`${p.name} rendszere`} value={v} onChange={(e) => setV(e.target.value)}>
+        <option value="">nincs megadva</option>
+        <option value="CORAL">korallos</option>
+        <option value="FISH">halas</option>
+      </select>
+      <button className="btn btn-soft" type="button" disabled={busy || v === (p.systemType ?? "")} onClick={() => void save("/api/admin/pool-system", "POST", { poolId: p.poolId, systemType: v || null })}>
+        Mentés
+      </button>
+      <Msg msg={msg} />
+    </span>
+  );
+}
+
 /** The feeding sheet's row colour of an animal or a group: none, or one of the narrow palette; the sample shows it. */
 export function SheetColorForm(p: { target: "animal" | "group"; id: string; name: string; color: string | null }) {
   const [v, setV] = useState(sheetColorBg(p.color) ? p.color! : "");

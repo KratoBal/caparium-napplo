@@ -11,6 +11,7 @@
 // admin's rename, icon or deactivation stays). Pool and parameter names are the starting values of
 // the data model (DN-01, DN-02); the groups follow the NY-03 default.
 
+import { ensureListFeed } from "./base-feed-marks";
 import type { Dimension, PrismaClient } from "@prisma/client";
 import { hasTestSystemData, loadInitialAnimals, loadInitialFeeds } from "./initial-data";
 import { initialAnimalsWanted } from "./seed-switch";
@@ -220,14 +221,12 @@ export async function loadBaseData(prisma: PrismaClient): Promise<BaseDataIds> {
     // every start, and an icon an admin cleared would come back after each restart.
     await prisma.feedType.upsert({ where: { code }, update: {}, create: { code, name, sortOrder: i + 1, emoji: FEED_TYPE_ICONS[code] } });
   }
-  // by name, not only into an empty table: a feed added to the list later (the "Egyéb" of stage 2)
-  // reaches a database seeded before it
-  {
-    const have = new Set((await prisma.feedName.findMany()).map((n) => n.name));
-    for (const [i, f] of BASE_FEEDS.entries()) {
-      if (have.has(f.name)) continue;
+  // not only into an empty table: a feed added to the list later (the "Egyéb" of stage 2) reaches a database seeded
+  // before it. By a stable key, not by name (package item 14, src/lib/base-feed-marks.ts): a renamed feed stays renamed
+  for (const [i, f] of BASE_FEEDS.entries()) {
+    await ensureListFeed(prisma, `base-feed:${f.type}:${f.name}`, f.name, async () => {
       const type = await prisma.feedType.findUniqueOrThrow({ where: { code: f.type } });
-      await prisma.feed.create({
+      const created = await prisma.feed.create({
         data: {
           typeId: type.id,
           allowedDimensions: [...f.dims],
@@ -236,7 +235,8 @@ export async function loadBaseData(prisma: PrismaClient): Promise<BaseDataIds> {
           names: { create: { name: f.name, validFrom: SINCE } },
         },
       });
-    }
+      return created.id;
+    });
   }
   // the description's starting lists (leírás 18-19. o.; caparium-hibak-1): the feeds everywhere, the animals only
   // on the test system: its explicit switch (src/lib/seed-switch.ts) or its mark in the data (the stage)

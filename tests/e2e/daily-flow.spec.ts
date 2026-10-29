@@ -1259,9 +1259,19 @@ test("a pool's own band and volume in the settings; the chemical calculator unde
   await page.getByRole("link", { name: "Beállítások" }).click();
   const volumes = page.getByTestId("pool-volumes");
   await volumes.getByLabel(`${pool} űrtartalma (liter)`).fill("1000");
-  await volumes.getByRole("row").filter({ hasText: pool }).getByRole("button", { name: "Mentés" }).click();
-  await expect(volumes.getByRole("row").filter({ hasText: pool }).getByRole("status")).toHaveText("Mentve.");
+  // the row has two forms since package item 5b: the volume's Mentés first, the system's last
+  const poolRow = volumes.getByRole("row").filter({ hasText: pool });
+  await poolRow.getByRole("button", { name: "Mentés" }).first().click();
+  await expect(poolRow.getByRole("status").first()).toHaveText("Mentve.");
   await page.waitForLoadState("networkidle");
+  // Lili 2026-10-29 (package item 5b): the pool's system, coral; a rerun finds it set already and saves nothing
+  const system = poolRow.getByLabel(`${pool} rendszere`);
+  if ((await system.inputValue()) !== "CORAL") {
+    await system.selectOption({ label: "korallos" });
+    await poolRow.getByRole("button", { name: "Mentés" }).last().click();
+    await expect(poolRow.getByRole("status").last()).toHaveText("Mentve.");
+    await page.waitForLoadState("networkidle");
+  }
 
   const block = page.getByTestId(`pool-ref-${pool}`);
   await block.locator("summary").click();
@@ -1286,6 +1296,14 @@ test("a pool's own band and volume in the settings; the chemical calculator unde
   await card.getByLabel("Kalcium emelése: célérték").fill("420");
   // the OS module's own hand-computed case: 1000 l, 380 -> 420 mg/l is about 146,7 g CaCl2·2H2O
   await expect(calc.getByTestId("chem-CA-result")).toHaveText("Szükséges mennyiség: 146,7 g");
+  // package item 5b: the pool's system comes with it (coral: at most 10 mg/l a day), so +40 mg/l is 4 days
+  await expect(calc.getByLabel("Rendszer")).toHaveValue("CORAL");
+  await expect(calc.getByTestId("chem-CA-daily")).toHaveText("Ajánlott: 4 nap alatt, naponta 36,7 g (+10 mg/l/nap; korallos rendszer: legfeljebb 10 mg/l naponta).");
+  // a fish system takes 20 mg/l a day: 2 days; without a system it asks, it does not guess
+  await calc.getByLabel("Rendszer").selectOption({ label: "halas" });
+  await expect(calc.getByTestId("chem-CA-daily")).toContainText("Ajánlott: 2 nap alatt, naponta 73,4 g");
+  await calc.getByLabel("Rendszer").selectOption({ label: "nincs megadva" });
+  await expect(calc.getByTestId("chem-CA-daily")).toContainText("válaszd ki a rendszert");
   await card.getByLabel("Kalcium emelése: célérték").fill("370");
   await expect(calc.getByTestId("chem-CA-result")).toHaveText("A célérték nem magasabb a jelenlegi értéknél, nincs szükség adagolásra.");
   // Lili 2026-10-29 (package item 5a): every card's result stays inside its card, the longest text included, at her
@@ -1559,6 +1577,10 @@ test("the helper: it speaks unasked without taking a click, the quick questions 
 test("the feed list: the admin sets the tick's base amount, an aquarist sees it", async ({ page }) => {
   await login(page, "teszt.admin");
   await page.getByRole("link", { name: "Takarmánylista" }).click();
+  // package item 15: banded rows, paler than the reports' band (--c-field) and not the plain white
+  const apro = page.getByTestId("feeds-APRO").locator("tbody tr");
+  const bgOf = (n: number) => apro.nth(n).locator("td").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect([await bgOf(0), await bgOf(1)]).toEqual(["rgba(0, 0, 0, 0)", "rgb(246, 249, 250)"]);
   const row = page.getByRole("row").filter({ hasText: "Homárikra" });
   // the other layout's run (or an earlier run) may have set 30 already: then it is a change to 35, or "Mentés" stays off
   const target = (await row.locator('[data-testid^="feed-dose-"]').textContent()) === "30 g" ? "35" : "30";
@@ -1574,6 +1596,17 @@ test("the feed list: the admin sets the tick's base amount, an aquarist sees it"
   const seen = page.getByRole("row").filter({ hasText: "Homárikra" });
   await expect(seen.locator('[data-testid^="feed-dose-"]')).toHaveText(`${target} g`);
   await expect(seen.getByRole("button", { name: "Homárikra: módosítás" })).toHaveCount(0);
+  // package item 14: the basic data's copies are an admin's operation; an aquarist has no such box
+  await expect(page.getByTestId("feed-copies")).toHaveCount(0);
+});
+
+test("the feed list: the admin's dry run for the basic data's copies finds none on a clean start", async ({ page }) => {
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Takarmánylista" }).click();
+  const box = page.getByTestId("feed-copies");
+  await box.getByRole("button", { name: "Másodpéldányok keresése (próba)" }).click();
+  await expect(box.getByTestId("feed-copies-none")).toHaveText("Nincs másodpéldány.");
+  await expect(box.getByRole("button", { name: /inaktiválása/ })).toHaveCount(0);
 });
 
 // Lili 2026-10-29 (package item 2): the day of the week small under the date wherever the day picker is, and the row on

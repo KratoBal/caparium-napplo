@@ -1,4 +1,5 @@
 import { FeedActive, FeedEdit, NewFeed } from "@/components/AnimalForms";
+import { FeedCopies } from "@/components/FeedCopies";
 import { OrderList } from "@/components/AnimalOrder";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
@@ -27,7 +28,11 @@ export default async function FeedsPage() {
           {t.feeds.length === 0 ? (
             <p className="hint">Nincs takarmány ebben a típusban.</p>
           ) : (
-            <table className="log-table" data-testid={`feeds-${t.code}`}>
+            <table
+              // Lili 2026-10-29 (package item 15): banded rows, paler than the reports' bands, under the coloured marks
+              className="log-table feeds-table"
+              data-testid={`feeds-${t.code}`}
+            >
               <thead><tr><th>Név</th><th>Mérhető</th><th>Alapegység</th><th>Pipa</th><th></th></tr></thead>
               <tbody>
                 {t.feeds.map((f) => (
@@ -77,6 +82,8 @@ export default async function FeedsPage() {
           <NewFeed types={addable.map((t) => ({ id: t.id, name: t.name }))} units={unitOpts} />
         </div>
       )}
+      {/* package item 14: the basic data's copies, an admin's operation with a dry run */}
+      {isAdmin && <FeedCopies />}
     </Shell>
   );
 }

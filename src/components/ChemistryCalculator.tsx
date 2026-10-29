@@ -6,6 +6,7 @@
 // as a suggestion, the pool's latest measured value and its reference band; every field can be overwritten.
 // Nothing is saved: it is a calculation, the dosing itself is recorded in the form above.
 import { useMemo, useState } from "react";
+import { dailyPlan, SYSTEM_LABEL, type SystemType } from "@/lib/daily-limit";
 import { alkalinityElevation, calciumElevation, magnesiumElevation, type MagnesiumSalt, type ReefChemistryElevationResult } from "@/lib/reef-chemistry";
 
 type Code = "CA" | "MG" | "KH";
@@ -13,6 +14,8 @@ export type CalcPool = {
   id: string;
   name: string;
   volumeLiters: string | null;
+  /** coral or fish (package item 5b): the daily raise limit follows it; null = not set in Beállítások */
+  systemType: SystemType | null;
   latest: Partial<Record<Code, { value: string; day: string }>>;
   band: Partial<Record<Code, { min: string | null; max: string | null; unit: string }>>;
 };
@@ -27,6 +30,7 @@ function Card({
   unit,
   pool,
   volume,
+  system,
   compute,
   children,
 }: {
@@ -35,6 +39,7 @@ function Card({
   unit: string;
   pool: CalcPool | undefined;
   volume: string;
+  system: SystemType | "";
   compute: (v: { volumeLiters: number; current: number; target: number }) => ReefChemistryElevationResult;
   children?: React.ReactNode;
 }) {
@@ -47,6 +52,9 @@ function Card({
     if (!volume.trim() || !current.trim() || !target.trim() || ![v, c, t].every(Number.isFinite) || v <= 0) return null;
     return compute({ volumeLiters: v, current: c, target: t });
   }, [compute, current, target, volume]);
+  // Lili 2026-10-29 (package item 5b, Balázs's limits): the dose split into days, not all of it at once
+  const plan = result?.kind === "dose" && system ? dailyPlan(code, system, toNumber(current), toNumber(target), result.grams) : null;
+  const raiseFmt = new Intl.NumberFormat("hu-HU", { maximumFractionDigits: 2 });
   return (
     <div className="card" data-testid={`chem-${code}`} style={{ margin: 0 }}>
       <h3>{title}</h3>
@@ -82,6 +90,15 @@ function Card({
             ? "A célérték nem magasabb a jelenlegi értéknél, nincs szükség adagolásra."
             : `Szükséges mennyiség: ${resultFormatter.format(result.grams)} g`}
       </div>
+      {result?.kind === "dose" && (
+        <p className="hint" data-testid={`chem-${code}-daily`} role="status">
+          {plan
+            ? plan.days === 1
+              ? `Egy napon belül marad (${SYSTEM_LABEL[system as SystemType]} rendszer: legfeljebb ${raiseFmt.format(plan.max)} ${unit} naponta).`
+              : `Ajánlott: ${plan.days} nap alatt, naponta ${resultFormatter.format(plan.perDayGrams)} g (+${raiseFmt.format(plan.perDayRaise)} ${unit}/nap; ${SYSTEM_LABEL[system as SystemType]} rendszer: legfeljebb ${raiseFmt.format(plan.max)} ${unit} naponta).`
+            : "A napi ajánláshoz válaszd ki a rendszert (korallos vagy halas) fent, vagy add meg a medencénél a Beállításokban."}
+        </p>
+      )}
     </div>
   );
 }
@@ -91,10 +108,13 @@ export function ChemistryCalculator({ pools }: { pools: CalcPool[] }) {
   const pool = pools.find((p) => p.id === poolId);
   const [volume, setVolume] = useState("");
   const [salt, setSalt] = useState<MagnesiumSalt>("MGCL2_HEXAHYDRATE");
+  // the pool's system as a suggestion, as the volume: it can be set here for a pool without one, or with none picked
+  const [system, setSystem] = useState<SystemType | "">("");
   const pick = (id: string) => {
     setPoolId(id);
     const p = pools.find((x) => x.id === id);
     setVolume(p?.volumeLiters ? hu(p.volumeLiters) : "");
+    setSystem(p?.systemType ?? "");
   };
   return (
     <div data-testid="chemistry-calculator">
@@ -114,6 +134,14 @@ export function ChemistryCalculator({ pools }: { pools: CalcPool[] }) {
           Térfogat (liter)
           <input className="input small" inputMode="decimal" aria-label="Térfogat (liter)" value={volume} onChange={(e) => setVolume(e.target.value)} />
         </label>
+        <label className="field">
+          Rendszer
+          <select className="input" aria-label="Rendszer" value={system} onChange={(e) => setSystem(e.target.value as SystemType | "")}>
+            <option value="">nincs megadva</option>
+            <option value="CORAL">korallos</option>
+            <option value="FISH">halas</option>
+          </select>
+        </label>
       </div>
       {pool && !pool.volumeLiters && (
         <p className="hint" data-testid="no-volume">
@@ -122,7 +150,7 @@ export function ChemistryCalculator({ pools }: { pools: CalcPool[] }) {
       )}
       {/* keyed by the pool: a new pool brings its own suggestions instead of keeping the previous pool's values */}
       <div className="chem-grid" key={poolId} style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-        <Card code="CA" title="Kalcium emelése" unit="mg/l" pool={pool} volume={volume} compute={({ volumeLiters, current, target }) => calciumElevation({ volumeLiters, currentMgL: current, targetMgL: target })}>
+        <Card code="CA" title="Kalcium emelése" unit="mg/l" pool={pool} volume={volume} system={system} compute={({ volumeLiters, current, target }) => calciumElevation({ volumeLiters, currentMgL: current, targetMgL: target })}>
           <p className="hint">Kalcium-klorid-dihidrát (CaCl₂·2H₂O)</p>
         </Card>
         <Card
@@ -131,6 +159,7 @@ export function ChemistryCalculator({ pools }: { pools: CalcPool[] }) {
           unit="mg/l"
           pool={pool}
           volume={volume}
+          system={system}
           compute={({ volumeLiters, current, target }) => magnesiumElevation({ volumeLiters, currentMgL: current, targetMgL: target, salt })}
         >
           <label className="field">
@@ -141,7 +170,7 @@ export function ChemistryCalculator({ pools }: { pools: CalcPool[] }) {
             </select>
           </label>
         </Card>
-        <Card code="KH" title="KH emelése" unit="dKH" pool={pool} volume={volume} compute={({ volumeLiters, current, target }) => alkalinityElevation({ volumeLiters, currentDkh: current, targetDkh: target })}>
+        <Card code="KH" title="KH emelése" unit="dKH" pool={pool} volume={volume} system={system} compute={({ volumeLiters, current, target }) => alkalinityElevation({ volumeLiters, currentDkh: current, targetDkh: target })}>
           <p className="hint">Nátrium-hidrogén-karbonát (NaHCO₃)</p>
         </Card>
       </div>
