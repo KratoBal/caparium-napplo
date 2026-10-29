@@ -1,4 +1,5 @@
 import { ChemistryCalculator } from "@/components/ChemistryCalculator";
+import { InactiveListFilter, InactiveRowShell } from "@/components/InactiveListFilter";
 import { ChemicalActive, ChemicalEdit, DosingForm, MovementForm, NewChemical, type ChemicalOpt } from "@/components/DosingForms";
 import { InvalidateButton } from "@/components/FeedingForms";
 import { PrintButton } from "@/components/PrintButton";
@@ -131,13 +132,15 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
       <div className="card">
         <h2>Készlet</h2>
         <p className="hint">A készlet a mozgások összege; kezdőkészlet nélkül negatív lehet, ez jelzés, nem hiba. Bevételezést és leltárkorrekciót adminisztrátor rögzít.</p>
+        {/* Lili 2026-10-29 (package item 16): an inactive chemical behind "Inaktívak mutatása", as the feeds; its dosings stay */}
+        <InactiveListFilter inactive={stock.filter((c) => !c.active).length}>
         <table className="log-table" data-testid="stock">
           <thead>
             <tr><th>Szer</th><th>Készlet</th><th>Fogyás, 7 nap</th><th>Fogyás, 30 nap</th>{isAdmin && <th className="no-print" />}</tr>
           </thead>
           <tbody>
             {stock.map((c) => (
-              <tr key={c.id} className={c.active ? undefined : "invalid"}>
+              <InactiveRowShell key={c.id} id={c.id} active={c.active}>
                 <td>{c.name}</td>
                 <td className="keep">
                   <span className={c.negative ? "badge badge-invalid" : undefined}>
@@ -155,10 +158,11 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
                     <ChemicalEdit chem={c} units={units.map((u) => ({ id: u.id, name: u.symbol }))} /> <ChemicalActive chem={c} />
                   </td>
                 )}
-              </tr>
+              </InactiveRowShell>
             ))}
           </tbody>
         </table>
+        </InactiveListFilter>
         {isAdmin && (
           <div className="no-print">
             <MovementForm chemicals={chemOpts} />

@@ -2,7 +2,7 @@
 
 // Forms of the animal and feed master data (DAT-01, DAT-02, DAT-05). The server decides every
 // permission; these only send what the user picked.
-import { useKeepFeedRow } from "./FeedListFilter";
+import { useKeepRow } from "./InactiveListFilter";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
@@ -298,8 +298,8 @@ export function NewFeed({ types, units }: { types: Opt[]; units: { id: string; s
 
 export function FeedActive({ id, active }: { id: string; active: boolean }) {
   const { msg, busy, call } = useApi();
-  // the row stays in view after the switch (FeedListFilter, as the pools of #107): its message is read
-  const keep = useKeepFeedRow();
+  // the row stays in view after the switch (InactiveListFilter, as the pools of #107): its message is read
+  const keep = useKeepRow();
   return (
     <>
       <button

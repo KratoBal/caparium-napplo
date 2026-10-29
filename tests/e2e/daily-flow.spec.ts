@@ -1251,6 +1251,12 @@ test("dosing: an admin changes and inactivates a chemical; it is not offered whi
   await expect(page.getByTestId("dosing-form").getByLabel("Szer", { exact: true }).locator("option", { hasText: `${name} uj` })).toHaveCount(0);
   await expect(page.getByTestId("movement-form").locator("option", { hasText: `${name} uj` })).toHaveCount(0);
   await expect(renamed).toHaveClass(/invalid/);
+  // Lili 2026-10-29 (package item 16, as the feeds): after the page is left the inactive row is hidden, behind
+  // "Inaktívak mutatása"; with the switch on it is there, marked, to be activated again
+  await page.reload();
+  await expect(renamed).toHaveCount(0);
+  await page.getByTestId("stock").locator("..").getByRole("switch", { name: /^Inaktívak mutatása/ }).check();
+  await expect(renamed).toHaveClass(/invalid/);
   // active again, and back to the first name: a second run starts where this one did
   await renamed.getByRole("button", { name: `${name} uj: aktiválás` }).click();
   await expect(page.getByTestId("dosing-form").getByLabel("Szer", { exact: true }).locator("option", { hasText: `${name} uj` })).toHaveCount(1);

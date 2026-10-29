@@ -4,6 +4,7 @@
 // admin's intake, correction and new chemical. The server decides every permission.
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useKeepRow } from "./InactiveListFilter";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 
 type Opt = { id: string; name: string };
@@ -180,6 +181,8 @@ export type ChemicalRow = { id: string; name: string; unitId: string; active: bo
 /** Lili 2026-10-28 16:06 UTC: an inactive chemical is not offered for a dosing or a stock line; its history stays. */
 export function ChemicalActive({ chem }: { chem: ChemicalRow }) {
   const { msg, busy, run } = useSend();
+  // the row stays in view after the switch (InactiveListFilter, package item 16): its message is read
+  const keep = useKeepRow();
   return (
     <>
       <button
@@ -187,7 +190,10 @@ export function ChemicalActive({ chem }: { chem: ChemicalRow }) {
         type="button"
         disabled={busy}
         aria-label={`${chem.name}: ${chem.active ? "inaktiválás" : "aktiválás"}`}
-        onClick={() => void run(`/api/admin/chemicals/${chem.id}`, { active: !chem.active }, chem.active ? "Inaktiválva." : "Újra aktív.", "PATCH")}
+        onClick={() => {
+          keep(chem.id);
+          void run(`/api/admin/chemicals/${chem.id}`, { active: !chem.active }, chem.active ? "Inaktiválva." : "Újra aktív.", "PATCH");
+        }}
       >
         {chem.active ? "Inaktiválás" : "Aktiválás"}
       </button>

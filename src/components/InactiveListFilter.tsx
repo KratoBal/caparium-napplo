@@ -1,15 +1,16 @@
 "use client";
 
-// The feed list hides an inactive feed (Lili 2026-10-29 via acrobot 38203, as the pools in #107): shown only with the
-// "Inaktívak mutatása" switch on, to be activated again. A row switched in this view stays until the page is left, so
-// its message is read and an inactivation undone at once. The earlier days and the exports are not affected: they read
-// the feeds themselves, not this list.
+// A list that hides its inactive rows (Lili 2026-10-29, as the pools in #107): the feed list (acrobot 38203) and the
+// chemical stock (acrobot 38228, package item 16). An inactive row is shown only with the "Inaktívak mutatása" switch on,
+// to be activated again. A row switched in this view stays until the page is left, so its message is read and an
+// inactivation undone at once. The earlier days, the dosing log and the exports are not affected: they read the feeds
+// and chemicals themselves, not this list.
 import { createContext, useContext, useState } from "react";
 
 type Filter = { show: boolean; kept: string[]; keep: (id: string) => void };
 const Ctx = createContext<Filter | null>(null);
 
-export function FeedListFilter({ inactive, children }: { inactive: number; children: React.ReactNode }) {
+export function InactiveListFilter({ inactive, children }: { inactive: number; children: React.ReactNode }) {
   const [show, setShow] = useState(false);
   const [kept, setKept] = useState<string[]>([]);
   const keep = (id: string) => setKept((k) => (k.includes(id) ? k : [...k, id]));
@@ -26,14 +27,14 @@ export function FeedListFilter({ inactive, children }: { inactive: number; child
   );
 }
 
-/** A feed's row: an inactive one only with the switch on, or after it was switched in this view. */
-export function FeedRowShell({ id, active, children }: { id: string; active: boolean; children: React.ReactNode }) {
+/** A row of the list: an inactive one only with the switch on, or after it was switched in this view. */
+export function InactiveRowShell({ id, active, children }: { id: string; active: boolean; children: React.ReactNode }) {
   const f = useContext(Ctx);
   if (!active && f && !f.show && !f.kept.includes(id)) return null;
   return <tr className={active ? undefined : "invalid"}>{children}</tr>;
 }
 
 /** Called by the row's activation button: the row stays in view after the switch. */
-export function useKeepFeedRow(): (id: string) => void {
+export function useKeepRow(): (id: string) => void {
   return useContext(Ctx)?.keep ?? (() => {});
 }
