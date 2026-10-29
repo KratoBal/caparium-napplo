@@ -389,6 +389,15 @@ test("animals: the list from the events, a transfer recorded, the history kept; 
   const renamed = page.getByRole("row").filter({ hasText: `${feedName} javított` });
   await expect(renamed).toContainText("tömeg és darab");
   await expect(renamed.locator('[data-testid^="feed-edit-"]'), "the editor closes after the save").toHaveCount(0);
+  // acrobot 38203 (as the pools of #107): an inactive feed is hidden on the list, behind "Inaktívak mutatása"; the row
+  // switched in this view stays until the page is left, so its message is read
+  await renamed.getByRole("button", { name: "Inaktiválás" }).click();
+  await expect(renamed.getByRole("status")).toHaveText("Inaktiválva.");
+  await expect(renamed.getByRole("button", { name: "Aktiválás" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("row").filter({ hasText: `${feedName} javított` })).toHaveCount(0);
+  await page.getByRole("switch", { name: /Inaktívak mutatása/ }).check();
+  await expect(page.getByRole("row").filter({ hasText: `${feedName} javított` })).toHaveClass(/invalid/);
 });
 
 test("feeding: the daily list, an item in pieces and grams, the list finalized; the eating log", async ({ page }, info) => {

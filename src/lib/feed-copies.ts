@@ -73,7 +73,8 @@ export async function feedCopies(actor: Actor, raw: z.input<typeof feedCopiesSch
   }
   if (input.mode === "plan") return { copies: await feedCopyCandidates(now) };
   await requireReason(prisma, true, input.reason, "Az eltávolításhoz indoklás kell.");
-  if (await prisma.auditEntry.findFirst({ where: { requestId: { startsWith: input.requestId } } })) return { replayed: true };
+  // the run's first row carries `<requestId>:0` (barracuda on #121: an exact match, not a prefix another run could share)
+  if (await prisma.auditEntry.findFirst({ where: { requestId: `${input.requestId}:0` } })) return { replayed: true };
   // planned again: what the admin saw may have moved meanwhile, the run follows the list as it is
   const copies = await feedCopyCandidates(now);
   if (!copies.length) throw new AppError(422, "NO_CHANGE", "Nincs alapadat-másodpéldány.");
