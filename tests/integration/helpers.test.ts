@@ -33,9 +33,20 @@ describe("Antennarius, the water helper", () => {
     expect(answer(h, "Késésben vagyunk?")).toContain("Elmúlt a határidő");
     // card 8b22c3c2: after the deadline the missed measurement is urgent, without the stock right too
     expect(h.alert).toMatch(/^14:00 elmúlt, és ma még nincs napi mérés: .*Kismedence/);
-    expect(h.alertKey).toMatch(/^meres:2028-08-12:/);
+    expect(h.alertKey).toBe("meres:2028-08-12");
     const before = await waterHelper(false, at("2028-08-12T13:59"));
     expect([before.alert, before.alertKey]).toEqual([undefined, undefined]);
+    // a pool measured since changes the text, not the key: the alert does not speak again on the water page
+    // while the missing ones are being recorded (barracuda on #109; the stock alert's rule, review of #20 b)
+    const missing = h.alert!.slice(h.alert!.indexOf(":") + 1, -1).split(",").map((x) => x.trim());
+    expect(missing.length).toBeGreaterThan(1);
+    const kis = await prisma.groupMembership.findMany({ where: { groupId: f.group("NAPI_KIS") }, include: { pool: { include: { names: true } } } });
+    const one = kis.find((m) => missing.includes(m.pool.names[0]?.displayName ?? ""))!;
+    await createMeasurement(f.aq1, { requestId: rid(), groupId: f.group("NAPI_KIS"), poolId: one.poolId, parameterId: f.param("SAL"), value: "35", measuredAtLocal: "2028-08-12T15:10" }, at("2028-08-12T15:10"));
+    const later = await waterHelper(false, at("2028-08-12T15:20"));
+    expect(later.alertKey).toBe(h.alertKey);
+    expect(later.alert).not.toContain(one.pool.names[0]!.displayName);
+    expect(later.alert).toContain(missing.find((n) => n !== one.pool.names[0]!.displayName)!);
     // AST-03: a chemical below zero speaks up, for someone who may see the stock
     await createChemical(f.admin, { requestId: rid(), name: "Teszt segítő-só", stockUnitId: unit.kg }, at("2028-08-12T08:00"));
     const chem = (await prisma.chemicalName.findFirstOrThrow({ where: { name: "Teszt segítő-só" } })).chemicalId;
@@ -45,7 +56,7 @@ describe("Antennarius, the water helper", () => {
     expect(first.alertKey).toContain("Teszt segítő-só");
     // both urgent notices in one alert, the measurement first; their keys joined
     expect(first.alert).toMatch(/^14:00 elmúlt.*Fogyóban: .*Teszt segítő-só/);
-    expect(first.alertKey).toMatch(/^meres:2028-08-12:.*#.*Teszt segítő-só/);
+    expect(first.alertKey).toMatch(/^meres:2028-08-12#.*Teszt segítő-só/);
     const off = await waterHelper(false, at("2028-08-12T15:00"));
     expect(off.alert).not.toContain("Teszt segítő-só");
     expect(off.alertKey).not.toContain("Teszt segítő-só");

@@ -3,11 +3,16 @@
 // AST-01..AST-03: a static figure in the corner with a speech bubble: fixed quick questions about the
 // page's data, never free text (D-23). The figure is drawn from an emoji, not an image: the AI-generated
 // character sheets wait for D-38 (their rights), and an image is a file swap in FIGURE below (card
-// 8b22c3c2, acrobot 38044). It opens by itself once per alert (AST-03), and greets once per session: the
-// greeting is a text-only bubble that takes no click (pointer-events: none) and goes after GREETING_MS,
-// so it never covers a form's button (the tablet e2e of #109: it sat on "Tétel mentése").
-// Switched off in the header (HelperToggle), the figure and the greeting go; the URGENT notices (the
-// missed measurement, a chemical running out) stay, in a small strip (Lili 2026-10-27 13:25 UTC).
+// 8b22c3c2, acrobot 38044). Switched off in the header (HelperToggle), the figure and the greeting go; the
+// URGENT notices (the missed measurement, a chemical running out) stay, in a small strip (Lili 2026-10-27
+// 13:25 UTC).
+//
+// WHAT SPEAKS BY ITSELF TAKES NO CLICK. The figure says something unasked twice: an alert, once per key and
+// session (AST-03), and a greeting, once per session (it goes after GREETING_MS). Both are a text-only
+// bubble with pointer-events: none, and so is the strip: none of them can cover a form's button (the
+// tablet e2e of #109, where the greeting sat on "Tétel mentése"; barracuda on #109: in the afternoon the
+// measurement alert would open on every water page). The bubble with the questions opens only from the
+// figure, and starts with the alert.
 import { useEffect, useState } from "react";
 import type { HelperData } from "@/lib/helpers";
 import { readOff, SWITCH_EVENT } from "@/lib/helper-switch";
@@ -17,19 +22,21 @@ const GREETED_KEY = "caparium-segito-koszont";
 const FIGURE = { water: { emoji: "🐠", name: "Antennarius" }, feeding: { emoji: "🦈", name: "Zebracápa" } } as const;
 const GREETING_MS = 8000;
 
+type Notice = { kind: "alert" | "greeting"; text: string };
+
 export function Helper({ data }: { data: HelperData }) {
   const [off, setOff] = useState(false);
   const [open, setOpen] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [answer, setAnswer] = useState<string | null>(null);
-  const [greeting, setGreeting] = useState(false);
   const [animal, setAnimal] = useState(data.perAnimal?.[0]?.name ?? "");
   // set once the stored state is read: before that a click could race the auto-open below
   const [ready, setReady] = useState(false);
   const figure = FIGURE[data.who];
 
-  /** AST-03: opens with the alert once per key and session; true when it did. It is also the figure's hello:
-   * the next page does not greet after it (an alert, then a hello, would open the bubble on every page) */
-  function openIfNew(): boolean {
+  /** AST-03: the alert speaks once per key and session; true when it did. It is also the figure's hello:
+   * the next page does not greet after it (an alert, then a hello, would speak on every page) */
+  function alertIfNew(): boolean {
     if (!data.alert) return false;
     const key = data.alertKey ?? data.alert;
     try {
@@ -37,10 +44,9 @@ export function Helper({ data }: { data: HelperData }) {
       sessionStorage.setItem(SEEN_KEY, key);
       sessionStorage.setItem(`${GREETED_KEY}-${data.who}`, "1");
     } catch {
-      /* without storage it opens on every page with an alert */
+      /* without storage it speaks on every page with an alert */
     }
-    setOpen(true);
-    setAnswer(data.alert);
+    setNotice({ kind: "alert", text: data.alert });
     return true;
   }
   /** the hello, once per session and figure; an alert goes first */
@@ -51,25 +57,25 @@ export function Helper({ data }: { data: HelperData }) {
     } catch {
       return; // without storage it would greet on every page: it does not greet
     }
-    setGreeting(true);
+    setNotice({ kind: "greeting", text: data.greeting });
   }
   useEffect(() => {
-    if (!greeting) return;
-    const t = setTimeout(() => setGreeting(false), GREETING_MS);
+    if (notice?.kind !== "greeting") return;
+    const t = setTimeout(() => setNotice(null), GREETING_MS);
     return () => clearTimeout(t);
-  }, [greeting]);
+  }, [notice]);
 
   useEffect(() => {
     setReady(true);
     const isOff = readOff();
     setOff(isOff);
-    // switched off, the alert is not marked as seen: switched back on, it still opens once
-    if (!isOff && !openIfNew()) greetIfNew();
+    // switched off, the alert is not marked as seen: switched back on, it still speaks once
+    if (!isOff && !alertIfNew()) greetIfNew();
     const onSwitch = (e: Event) => {
       const v = (e as CustomEvent<boolean>).detail;
       setOff(v);
-      // switched back on: an alert not seen yet opens on this page, not only on the next one
-      if (!v) openIfNew();
+      // switched back on: an alert not seen yet speaks on this page, not only on the next one
+      if (!v) alertIfNew();
     };
     window.addEventListener(SWITCH_EVENT, onSwitch);
     return () => window.removeEventListener(SWITCH_EVENT, onSwitch);
@@ -85,9 +91,9 @@ export function Helper({ data }: { data: HelperData }) {
   }
   return (
     <div className="helper no-print" data-testid="helper" data-ready={ready ? "1" : undefined}>
-      {greeting && !open && (
-        <p className="helper-bubble helper-greeting" role="status" data-testid="helper-greeting">
-          {data.greeting}
+      {notice && !open && (
+        <p className="helper-bubble helper-notice" role="status" data-kind={notice.kind} data-testid="helper-notice">
+          {notice.text}
         </p>
       )}
       {open && (
@@ -124,7 +130,9 @@ export function Helper({ data }: { data: HelperData }) {
         className={`helper-figure${data.alert ? " alert" : ""}`}
         type="button"
         onClick={() => {
-          setGreeting(false);
+          setNotice(null);
+          // the bubble starts with the alert: the figure's "!" is about it
+          if (!open) setAnswer(data.alert ?? null);
           setOpen(!open);
         }}
         aria-expanded={open}

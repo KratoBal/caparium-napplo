@@ -57,8 +57,9 @@ function missedAlert(missed: Awaited<ReturnType<typeof missedMeasurements>>): Pi
   if (!missed.due || !missed.pools.length) return {};
   return {
     alert: `${MEASUREMENT_DEADLINE} elmúlt, és ma még nincs napi mérés: ${missed.pools.join(", ")}.`,
-    // which pools on which day: a pool measured since takes it off, and a new day is a new notice
-    alertKey: `meres:${missed.day}:${missed.pools.join("|")}`,
+    // the day, not the pools: a pool measured since changes the text, not the key, so the alert does not speak
+    // again while the missing ones are being recorded (barracuda on #109; the stock alert's rule, review of #20 b)
+    alertKey: `meres:${missed.day}`,
   };
 }
 

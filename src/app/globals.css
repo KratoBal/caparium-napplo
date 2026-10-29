@@ -275,12 +275,14 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .helper-badge { position: absolute; top: -4px; right: -4px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--c-warn-ink); color: var(--c-white); font-weight: 700; font-size: 14px; }
 .helper-bubble { pointer-events: auto; position: relative; background: var(--c-white); border: 1px solid var(--c-line); border-radius: 16px; padding: 14px; box-shadow: 0 6px 24px rgba(17, 47, 62, 0.15); max-height: min(60vh, 520px); overflow: auto; }
 .helper-bubble::after { content: ""; position: absolute; right: 26px; bottom: -9px; width: 16px; height: 16px; background: var(--c-white); border-right: 1px solid var(--c-line); border-bottom: 1px solid var(--c-line); transform: rotate(45deg); }
-/* the greeting takes no click: it must never cover a form's button (#109's tablet e2e) */
-.helper-greeting { pointer-events: none; margin: 0; font-size: 15px; }
+/* what speaks by itself (alert, greeting) and the strip take no click: they never cover a form's button (#109) */
+.helper-notice { pointer-events: none; margin: 0; font-size: 15px; }
+/* the page keeps room under its last row for the figure, so nothing ends up behind it */
+.shell:has(.helper, .helper-urgent) .main { padding-bottom: 120px; }
 .helper-qs { display: flex; flex-wrap: wrap; gap: 8px; }
 .helper-animal { display: flex; gap: 6px; }
 .helper-answer { margin: 0 0 12px; font-size: 15px; }
-.helper-urgent { position: fixed; right: 16px; bottom: 16px; z-index: 20; max-width: min(420px, calc(100vw - 32px)); background: var(--c-warn-soft); color: var(--c-warn-ink); border-radius: var(--radius); padding: 8px 12px; font-size: 14px; box-shadow: 0 4px 14px rgba(17, 47, 62, 0.12); }
+.helper-urgent { pointer-events: none; position: fixed; right: 16px; bottom: 16px; z-index: 20; max-width: min(420px, calc(100vw - 32px)); background: var(--c-warn-soft); color: var(--c-warn-ink); border-radius: var(--radius); padding: 8px 12px; font-size: 14px; box-shadow: 0 4px 14px rgba(17, 47, 62, 0.12); }
 
 /* caparium-hibak-5: the home page's illustrated cards, 3-2-3, centred rows; one column on a phone */
 .home-cards { display: flex; flex-direction: column; gap: 28px; margin-top: 28px; }
