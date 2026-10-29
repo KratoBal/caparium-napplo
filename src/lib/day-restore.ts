@@ -17,6 +17,7 @@ import { prisma, type Tx } from "./db";
 import { AppError } from "./errors";
 import { lockFeedingDay } from "./feeding";
 import { moduleLevel } from "./master";
+import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { dayToDate } from "./time";
 
@@ -156,7 +157,9 @@ export async function restoreDay(actor: Actor, raw: z.input<typeof restoreSchema
   };
   if (input.mode === "plan") return { plan: summary(await plan(prisma, input.day, input.op)) };
 
-  if (!input.reason) throw new AppError(422, "REASON_REQUIRED", "A visszaállításhoz indoklás kell.");
+  // the reason follows the app's switch like every other (Balázs 2026-10-20, task caparium-indoklas-ki): asked only
+  // while reasons are on; off, the run is recorded without one
+  await requireReason(prisma, true, input.reason, "A visszaállításhoz indoklás kell.");
   if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true };
   return prisma.$transaction(async (tx) => {
     const { fd } = await dayRows(tx, input.day);
@@ -167,7 +170,7 @@ export async function restoreDay(actor: Actor, raw: z.input<typeof restoreSchema
       throw new AppError(409, "RESTORE_BLOCKED", `${p.blocked.length} változás az audit alapján nem fordítható vissza (tartalmi módosítás); a napot így nem állítom vissza.`, { blocked: p.blocked });
     }
     if (!p.changes.length && !p.feedIds) throw new AppError(422, "NO_CHANGE", "A nap már úgy áll, ahogy a művelet előtt.");
-    const why = `visszaállítás a(z) ${input.op} művelet előtti állapotra: ${input.reason}`;
+    const why = `visszaállítás a(z) ${input.op} művelet előtti állapotra${input.reason ? `: ${input.reason}` : ""}`;
     // invalidations first: one valid row per animal (the partial unique indexes) holds at every step
     const ordered = [...p.changes.filter((c) => c.to === "INVALIDATED"), ...p.changes.filter((c) => c.to === "VALID")];
     for (const c of ordered) {
@@ -184,7 +187,7 @@ export async function restoreDay(actor: Actor, raw: z.input<typeof restoreSchema
         entityType: c.type,
         entityId: c.id,
         changes: { status: { before: c.to === "INVALIDATED" ? "VALID" : "INVALIDATED", after: c.to } },
-        reason: why.slice(0, 500),
+        reason: input.reason ?? null,
         requestId: input.requestId,
       });
     }
@@ -196,7 +199,7 @@ export async function restoreDay(actor: Actor, raw: z.input<typeof restoreSchema
         entityType: "FeedingDay",
         entityId: fd.id,
         changes: { feedIds: { before: [...p.feedIds.now].sort(), after: [...p.feedIds.before].sort() } },
-        reason: why.slice(0, 500),
+        reason: input.reason ?? null,
         requestId: input.requestId,
       });
     }
