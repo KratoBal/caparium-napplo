@@ -54,6 +54,7 @@ export default async function MeasurementHistoryPage({ params }: { params: Promi
           today: businessDayOf(new Date()),
           closed: journal?.state === "CLOSED",
           isOwn: m.createdById === user.id,
+          othersToo: true,
         })
       : null;
   const people = decision?.kind === "ALLOW"

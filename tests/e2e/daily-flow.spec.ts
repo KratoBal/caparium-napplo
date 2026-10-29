@@ -949,12 +949,12 @@ for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti víz
 }
 
 // Lili 2026-10-29 (Caparium thread 1565386596310716569): an emptied value came back after the save, under "Minden érték
-// mentve.". A saved value emptied (here with the X) is invalidated on the save, after a confirmation; another aquarist's
-// value is refused by the server, and the page says so instead of reporting it saved. Each project its own pool, a
-// parameter no other test writes. WHAT TURNS RED: the emptied draft dropped without a request (the value is back after
-// the reload); a refused save reported as "Minden érték mentve."; the cell not naming the reason.
+// mentve.", when Bálint emptied what she had entered. A saved value emptied (here with the X) is invalidated on the save,
+// after a confirmation, and since her "Legyen javítható nyugodtan." (1565398519064297503) by another aquarist too. Each
+// project its own pool, a parameter no other test writes. WHAT TURNS RED: the emptied draft dropped without a request (the
+// value is back after the reload); another aquarist refused.
 for (const [name, link, tab, param] of [["daily", "Napi vízmérés", "Nagy medencék", "pH"], ["weekly", "Heti vízmérés", null, "KH"]] as const) {
-  test(`water measurement (${name}): a saved value emptied is invalidated on the save; another aquarist's is refused, and said`, async ({ page }, info) => {
+  test(`water measurement (${name}): a saved value emptied by another aquarist is invalidated on the save`, async ({ page }, info) => {
     const pool = info.project.name === "tablet" ? "Karantén" : "Kismedence";
     const dialogs: string[] = [];
     page.on("dialog", (d) => {
@@ -974,26 +974,13 @@ for (const [name, link, tab, param] of [["daily", "Napi vízmérés", "Nagy mede
     await page.getByTestId("save-all").click();
     await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
 
-    // another aquarist: refused (only one's own entry), the cell says why, the banner does not say saved
     await page.getByRole("button", { name: "Kilépés" }).click();
     await open("teszt.akvarista2");
     await expect(cell).toHaveValue("8,1");
     await x.click();
     await page.getByTestId("save-all").click();
-    await expect(page.getByTestId("banner")).toHaveText("1 érték nem lett mentve: az ok a cellánál látszik.");
-    await expect(page.getByText("Csak a saját bejegyzésedet módosíthatod.")).toBeVisible();
-    await page.reload();
-    await page.getByRole("button", { name: pool, exact: true }).click();
-    await expect(cell, "the refused value stands").toHaveValue("8,1");
-
-    // its author: confirmed, invalidated, empty after a reload
-    await page.getByRole("button", { name: "Kilépés" }).click();
-    await open("teszt.akvarista1");
-    const asked = dialogs.length;
-    await x.click();
-    await page.getByTestId("save-all").click();
     await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
-    expect(dialogs.length, "the emptying asked first").toBeGreaterThan(asked);
+    expect(dialogs, "the emptying asked first").not.toEqual([]);
     await page.reload();
     await page.getByRole("button", { name: pool, exact: true }).click();
     await expect(cell).toHaveValue("");
