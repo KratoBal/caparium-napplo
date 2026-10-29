@@ -91,7 +91,7 @@ export function Helper({ data, userName, loginAt }: { data: HelperData; userName
     const dismiss = () => {
       remove();
       setNotice(null);
-      alertTimer.current = setTimeout(() => alertLater.current(), ALERT_AFTER_GREETING_MS);
+      alertLater.current(); // CALIBRATION: the old behaviour
     };
     document.addEventListener("pointerdown", dismiss, true);
     document.addEventListener("keydown", dismiss, true);
