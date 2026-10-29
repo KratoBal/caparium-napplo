@@ -9,7 +9,8 @@ import { useState } from "react";
 type Op = { op: string; at: string; user: string; count: number; kinds: Record<string, number> };
 type Plan = {
   since: string;
-  ops: string[];
+  /** every operation turned back, the chosen one first */
+  ops: { op: string; at: string; user: string }[];
   count: Record<string, number>;
   changes: { type: string; id: string; animalId: string | null; to: string }[];
   blocked: { type: string; id: string; action: string; at: string }[];
@@ -108,9 +109,15 @@ export function DayRestore({ day }: { day: string }) {
       )}
       {plan && op && (
         <div data-testid="day-restore-plan">
-          <p>
-            Visszaállítás a(z) {time(plan.since)} előtti állapotra. Visszafordított műveletek: {plan.ops.length}.
-          </p>
+          <p>Visszaállítás a(z) {time(plan.since)} előtti állapotra. Ezek a műveletek fordulnak vissza:</p>
+          <ul data-testid="day-restore-turned-back">
+            {plan.ops.map((o) => (
+              <li key={o.op}>
+                {time(o.at)}, {o.user}
+              </li>
+            ))}
+          </ul>
+          <p>Ami változik:</p>
           <ul>
             {Object.entries(plan.count).map(([k, n]) => (
               <li key={k}>
@@ -132,7 +139,9 @@ export function DayRestore({ day }: { day: string }) {
                 type="button"
                 disabled={busy || reason.trim().length < 3 || (!Object.keys(plan.count).length && !plan.feedIds)}
                 onClick={() => {
-                  if (!window.confirm(`Visszaállítod a(z) ${day} napot a(z) ${time(plan.since)} előtti állapotra? A fenti változások mind megtörténnek.`)) return;
+                  const others = plan.ops.slice(1);
+                  const also = others.length ? ` Ez a kiválasztotton kívül további ${others.length} műveletet is visszafordít: ${others.map((o) => `${time(o.at)} ${o.user}`).join(", ")}.` : "";
+                  if (!window.confirm(`Visszaállítod a(z) ${day} napot a(z) ${time(plan.since)} előtti állapotra?${also} A fenti változások mind megtörténnek.`)) return;
                   void call({ mode: "run", op, reason: reason.trim() }).then((b) => {
                     if (!b) return;
                     setMsg({ ok: true, text: "A nap visszaállítva." });

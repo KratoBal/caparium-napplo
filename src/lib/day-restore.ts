@@ -79,6 +79,12 @@ export async function dayOperations(day: string) {
 
 type Change = { type: RowType; id: string; animalId: string | null; to: "VALID" | "INVALIDATED" };
 
+/** The status a row had before a status-only change. */
+const statusBefore = (x: Audit): "VALID" | "INVALIDATED" | null => {
+  const b = (x.changes as { status?: { before?: unknown } })?.status?.before;
+  return b === "VALID" || b === "INVALIDATED" ? b : null;
+};
+
 /** A status change only (a restore's own revalidation): not a content change, the row's content is as it was. */
 const statusOnly = (x: Audit) => {
   const keys = x.changes && typeof x.changes === "object" ? Object.keys(x.changes as object) : [];
@@ -106,8 +112,10 @@ async function plan(tx: Tx, day: string, op: string) {
     }
     const row = rows.get(id);
     if (!row) continue;
-    // the row as it stood before: a CREATE since means it did not exist; an INVALIDATE since means it was valid
-    const target = a.action === "CREATE" ? "INVALIDATED" : a.action === "INVALIDATE" ? "VALID" : null;
+    // the row as it stood before: a CREATE since means it did not exist; an INVALIDATE since means it was valid; a
+    // status-only UPDATE since (a restore's own) names the status it had before, so a restore can be turned back by
+    // another one (barracuda on #95)
+    const target = a.action === "CREATE" ? "INVALIDATED" : a.action === "INVALIDATE" ? "VALID" : statusOnly(a) ? statusBefore(a) : null;
     if (!target) {
       blocked.push({ type: row.type, id, action: a.action, at: a.at.toISOString() });
       continue;
@@ -121,15 +129,20 @@ async function plan(tx: Tx, day: string, op: string) {
     }
     if (row.status !== target) changes.push({ type: row.type, id, animalId: row.animalId, to: target });
   }
-  const later = [...new Set(since.map((a) => opOf(a.requestId)))];
-  return { fd, since: first.at, changes, blocked, feedIds, ops: later };
+  // every operation turned back, with its time and who did it: the admin sees whose later work goes too, not a count
+  // (barracuda on #95)
+  const users = new Map((await tx.user.findMany({ select: { id: true, fullName: true } })).map((u) => [u.id, u.fullName]));
+  const ops = new Map<string, { op: string; at: string; user: string }>();
+  for (const x of since) if (!ops.has(opOf(x.requestId))) ops.set(opOf(x.requestId), { op: opOf(x.requestId), at: x.at.toISOString(), user: users.get(x.userId) ?? "?" });
+  return { fd, since: first.at, changes, blocked, feedIds, ops: [...ops.values()] };
 }
 
-const MODEL = {
-  FeedingSelection: (tx: Tx) => tx.feedingSelection,
-  FeedingItem: (tx: Tx) => tx.feedingItem,
-  EatingStatus: (tx: Tx) => tx.eatingStatus,
-} as const;
+/** One row's status set, typed per model (no cast: a field name the model lacks is a compile error). */
+async function setStatus(tx: Tx, type: RowType, id: string, data: { status: "VALID" | "INVALIDATED"; invalidationReason: string | null; version: { increment: number }; updatedById: string; updatedAt: Date }) {
+  if (type === "FeedingSelection") await tx.feedingSelection.update({ where: { id }, data });
+  else if (type === "FeedingItem") await tx.feedingItem.update({ where: { id }, data });
+  else await tx.eatingStatus.update({ where: { id }, data });
+}
 
 export async function restoreDay(actor: Actor, raw: z.input<typeof restoreSchema>, now = new Date()) {
   const input = restoreSchema.parse(raw);
@@ -158,13 +171,12 @@ export async function restoreDay(actor: Actor, raw: z.input<typeof restoreSchema
     // invalidations first: one valid row per animal (the partial unique indexes) holds at every step
     const ordered = [...p.changes.filter((c) => c.to === "INVALIDATED"), ...p.changes.filter((c) => c.to === "VALID")];
     for (const c of ordered) {
-      const model = MODEL[c.type](tx) as unknown as { update: (a: unknown) => Promise<unknown> };
-      await model.update({
-        where: { id: c.id },
-        data:
-          c.to === "INVALIDATED"
-            ? { status: "INVALIDATED", invalidationReason: why.slice(0, 500), version: { increment: 1 }, updatedById: actor.id, updatedAt: now }
-            : { status: "VALID", invalidationReason: null, version: { increment: 1 }, updatedById: actor.id, updatedAt: now },
+      await setStatus(tx, c.type, c.id, {
+        status: c.to,
+        invalidationReason: c.to === "INVALIDATED" ? why.slice(0, 500) : null,
+        version: { increment: 1 },
+        updatedById: actor.id,
+        updatedAt: now,
       });
       await writeAudit(tx, {
         userId: actor.id,

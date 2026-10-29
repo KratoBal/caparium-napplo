@@ -64,15 +64,24 @@ describe("a day put back as it stood before a list switch", () => {
     // Teszt Egy is on both lists: the second put a NEW selection of it on, so its old one can come back only after
     // the new one is off (one valid selection per animal and day)
     expect([await selected(d), await dayFeedIds(d), await valid(d)]).toEqual([["Teszt Egy", "Teszt Három"], [feed["Teszt kagyló"]], { items: 0, manual: 0 }]);
+    // an aquarist's good-faith item after the wrong switch: the restore turns it back too, and says whose it is
+    await saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId: a["Teszt Három"], feedId: feed["Teszt kagyló"], quantities: [{ value: "5", unitId: unit.g }] } as Parameters<typeof saveFeedingItem>[1], at(d, "11:30"));
+    const afterB = { selected: await selected(d), feeds: await dayFeedIds(d), valid: await valid(d) };
+    expect(afterB.valid).toEqual({ items: 1, manual: 0 });
+    const aqName = (await prisma.user.findUniqueOrThrow({ where: { id: f.aq1.id } })).fullName;
+    const adminName = (await prisma.user.findUniqueOrThrow({ where: { id: f.admin.id } })).fullName;
 
     await expectCode(restoreDay(f.aq1, { requestId: rid(), day: d, mode: "ops" }), "ADMIN_ONLY");
     const ops = (await restoreDay(f.admin, { requestId: rid(), day: d, mode: "ops" })) as { ops: { op: string }[] };
     expect(ops.ops.map((o) => o.op)).toContain(off);
 
     const auditsBefore = await prisma.auditEntry.count();
-    const dry = (await restoreDay(f.admin, { requestId: rid(), day: d, mode: "plan", op: off })) as { plan: { count: Record<string, number>; blocked: unknown[]; feedIds: { before: string[] } | null } };
+    const dry = (await restoreDay(f.admin, { requestId: rid(), day: d, mode: "plan", op: off })) as { plan: { count: Record<string, number>; blocked: unknown[]; feedIds: { before: string[] } | null; ops: { op: string; user: string }[] } };
     expect(dry.plan.blocked).toEqual([]);
-    expect(dry.plan.count).toEqual({ "FeedingSelection INVALIDATED": 2, "FeedingSelection VALID": 2, "FeedingItem VALID": 1, "EatingStatus VALID": 1 });
+    expect(dry.plan.count).toEqual({ "FeedingSelection INVALIDATED": 2, "FeedingSelection VALID": 2, "FeedingItem INVALIDATED": 1, "FeedingItem VALID": 1, "EatingStatus VALID": 1 });
+    // the chosen one first, then everything after it, by whom
+    expect(dry.plan.ops.map((o) => o.user)).toEqual([adminName, adminName, aqName]);
+    expect(dry.plan.ops[0]!.op).toBe(off);
     expect(dry.plan.feedIds?.before).toEqual([feed["Teszt hal"]]);
     expect([await prisma.auditEntry.count(), await selected(d)], "the dry run writes nothing").toEqual([auditsBefore, ["Teszt Egy", "Teszt Három"]]);
 
@@ -80,14 +89,30 @@ describe("a day put back as it stood before a list switch", () => {
     const run = rid();
     await restoreDay(f.admin, { requestId: run, day: d, mode: "run", op: off, reason: "Lili kérése" }, at(d, "12:00"));
     expect({ selected: await selected(d), feeds: await dayFeedIds(d), valid: await valid(d) }).toEqual(before);
-    expect(await prisma.auditEntry.count({ where: { requestId: run } })).toBe(7);
+    expect(await prisma.auditEntry.count({ where: { requestId: run } })).toBe(8);
     expect(await restoreDay(f.admin, { requestId: run, day: d, mode: "run", op: off, reason: "Lili kérése" })).toEqual({ replayed: true });
     await expectCode(restoreDay(f.admin, { requestId: rid(), day: d, mode: "run", op: off, reason: "még egyszer" }), "NO_CHANGE");
-    // after the restore the item's amount is edited: a later restore to the same point cannot know the amount it had
-    // (its first change since is the switch's invalidation, the edit comes after it), so it is named, not guessed
+
+    // the wrong point was chosen: the restore itself is turned back, and the day stands as it did before it
+    // (barracuda on #95: its own status-only rows are no content change)
+    const back = (await restoreDay(f.admin, { requestId: rid(), day: d, mode: "plan", op: run })) as { plan: { blocked: unknown[] } };
+    expect(back.plan.blocked).toEqual([]);
+    await restoreDay(f.admin, { requestId: rid(), day: d, mode: "run", op: run, reason: "rossz pontot valasztottam" }, at(d, "12:30"));
+    expect({ selected: await selected(d), feeds: await dayFeedIds(d), valid: await valid(d) }).toEqual(afterB);
+  });
+
+  it("an amount edited after a restore cannot be turned back to a point before it: named, not guessed", async () => {
+    const d = "2027-04-15";
+    const listA = ((await createFeedingList(f.admin, { requestId: rid(), name: "Visszaallitas D", animalIds: [a["Teszt Egy"]], feedIds: [feed["Teszt hal"]] })) as { id: string }).id;
+    await applyFeedingList(f.admin, { requestId: rid(), day: d, listId: listA }, at(d, "08:00"));
+    await saveFeedingItem(f.admin, { requestId: rid(), day: d, animalId: a["Teszt Egy"], feedId: feed["Teszt hal"], quantities: [{ value: "10", unitId: unit.g }] } as Parameters<typeof saveFeedingItem>[1], at(d, "09:00"));
+    const off = rid();
+    await applyFeedingList(f.admin, { requestId: off, day: d, listId: null, confirmCascade: true }, at(d, "10:00"));
+    await restoreDay(f.admin, { requestId: rid(), day: d, mode: "run", op: off, reason: "proba" }, at(d, "11:00"));
+    // its first change since the switch is the switch's invalidation, the edit comes after the restore
     const fdId = (await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: dayToDate(d) } })).id;
     const item = await prisma.feedingItem.findFirstOrThrow({ where: { feedingDayId: fdId, status: "VALID" } });
-    await saveFeedingItem(f.admin, { requestId: rid(), day: d, itemId: item.id, expectedVersion: item.version, animalId: a["Teszt Egy"], feedId: feed["Teszt hal"], quantities: [{ value: "15", unitId: unit.g }] } as Parameters<typeof saveFeedingItem>[1], at(d, "13:00"));
+    await saveFeedingItem(f.admin, { requestId: rid(), day: d, itemId: item.id, expectedVersion: item.version, animalId: a["Teszt Egy"], feedId: feed["Teszt hal"], quantities: [{ value: "15", unitId: unit.g }] } as Parameters<typeof saveFeedingItem>[1], at(d, "12:00"));
     const again = (await restoreDay(f.admin, { requestId: rid(), day: d, mode: "plan", op: off })) as { plan: { blocked: { type: string; action: string }[] } };
     expect(again.plan.blocked.map((b) => [b.type, b.action])).toEqual([["FeedingItem", "UPDATE"]]);
   });
