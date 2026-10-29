@@ -4,7 +4,7 @@
 // the item form. A click on a recipient's row makes it active and the form follows; the live line adds
 // what is typed (not saved yet) to the row's saved total, per base unit, never pieces to grams.
 import { useCallback, useState } from "react";
-import { deviates } from "@/lib/calc-math";
+import { referenceState } from "@/lib/calc-math";
 import { chooserPools, sortDayAnimals } from "@/lib/day-animals";
 import { GIVEN } from "@/lib/eating-labels";
 import type { DayAnimal } from "@/lib/feeding";
@@ -67,15 +67,17 @@ export function FeedingDay(props: {
   const together: Record<string, number> = { ...saved };
   for (const [u, v] of Object.entries(draft)) together[u] = (together[u] ?? 0) + v;
   const activeLabel = recipients.find((r) => r.key === active)?.label;
-  // EGY-08: the row's total against its reference; nothing given (fasting, not on the list) is no deviation
+  // EGY-08: the row's total against its reference; nothing given (fasting, not on the list) is no deviation.
+  // Lili 2026-10-29 (package item 4): further from the number and larger, and within the reference green, the pair
+  // of the red "eltér"; nothing given yet stays quiet
   const refCell = (key: string) => {
     const ref = props.references?.[key];
     if (ref === undefined) return null;
-    const g = totals[key]?.g;
-    const off = g !== undefined && g > 0 && deviates(g, ref);
+    const state = referenceState(totals[key]?.g, ref);
+    const off = state === "off";
     return (
-      <span className={off ? "badge badge-invalid" : "hint"} data-testid={`reference-${key}`}>
-        {" "}ref {num(ref)} g{off ? ": eltér" : ""}
+      <span className={`ref-value ref-${state}`} data-testid={`reference-${key}`} data-state={state}>
+        ref {num(ref)} g{off ? ": eltér" : ""}
       </span>
     );
   };

@@ -58,7 +58,7 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
   );
   return (
     <Shell title="Takarmánykivétel" active="withdrawal" user={user}>
-      <div className="toolbar">
+      <div className="toolbar toolbar-end">
         <DayNav path="/kivetel" day={day} today={today} />
         {/* Lili 2026-10-26: a date picker, as on the water measurement pages; the compare period is kept */}
         <DayJump path="/kivetel" day={day} today={today} keep={{ tol: from, ig: to }} />

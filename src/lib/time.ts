@@ -168,3 +168,10 @@ export function formatDayLong(day: string): string {
 export function weekdayName(day: string): string {
   return HU_WEEKDAYS[dayToDate(day).getUTCDay()];
 }
+
+const HU_WEEKDAY_LETTERS = ["V", "H", "K", "Sze", "Cs", "P", "Szo"];
+
+/** The day's letter, as the feeding timetable writes it: H, K, Sze, Cs, P, Szo, V (Lili 2026-10-29, package item 7). */
+export function weekdayLetter(day: string): string {
+  return HU_WEEKDAY_LETTERS[dayToDate(day).getUTCDay()];
+}
