@@ -807,6 +807,42 @@ test("feeding sheet: a row colour set in the settings colours that animal's or g
   for (const label of ["Teszt Egy", "Teszt Kettő", "Teszt csoport (csoport)"]) await setColour(label, "Nincs szín");
 });
 
+test("feeding sheet: a small X empties an amount field in one click, on g and db each, only while it holds something", async ({ page }) => {
+  // Lili 2026-10-29 (caparium-cella-torles-x): the same as deleting it by hand, no retyping
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
+  await page.getByRole("switch", { name: "Nagymedence: mind kijelölve" }).check();
+  const dayFeeds = page.getByTestId("day-feeds");
+  await dayFeeds.getByLabel("A nap takarmánya: Litopenaeus vannamei").check();
+  const saveFeeds = dayFeeds.getByRole("button", { name: "A nap takarmányainak mentése" });
+  if (await saveFeeds.count()) await saveFeeds.click();
+  else if (await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).count()) await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).click();
+  const sheet = page.getByTestId("feeding-sheet");
+  await sheet.getByRole("row").filter({ has: page.getByRole("cell", { name: "Teszt Egy", exact: true }) }).click();
+  const g = sheet.getByLabel("Teszt Egy: Litopenaeus vannamei (g)", { exact: true });
+  const db = sheet.getByLabel("Teszt Egy: Litopenaeus vannamei (db)", { exact: true });
+  const clearG = sheet.getByRole("button", { name: "g kiürítése, Teszt Egy, Litopenaeus vannamei" });
+  const clearDb = sheet.getByRole("button", { name: "db kiürítése, Teszt Egy, Litopenaeus vannamei" });
+  await g.fill("");
+  await db.fill("");
+  await expect(clearG, "an empty field shows no X").toHaveCount(0);
+  await g.fill("12");
+  await db.fill("3");
+  await expect(clearG).toBeVisible();
+  await expect(clearDb).toBeVisible();
+  // in the corner: the X sits inside the field's box, at its top right
+  const [field, x] = await Promise.all([g.boundingBox(), clearG.boundingBox()]);
+  expect(field && x && x.x > field.x + field.width / 2 && x.x + x.width <= field.x + field.width + 1 && x.y >= field.y - 1 && x.y + x.height <= field.y + field.height / 2 + 4).toBe(true);
+  await clearG.click();
+  await expect(g).toHaveValue("");
+  await expect(db, "the other field of the pair keeps its value").toHaveValue("3");
+  await expect(clearG).toHaveCount(0);
+  await clearDb.click();
+  await expect(db).toHaveValue("");
+  // the row stays the active one: the click did not leave it
+  await expect(g).toBeVisible();
+});
+
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
   // each layout takes out its own feed: one item per feed and day
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";

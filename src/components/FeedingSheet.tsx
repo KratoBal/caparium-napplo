@@ -340,16 +340,36 @@ export function FeedingSheet({
                               />
                             ) : isActive ? (
                               cellUnits(f).map((u) => (
-                                <input
-                                  key={u.dimension}
-                                  className={`input small no-print${bad.includes(key) || conflict ? " input-invalid" : ""}`}
-                                  aria-invalid={bad.includes(key) || conflict}
-                                  inputMode="decimal"
-                                  value={d[u.dimension] ?? ""}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => type(r.key, f, u.dimension, e.target.value)}
-                                  aria-label={`${r.label}: ${f.name} (${u.symbol})`}
-                                />
+                                // Lili 2026-10-29: a small X in the corner empties the field in one click, the same as
+                                // deleting it by hand; shown only while the field holds something, on each of g and db
+                                <span key={u.dimension} className="clearable no-print">
+                                  <input
+                                    className={`input small${bad.includes(key) || conflict ? " input-invalid" : ""}`}
+                                    aria-invalid={bad.includes(key) || conflict}
+                                    inputMode="decimal"
+                                    value={d[u.dimension] ?? ""}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => type(r.key, f, u.dimension, e.target.value)}
+                                    aria-label={`${r.label}: ${f.name} (${u.symbol})`}
+                                  />
+                                  {(d[u.dimension] ?? "") !== "" && (
+                                    <button
+                                      type="button"
+                                      className="clear-x"
+                                      tabIndex={-1}
+                                      title="Kiürítés"
+                                      // not the field's own label with a word added: a label lookup by the field's
+                                      // name would then find two (the e2e tests' getByLabel did)
+                                      aria-label={`${u.symbol} kiürítése, ${r.label}, ${f.name}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        type(r.key, f, u.dimension, "");
+                                      }}
+                                    >
+                                      &times;
+                                    </button>
+                                  )}
+                                </span>
                               ))
                             ) : (
                               <span className={dirty || conflict ? "badge badge-pending" : undefined} title={conflict ? "Nem mentődött: lásd az üzenetet" : dirty ? "Nincs még mentve" : undefined}>
