@@ -139,7 +139,42 @@ export function SheetColorForm(p: { target: "animal" | "group"; id: string; name
   );
 }
 
-export function PoolRow(p: { poolId: string; name: string; groups: string; active: boolean }) {
+type PoolItem = { poolId: string; name: string; groups: string; active: boolean };
+
+/**
+ * The settings' pool list (Lili 2026-10-29, acrobot 37943): an inactive pool (a renovation) is shown only here, and only with
+ * the "Inaktívak mutatása" switch on, to be activated again. A row switched in this view stays until the page is left, so its
+ * message is read and an inactivation undone at once.
+ */
+export function PoolList({ pools, reasons }: { pools: PoolItem[]; reasons: boolean }) {
+  const [showInactive, setShowInactive] = useState(false);
+  const [kept, setKept] = useState<string[]>([]);
+  const inactive = pools.filter((x) => !x.active).length;
+  return (
+    <>
+      {inactive > 0 && (
+        <label className="toolbar" style={{ margin: "8px 0" }}>
+          <input className="switch" type="checkbox" role="switch" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+          Inaktívak mutatása ({inactive})
+        </label>
+      )}
+      <div className="table-scroll">
+        <table className="log-table" data-testid="pools-table">
+          <thead><tr><th>Név</th><th>Mérési csoport</th><th>Fajta</th>{reasons && <th>Indoklás</th>}<th></th></tr></thead>
+          <tbody>
+            {pools
+              .filter((x) => x.active || showInactive || kept.includes(x.poolId))
+              .map((x) => (
+                <PoolRow key={x.poolId} {...x} onSwitch={() => setKept((k) => (k.includes(x.poolId) ? k : [...k, x.poolId]))} />
+              ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+export function PoolRow(p: PoolItem & { onSwitch?: () => void }) {
   const [name, setName] = useState(p.name);
   const [mode, setMode] = useState<"change" | "correction">("change");
   const [reason, setReason] = useState("");
@@ -162,7 +197,8 @@ export function PoolRow(p: { poolId: string; name: string; groups: string; activ
           disabled={busy}
           aria-label={`${p.name}: ${p.active ? "inaktiválás" : "aktiválás"}`}
           onClick={() => {
-            if (p.active && !window.confirm(`Inaktiválod: ${p.name}? Felújítás idejére: új mérés nem rögzíthető rá, és lekerül a mérési táblából; a korábbi mérései megmaradnak, és aktiválva minden visszajön.`)) return;
+            if (p.active && !window.confirm(`Inaktiválod: ${p.name}? Felújítás idejére: új mérés nem rögzíthető rá, és lekerül a mérési táblából és a felhasználói oldalakról, csak itt látszik az „Inaktívak mutatása” kapcsolóval; a korábbi mérései megmaradnak, és aktiválva minden visszajön.`)) return;
+            p.onSwitch?.();
             void save("/api/admin/pool-active", "POST", { poolId: p.poolId, active: !p.active }, p.active ? "Inaktiválva." : "Újra aktív.");
           }}
         >

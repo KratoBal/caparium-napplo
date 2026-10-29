@@ -9,6 +9,7 @@ import { AppError } from "@/lib/errors";
 import { createMeasurement } from "@/lib/measurements";
 import { dailyProgress, missedMeasurements } from "@/lib/notices";
 import { getGrid } from "@/lib/queries";
+import { businessDayOf, localDateTimeOf } from "@/lib/time";
 import { waterReport } from "@/lib/water-report";
 import { cest, fixtures, rid } from "./fixtures";
 
@@ -61,5 +62,19 @@ describe("a pool off for a renovation", () => {
     await setPoolActive(f.admin, { requestId: rid(), poolId: pool, active: true });
     expect(await rows("2027-06-08")).toEqual([{ id: pool, name, active: true }]);
     expect(await code(measure("2027-06-08T09:00", "24"))).toBe(null);
+  });
+  // Lili 2026-10-29 (acrobot 37943): it disappears from the users' pages. TODAY it is off the grid even with a measurement
+  // recorded before it went off; an earlier day keeps it (above). WHAT TURNS RED: today's grid still listing it.
+  it("is off today's grid even when it was measured today before it went off", async () => {
+    const tag = rid().replace(/[^a-z0-9]/gi, "").slice(0, 6).toUpperCase();
+    const pool = ((await createPool(f.admin, { requestId: rid(), name: `Ma felujitas ${tag}`, code: `MAFEL_${tag}`, volumeLiters: "500", groupIds: [f.group("NAPI_NAGY")] })) as { id: string }).id;
+    const now = new Date();
+    const today = businessDayOf(now);
+    await createMeasurement(f.aq1, { requestId: rid(), groupId: f.group("NAPI_NAGY"), poolId: pool, parameterId: f.param("TEMP"), value: "25", measuredAtLocal: localDateTimeOf(now) } as Parameters<typeof createMeasurement>[1], now);
+    const rows = async () => ((await getGrid(f.group("NAPI_NAGY"), today))?.layout.pools ?? []).filter((p) => p.id === pool).length;
+    expect(await rows(), "active and measured: on today's grid").toBe(1);
+    await setPoolActive(f.admin, { requestId: rid(), poolId: pool, active: false });
+    expect(await rows()).toBe(0);
+    expect(await prisma.measurement.count({ where: { poolId: pool, status: "VALID" } }), "its measurement untouched").toBe(1);
   });
 });

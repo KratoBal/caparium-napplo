@@ -92,9 +92,12 @@ export async function getGrid(groupId: string, day: string, roundSeq?: number) {
     diluentWater: m.diluentWater,
   });
 
-  // an inactive pool (a renovation) stays on the days it has a measurement, read only; on the others it is off the grid
+  // an inactive pool (a renovation) stays on the earlier days it has a measurement, read only; on the others, and today
+  // even if it was measured before it went off, it is off the grid (Lili 2026-10-29, acrobot 37943: it disappears from
+  // the users' pages, its past stays in the earlier days and the exports)
   const measuredPools = new Set(all.map((m) => m.poolId));
-  layout.pools = layout.pools.filter((p) => p.active || measuredPools.has(p.id));
+  const isToday = day === businessDayOf(new Date());
+  layout.pools = layout.pools.filter((p) => p.active || (!isToday && measuredPools.has(p.id)));
 
   const cells: Record<string, CellView> = {};
   const daily: Record<string, CellView> = {};
