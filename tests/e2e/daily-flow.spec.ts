@@ -944,6 +944,24 @@ for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti víz
   });
 }
 
+test("settings: a module folds by its heading, and stays folded after a reload in that browser", async ({ page }) => {
+  // Lili 2026-10-29 (caparium-finomitas-1)
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Beállítások" }).click();
+  const icons = page.getByTestId("icons");
+  const save = icons.getByRole("button", { name: "Mentés" }).first();
+  await expect(save, "open by default").toBeVisible();
+  await icons.getByRole("heading", { name: "Ikonok" }).click();
+  await expect(save).toBeHidden();
+  await page.reload();
+  await expect(page.getByTestId("icons").getByRole("button", { name: "Mentés" }).first(), "still folded").toBeHidden();
+  // the other modules are untouched
+  await expect(page.getByTestId("sheet-colors").getByRole("button", { name: "Mentés" }).first()).toBeVisible();
+  await page.getByTestId("icons").getByRole("heading", { name: "Ikonok" }).click();
+  await page.reload();
+  await expect(page.getByTestId("icons").getByRole("button", { name: "Mentés" }).first(), "open again").toBeVisible();
+});
+
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
   // each layout takes out its own feed: one item per feed and day
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";

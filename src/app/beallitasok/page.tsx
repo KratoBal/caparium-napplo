@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { NewPoolForm, NewUserForm, PoolRow, PoolVolumeForm, ReferenceRow, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
+import { SettingsCard } from "@/components/SettingsCard";
 import { Shell } from "@/components/Shell";
 import { listAnimals, listGroupsWithNames } from "@/lib/animals";
 import { prisma } from "@/lib/db";
@@ -47,8 +48,7 @@ export default async function SettingsPage() {
   ]);
   return (
     <Shell title="Beállítások" active="settings" user={user}>
-      <div className="card" data-testid="pool-references">
-        <h2>Vízparaméterek és referenciaértékek medencénként</h2>
+      <SettingsCard id="referenciak" title="Vízparaméterek és referenciaértékek medencénként" testId="pool-references">
         <p className="hint">
           Minden medence a saját mért paramétereit látja (a mérési csoportjaiból). Ahol a medencének nincs saját értéke, a lenti
           közös érték érvényes rá; az első mentés a medence saját értékét hozza létre, mostantól. A korábbi mérések a régi
@@ -91,10 +91,9 @@ export default async function SettingsPage() {
               </details>
             );
           })}
-      </div>
+      </SettingsCard>
 
-      <div className="card">
-        <h2>Közös referenciaértékek</h2>
+      <SettingsCard id="kozos-referenciak" title="Közös referenciaértékek">
         <p className="hint">
           Az az érték, amiből minden saját érték nélküli medence indul (paraméterenként). A „változás” mostantól érvényes, a
           korábbi mérések a régi értékhez mérődnek; a „helyesbítés” elírást javít, és a múltra is hat.
@@ -122,10 +121,9 @@ export default async function SettingsPage() {
           </table>
         </div>
         <p className="banner banner-warn" style={{ marginTop: 16 }}>A tesztkörnyezet referenciaértékei bemutató adatok.</p>
-      </div>
+      </SettingsCard>
 
-      <div className="card">
-        <h2>Medencék</h2>
+      <SettingsCard id="medencek" title="Medencék">
         <p className="hint">Minden medencének állandó azonosítója van; a név változása a korábbi mérések hozzárendelését nem érinti.</p>
         <div className="table-scroll">
           <table className="log-table">
@@ -170,17 +168,15 @@ export default async function SettingsPage() {
             })}
           </tbody>
         </table>
-      </div>
+      </SettingsCard>
 
-      <div className="card">
-        <h2>Vízmérés kiküldése</h2>
+      <SettingsCard id="vizmeres-kikuldes" title="Vízmérés kiküldése">
         <p className="hint">Erre a címre küldi az Export oldal „Vízmérés kiküldése” gombja a mai és az e heti eredményeket, PDF-ben.</p>
         <WaterReportRecipient email={await getSetting(prisma, "water_report_recipient", now)} />
-      </div>
+      </SettingsCard>
 
       {/* the page is for a SETTINGS admin already; the icon is master data of the same kind */}
-      <div className="card" data-testid="icons">
-        <h2>Ikonok</h2>
+      <SettingsCard id="ikonok" title="Ikonok" testId="icons">
         <p className="hint">Medencék és takarmánytípusok ikonja (DAT-03): csak megjelenítés, exportba nem kerül. Üresen hagyva nincs ikon.</p>
         <table className="log-table">
           <tbody>
@@ -198,11 +194,10 @@ export default async function SettingsPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </SettingsCard>
 
       {/* Lili 2026-10-28 13:49 UTC: a row colour per animal and group, shown on the feeding sheet only */}
-      <div className="card" data-testid="sheet-colors">
-        <h2>Sorszínek a takarmánylapon</h2>
+      <SettingsCard id="sorszinek" title="Sorszínek a takarmánylapon" testId="sheet-colors">
         <p className="hint">Az állat vagy a csoport sora ezzel a háttérszínnel jelenik meg a takarmánylapon, máshol nem. Csak megjelenítés, exportba nem kerül. Alapból nincs szín.</p>
         <table className="log-table">
           <tbody>
@@ -222,11 +217,10 @@ export default async function SettingsPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </SettingsCard>
 
       {user.role === "ADMIN" && (
-      <div className="card" id="felhasznalok">
-        <h2>Felhasználók</h2>
+      <SettingsCard id="felhasznalok" title="Felhasználók" htmlId="felhasznalok">
         <p className="hint">Törlés nincs, csak inaktiválás: a régi naplók és az auditnapló a felhasználóra hivatkoznak.</p>
         <div className="table-scroll">
           <table className="log-table" data-testid="users-table">
@@ -250,7 +244,7 @@ export default async function SettingsPage() {
         </div>
         <h3 style={{ marginTop: 20 }}>Új felhasználó</h3>
         <NewUserForm />
-      </div>
+      </SettingsCard>
       )}
     </Shell>
   );
