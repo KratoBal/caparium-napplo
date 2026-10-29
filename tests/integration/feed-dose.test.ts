@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { feedingDayView, saveFeedingItem, setSelection } from "@/lib/feeding";
-import { listFeeds, updateFeed } from "@/lib/feeds";
+import { createFeed, listFeeds, updateFeed } from "@/lib/feeds";
 import { fixtures, rid } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -104,4 +104,55 @@ describe("the ticked feed's base amount (package item 3)", () => {
     await setSelection(f.aq1, { requestId: rid(), day: d, animalIds: [a["Teszt Egy"]], selected: true }, at(d, "09:00"));
     expect(await code(saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId: a["Teszt Egy"], feedId: feed[B], quantities: [] }, at(d, "09:00")))).toBe("QUANTITY_REQUIRED");
   });
+
+  it("the amount is checked against the dimensions after the change, and a change cannot strand it (barracuda on #113)", async () => {
+    const now = at("2028-03-20", "08:00");
+    const typeId = (await prisma.feedType.findFirstOrThrow({ where: { code: "APRO" } })).id;
+    const { id } = await createFeed(f.admin, { requestId: rid(), typeId, name: "Teszt adag-takarmány", dimensions: ["MASS"], defaultUnitId: unit.g }, now);
+    // one PATCH to pieces only, with an amount in grams: checked against [COUNT], refused
+    expect(await code(updateFeed(f.admin, id, { requestId: rid(), dimensions: ["COUNT"], defaultUnitId: unit.db, dose: { value: "30", unitId: unit.g } }, now))).toBe("UNIT_DIMENSION");
+    await updateFeed(f.admin, id, { requestId: rid(), dose: { value: "30", unitId: unit.g } }, now);
+    // a change of dimensions that takes the open amount's away: refused, unless the amount goes in the same step
+    expect(await code(updateFeed(f.admin, id, { requestId: rid(), dimensions: ["COUNT"], defaultUnitId: unit.db }, now))).toBe("DOSE_UNIT");
+    await updateFeed(f.admin, id, { requestId: rid(), dimensions: ["COUNT"], defaultUnitId: unit.db, dose: { value: "3", unitId: unit.db } }, now);
+    const listed = (await listFeeds(now)).flatMap((t) => t.feeds).find((x) => x.id === id)!;
+    expect([listed.dimensions, listed.dose?.symbol]).toEqual([["COUNT"], "db"]);
+  });
+
+  it("one open amount per feed: the index refuses a second, and two changes at once leave one", async () => {
+    const now = at("2028-03-21", "08:00");
+    const typeId = (await prisma.feedType.findFirstOrThrow({ where: { code: "APRO" } })).id;
+    const { id } = await createFeed(f.admin, { requestId: rid(), typeId, name: "Teszt párhuzamos takarmány", dimensions: ["MASS"], defaultUnitId: unit.g }, now);
+    await updateFeed(f.admin, id, { requestId: rid(), dose: { value: "10", unitId: unit.g } }, now);
+    // structural: a second open row, whoever writes it, is a unique violation
+    await expect(prisma.coralFeedDose.create({ data: { feedId: id, dose: "11", unitId: unit.g, validFrom: now } })).rejects.toThrow();
+
+    // two changes forced to overlap: a blocker holds the OPEN AMOUNT's row. With updateFeed's lock on the feed row the
+    // second change waits there and reads the first one's result; without it both read the same open row, both wait
+    // to close it, and the second's new open row is the index's unique violation: red (measured)
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const held = new Promise<void>((r) => (locked = r));
+    const blocker = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "coral_feed_dose" WHERE "feedId" = ${id}::uuid AND "validTo" IS NULL FOR UPDATE`;
+        locked();
+        await gate;
+      },
+      { timeout: 15_000 },
+    );
+    await held;
+    const later = at("2028-03-21", "09:00");
+    const both = Promise.allSettled([
+      updateFeed(f.admin, id, { requestId: rid(), dose: { value: "20", unitId: unit.g } }, later),
+      updateFeed(f.admin, id, { requestId: rid(), dose: { value: "25", unitId: unit.g } }, later),
+    ]);
+    await new Promise((r) => setTimeout(r, 300));
+    release();
+    await blocker;
+    const results = await both;
+    const open = await prisma.coralFeedDose.findMany({ where: { feedId: id, validTo: null } });
+    expect([results.map((r) => r.status), open.length]).toEqual([["fulfilled", "fulfilled"], 1]);
+  }, 30_000);
 });
