@@ -65,7 +65,7 @@ export async function Shell({
       <main className="main">
         <ReasonProvider on={reasons}>{children}</ReasonProvider>
       </main>
-      {helper && <Helper data={helper} />}
+      {helper && <Helper data={helper} userName={user?.fullName} />}
     </div>
   );
 }

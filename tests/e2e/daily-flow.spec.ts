@@ -1517,6 +1517,10 @@ test("the helper: it speaks unasked without taking a click, the quick questions 
   await expect(first.getByTestId("helper-notice")).toContainText("Teszt só");
   await expect(first.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "false");
   expect(await passesClicks(page, "helper-notice")).toBe(true);
+  // Lili 2026-10-29 (item 10): the figure is her picture for the situation, and it loads (a missing file is a broken image)
+  const picture = first.getByTestId("helper-button").locator("img");
+  await expect(picture).toHaveAttribute("src", /^\/segito\/(antennarius|zebracapa)-(feladatok|vegyszer)\.webp$/);
+  expect(await picture.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
   await page.getByRole("link", { name: "Napi vízmérés", exact: true }).click();
   // the overview has a helper too: wait for the new page, or the clicks below land on the old one
   await expect(page).toHaveURL(/\/vizmeres/);

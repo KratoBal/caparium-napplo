@@ -2,7 +2,6 @@
 // weekly values, with the measurer's monogram and the out-of-range mark. Embedded DejaVuSans (src/lib/pdf-font.ts).
 import PDFDocument from "pdfkit";
 import { pdfFont } from "./pdf-font";
-import { TICK_LABEL } from "./pool-ticks";
 import { waterReportTitle } from "./water-report-text";
 import type { ReportValue, WaterReport } from "./water-report";
 
@@ -63,15 +62,13 @@ export async function waterReportPdf(report: WaterReport): Promise<Buffer> {
   const SIZES = [9, 9, 9, 9, 7.5, 9];
   const HEAD = ["Paraméter", "Érték", "Mérte", "Hígítás", "Referencia", "Eltérés"];
   /** A text line on a colored band: the band is drawn first, then the text on it, 4 pt from the left edge. */
-  const band = (text: string, size: number, color: string, ink: string, right = "") => {
+  const band = (text: string, size: number, color: string, ink: string) => {
     const h = doc.fontSize(size).heightOfString(text, { width: WIDTH - 8 });
     // a band is a rectangle plus text: both on the same page, or the rectangle stays behind on the old one
     if (doc.y + h + 4 > doc.page.height - doc.page.margins.bottom) doc.addPage();
     const y = doc.y;
     doc.save().rect(LEFT, y - 2, WIDTH, h + 4).fill(color).restore();
     doc.fontSize(size).fillColor(ink).text(text, LEFT + 4, y, { width: WIDTH - 8 });
-    // the end of the line, in a smaller type: the pool's ticks (Lili 2026-10-29, item 8)
-    if (right) doc.fontSize(8).fillColor(ink).text(right, LEFT + 4, y + (h - 8) / 2, { width: WIDTH - 8, align: "right", lineBreak: false });
     doc.x = LEFT;
     doc.y = y + h + 4;
   };
@@ -88,7 +85,7 @@ export async function waterReportPdf(report: WaterReport): Promise<Buffer> {
   for (const p of report.pools) {
     if (doc.y > 700) doc.addPage();
     doc.moveDown(0.5);
-    band(p.pool, 13, BG_POOL, "#000", p.ticks.map((k) => TICK_LABEL[k].toLowerCase()).join(", "));
+    band(p.pool, 13, BG_POOL, "#000");
     if (p.daily.length) {
       band("Napi mérés", 10, BG_SECTION, "#333");
       row(HEAD, { header: true });
