@@ -234,7 +234,9 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .input.small { width: 110px; }
 /* Lili 2026-10-29: the feeding sheet's amount field empties with a small X in its top right corner, quiet until needed */
 .clearable { position: relative; display: inline-block; }
-.clearable .input { padding-right: 22px; }
+.clearable .input, .clearable .cell-input { padding-right: 22px; }
+/* the measurement grid's field fills its cell: the wrapper keeps that width */
+.clearable-block { display: block; max-width: 160px; }
 .clear-x { position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--c-muted); font-size: 14px; line-height: 16px; cursor: pointer; }
 .clear-x:hover, .clear-x:focus-visible { background: var(--c-line); color: var(--c-ink); }
 
