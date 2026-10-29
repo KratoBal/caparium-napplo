@@ -8,13 +8,16 @@
 // thread: an autosave on leaving a field mixed things up when a wrong value was corrected). Until then the typed
 // values are drafts, freely corrected; leaving the page with drafts asks first. The measurement time is a time of
 // day only: its date is the day chosen above (one date on the page, Balázs 2026-10-21). A failed network request
-// goes to a local queue with the same request id, so a retry never saves twice.
+// goes to a local queue with the same request id, so a retry never saves twice. A saved value emptied (by hand or
+// with the X) is invalidated on the save, after a confirmation, as a saved cell emptied on the feeding sheet (Lili
+// 2026-10-29, Caparium thread 1565386596310716569: an emptied value came back after the save, under "Minden érték
+// mentve."); a save the server refuses is never reported as saved.
 
 import { ClearX } from "./ClearX";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CellView, RangeView } from "@/lib/queries";
-import { useReasonsOn } from "./ReasonSwitch";
+import { askReason, useReasonsOn } from "./ReasonSwitch";
 import { useLeaveWarning } from "./useLeaveWarning";
 
 type Grid = {
@@ -329,6 +332,13 @@ export function MeasurementGrid({
     [grid, responsibleId, trainee, timeLocal, timeTouched, dilutable],
   );
 
+  const invalidateItem = (key: string, id: string, version: number, why: { reason?: string }): QueueItem => ({
+    key,
+    url: `/api/measurements/${id}/invalidate`,
+    method: "POST",
+    body: { requestId: requestId(), clientTimestamp: new Date().toISOString(), expectedVersion: version, ...why },
+  });
+
   const metaOf = useCallback(
     (key: string): Meta => {
       const c = grid.cells[key];
@@ -338,7 +348,7 @@ export function MeasurementGrid({
   );
 
   const doSave = useCallback(
-    async (poolId: string, parameterId: string, metaOverride?: Meta) => {
+    async (poolId: string, parameterId: string, metaOverride?: Meta, emptying?: { reason?: string }): Promise<SendOutcome | "none"> => {
       const key = `${poolId}:${parameterId}`;
       const existing = gridRef.current.cells[key];
       const draftText = draftsRef.current[key];
@@ -362,32 +372,47 @@ export function MeasurementGrid({
         });
       };
       if (text === undefined || text.trim() === "") {
+        // an emptied saved value: its measurement is invalidated, on the version shown; only the save button confirms
+        // it (`emptying`), any other path leaves the draft as it is rather than drop it
+        if (draftText !== undefined && existing) {
+          if (!emptying) return "none";
+          const outcome = await send(invalidateItem(key, existing.id, existing.version, emptying), false);
+          if (outcome === "ok") {
+            await refresh();
+            clear();
+          }
+          return outcome;
+        }
         if (draftText !== undefined) clear();
-        return; // a dilution without a value waits for the value
+        return "none"; // a dilution without a value waits for the value
       }
       const valueChanged = !existing || text.trim().replace(",", ".") !== existing.value;
       const metaChanged =
         dilutable(parameterId) && (!existing || meta.dilution !== existing.dilution || meta.diluentWater !== existing.diluentWater);
       if (!valueChanged && !metaChanged) {
         clear();
-        return;
+        return "none";
       }
       const outcome = await send(buildItem(poolId, parameterId, text.trim(), undefined, meta), false);
       if (outcome === "ok") {
         await refresh();
         clear();
       }
+      return outcome;
     },
     [send, buildItem, refresh, dilutable],
   );
 
   const saveCell = useCallback(
-    (poolId: string, parameterId: string, metaOverride?: Meta): Promise<void> => {
+    (poolId: string, parameterId: string, metaOverride?: Meta, emptying?: { reason?: string }): Promise<SendOutcome | "none" | undefined> => {
       const key = `${poolId}:${parameterId}`;
       const next = (chains.current.get(key) ?? Promise.resolve())
-        .then(() => doSave(poolId, parameterId, metaOverride))
+        .then(() => doSave(poolId, parameterId, metaOverride, emptying))
         .catch(() => undefined);
-      chains.current.set(key, next);
+      chains.current.set(
+        key,
+        next.then(() => undefined),
+      );
       return next;
     },
     [doSave],
@@ -395,14 +420,27 @@ export function MeasurementGrid({
 
   const saveAll = useCallback(async () => {
     setBanner(null);
+    const emptied = Object.keys(drafts).filter((k) => drafts[k]!.trim() === "" && gridRef.current.cells[k]);
+    let emptying: { reason?: string } | null = {};
+    if (emptied.length) {
+      emptying = askReason(reasonsOn, "A kiürített mérések érvénytelenítési oka:", `${emptied.length} kiürített mérés érvénytelenítődik. Folytatod?`);
+      if (!emptying) return;
+    }
+    let failed = 0;
     for (const key of new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)])) {
       const [poolId, parameterId] = key.split(":");
-      await saveCell(poolId, parameterId);
+      if ((await saveCell(poolId, parameterId, undefined, emptying)) === "failed") failed++;
     }
     await flushQueue();
     const left = readQueue().length;
-    setBanner(left ? { kind: "warn", text: `${left} mentés várakozik a kapcsolatra.` } : { kind: "ok", text: "Minden érték mentve." });
-  }, [drafts, metaDrafts, saveCell, flushQueue, readQueue]);
+    setBanner(
+      failed
+        ? { kind: "error", text: `${failed} érték nem lett mentve: az ok a cellánál látszik.` }
+        : left
+          ? { kind: "warn", text: `${left} mentés várakozik a kapcsolatra.` }
+          : { kind: "ok", text: "Minden érték mentve." },
+    );
+  }, [drafts, metaDrafts, saveCell, flushQueue, readQueue, reasonsOn]);
 
   const openNewRound = useCallback(async () => {
     if (unsavedRef.current > 0 && !window.confirm(LEAVE_WARNING)) return;
@@ -426,7 +464,12 @@ export function MeasurementGrid({
     const fresh = grid.cells[conflict.key];
     if (!fresh) return;
     setConflict(null);
-    const outcome = await send(buildItem(poolId, parameterId, conflict.draft, { version: fresh.version }, metaOf(conflict.key)), false);
+    // an emptied value kept against a newer one: the newer one is invalidated, as the draft asked
+    const item =
+      conflict.draft.trim() === ""
+        ? invalidateItem(conflict.key, fresh.id, fresh.version, {})
+        : buildItem(poolId, parameterId, conflict.draft, { version: fresh.version }, metaOf(conflict.key));
+    const outcome = await send(item, false);
     if (outcome === "ok") await refresh();
   }, [conflict, grid.cells, send, buildItem, refresh, metaOf]);
 
@@ -636,7 +679,7 @@ export function MeasurementGrid({
           <h2>Figyelem: a mérés időközben megváltozott</h2>
           <p>
             Más már mentett ide értéket: <b>{huNumber(conflict.server.value)}</b>. A te még nem mentett értéked:{" "}
-            <b>{huNumber(conflict.draft)}</b>. Egyik változatot sem írjuk felül automatikusan.
+            <b>{conflict.draft.trim() === "" ? "üres (érvénytelenítés)" : huNumber(conflict.draft)}</b>. Egyik változatot sem írjuk felül automatikusan.
           </p>
           <div className="versions">
             <div className="field">
@@ -645,7 +688,7 @@ export function MeasurementGrid({
             </div>
             <div className="field">
               Saját piszkozat
-              <span className="pill">{huNumber(conflict.draft)}</span>
+              <span className="pill">{conflict.draft.trim() === "" ? "üres (érvénytelenítés)" : huNumber(conflict.draft)}</span>
             </div>
           </div>
           <div className="actions">
