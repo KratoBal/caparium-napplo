@@ -893,6 +893,35 @@ test("the day's close also under the save button: the same action, it asks first
   expect(sheetSave && sheetClose && sheetClose.y > sheetSave.y).toBe(true);
 });
 
+test("feeding day restore: the day's operations, a dry run before one, the run with a reason puts it back (admin only)", async ({ page }, info) => {
+  // Lili 2026-10-28 23:51 UTC (msg 1565150977861095475). A past day of its own per project.
+  const day = info.project.name === "tablet" ? "2026-01-20" : "2026-01-21";
+  page.on("dialog", (dialog) => void (dialog.type() === "prompt" ? dialog.accept("e2e proba") : dialog.accept()));
+  await login(page, "teszt.admin");
+  await page.goto(`/etetes?nap=${day}`);
+  const sw = page.getByRole("switch", { name: "Nagymedence: mind kijelölve" });
+  await sw.check();
+  await expect(sw).toBeChecked();
+  const restore = page.getByTestId("day-restore");
+  await restore.locator("summary").click();
+  await restore.getByRole("button", { name: "A nap műveletei" }).click();
+  const ops = restore.getByTestId("day-restore-ops").getByRole("row");
+  await expect(ops.last()).toBeVisible();
+  await ops.last().getByRole("button", { name: /^Próba: .* előtti állapot$/ }).click();
+  const plan = restore.getByTestId("day-restore-plan");
+  await expect(plan).toContainText(/kijelölés le: \d+/);
+  await expect(sw, "the dry run changed nothing").toBeChecked();
+  await plan.getByLabel("A visszaállítás oka").fill("e2e visszaallitas");
+  await plan.getByRole("button", { name: "Visszaállítás" }).click();
+  await expect(restore.getByRole("status")).toHaveText("A nap visszaállítva.");
+  await expect(sw).not.toBeChecked();
+  // an aquarist does not see it
+  await page.getByRole("button", { name: "Kilépés" }).click();
+  await login(page, "teszt.akvarista1");
+  await page.goto(`/etetes?nap=${day}`);
+  await expect(page.getByTestId("day-restore")).toHaveCount(0);
+});
+
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
   // each layout takes out its own feed: one item per feed and day
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DayControls } from "@/components/DayControls";
+import { DayRestore } from "@/components/DayRestore";
 import { DayJump, DayNav } from "@/components/DayNav";
 import { FeedingDay } from "@/components/FeedingDay";
 import { ApplyPlan } from "@/components/FeedingForms";
@@ -118,6 +119,7 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         sheetFeeds={sheetFeeds}
         lock={{ kind: "FEEDING", day, status: lock, isAdmin }}
       />
+      {isAdmin && <DayRestore day={day} />}
     </Shell>
   );
 }
