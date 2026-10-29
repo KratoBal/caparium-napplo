@@ -924,6 +924,26 @@ test("feeding day restore: the day's operations, a dry run before one, the run w
   await expect(page.getByTestId("day-restore")).toHaveCount(0);
 });
 
+for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti vízmérés"]] as const) {
+  test(`water measurement (${name}): the corner X empties a field in one click, only while it holds something`, async ({ page }) => {
+    // Lili 2026-10-29 (Caparium thread 1565349971556049017): the feeding sheet's X on the water fields too; a draft only,
+    // nothing is saved
+    await login(page, "teszt.akvarista1");
+    await page.getByRole("link", { name: link, exact: true }).first().click();
+    const cell = page.locator('input[data-testid^="cell-"]').first();
+    const x = cell.locator("xpath=..").getByRole("button", { name: /^Kiürítés, / });
+    await cell.fill("");
+    await expect(x, "an empty field shows no X").toHaveCount(0);
+    await cell.fill("8,1");
+    await expect(x).toBeVisible();
+    const [field, box] = await Promise.all([cell.boundingBox(), x.boundingBox()]);
+    expect(field && box && box.x > field.x + field.width / 2 && box.x + box.width <= field.x + field.width + 1 && box.y >= field.y - 1).toBe(true);
+    await x.click();
+    await expect(cell).toHaveValue("");
+    await expect(x).toHaveCount(0);
+  });
+}
+
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
   // each layout takes out its own feed: one item per feed and day
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";

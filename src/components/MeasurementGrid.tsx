@@ -10,6 +10,7 @@
 // day only: its date is the day chosen above (one date on the page, Balázs 2026-10-21). A failed network request
 // goes to a local queue with the same request id, so a retry never saves twice.
 
+import { ClearX } from "./ClearX";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CellView, RangeView } from "@/lib/queries";
@@ -549,18 +550,22 @@ export function MeasurementGrid({
                       return (
                         <td key={param.id}>
                           {active ? (
-                            <input
-                              className={`cell-input${out ? " out" : ""}`}
-                              inputMode="decimal"
-                              autoComplete="off"
-                              aria-label={`${pool.name} ${param.name}`}
-                              data-testid={`cell-${pool.name}-${param.name}`}
-                              value={shown}
-                              onChange={(e) => setDrafts((d) => ({ ...d, [key]: e.target.value }))}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                              }}
-                            />
+                            // Lili 2026-10-29: the same corner X as on the feeding sheet (ClearX)
+                            <span className="clearable clearable-block">
+                              <input
+                                className={`cell-input${out ? " out" : ""}`}
+                                inputMode="decimal"
+                                autoComplete="off"
+                                aria-label={`${pool.name} ${param.name}`}
+                                data-testid={`cell-${pool.name}-${param.name}`}
+                                value={shown}
+                                onChange={(e) => setDrafts((d) => ({ ...d, [key]: e.target.value }))}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                }}
+                              />
+                              <ClearX shown={shown !== ""} label={`Kiürítés, ${pool.name}, ${param.name}`} onClear={() => setDrafts((d) => ({ ...d, [key]: "" }))} />
+                            </span>
                           ) : (
                             <div
                               className={`cell-value${shown ? "" : " empty"}${out ? " out" : ""}`}

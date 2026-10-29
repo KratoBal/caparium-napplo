@@ -20,6 +20,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type CSSProperties } from "react";
 import { sheetColorBg } from "@/lib/sheet-color-palette";
+import { ClearX } from "./ClearX";
 import { DayControls, type DayLock } from "./DayControls";
 import { Msg, parseAmount, useSend, type FeedOpt, type Recipient } from "./FeedingForms";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
@@ -356,23 +357,11 @@ export function FeedingSheet({
                                     onChange={(e) => type(r.key, f, u.dimension, e.target.value)}
                                     aria-label={`${r.label}: ${f.name} (${u.symbol})`}
                                   />
-                                  {(d[u.dimension] ?? "") !== "" && (
-                                    <button
-                                      type="button"
-                                      className="clear-x"
-                                      tabIndex={-1}
-                                      title="Kiürítés"
-                                      // not the field's own label with a word added: a label lookup by the field's
-                                      // name would then find two (the e2e tests' getByLabel did)
-                                      aria-label={`${u.symbol} kiürítése, ${r.label}, ${f.name}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        type(r.key, f, u.dimension, "");
-                                      }}
-                                    >
-                                      &times;
-                                    </button>
-                                  )}
+                                  <ClearX
+                                    shown={(d[u.dimension] ?? "") !== ""}
+                                    label={`${u.symbol} kiürítése, ${r.label}, ${f.name}`}
+                                    onClear={() => type(r.key, f, u.dimension, "")}
+                                  />
                                 </span>
                               ))
                             ) : (
