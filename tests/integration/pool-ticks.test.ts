@@ -46,7 +46,7 @@ describe("the pool ticks", () => {
 
   it("refuses a kind the group does not have, a pool that is not in the group, another day for an aquarist; an admin may", async () => {
     expect(await code(tick("NAGY", "WATER_CHANGE", true))).toBe("TICK_NOT_FOR_GROUP");
-    expect(await code(tick("KIS", "BACKWASH", true, "NAPI_NAGY"))).toBe("POOL_NOT_IN_GROUP");
+    expect(await code(tick("KORALLOS", "BACKWASH", true, "NAPI_NAGY"))).toBe("POOL_NOT_IN_GROUP");
     expect(await code(tick("NAGY", "TOPUP", false, "NAPI_NAGY", new Date("2029-02-15T10:00:00+01:00")))).toBe("NOT_TODAY");
     await tick("KARANTEN", "BACKWASH", true, "NAPI_NAGY", new Date("2029-02-15T10:00:00+01:00"), f.admin); // an admin, another day
     expect(Object.keys(await ticksOfDay(DAY))).toContain(`${f.pool("KARANTEN")}:BACKWASH`);
