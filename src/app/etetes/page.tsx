@@ -77,7 +77,7 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
     .filter((t) => t.feeds.length > 0);
   return (
     <Shell title="Takarmánynapló" active="feeding" user={user} helper={await feedingHelper((await moduleLevel(prisma, user.id, user.role, "DOSING")) !== "NONE")}>
-      <div className="toolbar">
+      <div className="toolbar toolbar-end">
         <DayNav path="/etetes" day={day} today={today} />
         {/* Lili 2026-10-27 12:32 and 12:36 UTC (item 7): the jump calendar beside the arrows, as on the eating log */}
         <DayJump path="/etetes" day={day} today={today} />

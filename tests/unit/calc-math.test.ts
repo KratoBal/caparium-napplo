@@ -1,7 +1,7 @@
 // KALK-01 arithmetic and the EGY-08 deviation rule (pure). The NY-15 / D-16 defaults are temporary:
 // FR in steps of 0.5, a rough deviation beyond ±20 %.
 import { describe, expect, it } from "vitest";
-import { calculate, deviates } from "@/lib/calc-math";
+import { calculate, deviates, referenceState } from "@/lib/calc-math";
 
 describe("calculate (KALK-01: FR = F × N / (BW/100))", () => {
   it("BW 50 kg, FR 2 % a week, 4 feedings: 250 g a feeding, 1000 g a week, 0.2857 % a day", () => {
@@ -24,6 +24,12 @@ describe("calculate (KALK-01: FR = F × N / (BW/100))", () => {
     expect(() => calculate(50, 2, 8)).toThrow(/1 és 7/);
     expect(() => calculate(50, 2, 2.5)).toThrow(/1 és 7/);
     expect(() => calculate(0, 2, 4)).toThrow(/testtömeg/);
+  });
+});
+
+describe("the reference mark (Lili 2026-10-29, package item 4)", () => {
+  it("red off the reference, green within it, quiet while nothing is given", () => {
+    expect([referenceState(259, 231), referenceState(424, 664), referenceState(undefined, 231), referenceState(0, 231)]).toEqual(["ok", "off", "none", "none"]);
   });
 });
 

@@ -74,7 +74,8 @@ function Card({
           A medence célsávja: {band.min !== null ? hu(band.min) : "–"} … {band.max !== null ? hu(band.max) : "–"} {band.unit}
         </p>
       )}
-      <div className="pill" data-testid={`chem-${code}-result`} role="status">
+      {/* Lili 2026-10-29 (package item 5a): the result wraps inside its card instead of running out of it */}
+      <div className="pill pill-wrap" data-testid={`chem-${code}-result`} role="status">
         {result === null
           ? "Szükséges mennyiség: töltsd ki a mezőket a számításhoz."
           : result.kind === "no-dosing-needed"

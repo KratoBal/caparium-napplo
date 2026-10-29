@@ -687,33 +687,8 @@ export function CloseWithdrawalDay({ day }: { day: string }) {
   );
 }
 
-const WEEKDAYS = ["H", "K", "Sze", "Cs", "P", "Szo", "V"];
-
-/** JAV-08: the weekdays an animal is planned to be fed (1 = Monday). */
-export function PlanForm({ animalId, weekdays }: { animalId: string; weekdays: number[] }) {
-  const [days, setDays] = useState<number[]>(weekdays);
-  const { msg, busy, run } = useSend();
-  return (
-    <div className="toolbar" data-testid="plan-form">
-      <span className="hint">Etetési napok:</span>
-      {WEEKDAYS.map((label, i) => (
-        <label key={label} className="check">
-          <input
-            type="checkbox"
-            checked={days.includes(i + 1)}
-            onChange={(e) => setDays(e.target.checked ? [...days, i + 1] : days.filter((d) => d !== i + 1))}
-            aria-label={`Etetési nap: ${label}`}
-          />
-          {label}
-        </label>
-      ))}
-      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void run("/api/feeding/plan", { animalId, weekdays: days }, "Terv mentve.")}>
-        Terv mentése
-      </button>
-      <Msg msg={msg} />
-    </div>
-  );
-}
+// Lili 2026-10-29 (package item 6): the per-animal "Etetési napok" form (PlanForm) is gone from the animal's page;
+// the feeding timetable (Timetable.tsx, /etetes/rend) writes the same plan (feeding_plan) for every animal at once.
 
 /** JAV-08: selects the animals planned for the day's weekday; it only adds to the common list. */
 function planText(res: Record<string, unknown>): string {
