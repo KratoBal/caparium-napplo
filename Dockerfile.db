@@ -1,0 +1,9 @@
+# The database image: the official PostgreSQL with the backup script inside (caparium-backup).
+# The script was a relative bind mount (./scripts/db-backup.sh) before; a Coolify Docker Compose app
+# deployed from git does not keep the repository's files beside the compose file, so the mount's
+# source was missing and Docker made an empty DIRECTORY in its place: the scheduled backup failed at
+# once, without output (2026-10-29, acrobot 37810). Baked in, it is the same file everywhere.
+FROM postgres:17
+# COPY, then chmod: no BuildKit needed for --chmod, whatever builds it
+COPY scripts/db-backup.sh /usr/local/bin/caparium-backup
+RUN chmod 0755 /usr/local/bin/caparium-backup

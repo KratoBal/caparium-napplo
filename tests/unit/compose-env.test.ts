@@ -31,3 +31,21 @@ describe("docker-compose app environment", () => {
     expect(names.filter((n) => !passed.has(n))).toEqual([]);
   });
 });
+
+// 2026-10-29 (acrobot 37810): the db service's backup script came in by a relative bind mount, and the Coolify app,
+// deployed from git, has no repository files beside its compose file: Docker made an empty directory there and every
+// scheduled backup failed at once. No service may take a file of the repository by a relative bind mount.
+describe("docker-compose volumes", () => {
+  it("bind-mount no file of the repository: what a service needs is in its image", () => {
+    const relative = [...read("docker-compose.yml").matchAll(/^\s*-\s*["']?(\.{1,2}\/[^:"'\s]+):/gm)].map((m) => m[1]);
+    expect(relative).toEqual([]);
+  });
+
+  it("the db image carries the backup script, executable, where the scheduled task calls it", () => {
+    const docker = read("Dockerfile.db");
+    expect(docker).toMatch(/^FROM postgres:17$/m);
+    expect(docker).toMatch(/^COPY scripts\/db-backup\.sh \/usr\/local\/bin\/caparium-backup$/m);
+    expect(docker).toMatch(/^RUN chmod 0755 \/usr\/local\/bin\/caparium-backup$/m);
+    expect(read("docker-compose.yml")).toMatch(/dockerfile: Dockerfile\.db/);
+  });
+});
