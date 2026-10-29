@@ -1,7 +1,7 @@
 // EGY-13 breakdown and EVE-08 week shading (pure).
 import { describe, expect, it } from "vitest";
 import { WEEK_FILLS, weekShade } from "@/lib/exports/feeding-excel";
-import { breakdown } from "@/lib/reports";
+import { breakdown, headerGroups } from "@/lib/reports";
 
 describe("breakdown (EGY-13)", () => {
   const e = (day: string, recipient: string, feed: string, unit: string, value: number, group = false) => ({ day, recipient, feed, unit, value, group });
@@ -50,5 +50,20 @@ describe("weekShade (EVE-08)", () => {
     expect(weekShade("2026-11-02", "2026-11-16")).toBe(WEEK_FILLS[0]);
     expect(weekShade("2026-11-05", "2026-11-08")).toBe(WEEK_FILLS[0]); // a period starting mid-week
     expect(weekShade("2026-11-05", "2026-11-09")).toBe(WEEK_FILLS[1]);
+  });
+});
+
+describe("the reports' group headers (Lili 2026-10-29, package item 12)", () => {
+  const e = (feed: string, unit: string, group = false) => ({ day: "2026-11-02", recipient: group ? "Teszt csoport (csoport)" : "Teszt Egy", feed, unit, value: 1, group });
+  it("one header per run of a feed type, the group-item columns apart; without the types one empty run", () => {
+    const types = new Map([["Litopenaeus vannamei", "🦐 Rákok"], ["Teszt hal", "🐟 Halak"], ["Clupea harengus", "🐟 Halak"]]);
+    const places = new Map<string, readonly [number, number]>([["Litopenaeus vannamei", [1, 1]], ["Teszt hal", [2, 1]], ["Clupea harengus", [2, 2]]]);
+    const r = breakdown([e("Litopenaeus vannamei", "db"), e("Litopenaeus vannamei", "g"), e("Teszt hal", "g"), e("Clupea harengus", "g"), e("Teszt hal", "g", true)], ["2026-11-02"], true, undefined, places, types);
+    expect(headerGroups(r.columns)).toEqual([
+      { label: "🦐 Rákok", span: 2 },
+      { label: "🐟 Halak", span: 2 },
+      { label: "🐟 Halak (csoportos tételek)", span: 1 },
+    ]);
+    expect(headerGroups(breakdown([e("Teszt hal", "g")], ["2026-11-02"]).columns)).toEqual([{ label: "", span: 1 }]);
   });
 });

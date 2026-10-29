@@ -1295,6 +1295,21 @@ test("reports: the tables and the Excel; no daily report menu any more", async (
   await page.getByRole("link", { name: "Kimutatások" }).click();
   await expect(page.getByTestId("report-by-day")).toContainText("Összesen");
   await expect(page.getByTestId("report-by-recipient")).toBeVisible();
+  // Lili 2026-10-29 (package item 12): a group header over the feeds and one over the totals; the total line apart at
+  // the bottom (tfoot), bold on its own background; the rows banded (a second row's background differs from the first's)
+  for (const id of ["report-by-day", "report-by-recipient"]) {
+    const t = page.getByTestId(id);
+    await expect(t.getByTestId("report-group").last()).toHaveText("Összesítés");
+    const total = t.locator("tfoot").getByTestId("report-total");
+    await expect(total).toContainText("Összesen");
+    const [weight, bg] = await total.locator("td").first().evaluate((el) => [getComputedStyle(el).fontWeight, getComputedStyle(el).backgroundColor]);
+    expect([weight, bg === "rgba(0, 0, 0, 0)"]).toEqual(["700", false]);
+    const rows = t.locator("tbody tr");
+    if ((await rows.count()) > 1) {
+      const bgOf = (n: number) => rows.nth(n).locator("td").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(await bgOf(0)).not.toBe(await bgOf(1));
+    }
+  }
   const [file] = await Promise.all([page.waitForEvent("download"), page.getByTestId("excel-kimutatas").click()]);
   expect(file.suggestedFilename()).toMatch(/^Kimutatas_\d{4}-\d{2}-\d{2}/);
   // caparium-hibak-4: the daily report menu is gone (its Excel is the export page's, for one day)

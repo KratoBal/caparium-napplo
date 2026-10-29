@@ -10,7 +10,20 @@ import type { LogEntry } from "./feeding-log";
 
 export const GROUP_MARK = " [csoportos tétel]";
 
-export type Column = { key: string; feed: string; unit: string; group: boolean };
+/** `type`: the feed type's label, for the group header above the feeds (Lili 2026-10-29, package item 12) */
+export type Column = { key: string; feed: string; unit: string; group: boolean; type?: string };
+
+/** The header's groups over the feed columns, in order: one per run of the same type (a run, not a set: the columns are sorted by type, the group-item ones after the rest). */
+export function headerGroups(columns: readonly Column[]): { label: string; span: number }[] {
+  const out: { label: string; span: number }[] = [];
+  for (const c of columns) {
+    const label = `${c.type ?? ""}${c.group ? " (csoportos tételek)" : ""}`;
+    const last = out.at(-1);
+    if (last && last.label === label) last.span++;
+    else out.push({ label, span: 1 });
+  }
+  return out;
+}
 export type ReportLine = { label: string; cells: Record<string, number>; totals: Record<string, number>; groupTotals: Record<string, number> };
 
 function line(label: string, entries: LogEntry[], split: boolean): ReportLine {
@@ -34,13 +47,15 @@ export function breakdown(
   filtered = false,
   recipientOrder?: ReadonlyMap<string, number | null>,
   feedOrder?: ReadonlyMap<string, FeedPlace>,
+  feedType?: ReadonlyMap<string, string>,
 ) {
   const columns: Column[] = [
     ...new Map(
       entries.map((e) => {
         const apart = filtered && e.group;
         const feed = `${e.feed}${apart ? GROUP_MARK : ""}`;
-        return [`${feed}|${e.unit}`, { key: `${feed}|${e.unit}`, feed, unit: e.unit, group: apart }];
+        const type = feedType?.get(e.feed);
+        return [`${feed}|${e.unit}`, { key: `${feed}|${e.unit}`, feed, unit: e.unit, group: apart, ...(type ? { type } : {}) }];
       }),
     ).values(),
   ].sort(
