@@ -182,9 +182,13 @@ test("weekly measurement: value with dilution and RO/SW, kept after a reload, sh
   await expect(row).toContainText("1:10, RO");
 });
 
+// Budapest's today moved by calendar days, not by 24-hour steps: across the DST change (2026-10-25) a 24-hour step lands
+// an hour off, so from 23:00 to midnight "-31" was 30 calendar days back (card 61043ae0)
 function budapestDay(offsetDays: number): string {
-  const d = new Date(Date.now() + offsetDays * 86_400_000);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest" }).format(d);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest" }).format(new Date());
+  const d = new Date(`${today}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
 }
 
 test("admin corrects and invalidates an earlier day's measurement with a reason (the reasons on); an aquarist gets no form", async ({ page, browser }, info) => {
@@ -536,8 +540,10 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
 // fills its own animal's row; the day's feeds are shared, so the second run finds them saved already.
 test("one button: \"Takarmánylap kész\" saves the day's feeds ticked above and finalizes; a failed save does not finalize", async ({ page }, info) => {
   // Lili 2026-10-27 22:47 UTC: the two buttons were one in the plan; finalizing alone lost the fresh ticks. A day of its
-  // own per project, in the past (an admin may write there), so no other test has finalized it
-  const day = budapestDay(info.project.name === "tablet" ? -30 : -31);
+  // own per project, in the past (an admin may write there), so no other test has finalized it. Two days apart, not one:
+  // each project reads the clock when it runs, and a run that crosses midnight between the two moves the later one's day
+  // by one (card 61043ae0: tablet at 21:59:32 UTC, desktop at 22:02:30 UTC on 10-29, both on 09-29)
+  const day = budapestDay(info.project.name === "tablet" ? -30 : -32);
   page.on("dialog", (d) => void d.accept());
   await login(page, "teszt.admin");
   await page.goto(`/etetes?nap=${day}`);
