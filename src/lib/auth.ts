@@ -37,7 +37,8 @@ function tokenHash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export type SessionUser = { id: string; fullName: string; loginId: string; role: Role };
+/** `sessionStartedAt`: when this login began (ms), not a secret: the helper greets once per login with it (Lili 2026-10-29). */
+export type SessionUser = { id: string; fullName: string; loginId: string; role: Role; sessionStartedAt?: number };
 
 const MAX_FAILURES = 10;
 const FAILURE_WINDOW_MIN = 15;
@@ -136,7 +137,7 @@ export async function userForToken(token: string | undefined | null): Promise<Se
   if (!token) return null;
   const session = await prisma.session.findUnique({ where: { id: tokenHash(token) }, include: { user: true } });
   if (!session || session.expiresAt <= new Date() || !session.user.active || session.user.role === "SYSTEM") return null;
-  return { id: session.user.id, fullName: session.user.fullName, loginId: session.user.loginId, role: session.user.role };
+  return { id: session.user.id, fullName: session.user.fullName, loginId: session.user.loginId, role: session.user.role, sessionStartedAt: session.createdAt.getTime() };
 }
 
 export function readCookie(header: string | null, name: string): string | undefined {

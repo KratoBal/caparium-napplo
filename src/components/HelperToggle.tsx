@@ -15,9 +15,11 @@ export function HelperToggle() {
   }, []);
   // before the stored state is read the switch is not shown: a click could flip the wrong way
   if (off === null) return null;
+  // the switch the other pages use (Lili 2026-10-29): the same `switch` input, with a small label
   return (
-    <button className="btn btn-soft helper-toggle no-print" type="button" aria-pressed={!off} onClick={() => writeOff(!off)} data-testid="helper-toggle">
-      {off ? "Segítő: ki" : "Segítő: be"}
-    </button>
+    <label className="switch-wrap helper-toggle no-print">
+      <input className="switch" type="checkbox" role="switch" checked={!off} onChange={() => writeOff(!off)} aria-label="Segítő" data-testid="helper-toggle" />
+      <span className="helper-toggle-label">Segítő</span>
+    </label>
   );
 }

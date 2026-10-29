@@ -1492,6 +1492,9 @@ test("the helper: it speaks unasked without taking a click, the quick questions 
   await page.waitForLoadState("networkidle");
   await page.evaluate(() => sessionStorage.clear());
   await page.reload();
+  // a login not greeted yet: the hello comes first and goes with the first click; the alert speaks after it (Lili 2026-10-29)
+  await expect(page.getByTestId("helper-notice")).toHaveAttribute("data-kind", "greeting");
+  await page.getByTestId("current-user").click();
   const shown = page.getByTestId("helper-notice");
   await expect(shown).toContainText("Teszt só");
   const before = await shown.textContent();
@@ -1508,11 +1511,24 @@ test("the helper: it speaks unasked without taking a click, the quick questions 
   // Lili 2026-10-27 13:02 UTC: the start page has no "Mai áttekintés" title; what is under the bar stays
   await expect(page.getByRole("heading", { name: "Jó munkát!" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mai áttekintés" })).toHaveCount(0);
+  // barracuda on #122: the first click after the login is mostly a menu link; the alert must not be marked heard behind
+  // it, and must speak on the page the link leads to
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  await expect(page.getByTestId("helper-notice")).toHaveAttribute("data-kind", "greeting");
+  await page.getByRole("link", { name: "Napi vízmérés", exact: true }).click();
+  await expect(page).toHaveURL(/\/vizmeres/);
+  await expect(page.getByTestId("helper-notice")).toHaveAttribute("data-kind", "alert");
+  await expect(page.getByTestId("helper-notice")).toContainText("Teszt só");
+  await page.getByRole("link", { name: "START", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Jó munkát!" })).toBeVisible();
   await page.evaluate(() => sessionStorage.clear());
   await page.reload();
   // AST-03: the overview's helper speaks by itself, once, as a notice: the bubble with the buttons stays closed
   const first = page.getByTestId("helper");
   await expect(first).toHaveAttribute("data-ready", "1");
+  await expect(first.getByTestId("helper-notice")).toHaveAttribute("data-kind", "greeting");
+  await page.getByTestId("current-user").click();
   await expect(first.getByTestId("helper-notice")).toHaveAttribute("data-kind", "alert");
   await expect(first.getByTestId("helper-notice")).toContainText("Teszt só");
   await expect(first.getByTestId("helper-button")).toHaveAttribute("aria-expanded", "false");
@@ -1539,9 +1555,9 @@ test("the helper: it speaks unasked without taking a click, the quick questions 
   await helper.getByTestId("helper-button").click();
   // card 8b22c3c2: the switch is in the header; off, the figure goes and the urgent notice stays in a strip
   const toggle = page.getByTestId("helper-toggle");
-  await expect(toggle).toHaveText("Segítő: be");
+  await expect(toggle).toBeChecked();
   await toggle.click();
-  await expect(toggle).toHaveText("Segítő: ki");
+  await expect(toggle).not.toBeChecked();
   await expect(page.getByTestId("helper")).toHaveCount(0);
   await expect(page.getByTestId("helper-urgent")).toContainText("Teszt só");
   expect(await passesClicks(page, "helper-urgent")).toBe(true);
@@ -1549,7 +1565,7 @@ test("the helper: it speaks unasked without taking a click, the quick questions 
   // a new session while switched off: the alert must not be marked seen behind the closed helper (review of #20, a)
   await page.evaluate(() => sessionStorage.clear());
   await page.reload();
-  await expect(page.getByTestId("helper-toggle")).toHaveText("Segítő: ki");
+  await expect(page.getByTestId("helper-toggle")).not.toBeChecked();
   await expect(page.getByTestId("helper-urgent")).toContainText("Teszt só");
   await page.getByTestId("helper-toggle").click();
   // switched back on, the alert not seen in this session speaks right here, not only on the next page (review of #21)
@@ -2064,4 +2080,35 @@ test("daily measurement: the pool ticks save on their own and survive a reload; 
   for (const [kind] of kinds) await page.getByTestId(`tick-${p.pool}-${kind}`).uncheck();
   await page.reload();
   for (const [kind] of kinds) await expect(page.getByTestId(`tick-${p.pool}-${kind}`)).not.toBeChecked();
+});
+
+// Lili 2026-10-29 (feedback on #119, acrobot 38178, 38179, 38180, 38182): the figure greets after the login with the login
+// name, and the greeting goes with the FIRST click anywhere, which still reaches its target; once per login. The pictures
+// turn towards the page, there is no name under the figure.
+test("the helper greets after the login, goes with the first click that still works, and does not greet again in the same login", async ({ page }) => {
+  await login(page, "teszt.akvarista1");
+  const helper = page.getByTestId("helper");
+  await expect(helper).toHaveAttribute("data-ready", "1");
+  const hello = helper.getByTestId("helper-notice");
+  await expect(hello).toHaveAttribute("data-kind", "greeting");
+  await expect(hello).toHaveText("Üdv a fedélzeten Teszt.akvarista1!");
+  const picture = helper.getByTestId("helper-button").locator("img");
+  await expect(picture).toHaveAttribute("src", /^\/segito\/(antennarius|zebracapa)-udv-[123]\.webp$/);
+  expect(await picture.evaluate((img: HTMLImageElement) => getComputedStyle(img).transform)).toBe("matrix(-1, 0, 0, 1, 0, 0)"); // towards the page
+  await expect(helper.locator(".helper-name")).toHaveCount(0);
+  // the first click is a click on a link: it goes through to the page, and the greeting goes
+  await page.getByRole("link", { name: "Napi vízmérés", exact: true }).click();
+  await expect(page).toHaveURL(/\/vizmeres/);
+  await expect(page.getByRole("heading", { name: "Napi vízmérések" })).toBeVisible();
+  await expect(page.locator('[data-testid="helper-notice"][data-kind="greeting"]')).toHaveCount(0);
+  // the same login, the page loaded again: no second hello
+  await page.reload();
+  await expect(page.getByTestId("helper")).toHaveAttribute("data-ready", "1");
+  await expect(page.locator('[data-testid="helper-notice"][data-kind="greeting"]')).toHaveCount(0);
+  // a key takes the greeting too (no pointer needed)
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  await expect(page.locator('[data-testid="helper-notice"][data-kind="greeting"]')).toHaveCount(1);
+  await page.keyboard.press("Tab");
+  await expect(page.locator('[data-testid="helper-notice"][data-kind="greeting"]')).toHaveCount(0);
 });

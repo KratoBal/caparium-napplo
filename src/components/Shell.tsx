@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { SessionUser } from "@/lib/auth";
 import type { HelperData } from "@/lib/helpers";
+import { greetingName } from "@/lib/helper-notice";
 import { Helper } from "./Helper";
 import { HelperToggle } from "./HelperToggle";
 import { ReasonProvider } from "./ReasonSwitch";
@@ -65,7 +66,7 @@ export async function Shell({
       <main className="main">
         <ReasonProvider on={reasons}>{children}</ReasonProvider>
       </main>
-      {helper && <Helper data={helper} userName={user?.fullName} />}
+      {helper && <Helper data={helper} userName={user ? greetingName(user) : undefined} loginAt={user?.sessionStartedAt} />}
     </div>
   );
 }

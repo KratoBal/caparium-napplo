@@ -16,3 +16,12 @@ export function followAnswer(answer: string | null, previousAlert: string | unde
   if (previousAlert === undefined || answer !== previousAlert) return answer;
   return alert ?? null;
 }
+
+/**
+ * The name the figure greets with (Lili 2026-10-29, acrobot 38178): the login name (Lili, Vivi, Niki), its first letter
+ * capital as people write a name (login names are stored in lower case); the full name where there is none.
+ */
+export function greetingName(user: { loginId?: string | null; fullName: string }): string {
+  const login = (user.loginId ?? "").trim();
+  return login ? login.charAt(0).toLocaleUpperCase("hu") + login.slice(1) : user.fullName.trim();
+}

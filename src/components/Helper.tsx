@@ -9,7 +9,7 @@
 // 13:25 UTC).
 //
 // WHAT SPEAKS BY ITSELF TAKES NO CLICK. The figure says something unasked twice: an alert, once per key and
-// session (AST-03), and a greeting, once per session (it goes after GREETING_MS). Both are a text-only
+// session (AST-03), and a greeting, once per login (it goes with the first click). Both are a text-only
 // bubble with pointer-events: none, and so is the strip: none of them can cover a form's button (the
 // tablet e2e of #109, where the greeting sat on "Tétel mentése"; barracuda on #109: in the afternoon the
 // measurement alert would open on every water page). The bubble with the questions opens only from the
@@ -24,9 +24,10 @@ const GREETED_KEY = "caparium-segito-koszont";
 const FIGURE = { water: { slug: "antennarius", name: "Antennarius" }, feeding: { slug: "zebracapa", name: "Zebracápa" } } as const;
 const ALERT_PICTURE = { measurement: "feladatok", stock: "vegyszer" } as const;
 const GREETING_PICTURES = 3;
-const GREETING_MS = 8000;
+// the alert waits a beat after the greeting went: a click that LEAVES the page (a menu link) must not mark it heard
+const ALERT_AFTER_GREETING_MS = 600;
 
-export function Helper({ data, userName }: { data: HelperData; userName?: string }) {
+export function Helper({ data, userName, loginAt }: { data: HelperData; userName?: string; loginAt?: number }) {
   const [off, setOff] = useState(false);
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -37,44 +38,65 @@ export function Helper({ data, userName }: { data: HelperData; userName?: string
   // set once the stored state is read: before that a click could race the auto-open below
   const [ready, setReady] = useState(false);
   const figure = FIGURE[data.who];
-  const picture = data.alert
-    ? ALERT_PICTURE[data.alertKind ?? "measurement"]
-    : `udv-${notice?.kind === "greeting" ? greetingPicture : 1}`;
+  // while it greets the figure wears a greeting picture, even with an alert waiting; then the alert's, else at rest the first
+  const picture =
+    notice?.kind === "greeting" ? `udv-${greetingPicture}` : data.alert ? ALERT_PICTURE[data.alertKind ?? "measurement"] : "udv-1";
   // the alert the shown texts were taken from: a refresh (a save) may change or end it
   const shownAlert = useRef(data.alert);
 
-  /** AST-03: the alert speaks once per key and session; true when it did. It is also the figure's hello:
-   * the next page does not greet after it (an alert, then a hello, would speak on every page) */
+  /** AST-03: the alert speaks once per key and session; true when it did. */
   function alertIfNew(): boolean {
     if (!data.alert) return false;
     const key = data.alertKey ?? data.alert;
     try {
       if (sessionStorage.getItem(SEEN_KEY) === key) return false;
       sessionStorage.setItem(SEEN_KEY, key);
-      sessionStorage.setItem(`${GREETED_KEY}-${data.who}`, "1");
     } catch {
       /* without storage it speaks on every page with an alert */
     }
     setNotice({ kind: "alert", text: data.alert });
     return true;
   }
-  /** the hello, once per session and figure; an alert goes first */
-  function greetIfNew() {
+  /**
+   * The hello, once per LOGIN (Lili 2026-10-29): it shows after the login, on the first page that has the figure, and goes
+   * with the first click anywhere (below). The mark is the login's start, so a new login in the same tab greets again;
+   * an alert waits until the hello is gone. True when it greets.
+   */
+  function greetIfNew(): boolean {
     try {
-      if (sessionStorage.getItem(`${GREETED_KEY}-${data.who}`) === "1") return;
-      sessionStorage.setItem(`${GREETED_KEY}-${data.who}`, "1");
+      const mark = String(loginAt ?? "login");
+      if (sessionStorage.getItem(GREETED_KEY) === mark) return false;
+      sessionStorage.setItem(GREETED_KEY, mark);
     } catch {
-      return; // without storage it would greet on every page: it does not greet
+      return false; // without storage it would greet on every page: it does not greet
     }
-    // Lili 2026-10-29 (item 10): at login, "Üdv a fedélzeten <név>!", in one of the figure's greeting pictures
     setGreetingPicture(1 + Math.floor(Math.random() * GREETING_PICTURES));
     setNotice({ kind: "greeting", text: userName ? `Üdv a fedélzeten ${userName}!` : "Üdv a fedélzeten!" });
+    return true;
   }
+  // the hello goes with the FIRST click (or key) anywhere, and the click goes on to its target: the listeners only watch
+  // (capture, no stopPropagation), and the bubble itself takes no click. An alert not yet heard speaks a beat later and
+  // is marked heard only when it speaks (barracuda on #122): where the click was a link, the page is gone before that,
+  // and the alert speaks on the next page. The latest alertIfNew is read through a ref: the timer outlives the effect.
+  const alertLater = useRef<() => boolean>(() => false);
+  alertLater.current = alertIfNew;
+  const alertTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(alertTimer.current), []);
   useEffect(() => {
     if (notice?.kind !== "greeting") return;
-    const t = setTimeout(() => setNotice(null), GREETING_MS);
-    return () => clearTimeout(t);
-  }, [notice]);
+    const remove = () => {
+      document.removeEventListener("pointerdown", dismiss, true);
+      document.removeEventListener("keydown", dismiss, true);
+    };
+    const dismiss = () => {
+      remove();
+      setNotice(null);
+      alertTimer.current = setTimeout(() => alertLater.current(), ALERT_AFTER_GREETING_MS);
+    };
+    document.addEventListener("pointerdown", dismiss, true);
+    document.addEventListener("keydown", dismiss, true);
+    return remove;
+  }, [notice?.kind]);
 
   useEffect(() => {
     setReady(true);
@@ -86,7 +108,7 @@ export function Helper({ data, userName }: { data: HelperData; userName?: string
     const isOff = readOff();
     setOff(isOff);
     // switched off, the alert is not marked as seen: switched back on, it still speaks once
-    if (!isOff && !alertIfNew()) greetIfNew();
+    if (!isOff && !greetIfNew()) alertIfNew();
     const onSwitch = (e: Event) => {
       const v = (e as CustomEvent<boolean>).detail;
       setOff(v);
@@ -156,7 +178,6 @@ export function Helper({ data, userName }: { data: HelperData; userName?: string
         data-testid="helper-button"
       >
         <img className="helper-face" src={`/segito/${figure.slug}-${picture}.webp`} alt="" height={80} data-picture={picture} />
-        <span className="helper-name">{figure.name}</span>
         {data.alert && (
           <span className="helper-badge" aria-hidden="true">
             !

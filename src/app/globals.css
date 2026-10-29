@@ -301,18 +301,23 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .helper { pointer-events: none; position: fixed; right: 16px; bottom: 16px; z-index: 20; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; max-width: min(420px, calc(100vw - 32px)); }
 .helper-figure { pointer-events: auto; position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: 0; padding: 0; cursor: pointer; }
 /* Lili's own pictures (item 10): transparent WebP files, a small figure, not a button-sized disc */
-.helper-face { display: block; height: 80px; width: auto; filter: drop-shadow(0 3px 6px rgba(17, 47, 62, 0.25)); }
+.helper-face { display: block; height: 100px; width: auto; transform: scaleX(-1); filter: drop-shadow(0 3px 6px rgba(17, 47, 62, 0.25)); }
+/* Lili 2026-10-29 (#119): the pictures turn towards the page, not the wall (they are drawn looking right); the bubble's
+   words and its buttons are smaller; the name under the figure is gone (the figure's aria-label keeps it) */
+.helper-bubble .btn { font-size: 12px; min-height: 30px; padding: 4px 10px; }
+.helper-bubble .input { font-size: 12px; min-height: 30px; }
+.helper-toggle-label { font-size: 12px; font-weight: 600; color: var(--c-muted); }
 .helper-name { font-size: 12px; font-weight: 600; color: var(--c-ink); background: var(--c-white); border-radius: 999px; padding: 1px 8px; }
 .helper-badge { position: absolute; top: -4px; right: -4px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--c-warn-ink); color: var(--c-white); font-weight: 700; font-size: 14px; }
-.helper-bubble { pointer-events: auto; position: relative; background: var(--c-white); border: 1px solid var(--c-line); border-radius: 16px; padding: 14px; box-shadow: 0 6px 24px rgba(17, 47, 62, 0.15); max-height: min(60vh, 520px); overflow: auto; }
+.helper-bubble { pointer-events: auto; position: relative; background: var(--c-white); border: 1px solid var(--c-line); border-radius: 16px; padding: 10px 12px; font-size: 13px; box-shadow: 0 6px 24px rgba(17, 47, 62, 0.15); max-height: min(60vh, 520px); overflow: auto; }
 .helper-bubble::after { content: ""; position: absolute; right: 26px; bottom: -9px; width: 16px; height: 16px; background: var(--c-white); border-right: 1px solid var(--c-line); border-bottom: 1px solid var(--c-line); transform: rotate(45deg); }
 /* what speaks by itself (alert, greeting) and the strip take no click: they never cover a form's button (#109) */
-.helper-notice { pointer-events: none; margin: 0; font-size: 15px; }
+.helper-notice { pointer-events: none; margin: 0; font-size: 13px; }
 /* the page keeps room under its last row for the figure, so nothing ends up behind it */
 .shell:has(.helper, .helper-urgent) .main { padding-bottom: 120px; }
 .helper-qs { display: flex; flex-wrap: wrap; gap: 8px; }
 .helper-animal { display: flex; gap: 6px; }
-.helper-answer { margin: 0 0 12px; font-size: 15px; }
+.helper-answer { margin: 0 0 10px; font-size: 13px; }
 .helper-urgent { pointer-events: none; position: fixed; right: 16px; bottom: 16px; z-index: 20; max-width: min(420px, calc(100vw - 32px)); background: var(--c-warn-soft); color: var(--c-warn-ink); border-radius: var(--radius); padding: 8px 12px; font-size: 14px; box-shadow: 0 4px 14px rgba(17, 47, 62, 0.12); }
 
 /* caparium-hibak-5: the home page's illustrated cards, 3-2-3, centred rows; one column on a phone */
