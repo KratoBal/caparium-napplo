@@ -5,6 +5,7 @@
 // written), and the run with a reason and a confirmation. Feeding admins only; the server checks it again.
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useReasonsOn } from "./ReasonSwitch";
 
 type Op = { op: string; at: string; user: string; count: number; kinds: Record<string, number> };
 type Plan = {
@@ -42,6 +43,8 @@ export function DayRestore({ day }: { day: string }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // the reason only while the app asks for reasons (Balázs 2026-10-20, task caparium-indoklas-ki): off, no field
+  const reasonsOn = useReasonsOn();
 
   async function call(body: Record<string, unknown>) {
     setBusy(true);
@@ -133,16 +136,16 @@ export function DayRestore({ day }: { day: string }) {
             </p>
           ) : (
             <div className="toolbar">
-              <input className="input" aria-label="A visszaállítás oka" placeholder="A visszaállítás oka" value={reason} onChange={(e) => setReason(e.target.value)} />
+              {reasonsOn && <input className="input" aria-label="A visszaállítás oka" placeholder="A visszaállítás oka" value={reason} onChange={(e) => setReason(e.target.value)} />}
               <button
                 className="btn"
                 type="button"
-                disabled={busy || reason.trim().length < 3 || (!Object.keys(plan.count).length && !plan.feedIds)}
+                disabled={busy || (reasonsOn && reason.trim().length < 3) || (!Object.keys(plan.count).length && !plan.feedIds)}
                 onClick={() => {
                   const others = plan.ops.slice(1);
                   const also = others.length ? ` Ez a kiválasztotton kívül további ${others.length} műveletet is visszafordít: ${others.map((o) => `${time(o.at)} ${o.user}`).join(", ")}.` : "";
                   if (!window.confirm(`Visszaállítod a(z) ${day} napot a(z) ${time(plan.since)} előtti állapotra?${also} A fenti változások mind megtörténnek.`)) return;
-                  void call({ mode: "run", op, reason: reason.trim() }).then((b) => {
+                  void call({ mode: "run", op, ...(reasonsOn ? { reason: reason.trim() } : {}) }).then((b) => {
                     if (!b) return;
                     setMsg({ ok: true, text: "A nap visszaállítva." });
                     setPlan(null);

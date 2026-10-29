@@ -911,7 +911,9 @@ test("feeding day restore: the day's operations, a dry run before one, the run w
   const plan = restore.getByTestId("day-restore-plan");
   await expect(plan).toContainText(/kijelölés le: \d+/);
   await expect(sw, "the dry run changed nothing").toBeChecked();
-  await plan.getByLabel("A visszaállítás oka").fill("e2e visszaallitas");
+  // the reason field only while the app asks for reasons (off by default): no field, no reason
+  const why = plan.getByLabel("A visszaállítás oka");
+  if (await why.count()) await why.fill("e2e visszaallitas");
   await plan.getByRole("button", { name: "Visszaállítás" }).click();
   await expect(restore.getByRole("status")).toHaveText("A nap visszaállítva.");
   await expect(sw).not.toBeChecked();

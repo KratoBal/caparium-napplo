@@ -12,7 +12,7 @@ import { AppError } from "@/lib/errors";
 import { feedingDayView, saveFeedingItem } from "@/lib/feeding";
 import { applyFeedingList, createFeedingList } from "@/lib/feeding-lists";
 import { dayToDate } from "@/lib/time";
-import { fixtures, rid } from "./fixtures";
+import { fixtures, rid, withReasons } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
 const a: Record<string, string> = {};
@@ -85,12 +85,15 @@ describe("a day put back as it stood before a list switch", () => {
     expect(dry.plan.feedIds?.before).toEqual([feed["Teszt hal"]]);
     expect([await prisma.auditEntry.count(), await selected(d)], "the dry run writes nothing").toEqual([auditsBefore, ["Teszt Egy", "Teszt Három"]]);
 
-    await expectCode(restoreDay(f.admin, { requestId: rid(), day: d, mode: "run", op: off }), "REASON_REQUIRED");
+    // the reason follows the app's switch (Balázs 2026-10-20, caparium-indoklas-ki): on, it is asked; off (the
+    // default), the run goes without one and the audit carries none
+    await expectCode(withReasons(() => restoreDay(f.admin, { requestId: rid(), day: d, mode: "run", op: off })), "REASON_REQUIRED");
     const run = rid();
-    await restoreDay(f.admin, { requestId: run, day: d, mode: "run", op: off, reason: "Lili kérése" }, at(d, "12:00"));
+    await restoreDay(f.admin, { requestId: run, day: d, mode: "run", op: off }, at(d, "12:00"));
+    expect(await prisma.auditEntry.count({ where: { requestId: run, reason: { not: null } } })).toBe(0);
     expect({ selected: await selected(d), feeds: await dayFeedIds(d), valid: await valid(d) }).toEqual(before);
     expect(await prisma.auditEntry.count({ where: { requestId: run } })).toBe(8);
-    expect(await restoreDay(f.admin, { requestId: run, day: d, mode: "run", op: off, reason: "Lili kérése" })).toEqual({ replayed: true });
+    expect(await restoreDay(f.admin, { requestId: run, day: d, mode: "run", op: off })).toEqual({ replayed: true });
     await expectCode(restoreDay(f.admin, { requestId: rid(), day: d, mode: "run", op: off, reason: "még egyszer" }), "NO_CHANGE");
 
     // the wrong point was chosen: the restore itself is turned back, and the day stands as it did before it
