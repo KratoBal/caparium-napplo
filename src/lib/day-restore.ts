@@ -89,7 +89,8 @@ const statusBefore = (x: Audit): "VALID" | "INVALIDATED" | null => {
 /** A status change only (a restore's own revalidation): not a content change, the row's content is as it was. */
 const statusOnly = (x: Audit) => {
   const keys = x.changes && typeof x.changes === "object" ? Object.keys(x.changes as object) : [];
-  return keys.length === 1 && keys[0] === "status";
+  // a restore's own row also names the point it went back to: still no content change
+  return keys.includes("status") && keys.every((k) => k === "status" || k === "restoredBefore");
 };
 
 /** What going back to just before `op` would change; `blocked` names what the audit cannot turn back. */
@@ -171,6 +172,9 @@ export async function restoreDay(actor: Actor, raw: z.input<typeof restoreSchema
     }
     if (!p.changes.length && !p.feedIds) throw new AppError(422, "NO_CHANGE", "A nap már úgy áll, ahogy a művelet előtt.");
     const why = `visszaállítás a(z) ${input.op} művelet előtti állapotra${input.reason ? `: ${input.reason}` : ""}`;
+    // the point the day went back to, as a fact in every audit row of the run (not a reason: it is written with the
+    // switch off too; acrobot 37841, barracuda on #97)
+    const target = { before: null, after: `${input.op} @ ${p.since.toISOString()}` };
     // invalidations first: one valid row per animal (the partial unique indexes) holds at every step
     const ordered = [...p.changes.filter((c) => c.to === "INVALIDATED"), ...p.changes.filter((c) => c.to === "VALID")];
     for (const c of ordered) {
@@ -186,7 +190,7 @@ export async function restoreDay(actor: Actor, raw: z.input<typeof restoreSchema
         action: c.to === "INVALIDATED" ? "INVALIDATE" : "UPDATE",
         entityType: c.type,
         entityId: c.id,
-        changes: { status: { before: c.to === "INVALIDATED" ? "VALID" : "INVALIDATED", after: c.to } },
+        changes: { status: { before: c.to === "INVALIDATED" ? "VALID" : "INVALIDATED", after: c.to }, restoredBefore: target },
         reason: input.reason ?? null,
         requestId: input.requestId,
       });
@@ -198,7 +202,7 @@ export async function restoreDay(actor: Actor, raw: z.input<typeof restoreSchema
         action: "UPDATE",
         entityType: "FeedingDay",
         entityId: fd.id,
-        changes: { feedIds: { before: [...p.feedIds.now].sort(), after: [...p.feedIds.before].sort() } },
+        changes: { feedIds: { before: [...p.feedIds.now].sort(), after: [...p.feedIds.before].sort() }, restoredBefore: target },
         reason: input.reason ?? null,
         requestId: input.requestId,
       });
