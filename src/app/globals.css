@@ -350,6 +350,8 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 /* Lili 2026-10-29, item 12 follow-up: the vertical totals stand out too: their own background, bold, a line on the left of the first */
 .report-table th.report-sum, .report-table tbody td.report-sum, .report-table tfoot td.report-sum { background: var(--c-control-bg); font-weight: 700; }
 .report-table .report-sum-first { border-left: 2px solid var(--c-control-line); }
+/* Lili 2026-10-29, picture 12c: the line between two groups (Kagylók | Rákok ...) continues down through the rows */
+.report-table .report-gstart { border-left: 1px solid var(--c-control-line); }
 .report-table tbody td, .report-table tfoot td, .report-table th.report-sum { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .order-row.touched { background: var(--c-primary-soft); border-color: var(--c-primary); }
 .order-row.dragging { background: #cfe9ee; border-color: var(--c-primary); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); }

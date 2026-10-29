@@ -12,13 +12,21 @@ export function ReportTable({ title, columns, lines, total, testId }: { title: s
   const units = [...new Set(columns.filter((c) => !c.group).map((c) => c.unit))];
   const groupUnits = [...new Set(columns.filter((c) => c.group).map((c) => c.unit))];
   const groups = headerGroups(columns);
+  // the first feed column of every group but the first: the line between the groups runs down from the header through the rows
+  // (Lili 2026-10-29, picture 12c)
+  const groupStart = new Set<string>();
+  groups.reduce((at, g) => {
+    if (at > 0) groupStart.add(columns[at].key);
+    return at + g.span;
+  }, 0);
+  const startClass = (c: Column) => (groupStart.has(c.key) ? "report-gstart" : undefined);
   // The summary columns (the vertical totals) are marked like the total line is, and what they hold, like the total line,
   // reads in kg from 1000 g (Lili 2026-10-29, item 12 follow-up). `isTotal`: the bottom line, whose feed cells are sums too.
   const cells = (l: ReportLine, isTotal = false) => (
     <>
       <td>{l.label}</td>
       {columns.map((c) => (
-        <td key={c.key}>{l.cells[c.key] === undefined ? "" : isTotal ? summaryCell(c.unit, l.cells[c.key]) : num(l.cells[c.key])}</td>
+        <td key={c.key} className={startClass(c)}>{l.cells[c.key] === undefined ? "" : isTotal ? summaryCell(c.unit, l.cells[c.key]) : num(l.cells[c.key])}</td>
       ))}
       {units.map((u, i) => (
         <td key={u} className={sumClass(i === 0)}>{l.totals[u] !== undefined ? summaryCell(u, l.totals[u]) : ""}</td>
@@ -47,7 +55,7 @@ export function ReportTable({ title, columns, lines, total, testId }: { title: s
           </tr>
           <tr>
             {columns.map((c) => (
-              <th key={c.key}>
+              <th key={c.key} className={startClass(c)}>
                 {c.feed} ({c.unit})
               </th>
             ))}

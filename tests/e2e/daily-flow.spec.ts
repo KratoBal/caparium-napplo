@@ -1345,6 +1345,15 @@ test("reports: the tables and the Excel; no daily report menu any more", async (
       expect(sumWeight).toBe("700");
       expect(sumBg).not.toBe(plainBg);
     }
+    // picture 12c: the line between two groups runs down through the rows: the cell under a group's first feed header has
+    // the same left line as the header cell (where there are two groups or more)
+    const starts = t.locator("thead th.report-gstart");
+    if ((await starts.count()) > 0) {
+      const lineOf = (loc: ReturnType<typeof t.locator>) => loc.first().evaluate((el) => getComputedStyle(el).borderLeftWidth);
+      expect(await lineOf(starts)).toBe("1px");
+      expect(await lineOf(t.locator("tbody td.report-gstart"))).toBe("1px");
+      expect(await lineOf(t.locator("tfoot td.report-gstart"))).toBe("1px");
+    }
     const rows = t.locator("tbody tr");
     if ((await rows.count()) > 1) {
       const bgOf = (n: number) => rows.nth(n).locator("td").first().evaluate((el) => getComputedStyle(el).backgroundColor);
