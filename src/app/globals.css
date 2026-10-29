@@ -215,6 +215,9 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .eat-pattern .eat-FASTING { background: #a8c3da; color: #134a6c; }
 .eat-pattern .eat-bar { min-width: 30px; height: 14px; padding: 0; vertical-align: middle; }
 .eat-pattern .day-letter { display: block; font-size: 12px; color: var(--c-muted); font-weight: 600; }
+/* Lili 2026-10-29 (package item 15b): the eating pattern's rows banded in a very pale grey, paler than the reports' bands,
+   so the coloured bars keep standing out; the band stays on paper too */
+.eat-pattern tbody tr:nth-child(even) td { background: #f5f5f5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 /* Lili 2026-10-29 (package item 11): the table as wide as its content, not the page: the Állat column as wide as the
    longest name, the days next to it in narrow equal columns (the full-width table gave the spare room to the names) */
 .log-table.eat-pattern { width: auto; }

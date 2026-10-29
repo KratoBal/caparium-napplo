@@ -532,6 +532,16 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
     return firstDay - Math.max(...names);
   });
   expect(gap).toBeLessThanOrEqual(40);
+  // Lili 2026-10-29 (package item 15b): the rows banded, every second one a very pale grey (each channel at least 240,
+  // all three equal), the first one white
+  const bands = await page.getByTestId("eating-pattern").evaluate((t) =>
+    Array.from(t.querySelectorAll("tbody tr")).slice(0, 2).map((r) => getComputedStyle(r.querySelector("td")!).backgroundColor),
+  );
+  if (bands.length === 2) {
+    expect(bands[0]).toMatch(/^rgba\(0, 0, 0, 0\)$|^rgb\(255, 255, 255\)$/);
+    const [r, g, b] = bands[1].match(/\d+/g)!.map(Number);
+    expect(r === g && g === b && r >= 240 && r < 255).toBe(true);
+  }
 
   // EGY-10, EVE-07: both Excel files are real downloads from the export page
   await page.getByRole("link", { name: "Export" }).click();
