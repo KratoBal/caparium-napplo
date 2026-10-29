@@ -83,7 +83,6 @@ export async function mailMonthlyPackage(
   // covers a slow SMTP server.
   return prisma.$transaction(
     async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
       if (sentThisRun.has(key) || (await alreadySent(tx, key))) return { sent: false, why: "ALREADY_SENT" };
       try {
         await send({ from: config.from, to: recipients.list.join(", "), subject, text, attachments });
