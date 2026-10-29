@@ -1,6 +1,6 @@
 // The pool ticks of the daily water measurement (Lili 2026-10-29, task caparium-lili-nagyobb-m, item 8): visszamosás and
-// rátöltés under the big pools, vízcsere under the small tanks; saved apart from the values, shown in the Excel and the
-// PDF report, never in the ZIMS export (its code does not read them). February 2029: a month no other spec uses (the database is shared across files).
+// rátöltés under the big pools, vízcsere under the small tanks; saved apart from the values, shown in the Excel (not in the PDF report, Lili
+// 2026-10-29 22:01), never in the ZIMS export (its code does not read them). February 2029: a month no other spec uses (the database is shared across files).
 import ExcelJS from "exceljs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { AppError } from "@/lib/errors";
@@ -9,6 +9,8 @@ import { createMeasurement } from "@/lib/measurements";
 import { setPoolTick, ticksOfDay } from "@/lib/pool-ticks";
 import { getGrid } from "@/lib/queries";
 import { waterReport } from "@/lib/water-report";
+import { waterReportPdf } from "@/lib/water-report-pdf";
+import { readPdfLines } from "../support/pdf-readback";
 import { fixtures, rid } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -53,7 +55,7 @@ describe("the pool ticks", () => {
     await tick("KARANTEN", "BACKWASH", false, "NAPI_NAGY", new Date("2029-02-15T10:00:00+01:00"), f.admin);
   });
 
-  it("the Excel carries 'volt' once per pool and day under its column, on the first row; the report lists the ticks", async () => {
+  it("the Excel carries 'volt' once per pool and day under its column, on the first row; the PDF report does not show them", async () => {
     const measure = (param: string, value: string, time: string) =>
       createMeasurement(
         f.aq1,
@@ -72,7 +74,11 @@ describe("the pool ticks", () => {
       expect(ticksOf(2), name).toEqual(["volt", "volt", ""]); // the first row of the pool and the day
       expect(ticksOf(3), name).toEqual(["", "", ""]); // the second row of the same day: not repeated
     }
+    // Lili (acrobot msg 38143, 2026-10-29 22:01): the ticks are NOT in the PDF report, only in the Excel
     const report = await waterReport(DAY);
-    expect(report.pools.find((p) => p.pool === "Nagymedence")?.ticks).toEqual(["BACKWASH", "TOPUP"]);
+    expect(report.pools.find((p) => p.pool === "Nagymedence")).toBeDefined();
+    const lines = await readPdfLines(await waterReportPdf(report));
+    expect(lines.find((l) => l.startsWith("Nagymedence"))).toBe("Nagymedence");
+    expect(lines.join("\n")).not.toMatch(/visszamos|rátölt|vízcsere/i);
   });
 });
