@@ -1518,17 +1518,19 @@ test("the feed list: the admin sets the tick's base amount, an aquarist sees it"
   await login(page, "teszt.admin");
   await page.getByRole("link", { name: "Takarmánylista" }).click();
   const row = page.getByRole("row").filter({ hasText: "Homárikra" });
+  // the other layout's run (or an earlier run) may have set 30 already: then it is a change to 35, or "Mentés" stays off
+  const target = (await row.locator('[data-testid^="feed-dose-"]').textContent()) === "30 g" ? "35" : "30";
   await row.getByRole("button", { name: "Homárikra: módosítás" }).click();
   const form = page.locator('[data-testid^="feed-edit-"]');
-  await form.getByLabel("Alapmennyiség a pipához").fill("30");
+  await form.getByLabel("Alapmennyiség a pipához").fill(target);
   await form.getByLabel("Az alapmennyiség egysége").selectOption({ label: "g" });
   await form.getByRole("button", { name: "Mentés" }).click();
-  await expect(row.locator('[data-testid^="feed-dose-"]')).toHaveText("30 g");
+  await expect(row.locator('[data-testid^="feed-dose-"]')).toHaveText(`${target} g`);
   await page.context().clearCookies();
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Takarmánylista" }).click();
   const seen = page.getByRole("row").filter({ hasText: "Homárikra" });
-  await expect(seen.locator('[data-testid^="feed-dose-"]')).toHaveText("30 g");
+  await expect(seen.locator('[data-testid^="feed-dose-"]')).toHaveText(`${target} g`);
   await expect(seen.getByRole("button", { name: "Homárikra: módosítás" })).toHaveCount(0);
 });
 
