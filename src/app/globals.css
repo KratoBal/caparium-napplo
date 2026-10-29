@@ -267,14 +267,16 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 }
 
 /* AST-01: the helper in the corner: a static figure with a speech bubble (card 8b22c3c2) */
-.helper { position: fixed; right: 16px; bottom: 16px; z-index: 20; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; max-width: min(420px, calc(100vw - 32px)); }
-.helper-figure { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: 0; padding: 0; cursor: pointer; }
+.helper { pointer-events: none; position: fixed; right: 16px; bottom: 16px; z-index: 20; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; max-width: min(420px, calc(100vw - 32px)); }
+.helper-figure { pointer-events: auto; position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: 0; padding: 0; cursor: pointer; }
 .helper-face { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: var(--c-white); border: 2px solid var(--c-ink); box-shadow: 0 4px 14px rgba(17, 47, 62, 0.18); font-size: 36px; line-height: 1; }
 .helper-figure.alert .helper-face { border-color: var(--c-warn-ink); }
 .helper-name { font-size: 12px; font-weight: 600; color: var(--c-ink); background: var(--c-white); border-radius: 999px; padding: 1px 8px; }
 .helper-badge { position: absolute; top: -4px; right: -4px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--c-warn-ink); color: var(--c-white); font-weight: 700; font-size: 14px; }
-.helper-bubble { position: relative; background: var(--c-white); border: 1px solid var(--c-line); border-radius: 16px; padding: 14px; box-shadow: 0 6px 24px rgba(17, 47, 62, 0.15); max-height: min(60vh, 520px); overflow: auto; }
+.helper-bubble { pointer-events: auto; position: relative; background: var(--c-white); border: 1px solid var(--c-line); border-radius: 16px; padding: 14px; box-shadow: 0 6px 24px rgba(17, 47, 62, 0.15); max-height: min(60vh, 520px); overflow: auto; }
 .helper-bubble::after { content: ""; position: absolute; right: 26px; bottom: -9px; width: 16px; height: 16px; background: var(--c-white); border-right: 1px solid var(--c-line); border-bottom: 1px solid var(--c-line); transform: rotate(45deg); }
+/* the greeting takes no click: it must never cover a form's button (#109's tablet e2e) */
+.helper-greeting { pointer-events: none; margin: 0; font-size: 15px; }
 .helper-qs { display: flex; flex-wrap: wrap; gap: 8px; }
 .helper-animal { display: flex; gap: 6px; }
 .helper-answer { margin: 0 0 12px; font-size: 15px; }

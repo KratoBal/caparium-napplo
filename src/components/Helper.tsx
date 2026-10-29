@@ -3,7 +3,9 @@
 // AST-01..AST-03: a static figure in the corner with a speech bubble: fixed quick questions about the
 // page's data, never free text (D-23). The figure is drawn from an emoji, not an image: the AI-generated
 // character sheets wait for D-38 (their rights), and an image is a file swap in FIGURE below (card
-// 8b22c3c2, acrobot 38044). It greets once per session, and it opens by itself once per alert (AST-03).
+// 8b22c3c2, acrobot 38044). It opens by itself once per alert (AST-03), and greets once per session: the
+// greeting is a text-only bubble that takes no click (pointer-events: none) and goes after GREETING_MS,
+// so it never covers a form's button (the tablet e2e of #109: it sat on "Tétel mentése").
 // Switched off in the header (HelperToggle), the figure and the greeting go; the URGENT notices (the
 // missed measurement, a chemical running out) stay, in a small strip (Lili 2026-10-27 13:25 UTC).
 import { useEffect, useState } from "react";
@@ -13,11 +15,13 @@ import { readOff, SWITCH_EVENT } from "@/lib/helper-switch";
 const SEEN_KEY = "caparium-segito-latta";
 const GREETED_KEY = "caparium-segito-koszont";
 const FIGURE = { water: { emoji: "🐠", name: "Antennarius" }, feeding: { emoji: "🦈", name: "Zebracápa" } } as const;
+const GREETING_MS = 8000;
 
 export function Helper({ data }: { data: HelperData }) {
   const [off, setOff] = useState(false);
   const [open, setOpen] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
+  const [greeting, setGreeting] = useState(false);
   const [animal, setAnimal] = useState(data.perAnimal?.[0]?.name ?? "");
   // set once the stored state is read: before that a click could race the auto-open below
   const [ready, setReady] = useState(false);
@@ -47,9 +51,13 @@ export function Helper({ data }: { data: HelperData }) {
     } catch {
       return; // without storage it would greet on every page: it does not greet
     }
-    setOpen(true);
-    setAnswer(data.greeting);
+    setGreeting(true);
   }
+  useEffect(() => {
+    if (!greeting) return;
+    const t = setTimeout(() => setGreeting(false), GREETING_MS);
+    return () => clearTimeout(t);
+  }, [greeting]);
 
   useEffect(() => {
     setReady(true);
@@ -77,6 +85,11 @@ export function Helper({ data }: { data: HelperData }) {
   }
   return (
     <div className="helper no-print" data-testid="helper" data-ready={ready ? "1" : undefined}>
+      {greeting && !open && (
+        <p className="helper-bubble helper-greeting" role="status" data-testid="helper-greeting">
+          {data.greeting}
+        </p>
+      )}
       {open && (
         <div className="helper-bubble" role="dialog" aria-label={`${figure.name} segítő`}>
           {answer && (
@@ -110,7 +123,10 @@ export function Helper({ data }: { data: HelperData }) {
       <button
         className={`helper-figure${data.alert ? " alert" : ""}`}
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          setGreeting(false);
+          setOpen(!open);
+        }}
         aria-expanded={open}
         aria-label={`${figure.name}${data.alert ? ", figyelmeztetés" : ""}`}
         data-testid="helper-button"
