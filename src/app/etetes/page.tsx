@@ -116,6 +116,7 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         feedTypes={feedTypes}
         dayFeedIds={view.feedIds}
         sheetFeeds={sheetFeeds}
+        lock={{ kind: "FEEDING", day, status: lock, isAdmin }}
       />
     </Shell>
   );

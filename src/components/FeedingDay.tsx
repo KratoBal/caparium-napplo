@@ -9,6 +9,7 @@ import { chooserPools, sortDayAnimals } from "@/lib/day-animals";
 import { GIVEN } from "@/lib/eating-labels";
 import type { DayAnimal } from "@/lib/feeding";
 import { DayFeeds, FinalizeList, GroupSwitch, InvalidateButton, ItemForm, SelectBox, type FeedOpt, type FeedTypeOpt, type Recipient } from "./FeedingForms";
+import type { DayLock } from "./DayControls";
 import { FeedingSheet } from "./FeedingSheet";
 
 type Item = {
@@ -39,6 +40,8 @@ export function FeedingDay(props: {
   /** EGY-08: the reference valid that day, grams per feeding, by recipient key */
   references?: Record<string, number>;
   recipients: Recipient[];
+  /** the day's lock, for the close action under the sheet's save button */
+  lock?: DayLock;
   feeds: FeedOpt[];
   otherNames?: string[];
   /** 6fe63c9b, step 2: the feed types with their feeds, and the day's choice */
@@ -131,7 +134,7 @@ export function FeedingDay(props: {
       )}
       {/* keyed by the day: DayNav changes ?nap= on the same route, which keeps a client component's state, so a
           draft typed on one day would show (and save) on the next; a new day is a new sheet (barracuda #45) */}
-      <FeedingSheet key={day} day={day} editable={editable} recipients={recipients} feeds={props.sheetFeeds ?? []} items={items} active={active} onActive={setActive} />
+      <FeedingSheet key={day} day={day} editable={editable} recipients={recipients} lock={props.lock} feeds={props.sheetFeeds ?? []} items={items} active={active} onActive={setActive} />
       {editable && (
         <div className="card">
           <h2>Új tétel</h2>

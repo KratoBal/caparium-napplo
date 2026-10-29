@@ -47,7 +47,7 @@ export function Timetable({ animals, editable }: { animals: Row[]; editable: boo
       <h2>Heti etetési rend</h2>
       {!anyPlan && (
         <p className="banner banner-warn" data-testid="timetable-empty">
-          Még nincs etetési terv. Pipáld be, melyik állat a hét mely napjain eszik, és mentsd: a takarmánynaplóban a „Lista a terv szerint” gomb ebből jelöli ki az aznapi állatokat.
+          Még nincs etetési terv. Pipáld be, melyik állat a hét mely napjain eszik, és mentsd: a takarmánynaplóban a „Mai Terv” gomb ebből jelöli ki az aznapi állatokat.
         </p>
       )}
       <p className="hint">Ugyanaz a terv, mint az állat adatlapján. A terv nem tény: a napi listát továbbra is kézzel lehet módosítani.</p>

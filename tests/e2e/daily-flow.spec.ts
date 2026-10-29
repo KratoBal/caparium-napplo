@@ -843,6 +843,56 @@ test("feeding sheet: a small X empties an amount field in one click, on g and db
   await expect(g).toBeVisible();
 });
 
+test("the day's close also under the save button: the same action, it asks first beside an unsaved row", async ({ page }, info) => {
+  // Lili 2026-10-29 08:29 UTC (msg 1565281522519375953). A past day of its own per project, so today's tests are untouched.
+  const day = info.project.name === "tablet" ? "2026-01-13" : "2026-01-14";
+  await login(page, "teszt.admin");
+  await page.goto(`/evesi-naplo?nap=${day}`);
+  const bottom = page.getByTestId("day-status-bottom");
+  await expect(bottom.getByRole("button", { name: "Nap lezárása" })).toBeVisible();
+  // below the save button, not beside the day's state on top
+  const [save, close] = await Promise.all([page.getByTestId("eating-save-all").boundingBox(), bottom.boundingBox()]);
+  expect(save && close && close.y > save.y).toBe(true);
+  // an unsaved row: the close asks, and a "no" leaves the day open
+  // on a past day nobody is on the list: the fasting rows are folded, and an exception opens a row
+  await page.locator("details summary", { hasText: "Koplalónapos állatok" }).click();
+  await page.getByRole("button", { name: "Teszt Egy: kivétel rögzítése" }).click();
+  await page.getByLabel("Teszt Egy evési állapota", { exact: true }).selectOption({ index: 1 });
+  await page.getByLabel("Teszt Egy vitamin", { exact: true }).check();
+  await expect(page.getByTestId("eating-save-all"), "the row is a draft").toContainText("1 sor");
+  let asked = "";
+  page.once("dialog", (dialog) => {
+    asked = dialog.message();
+    void dialog.dismiss();
+  });
+  await bottom.getByRole("button", { name: "Nap lezárása" }).click();
+  await expect.poll(() => asked).toContain("mentetlen");
+  await expect(page.getByTestId("day-status")).toContainText("Nyitott");
+  // without a draft it calls the same close as the top button, with the same answer from the server: a past day that
+  // was not reopened is not closed by hand (the server's rule, unchanged), and both buttons say so
+  await page.reload();
+  const answer = "Csak újranyitott napot lehet kézzel lezárni.";
+  await page.getByTestId("day-status-bottom").getByRole("button", { name: "Nap lezárása" }).click();
+  await expect(page.getByTestId("day-status-bottom")).toContainText(answer);
+  await page.getByTestId("day-status").getByRole("button", { name: "Nap lezárása" }).click();
+  await expect(page.getByTestId("day-status")).toContainText(answer);
+  // the feeding page has it under the sheet's save button too (today's day is not closed here)
+  await page.goto("/etetes");
+  await page.getByRole("switch", { name: "Nagymedence: mind kijelölve" }).check();
+  const dayFeeds = page.getByTestId("day-feeds");
+  await dayFeeds.getByLabel("A nap takarmánya: Mysis").check();
+  const saveFeeds = dayFeeds.getByRole("button", { name: "A nap takarmányainak mentése" });
+  if (await saveFeeds.count()) await saveFeeds.click();
+  else if (await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).count()) await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).click();
+  const sheet = page.getByTestId("feeding-sheet");
+  await expect(sheet.getByTestId("day-status-bottom").getByRole("button", { name: "Nap lezárása" })).toBeVisible();
+  const [sheetSave, sheetClose] = await Promise.all([
+    sheet.getByRole("button", { name: /Takarmánylap mentése/ }).boundingBox(),
+    sheet.getByTestId("day-status-bottom").boundingBox(),
+  ]);
+  expect(sheetSave && sheetClose && sheetClose.y > sheetSave.y).toBe(true);
+});
+
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
   // each layout takes out its own feed: one item per feed and day
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";
@@ -1152,7 +1202,7 @@ test("conveniences: a feeding plan, the list from it, the feed type icons", asyn
   await plan.getByRole("button", { name: "Terv mentése" }).click();
   await expect(plan.getByRole("status")).toHaveText("Terv mentve.");
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
-  await page.getByRole("button", { name: "Lista a terv szerint" }).click();
+  await page.getByRole("button", { name: "Mai Terv" }).click();
   await expect(page.getByLabel("Teszt Három a mai listán")).toBeChecked();
   await page.getByRole("link", { name: "Takarmánylista" }).click();
   await expect(page.getByRole("heading", { name: "🦐 Rákok" })).toBeVisible();
@@ -1495,7 +1545,7 @@ test("feeding lists: the admin composes one, the header's switch and dropdown ma
 
   await page.goto("/etetes");
   await page.waitForLoadState("networkidle");
-  await expect(page.getByRole("button", { name: "Lista a terv szerint" }), "the weekly plan's button stays").toBeVisible();
+  await expect(page.getByRole("button", { name: "Mai Terv" }), "the weekly plan's button stays").toBeVisible();
   const pick = page.getByTestId("apply-list");
   // taking an animal off the day's list that already has an item asks first (R-3); this run may find items from the tests before
   page.on("dialog", (d) => void d.accept());
@@ -1593,7 +1643,7 @@ test("the admin's animal order: a drag handle, a place number and the highlighte
 test("the feeding timetable is the admin's: an aquarist has no entry, is sent away, and keeps the plan button", async ({ page }) => {
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Lista a terv szerint" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Mai Terv" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Etetési rend" })).toHaveCount(0);
   await page.goto("/etetes/rend");
   await expect(page).toHaveURL(/nincs-jogosultsag/);

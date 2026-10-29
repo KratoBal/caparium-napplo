@@ -3,6 +3,7 @@
 // Forms of the feeding log and the eating log (EGY-01..EGY-12, EVE-01..EVE-05). The server decides
 // every permission; a confirmation (R-3, an empty list) or a reason (admin, an earlier or closed day)
 // is asked only when the server says it is needed.
+import { DayControls, type DayLock } from "./DayControls";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { EAT_LABEL } from "@/lib/eating-labels";
@@ -727,7 +728,7 @@ export function ApplyPlan({ day }: { day: string }) {
   return (
     <span>
       <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void run("/api/feeding/plan/apply", { day }, planText)}>
-        Lista a terv szerint
+        Mai Terv
       </button>
       <Msg msg={msg} />
     </span>
@@ -770,7 +771,7 @@ type RowDraft = { state: string; vitamin: boolean; medicine: boolean; note: stri
  */
 const EATING_LEAVE_WARNING = "Van még nem mentett sor az evési naplóban. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?";
 
-export function EatingTable({ day, rows, editable }: { day: string; rows: EatingRowView[]; editable: boolean }) {
+export function EatingTable({ day, rows, editable, lock }: { day: string; rows: EatingRowView[]; editable: boolean; lock?: DayLock }) {
   const router = useRouter();
   const initial = (r: EatingRowView): RowDraft => {
     const manual = r.status?.source === "MANUAL" ? r.status : null;
@@ -982,6 +983,7 @@ export function EatingTable({ day, rows, editable }: { day: string; rows: Eating
           )}
         </div>
       )}
+      {lock && <DayControls {...lock} bottom unsaved={editable ? toSave.length : 0} />}
     </>
   );
 }
