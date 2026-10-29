@@ -20,6 +20,9 @@ import type { CellView, RangeView } from "@/lib/queries";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 import { useLeaveWarning } from "./useLeaveWarning";
 
+type TickKind = "BACKWASH" | "TOPUP" | "WATER_CHANGE";
+const TICK_TEXT: Record<TickKind, string> = { BACKWASH: "Visszamosás", TOPUP: "Rátöltés", WATER_CHANGE: "Vízcsere" };
+
 type Grid = {
   group: { id: string; name: string };
   day: string;
@@ -27,6 +30,10 @@ type Grid = {
     pools: { id: string; name: string; active: boolean }[];
     parameters: { id: string; name: string; decimals: number; unit: { symbol: string }; dilution: boolean }[];
   };
+  /** the pool ticks this group offers (Lili 2026-10-29, item 8): empty for the weekly groups */
+  tickKinds: TickKind[];
+  /** "poolId:kind" -> true while the tick is on for the day */
+  ticks: Record<string, true>;
   rounds: { id: string; seq: number }[];
   selectedRound: { id: string; seq: number } | null;
   cells: Record<string, CellView>;
@@ -203,6 +210,37 @@ export function MeasurementGrid({
       setGrid(g);
     }
   }, [grid.group.id, grid.day, grid.selectedRound?.seq]);
+
+  // A pool tick (visszamosás, rátöltés, vízcsere) saves on its own click, apart from the values and the Mentés button:
+  // it is a fact of the pool and the day, not a measurement. Shown at once, put back with the reason if the server refuses.
+  const toggleTick = useCallback(
+    async (poolId: string, kind: TickKind, done: boolean) => {
+      const key = `${poolId}:${kind}`;
+      const put = (on: boolean) =>
+        setGrid((g) => {
+          const ticks = { ...g.ticks };
+          if (on) ticks[key] = true;
+          else delete ticks[key];
+          return { ...g, ticks };
+        });
+      put(done);
+      try {
+        const res = await fetch("/api/pool-ticks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requestId: requestId(), groupId: gridRef.current.group.id, poolId, day: gridRef.current.day, kind, done }),
+        });
+        if (res.ok) return;
+        const payload = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+        put(!done);
+        setBanner({ kind: "error", text: payload.error?.message ?? "A jelölő mentése nem sikerült." });
+      } catch {
+        put(!done);
+        setBanner({ kind: "error", text: "Nincs kapcsolat: a jelölő nem mentődött. Próbáld újra." });
+      }
+    },
+    [],
+  );
 
   type SendOutcome = "ok" | "queued" | "failed";
 
@@ -597,6 +635,22 @@ export function MeasurementGrid({
                         {pool.name}
                         {!pool.active && <span className="hint"> (inaktív)</span>}
                       </button>
+                      {grid.tickKinds.length > 0 && (
+                        <div className="pool-ticks">
+                          {grid.tickKinds.map((kind) => (
+                            <label key={kind} className="check pool-tick">
+                              <input
+                                type="checkbox"
+                                checked={!!grid.ticks[`${pool.id}:${kind}`]}
+                                disabled={readOnly || !pool.active}
+                                onChange={(e) => void toggleTick(pool.id, kind, e.target.checked)}
+                                data-testid={`tick-${pool.name}-${kind}`}
+                              />
+                              {TICK_TEXT[kind]}
+                            </label>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     {grid.layout.parameters.map((param) => {
                       const key = `${pool.id}:${param.id}`;

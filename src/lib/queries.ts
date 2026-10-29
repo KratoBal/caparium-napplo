@@ -5,6 +5,7 @@ import { prisma } from "./db";
 import { canonicalDecimal } from "./decimal";
 import { takesDilution } from "./dilution";
 import { groupLayout, monogramResolver, pickValid } from "./master";
+import { tickKindsOf, ticksOfDay } from "./pool-ticks";
 import { evaluateReference, type ReferenceStatus } from "./reference";
 import { businessDayOf, dateToDay, dayToDate, localDateTimeOf, localTimeOf } from "./time";
 
@@ -128,6 +129,9 @@ export async function getGrid(groupId: string, day: string, roundSeq?: number) {
   return {
     group: { id: group.id, name: group.name, frequency: group.frequency },
     day,
+    // the pool ticks of the day (item 8 of Lili's package): the kinds this group offers, and which are on
+    tickKinds: tickKindsOf(group.code),
+    ticks: await ticksOfDay(day),
     layout,
     rounds: rounds.map((r) => ({ id: r.id, seq: r.seq })),
     selectedRound: selected ? { id: selected.id, seq: selected.seq } : null,
