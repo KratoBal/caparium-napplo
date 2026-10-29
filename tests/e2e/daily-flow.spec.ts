@@ -1493,6 +1493,17 @@ test("the helper: it speaks unasked without taking a click, the quick questions 
   // Lili 2026-10-27 13:02 UTC: the start page has no "Mai áttekintés" title; what is under the bar stays
   await expect(page.getByRole("heading", { name: "Jó munkát!" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mai áttekintés" })).toHaveCount(0);
+  // barracuda on #122: the first click after the login is mostly a menu link; the alert must not be marked heard behind
+  // it, and must speak on the page the link leads to
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  await expect(page.getByTestId("helper-notice")).toHaveAttribute("data-kind", "greeting");
+  await page.getByRole("link", { name: "Napi vízmérés", exact: true }).click();
+  await expect(page).toHaveURL(/\/vizmeres/);
+  await expect(page.getByTestId("helper-notice")).toHaveAttribute("data-kind", "alert");
+  await expect(page.getByTestId("helper-notice")).toContainText("Teszt só");
+  await page.getByRole("link", { name: "START", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Jó munkát!" })).toBeVisible();
   await page.evaluate(() => sessionStorage.clear());
   await page.reload();
   // AST-03: the overview's helper speaks by itself, once, as a notice: the bubble with the buttons stays closed
@@ -2060,5 +2071,11 @@ test("the helper greets after the login, goes with the first click that still wo
   // the same login, the page loaded again: no second hello
   await page.reload();
   await expect(page.getByTestId("helper")).toHaveAttribute("data-ready", "1");
+  await expect(page.locator('[data-testid="helper-notice"][data-kind="greeting"]')).toHaveCount(0);
+  // a key takes the greeting too (no pointer needed)
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  await expect(page.locator('[data-testid="helper-notice"][data-kind="greeting"]')).toHaveCount(1);
+  await page.keyboard.press("Tab");
   await expect(page.locator('[data-testid="helper-notice"][data-kind="greeting"]')).toHaveCount(0);
 });

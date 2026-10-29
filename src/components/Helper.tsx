@@ -24,6 +24,8 @@ const GREETED_KEY = "caparium-segito-koszont";
 const FIGURE = { water: { slug: "antennarius", name: "Antennarius" }, feeding: { slug: "zebracapa", name: "Zebracápa" } } as const;
 const ALERT_PICTURE = { measurement: "feladatok", stock: "vegyszer" } as const;
 const GREETING_PICTURES = 3;
+// the alert waits a beat after the greeting went: a click that LEAVES the page (a menu link) must not mark it heard
+const ALERT_AFTER_GREETING_MS = 600;
 
 export function Helper({ data, userName, loginAt }: { data: HelperData; userName?: string; loginAt?: number }) {
   const [off, setOff] = useState(false);
@@ -72,17 +74,29 @@ export function Helper({ data, userName, loginAt }: { data: HelperData; userName
     setNotice({ kind: "greeting", text: userName ? `Üdv a fedélzeten ${userName}!` : "Üdv a fedélzeten!" });
     return true;
   }
-  // the hello goes with the FIRST click anywhere, and the click goes on to its target: the listener only watches (capture,
-  // no stopPropagation), and the bubble itself takes no click. An alert not yet heard speaks right after.
+  // the hello goes with the FIRST click (or key) anywhere, and the click goes on to its target: the listeners only watch
+  // (capture, no stopPropagation), and the bubble itself takes no click. An alert not yet heard speaks a beat later and
+  // is marked heard only when it speaks (barracuda on #122): where the click was a link, the page is gone before that,
+  // and the alert speaks on the next page. The latest alertIfNew is read through a ref: the timer outlives the effect.
+  const alertLater = useRef<() => boolean>(() => false);
+  alertLater.current = alertIfNew;
+  const alertTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(alertTimer.current), []);
   useEffect(() => {
     if (notice?.kind !== "greeting") return;
-    const dismiss = () => {
-      setNotice(null);
-      alertIfNew();
+    const remove = () => {
+      document.removeEventListener("pointerdown", dismiss, true);
+      document.removeEventListener("keydown", dismiss, true);
     };
-    document.addEventListener("pointerdown", dismiss, { capture: true, once: true });
-    return () => document.removeEventListener("pointerdown", dismiss, true);
-  }, [notice?.kind, data.alert, data.alertKey]);
+    const dismiss = () => {
+      remove();
+      setNotice(null);
+      alertTimer.current = setTimeout(() => alertLater.current(), ALERT_AFTER_GREETING_MS);
+    };
+    document.addEventListener("pointerdown", dismiss, true);
+    document.addEventListener("keydown", dismiss, true);
+    return remove;
+  }, [notice?.kind]);
 
   useEffect(() => {
     setReady(true);
