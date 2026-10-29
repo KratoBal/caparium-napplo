@@ -340,6 +340,9 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 /* the reports' tables (Lili 2026-10-29, package item 12): banded rows, a group header per feed type, the total line
    apart at the bottom; the bands and the total keep their background on paper too */
 .report-table tbody tr:nth-child(even) td { background: var(--c-field); }
+/* the feed list's tables (Lili 2026-10-29, package item 15): the same banding, paler still, so the coloured marks
+   (the inactive row, the buttons) keep standing out */
+.feeds-table tbody tr:nth-child(even) td { background: #f6f9fa; }
 .report-table .report-groups th { text-align: center; color: var(--c-ink); font-weight: 700; border-bottom: 1px solid var(--c-control-line); }
 .report-table .report-groups th:first-child { text-align: left; vertical-align: bottom; }
 .report-table .report-groups th + th { border-left: 1px solid var(--c-line); }

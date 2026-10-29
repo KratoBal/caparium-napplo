@@ -28,7 +28,11 @@ export default async function FeedsPage() {
           {t.feeds.length === 0 ? (
             <p className="hint">Nincs takarmány ebben a típusban.</p>
           ) : (
-            <table className="log-table" data-testid={`feeds-${t.code}`}>
+            <table
+              // Lili 2026-10-29 (package item 15): banded rows, paler than the reports' bands, under the coloured marks
+              className="log-table feeds-table"
+              data-testid={`feeds-${t.code}`}
+            >
               <thead><tr><th>Név</th><th>Mérhető</th><th>Alapegység</th><th>Pipa</th><th></th></tr></thead>
               <tbody>
                 {t.feeds.map((f) => (
