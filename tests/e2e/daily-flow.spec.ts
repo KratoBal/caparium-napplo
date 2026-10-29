@@ -944,6 +944,24 @@ for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti víz
   });
 }
 
+test("settings: a module folds by its heading, and stays folded after a reload in that browser", async ({ page }) => {
+  // Lili 2026-10-29 (caparium-finomitas-1)
+  await login(page, "teszt.admin");
+  await page.getByRole("link", { name: "Beállítások" }).click();
+  const icons = page.getByTestId("icons");
+  const save = icons.getByRole("button", { name: "Mentés" }).first();
+  await expect(save, "open by default").toBeVisible();
+  await icons.getByRole("heading", { name: "Ikonok" }).click();
+  await expect(save).toBeHidden();
+  await page.reload();
+  await expect(page.getByTestId("icons").getByRole("button", { name: "Mentés" }).first(), "still folded").toBeHidden();
+  // the other modules are untouched
+  await expect(page.getByTestId("sheet-colors").getByRole("button", { name: "Mentés" }).first()).toBeVisible();
+  await page.getByTestId("icons").getByRole("heading", { name: "Ikonok" }).click();
+  await page.reload();
+  await expect(page.getByTestId("icons").getByRole("button", { name: "Mentés" }).first(), "open again").toBeVisible();
+});
+
 test("settings: a pool goes off for a renovation and comes back", async ({ page }) => {
   // Lili 2026-10-29 (caparium-finomitas-1, item 2); the rules themselves are in tests/integration/pool-inactive.test.ts
   page.on("dialog", (d) => void d.accept());

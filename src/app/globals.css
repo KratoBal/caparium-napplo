@@ -303,3 +303,11 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .btn-row:hover:not(:disabled) { background: var(--c-bg); color: var(--c-ink); }
 .btn-row:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 1px; }
 .row-actions { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* Lili 2026-10-29: the settings modules fold (SettingsCard); the heading is the handle */
+.settings-fold > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px; }
+.settings-fold > summary::-webkit-details-marker { display: none; }
+.settings-fold > summary::before { content: "\25B8"; color: var(--c-muted); font-size: 18px; }
+.settings-fold[open] > summary::before { content: "\25BE"; }
+.settings-fold > summary h2 { margin: 0; }
+.settings-fold[open] > summary { margin-bottom: 12px; }
