@@ -1343,6 +1343,26 @@ test("reports: the tables and the Excel; no daily report menu any more", async (
     await expect(total).toContainText("Összesen");
     const [weight, bg] = await total.locator("td").first().evaluate((el) => [getComputedStyle(el).fontWeight, getComputedStyle(el).backgroundColor]);
     expect([weight, bg === "rgba(0, 0, 0, 0)"]).toEqual(["700", false]);
+    // item 12 follow-up (Lili, msg 1565472118970257490): the vertical totals stand out too: bold and their own background
+    if ((await t.locator("tbody td.report-sum").count()) > 0) {
+      const sum = t.locator("tbody tr").first().locator("td.report-sum").first();
+      const [sumWeight, sumBg, plainBg] = await sum.evaluate((el) => [
+        getComputedStyle(el).fontWeight,
+        getComputedStyle(el).backgroundColor,
+        getComputedStyle(el.parentElement!.querySelector("td:not(.report-sum)")!.nextElementSibling ?? el).backgroundColor,
+      ]);
+      expect(sumWeight).toBe("700");
+      expect(sumBg).not.toBe(plainBg);
+    }
+    // picture 12c: the line between two groups runs down through the rows: the cell under a group's first feed header has
+    // the same left line as the header cell (where there are two groups or more)
+    const starts = t.locator("thead th.report-gstart");
+    if ((await starts.count()) > 0) {
+      const lineOf = (loc: ReturnType<typeof t.locator>) => loc.first().evaluate((el) => getComputedStyle(el).borderLeftWidth);
+      expect(await lineOf(starts)).toBe("1px");
+      expect(await lineOf(t.locator("tbody td.report-gstart"))).toBe("1px");
+      expect(await lineOf(t.locator("tfoot td.report-gstart"))).toBe("1px");
+    }
     const rows = t.locator("tbody tr");
     if ((await rows.count()) > 1) {
       const bgOf = (n: number) => rows.nth(n).locator("td").first().evaluate((el) => getComputedStyle(el).backgroundColor);

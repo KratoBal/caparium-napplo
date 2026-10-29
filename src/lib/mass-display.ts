@@ -19,3 +19,12 @@ export function rowForDisplay(unit: string, values: readonly number[]): { unit: 
     return { unit: "kg", values: values.map(kilograms) };
   return { unit, values: values.map(plainNumber) };
 }
+
+/**
+ * A summary cell of the reports (Lili, package item 12 follow-up, msg 1565472118970257490: "az összesítő sorokban az értékek
+ * kg-ba váltva, ahogy máshol"): a gram value from 1000 g up reads in kg, two decimals, with its unit ("7,67 kg"); anything
+ * else stays as the column's header says ("850" under "(g)"). Display only: the Excel stays in grams.
+ */
+export function summaryCell(unit: string, value: number): string {
+  return unit === "g" && Math.abs(value) >= KG_FROM ? `${kilograms(value)} kg` : plainNumber(value);
+}

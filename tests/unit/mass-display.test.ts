@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { plainNumber, rowForDisplay } from "@/lib/mass-display";
+import { plainNumber, rowForDisplay, summaryCell } from "@/lib/mass-display";
 
 describe("the taken-given row in g or kg (Lili 2026-10-27)", () => {
   it("a gram row with any value at 1000 g or more is shown in kg as a whole, two decimals", () => {
@@ -20,5 +20,16 @@ describe("the taken-given row in g or kg (Lili 2026-10-27)", () => {
   });
   it("the plain form keeps at most four decimals with a comma", () => {
     expect(plainNumber(12.345678)).toBe("12,3457");
+  });
+});
+
+describe("summaryCell (Lili's package, item 12 follow-up)", () => {
+  it("a gram value from 1000 g up reads in kg with its unit, below it stays plain; other units are never converted", () => {
+    expect(summaryCell("g", 7670)).toBe("7,67 kg");
+    expect(summaryCell("g", 1000)).toBe("1,00 kg");
+    expect(summaryCell("g", 999)).toBe("999");
+    expect(summaryCell("g", 12.5)).toBe("12,5");
+    expect(summaryCell("db", 2500)).toBe("2500");
+    expect(summaryCell("ml", 1500)).toBe("1500");
   });
 });

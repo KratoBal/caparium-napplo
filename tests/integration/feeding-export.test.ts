@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { setEatingStatus } from "@/lib/eating";
 import { buildEatingWorkbook, buildFeedingWorkbook } from "@/lib/exports/feeding-excel";
 import { finalizeList, saveFeedingItem, setSelection } from "@/lib/feeding";
+import { feedingLog } from "@/lib/feeding-log";
 import { recloseDay } from "@/lib/journal";
 import { fixtures, rid } from "./fixtures";
 
@@ -133,6 +134,33 @@ describe("the feeding Excel's other feeds (Lili 2026-10-29, package item 13)", (
     expect(cols.map((c) => val(egy.getCell(c)))).toEqual(names.map(() => 2));
     const gSum = [0, 1].map((k) => colOf(ws, 1, "SUM/Állat", k)).find((c) => ws.getRow(2).getCell(c).value === "g")!;
     expect(val(egy.getCell(gSum))).toBe(10 + 2 * names.length);
+  });
+});
+
+// Lili's package, item 12 follow-up (acrobot 38155, nautilus 38181): the same other name in another case or with other spaces is ONE
+// column in the Excel and ONE feed in the report's log; the form first met is the header.
+describe("the other feeds' names, normalized", () => {
+  it("'Spirulina', ' spirulina ' and 'SPIRULINA' are one column and one report feed, under the first form", async () => {
+    const d = "2028-04-04";
+    const now = at(d, "09:00");
+    await setSelection(f.aq1, { requestId: rid(), day: d, animalIds: [a["Teszt Egy"], a["Teszt Három"]], selected: true }, now);
+    const give = (animal: string, otherName: string, value: string, time: string) =>
+      saveFeedingItem(f.aq1, { requestId: rid(), day: d, animalId: a[animal], feedId: feed["Egyéb"], otherName, quantities: [{ value, unitId: unit.g }] }, at(d, time));
+    await give("Teszt Egy", "Spirulina", "2", "09:00");
+    await give("Teszt Három", "spirulina", "3", "09:05");
+    await give("Teszt Egy", "ALGA", "1", "09:10"); // another name, to show the difference
+    const ws = await sheet((await buildFeedingWorkbook({ from: d, to: d })).buffer);
+    const heads: string[] = [];
+    ws.getRow(1).eachCell((c) => heads.push(String(c.value)));
+    expect(heads.filter((h) => h.toLowerCase() === "spirulina")).toEqual(["Spirulina"]); // one column, the first form
+    const col = colOf(ws, 1, "Spirulina");
+    expect(val(rowOf(ws, 3, "Teszt Egy").getCell(col))).toBe(2);
+    expect(val(rowOf(ws, 3, "Teszt Három").getCell(col))).toBe(3);
+    // the report's feed: one, with the first form, summed
+    const log = await feedingLog({ from: d, to: d, poolId: null, animalId: null });
+    const feeds = [...new Set(log.entries.map((e) => e.feed))].filter((x) => x.toLowerCase().includes("spirulina"));
+    expect(feeds).toEqual(["Egyéb: Spirulina"]);
+    expect(log.entries.filter((e) => e.feed === "Egyéb: Spirulina").reduce((n, e) => n + e.value, 0)).toBe(5);
   });
 });
 
