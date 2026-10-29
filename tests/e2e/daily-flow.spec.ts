@@ -1019,18 +1019,35 @@ test("settings: a module folds by its heading, and stays folded after a reload i
 });
 
 test("settings: a pool goes off for a renovation and comes back", async ({ page }) => {
-  // Lili 2026-10-29 (caparium-finomitas-1, item 2); the rules themselves are in tests/integration/pool-inactive.test.ts
+  // Lili 2026-10-29 (caparium-finomitas-1, item 2); the rules themselves are in tests/integration/pool-inactive.test.ts.
+  // acrobot 37943: inactive, it is gone from the users' pages (today's grid too) and shown only in the settings' list with
+  // the "Inaktívak mutatása" switch, from where it is activated
   page.on("dialog", (d) => void d.accept());
   await login(page, "teszt.admin");
   await page.getByRole("link", { name: "Beállítások" }).click();
   const row = page.getByTestId("pool-Ragadozós");
+  const showInactive = page.getByRole("switch", { name: /^Inaktívak mutatása/ });
   await row.getByRole("button", { name: "Ragadozós: inaktiválás" }).click();
+  // the row switched here stays until the page is left: its message is read, and it can be undone at once
   await expect(row.getByRole("status")).toHaveText("Inaktiválva.");
   await expect(row).toHaveClass(/invalid/);
+  await page.reload();
+  await expect(row, "an inactive pool is hidden by default").toHaveCount(0);
+  await expect(showInactive).not.toBeChecked();
+  // off the weekly grid of today
+  await page.getByRole("link", { name: "Heti vízmérés", exact: true }).first().click();
+  await expect(page.getByTestId("row-Nagymedence")).toBeVisible();
+  await expect(page.getByTestId("row-Ragadozós")).toHaveCount(0);
   // back, within the test: the other tests measure in it
+  await page.getByRole("link", { name: "Beállítások" }).click();
+  await showInactive.check();
+  await expect(row).toHaveClass(/invalid/);
   await row.getByRole("button", { name: "Ragadozós: aktiválás" }).click();
   await expect(row).not.toHaveClass(/invalid/);
   await expect(row.getByRole("button", { name: "Ragadozós: inaktiválás" })).toBeVisible();
+  await page.reload();
+  // another test may leave a pool of its own inactive, so the switch itself may stay; this row needs it no more
+  await expect(row, "active: listed without the switch").toBeVisible();
 });
 
 for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti vízmérés"]] as const) {

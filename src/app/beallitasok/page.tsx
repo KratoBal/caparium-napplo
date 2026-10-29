@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { NewPoolForm, NewUserForm, PoolRow, PoolVolumeForm, ReferenceRow, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
+import { NewPoolForm, NewUserForm, PoolList, PoolVolumeForm, ReferenceRow, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
 import { SettingsCard } from "@/components/SettingsCard";
 import { Shell } from "@/components/Shell";
@@ -129,23 +129,16 @@ export default async function SettingsPage() {
       </SettingsCard>
 
       <SettingsCard id="medencek" title="Medencék">
-        <p className="hint">Minden medencének állandó azonosítója van; a név változása a korábbi mérések hozzárendelését nem érinti.</p>
-        <div className="table-scroll">
-          <table className="log-table">
-            <thead><tr><th>Név</th><th>Mérési csoport</th><th>Fajta</th>{reasons && <th>Indoklás</th>}<th></th></tr></thead>
-            <tbody>
-              {allPools.map((p) => (
-                <PoolRow
-                  key={p.id}
-                  poolId={p.id}
-                  name={pickValid(p.names, now)?.displayName ?? p.code}
-                  groups={p.memberships.map((m) => m.group.name).join(", ")}
-                  active={p.active}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <p className="hint">Minden medencének állandó azonosítója van; a név változása a korábbi mérések hozzárendelését nem érinti. Az inaktív (felújítás alatti) medence csak itt látszik, az „Inaktívak mutatása” kapcsolóval, és innen aktiválható; a korábbi mérései a korábbi napokon és az exportban megmaradnak.</p>
+        <PoolList
+          reasons={reasons}
+          pools={allPools.map((p) => ({
+            poolId: p.id,
+            name: pickValid(p.names, now)?.displayName ?? p.code,
+            groups: p.memberships.map((m) => m.group.name).join(", "),
+            active: p.active,
+          }))}
+        />
         {user.role === "ADMIN" && (
           <div data-testid="new-pool-box">
             <h3 style={{ marginTop: 20 }}>Új medence</h3>
