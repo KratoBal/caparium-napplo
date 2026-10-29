@@ -1,5 +1,6 @@
 import { FeedActive, FeedEdit, NewFeed } from "@/components/AnimalForms";
 import { FeedCopies } from "@/components/FeedCopies";
+import { FeedListFilter, FeedRowShell } from "@/components/FeedListFilter";
 import { OrderList } from "@/components/AnimalOrder";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
@@ -22,6 +23,7 @@ export default async function FeedsPage() {
   const addable = isAdmin ? types : canRecord ? types.filter((t) => t.code === "EGYEB") : [];
   return (
     <Shell title="Takarmánylista" active="feeds" user={user}>
+      <FeedListFilter inactive={types.reduce((n, t) => n + t.feeds.filter((x) => !x.active).length, 0)}>
       {types.map((t) => (
         <div className="card" key={t.id}>
           <h2>{withIcon(t.emoji, t.name)}</h2>
@@ -36,7 +38,7 @@ export default async function FeedsPage() {
               <thead><tr><th>Név</th><th>Mérhető</th><th>Alapegység</th><th>Pipa</th><th></th></tr></thead>
               <tbody>
                 {t.feeds.map((f) => (
-                  <tr key={f.id} className={f.active ? undefined : "invalid"}>
+                  <FeedRowShell key={f.id} id={f.id} active={f.active}>
                     <td className="keep">{f.name}</td>
                     <td>{f.dimensions.map((d) => DIM[d] ?? d).join(" és ")}</td>
                     <td>{f.defaultUnit}</td>
@@ -50,7 +52,7 @@ export default async function FeedsPage() {
                         </span>
                       )}
                     </td>
-                  </tr>
+                  </FeedRowShell>
                 ))}
               </tbody>
             </table>
@@ -82,6 +84,7 @@ export default async function FeedsPage() {
           <NewFeed types={addable.map((t) => ({ id: t.id, name: t.name }))} units={unitOpts} />
         </div>
       )}
+      </FeedListFilter>
       {/* package item 14: the basic data's copies, an admin's operation with a dry run */}
       {isAdmin && <FeedCopies />}
     </Shell>
