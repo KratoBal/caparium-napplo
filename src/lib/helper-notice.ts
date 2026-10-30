@@ -3,7 +3,8 @@
 // pool measured), but its key stays, so it does not speak again: what is already shown must not stay as it
 // was, saying a measurement is missing after it was recorded. Pure, so a unit test reaches it.
 
-export type Notice = { kind: "alert" | "greeting"; text: string };
+/** `reminder`: "Ne felejtsd el menteni!" (card 0d617f0c), announced by the form, not by the page's data */
+export type Notice = { kind: "alert" | "greeting" | "reminder"; text: string };
 
 /** The notice on show after the data changed: an alert one takes the new text, or goes with the alert. */
 export function followNotice(shown: Notice | null, alert: string | undefined): Notice | null {

@@ -21,9 +21,17 @@ export type LeaveDocument = {
  * opens in a new tab leaves the page alone and is not asked. The browser's back button is neither a click nor an
  * unload in the App Router, so it is not asked. Returns the function that removes both listeners.
  */
-export function attachLeaveWarning(unsaved: () => number, message: string, win: LeaveWindow, doc: LeaveDocument): () => void {
+export function attachLeaveWarning(
+  unsaved: () => number,
+  message: string,
+  win: LeaveWindow,
+  doc: LeaveDocument,
+  /** called when the page is about to be left with unsaved values, before the question (the save reminder, card 0d617f0c) */
+  onWarn?: () => void,
+): () => void {
   const beforeUnload = (e: BeforeUnloadEvent) => {
     if (unsaved() === 0) return;
+    onWarn?.();
     e.preventDefault();
     e.returnValue = "";
   };
@@ -31,6 +39,7 @@ export function attachLeaveWarning(unsaved: () => number, message: string, win: 
     if (unsaved() === 0 || e.defaultPrevented || e.button !== 0) return;
     const link = (e.target as Element | null)?.closest?.("a[href]");
     if (!link || (link as HTMLAnchorElement).target === "_blank") return;
+    onWarn?.();
     if (!win.confirm(message)) {
       e.preventDefault();
       e.stopPropagation();

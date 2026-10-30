@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { MonthlyZimsRecipient, NewPoolForm, NewUserForm, PoolList, PoolSystemForm, PoolVolumeForm, ReferenceRow, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
+import { MonthlyZimsRecipient, NewPoolForm, NewUserForm, PoolList, PoolSystemForm, PoolVolumeForm, ReferenceRow, SaveReminderSwitch, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
 import { SettingsCard } from "@/components/SettingsCard";
 import { Shell } from "@/components/Shell";
@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { canonicalDecimal } from "@/lib/decimal";
 import { getSetting, moduleLevel, pickValid, validAt } from "@/lib/master";
 import { reasonsRequired } from "@/lib/reasons";
+import { saveReminderOn } from "@/lib/save-reminder-setting";
 import { requireUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -183,6 +184,14 @@ export default async function SettingsPage() {
       <SettingsCard id="havi-zims-level" title="Havi ZIMS-csomag levélben">
         <p className="hint">Erre a címre megy az előző hónap ZIMS-csomagja az új hónap első órájában, medencénként egy CSV-vel. Ha a hónapra nem készül csomag, figyelmeztető levél megy. Üresen hagyva nem megy levél. Ha a címet hónap közben adod meg, az előző hónap csomagja is egyszer kimegy.</p>
         <MonthlyZimsRecipient email={await getSetting(prisma, "monthly_zims_recipient", now)} />
+      </SettingsCard>
+
+      <SettingsCard id="mentes-emlekezteto" title="Mentés-emlékeztető">
+        <p className="hint">
+          Ha a napi vagy a heti vízmérésen minden mező ki van töltve, de még nincs mentve, a segítő szól: egy perc csend után,
+          vagy amikor az oldalt elhagynád. Ha már rutin a mentés, itt kikapcsolható mindenkinek.
+        </p>
+        <SaveReminderSwitch on={await saveReminderOn(prisma, now)} />
       </SettingsCard>
 
       {/* the page is for a SETTINGS admin already; the icon is master data of the same kind */}

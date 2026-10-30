@@ -7,6 +7,7 @@ import { waterHelper } from "@/lib/helpers";
 import { helperStockAccess } from "@/lib/helper-access";
 import { prisma } from "@/lib/db";
 import { getGrid, listGroups } from "@/lib/queries";
+import { saveReminderOn } from "@/lib/save-reminder-setting";
 import { requireModuleRead } from "@/lib/session";
 import { businessDayOf, formatDayLong, isValidDay, weekdayName } from "@/lib/time";
 
@@ -108,6 +109,7 @@ export async function MeasurementPage({
           people={people}
           weekly={frequency === "WEEKLY"}
           basePath={basePath}
+          saveReminder={await saveReminderOn(prisma)}
         />
       )}
     </Shell>

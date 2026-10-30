@@ -55,6 +55,9 @@ export const SETTING_DEFAULTS = {
   // Takarmányhűtő page; empty = each feed counts from its first intake that was not sent back. What lies before it stays
   // in the logs, the reports and the exports at full value and is not in the stock (src/lib/feed-intake.ts feedStock).
   feed_stock_start: "",
+  // card 0d617f0c (Lili 2026-10-30 11:39 UTC: "csak addig, amíg nem lesz rutin"): the helper's "Ne felejtsd el menteni!"
+  // on a fully filled, unsaved form (src/lib/save-reminder.ts). On until an admin switches it off in Beállítások.
+  save_reminder: "true",
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

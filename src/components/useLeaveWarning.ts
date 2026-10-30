@@ -10,9 +10,12 @@ import { attachLeaveWarning } from "@/lib/leave-warning";
  *
  * Returns the ref that holds the count, for a caller that asks the same question elsewhere (a new round, say).
  */
-export function useLeaveWarning(unsavedCount: number, message: string) {
+export function useLeaveWarning(unsavedCount: number, message: string, onWarn?: () => void) {
   const unsavedRef = useRef(0);
   unsavedRef.current = unsavedCount;
-  useEffect(() => attachLeaveWarning(() => unsavedRef.current, message, window, document), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // the latest callback, read when the warning fires: the listeners are attached once
+  const warnRef = useRef(onWarn);
+  warnRef.current = onWarn;
+  useEffect(() => attachLeaveWarning(() => unsavedRef.current, message, window, document, () => warnRef.current?.()), []); // eslint-disable-line react-hooks/exhaustive-deps
   return unsavedRef;
 }
