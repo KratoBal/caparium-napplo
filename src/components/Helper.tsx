@@ -264,6 +264,7 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
       className={`helper no-print${place ? ` helper-placed helper-${anchorOf(place).horizontal} helper-${anchorOf(place).vertical}` : ""}${dragging ? " helper-dragging" : ""}`}
       style={placeStyle()}
       data-testid="helper"
+      data-figure={figure.slug}
       data-ready={ready ? "1" : undefined}
       data-placed={place ? "1" : undefined}
     >

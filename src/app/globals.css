@@ -314,7 +314,7 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 /* Lili's own pictures (item 10): transparent WebP files, a small figure, not a button-sized disc */
 /* Lili 2026-10-30 13:38 UTC (msg, picture lili-segito-beleolvad): the figure melts into a picture of the page it stands on; a faint white outline
    (four 1.5 px white shadows) and a little more shadow set it apart, as the bubble is set apart by its own white */
-.helper-face { display: block; height: 125px; width: auto; -webkit-user-drag: none; pointer-events: none; transform: scaleX(-1); filter: drop-shadow(1.5px 0 0 rgba(255, 255, 255, 0.85)) drop-shadow(-1.5px 0 0 rgba(255, 255, 255, 0.85)) drop-shadow(0 1.5px 0 rgba(255, 255, 255, 0.85)) drop-shadow(0 -1.5px 0 rgba(255, 255, 255, 0.85)) drop-shadow(0 3px 6px rgba(17, 47, 62, 0.3)); }
+.helper-face { display: block; height: 125px; width: auto; -webkit-user-drag: none; pointer-events: none; transform: scaleX(-1); filter: drop-shadow(1.5px 0 0 rgba(255, 255, 255, 0.85)) drop-shadow(-1.5px 0 0 rgba(255, 255, 255, 0.85)) drop-shadow(0 1.5px 0 rgba(255, 255, 255, 0.85)) drop-shadow(0 -1.5px 0 rgba(255, 255, 255, 0.85)) var(--face-glow, drop-shadow(0 0 0 transparent)) drop-shadow(0 3px 6px rgba(17, 47, 62, 0.3)); }
 /* Lili 2026-10-29 (#119): the pictures turn towards the page, not the wall (they are drawn looking right); the bubble's
    words and its buttons are smaller; the name under the figure is gone (the figure's aria-label keeps it) */
 .helper-bubble .btn { font-size: 12px; min-height: 30px; padding: 4px 10px; }
@@ -322,8 +322,17 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .helper-toggle-label { font-size: 12px; font-weight: 600; color: var(--c-muted); }
 .helper-name { font-size: 12px; font-weight: 600; color: var(--c-ink); background: var(--c-white); border-radius: 999px; padding: 1px 8px; }
 .helper-badge { position: absolute; top: -4px; right: -4px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--c-warn-ink); color: var(--c-white); font-weight: 700; font-size: 14px; }
-.helper-bubble { pointer-events: auto; position: relative; background: var(--c-white); border: 1px solid var(--c-line); border-radius: 16px; padding: 10px 12px; font-size: 13px; box-shadow: 0 6px 24px rgba(17, 47, 62, 0.15); max-height: min(60vh, 520px); overflow: auto; }
-.helper-bubble::after { content: ""; position: absolute; right: 26px; bottom: -9px; width: 16px; height: 16px; background: var(--c-white); border-right: 1px solid var(--c-line); border-bottom: 1px solid var(--c-line); transform: rotate(45deg); }
+.helper-bubble { pointer-events: auto; position: relative; background: var(--bubble-bg, var(--c-white)); border: 1px solid var(--bubble-edge, var(--c-line)); border-radius: 16px; padding: 10px 12px; font-size: 13px; box-shadow: var(--bubble-shadow, 0 6px 24px rgba(17, 47, 62, 0.15)); max-height: min(60vh, 520px); overflow: auto; }
+.helper-bubble::after { content: ""; position: absolute; right: 26px; bottom: -9px; width: 16px; height: 16px; background: var(--bubble-bg, var(--c-white)); border-right: 1px solid var(--bubble-edge, var(--c-line)); border-bottom: 1px solid var(--bubble-edge, var(--c-line)); transform: rotate(45deg); }
+/* Lili 2026-10-30 (task caparium-buborek-szin; msgs 1565721013113585835, 1565721180436963370): each figure's bubble in its own colour,
+   dark text stays (the ink on these pastels reads well). BASE COLOURS: Antennarius #FFC4A8, Zebracápa #FFF0B8. */
+.helper[data-figure="antennarius"] { --bubble-bg: #ffc4a8; }
+.helper[data-figure="zebracapa"] { --bubble-bg: #fff0b8; }
+/* the extra set-apart (acrobot's proposal, 16:07): a thin edge a shade darker than the bubble, a softer larger shadow, and a faint white
+   glow round the figure. EASY TO TAKE OUT: delete this block (and the var(--face-glow) in .helper-face) and only the two base colours stay. */
+.helper[data-figure="antennarius"] { --bubble-edge: #e8a07f; }
+.helper[data-figure="zebracapa"] { --bubble-edge: #e6c95c; }
+.helper { --bubble-shadow: 0 6px 22px rgba(17, 47, 62, 0.28); --face-glow: drop-shadow(0 0 6px rgba(255, 255, 255, 0.95)); }
 /* what speaks by itself (alert, greeting) and the strip take no click: they never cover a form's button (#109) */
 .helper-notice { pointer-events: none; margin: 0; font-size: 13px; }
 /* the page keeps room under its last row for the figure, so nothing ends up behind it */
