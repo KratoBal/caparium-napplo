@@ -2160,14 +2160,23 @@ test("daily measurement: the pool ticks save on their own and survive a reload; 
   await expect(page.getByRole("heading", { name: /Napi paraméterek/ })).toBeVisible();
   const row = page.getByTestId(`row-${p.pool}`);
   await expect(row.getByLabel(other)).toHaveCount(0);
+  // The box ticks at once and the save goes after it (MeasurementGrid.tsx), so each change waits for its own saved answer
+  // before the reload: a reload in flight cancelled the save, and the tablet run failed on it (#138, CI 41049678125).
+  const saved = async (change: Promise<void>) => {
+    const [res] = await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith("/api/pool-ticks") && r.request().method() === "POST"),
+      change,
+    ]);
+    expect(res.ok(), `pool tick save: HTTP ${res.status()}`).toBe(true);
+  };
   for (const [kind] of kinds) {
     const box = page.getByTestId(`tick-${p.pool}-${kind}`);
     await expect(box).not.toBeChecked();
-    await box.check();
+    await saved(box.check());
   }
   await page.reload();
   for (const [kind] of kinds) await expect(page.getByTestId(`tick-${p.pool}-${kind}`)).toBeChecked();
-  for (const [kind] of kinds) await page.getByTestId(`tick-${p.pool}-${kind}`).uncheck();
+  for (const [kind] of kinds) await saved(page.getByTestId(`tick-${p.pool}-${kind}`).uncheck());
   await page.reload();
   for (const [kind] of kinds) await expect(page.getByTestId(`tick-${p.pool}-${kind}`)).not.toBeChecked();
 });
