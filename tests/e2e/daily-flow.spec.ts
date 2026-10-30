@@ -1091,7 +1091,7 @@ test("settings: a pool goes off for a renovation and comes back", async ({ page 
 });
 
 for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti vízmérés"]] as const) {
-  test(`water measurement (${name}): the table is as before where it fits, and a phone shows one card per pool instead of the sticky table`, async ({ page }) => {
+  test(`water measurement (${name}): header row and pool column stay put only when the table is wider than the screen (768 px), and a phone shows one card per pool instead`, async ({ page }) => {
     // Lili 2026-10-29 (caparium-finomitas-1, item 4)
     await login(page, "teszt.akvarista1");
     await page.getByRole("link", { name: link, exact: true }).first().click();
@@ -1103,8 +1103,29 @@ for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti víz
       await expect(box).not.toHaveClass(/grid-overflow/);
       expect(await head.evaluate((el) => getComputedStyle(el).position)).toBe("static");
     }
-    // a phone (caparium-vizmeres-telefon, Lili 2026-10-30): the table is no longer wider than the screen, because every pool is a card, so the
-    // sticky header and pool column (item 4 of 2026-10-29) have nothing to hold on to: no sideways scroll, no stuck cells, the header row hidden
+    // tablet portrait, 768 px: above the phone breakpoint the table is back. The daily table (4 parameters) fits there, so nothing sticks; the
+    // weekly one (5 parameters and the dilution selects, 844 px wide in the preview) is wider than its place, so its header and pool column stick,
+    // as before (Lili 2026-10-29, caparium-finomitas-1, item 4)
+    await page.setViewportSize({ width: 768, height: 900 });
+    const wider = await box.evaluate((el) => (el.querySelector("table") as HTMLElement).offsetWidth > el.clientWidth + 1);
+    expect(wider, `the ${name} table is ${name === "weekly" ? "wider than" : "inside"} its place at 768 px`).toBe(name === "weekly");
+    if (!wider) {
+      await expect(box).not.toHaveClass(/grid-overflow/);
+      expect(await head.evaluate((el) => getComputedStyle(el).position)).toBe("static");
+    } else {
+      await expect(box).toHaveClass(/grid-overflow/);
+      expect(await head.evaluate((el) => getComputedStyle(el).position)).toBe("sticky");
+      const scrolled = await box.evaluate((el) => {
+        el.scrollLeft = el.scrollWidth;
+        return el.scrollLeft;
+      });
+      expect(scrolled, "the table scrolls sideways").toBeGreaterThan(0);
+      const [boxLeft, cellLeft] = await Promise.all([box.evaluate((el) => el.getBoundingClientRect().left), firstCell.evaluate((el) => el.getBoundingClientRect().left)]);
+      expect(Math.abs(cellLeft - boxLeft), "the pool name stays at the left").toBeLessThan(1);
+      expect(await firstCell.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
+    }
+    // a phone (caparium-vizmeres-telefon, Lili 2026-10-30): every pool is a card, so the table is never wider than the screen and the sticky
+    // header and pool column have nothing to hold on to: no sideways scroll, no stuck cells, the header row hidden
     await page.setViewportSize({ width: 390, height: 760 });
     await expect(box).not.toHaveClass(/grid-overflow/);
     expect(await head.evaluate((el) => getComputedStyle(el.closest("thead")!).display)).toBe("none");
