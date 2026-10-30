@@ -111,17 +111,29 @@ jobs:
           retention-days: 7
 
   compose:
-    name: docker compose starts (two DB roles, seed on start), backup restores
+    name: docker compose starts (two DB roles, seed only on its switch), backup restores
     runs-on: ubuntu-latest
     env:
-      # what Coolify generates in the stage environment; throwaway values here
+      # what Coolify generates on EVERY environment, a live one included; throwaway values here
       SERVICE_PASSWORD_POSTGRES: ci-compose-owner-only
       SERVICE_PASSWORD_APP: ci-compose-app-role-only
       SERVICE_PASSWORD_SEED: ci-compose-seed-only
       APP_PORT: "3000"
     steps:
       - uses: actions/checkout@v4
+      # first the live shape: the seed password is there (Coolify generates it), the switch is not
       - run: docker compose up -d --build --wait --wait-timeout 300 app
+      - name: Without CAPARIUM_TEST_SEED=on the seed does not run and no test user exists
+        run: |
+          docker compose logs app | grep -F "start: test seed off"
+          if docker compose logs app | grep -F "seed ok:"; then echo "the seed ran without its switch"; exit 1; fi
+          code=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -H 'Origin: http://127.0.0.1:3000' \
+            --data-urlencode loginId=teszt.admin --data-urlencode "password=$SERVICE_PASSWORD_SEED" \
+            http://127.0.0.1:3000/api/auth/login)
+          echo "$code"
+          case "$code" in "303 http://127.0.0.1:3000/") echo "teszt.admin logged in without the seed"; exit 1 ;; esac
+      # then the stage shape: the switch on, the app container recreated with it
+      - run: CAPARIUM_TEST_SEED=on docker compose up -d --wait --wait-timeout 120 app
       - name: Started in two-role mode, seeded, and a test user can log in
         run: |
           docker compose logs app | grep -F "db-role: caparium_app can log in"
@@ -141,6 +153,9 @@ jobs:
           echo "$out" | grep -F "permission denied"
       - run: scripts/backup.sh "$RUNNER_TEMP/backup"
       - name: A restarted container repeats the start steps without harm
+        env:
+          # the same switch as the container's, or `up` would recreate it without the seed
+          CAPARIUM_TEST_SEED: "on"
         run: |
           docker compose restart app
           docker compose up -d --wait --wait-timeout 120 app

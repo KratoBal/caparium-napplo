@@ -7,7 +7,7 @@
 #     SERVICE_PASSWORD_* are Coolify's generated secrets (set them yourself elsewhere):
 #     POSTGRES = table owner (migrations), APP = the server's role, SEED = test users;
 #   - the basic data loads at every start, without a password; the test seed runs too when
-#     SEED_TEST_PASSWORD is set (both idempotent);
+#     CAPARIUM_TEST_SEED=on (both idempotent);
 #   - backups: run `caparium-backup` in the db container (a Coolify scheduled task),
 #     dumps land in the db-backups volume, each one restore-checked.
 services:
@@ -51,6 +51,9 @@ services:
       BASIC_AUTH_SHA256: ${BASIC_AUTH_SHA256:-}
       BASIC_AUTH_PASSWORD: ${SERVICE_PASSWORD_BASICAUTH:-}
       SEED_TEST_PASSWORD: ${SERVICE_PASSWORD_SEED:-}
+      # the test seed (test users, placeholder reference ranges): "on" on the stage only. The password above
+      # is no switch: Coolify generates it everywhere, a live system included (scripts/start.sh)
+      CAPARIUM_TEST_SEED: ${CAPARIUM_TEST_SEED:-}
       # the synthetic test feeds, chemicals and animals: 1 on the stage only, never on a live system
       CAPARIUM_SEED_SZINTETIKUS: ${CAPARIUM_SEED_SZINTETIKUS:-}
       # "Vízmérés kiküldése" (src/lib/mail.ts): SMTP; empty = the button says which ones are missing, nothing is sent
