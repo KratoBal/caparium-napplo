@@ -100,16 +100,17 @@ describe("who may record intake, and when", () => {
     const feedId = await newFeed("Hűtő-teszt négy");
     const d = "2026-08-19";
     const mine = (await receive(d, feedId, { quantities: [{ value: "10", unitId: unit.g }] })) as { itemId: string };
-    await expectCode(receive("2026-08-18", feedId, { quantities: [{ value: "10", unitId: unit.g }] }), "NOT_TODAY");
-    await expectCode(receive("2026-08-20", feedId, { quantities: [{ value: "10", unitId: unit.g }] }, f.aq1, "08:00"), "FUTURE_DAY");
+    // "now" is the day d; the day of the item is another
+    const onDay = (day: string, actor = f.aq1, body: Record<string, unknown> = {}) =>
+      saveIntakeItem(actor, { requestId: rid(), day, feedId, quantities: [{ value: "10", unitId: unit.g }], ...body } as Parameters<typeof saveIntakeItem>[1], at(d, "08:03"));
+    await expectCode(onDay("2026-08-18"), "NOT_TODAY");
+    await expectCode(onDay("2026-08-20"), "FUTURE_DAY");
     await expectCode(receive(d, feedId, { itemId: mine.itemId, expectedVersion: 1, quantities: [{ value: "12", unitId: unit.g }] }, f.aq2), "NOT_OWN");
     await expectCode(receive(d, feedId, { itemId: mine.itemId, expectedVersion: 5, quantities: [{ value: "12", unitId: unit.g }] }), "VERSION_CONFLICT");
     // moving it to an earlier day is the admin's too; an admin may record on an earlier day
-    await expectCode(
-      saveIntakeItem(f.aq1, { requestId: rid(), day: "2026-08-18", itemId: mine.itemId, expectedVersion: 1, feedId, quantities: [{ value: "10", unitId: unit.g }] }, at(d, "08:02")),
-      "NOT_TODAY",
-    );
-    await receive("2026-08-18", feedId, { quantities: [{ value: "3", unitId: unit.g }], reason: "késői rögzítés" }, f.admin);
+    await expectCode(onDay("2026-08-18", f.aq1, { itemId: mine.itemId, expectedVersion: 1 }), "NOT_TODAY");
+    await onDay("2026-08-18", f.admin, { reason: "késői rögzítés" });
+    expect(await prisma.feedIntakeItem.count({ where: { feedId, intakeDay: new Date("2026-08-18") } })).toBe(1);
     await expectCode(invalidateIntakeItem(f.aq2, mine.itemId, { requestId: rid(), expectedVersion: 2, reason: "nem az enyém" }, at(d, "09:00")), "NOT_OWN");
   });
 
