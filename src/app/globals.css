@@ -304,9 +304,16 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 
 /* AST-01: the helper in the corner: a static figure with a speech bubble (card 8b22c3c2) */
 .helper { pointer-events: none; position: fixed; right: 16px; bottom: 16px; z-index: 20; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; max-width: min(420px, calc(100vw - 32px)); }
-.helper-figure { pointer-events: auto; position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: 0; padding: 0; cursor: pointer; }
+.helper-figure { pointer-events: auto; position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: 0; padding: 0; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+/* Lili 2026-10-30: the figure can be dragged to another place on the screen (src/lib/helper-place.ts); dragged, its bubble opens towards
+   the room: by the figure's left or right edge, above it in the lower half of the screen and below it in the upper half */
+.helper-dragging .helper-figure { cursor: grabbing; }
+.helper-placed.helper-left { align-items: flex-start; }
+.helper-placed.helper-top { flex-direction: column-reverse; }
 /* Lili's own pictures (item 10): transparent WebP files, a small figure, not a button-sized disc */
-.helper-face { display: block; height: 100px; width: auto; transform: scaleX(-1); filter: drop-shadow(0 3px 6px rgba(17, 47, 62, 0.25)); }
+/* Lili 2026-10-30 13:38 UTC (msg, picture lili-segito-beleolvad): the figure melts into a picture of the page it stands on; a faint white outline
+   (four 1.5 px white shadows) and a little more shadow set it apart, as the bubble is set apart by its own white */
+.helper-face { display: block; height: 125px; width: auto; -webkit-user-drag: none; pointer-events: none; transform: scaleX(-1); filter: drop-shadow(1.5px 0 0 rgba(255, 255, 255, 0.85)) drop-shadow(-1.5px 0 0 rgba(255, 255, 255, 0.85)) drop-shadow(0 1.5px 0 rgba(255, 255, 255, 0.85)) drop-shadow(0 -1.5px 0 rgba(255, 255, 255, 0.85)) drop-shadow(0 3px 6px rgba(17, 47, 62, 0.3)); }
 /* Lili 2026-10-29 (#119): the pictures turn towards the page, not the wall (they are drawn looking right); the bubble's
    words and its buttons are smaller; the name under the figure is gone (the figure's aria-label keeps it) */
 .helper-bubble .btn { font-size: 12px; min-height: 30px; padding: 4px 10px; }
@@ -319,7 +326,12 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 /* what speaks by itself (alert, greeting) and the strip take no click: they never cover a form's button (#109) */
 .helper-notice { pointer-events: none; margin: 0; font-size: 13px; }
 /* the page keeps room under its last row for the figure, so nothing ends up behind it */
-.shell:has(.helper, .helper-urgent) .main { padding-bottom: 120px; }
+.shell:has(.helper, .helper-urgent) .main { padding-bottom: 150px; }
+/* on a phone the figure keeps its size of before (it must not cover a save button), and so does the room under the page */
+@media (max-width: 720px) {
+  .helper-face { height: 100px; }
+  .shell:has(.helper, .helper-urgent) .main { padding-bottom: 120px; }
+}
 .helper-qs { display: flex; flex-wrap: wrap; gap: 8px; }
 .helper-animal { display: flex; gap: 6px; }
 .helper-answer { margin: 0 0 10px; font-size: 13px; }
