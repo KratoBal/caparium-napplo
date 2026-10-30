@@ -5,7 +5,7 @@ import { attachLeaveWarning, type LeaveDocument, type LeaveWindow } from "@/lib/
 
 const MESSAGE = "Van még nem mentett érték. Továbblépsz mentés nélkül?";
 
-function setup(count: { n: number }, answer = true) {
+function setup(count: { n: number }, answer = true, onWarn?: () => void) {
   const handlers = { beforeunload: null as null | ((e: BeforeUnloadEvent) => void), click: null as null | ((e: MouseEvent) => void) };
   const calls = { added: [] as string[], removed: [] as string[], captures: [] as boolean[] };
   const confirm = vi.fn(() => answer);
@@ -32,7 +32,7 @@ function setup(count: { n: number }, answer = true) {
       if (handlers.click === listener) handlers.click = null;
     },
   };
-  const detach = attachLeaveWarning(() => count.n, MESSAGE, win, doc);
+  const detach = attachLeaveWarning(() => count.n, MESSAGE, win, doc, onWarn);
   return { handlers, calls, confirm, detach };
 }
 
@@ -107,5 +107,22 @@ describe("attachLeaveWarning", () => {
     handlers.click!(linkClick({ button: 1 }));
     handlers.click!(linkClick({ defaultPrevented: true }));
     expect(confirm).not.toHaveBeenCalled();
+  });
+
+  // card 0d617f0c: the save reminder speaks the moment the page is about to be left with unsaved values
+  it("calls onWarn before the question, on a link and on the unload, and only while something is unsaved", () => {
+    const count = { n: 0 };
+    const order: string[] = [];
+    const onWarn = vi.fn(() => order.push("warn"));
+    const { handlers, confirm } = setup(count, true, onWarn);
+    confirm.mockImplementation(() => (order.push("confirm"), true));
+    handlers.click!(linkClick());
+    handlers.beforeunload!({ preventDefault: vi.fn(), returnValue: "x" } as unknown as BeforeUnloadEvent);
+    expect(onWarn).not.toHaveBeenCalled();
+    count.n = 1;
+    handlers.click!(linkClick());
+    expect(order).toEqual(["warn", "confirm"]);
+    handlers.beforeunload!({ preventDefault: vi.fn(), returnValue: "x" } as unknown as BeforeUnloadEvent);
+    expect(onWarn).toHaveBeenCalledTimes(2);
   });
 });

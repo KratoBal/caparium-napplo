@@ -16,6 +16,7 @@
 import { ClearX } from "./ClearX";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { announceReminder, formComplete, reminderTimer, reminderWanted } from "@/lib/save-reminder";
 import type { CellView, RangeView } from "@/lib/queries";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 import { useLeaveWarning } from "./useLeaveWarning";
@@ -102,6 +103,7 @@ export function MeasurementGrid({
   people,
   weekly = false,
   basePath = "/vizmeres",
+  saveReminder = false,
 }: {
   initial: Grid;
   groupCode: string;
@@ -109,6 +111,8 @@ export function MeasurementGrid({
   weekly?: boolean;
   /** the page of this grid, for the round and day links */
   basePath?: string;
+  /** the helper's "Ne felejtsd el menteni!" is on (setting save_reminder, card 0d617f0c) */
+  saveReminder?: boolean;
   today: string;
   user: { id: string; role: string };
   /** the effective module level (R-17) allows recording */
@@ -164,7 +168,11 @@ export function MeasurementGrid({
   metaRef.current = metaDrafts;
   // the drafts not yet saved: leaving the page with them asks first (the reverse of the old autosave mix-up
   // would be a silently lost measurement)
-  const unsavedRef = useLeaveWarning(new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)]).size, LEAVE_WARNING);
+  // the save reminder's timer (card 0d617f0c, src/lib/save-reminder.ts); leaving with drafts makes it speak at once
+  const reminder = useRef<ReturnType<typeof reminderTimer> | null>(null);
+  const unsavedRef = useLeaveWarning(new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)]).size, LEAVE_WARNING, () =>
+    reminder.current?.leaving(),
+  );
   const chains = useRef(new Map<string, Promise<void>>());
 
   const queueKey = `napplo-queue-v1-${user.id}`;
@@ -491,6 +499,7 @@ export function MeasurementGrid({
   }, [drafts, metaDrafts, saveCell, flushQueue, readQueue, reasonsOn]);
 
   const openNewRound = useCallback(async () => {
+    if (unsavedRef.current > 0) reminder.current?.leaving();
     if (unsavedRef.current > 0 && !window.confirm(LEAVE_WARNING)) return;
     const res = await fetch("/api/rounds", {
       method: "POST",
@@ -542,6 +551,30 @@ export function MeasurementGrid({
     [grid.cells, grid.currentRanges, drafts],
   );
   const unsaved = new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)]).size;
+  // every field of the active pools has a value, typed or saved: the form is "filled" for the save reminder
+  const complete = formComplete(
+    grid.layout.pools.filter((p) => p.active).flatMap((p) => grid.layout.parameters.map((x) => `${p.id}:${x.id}`)),
+    (k) => drafts[k] ?? grid.cells[k]?.value,
+  );
+  useEffect(() => {
+    const timer = reminderTimer(announceReminder, {
+      setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+      clearTimeout: (h) => window.clearTimeout(h as number),
+    });
+    reminder.current = timer;
+    // any input on the page is activity: the quiet minute starts again
+    const poke = () => timer.poke();
+    for (const type of ["keydown", "pointerdown", "input"] as const) document.addEventListener(type, poke, true);
+    return () => {
+      for (const type of ["keydown", "pointerdown", "input"] as const) document.removeEventListener(type, poke, true);
+      timer.dispose();
+      reminder.current = null;
+      announceReminder(false);
+    };
+  }, []);
+  useEffect(() => {
+    reminder.current?.update(reminderWanted({ on: saveReminder && !readOnly, complete, unsaved }));
+  });
 
   return (
     <>

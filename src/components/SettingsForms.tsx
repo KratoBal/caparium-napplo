@@ -397,6 +397,25 @@ export function WaterReportRecipient({ email }: { email: string }) {
   return <RecipientForm email={email} endpoint="/api/admin/water-report-recipient" label="A vízmérés címzettjei" testId="water-report-recipient" />;
 }
 
+/** Card 0d617f0c: the helper's "Ne felejtsd el menteni!" on a filled, unsaved form; saved as soon as it is switched. */
+export function SaveReminderSwitch({ on }: { on: boolean }) {
+  const { msg, busy, save } = useSave();
+  return (
+    <label className="toolbar" data-testid="save-reminder">
+      <input
+        className="switch"
+        type="checkbox"
+        role="switch"
+        checked={on}
+        disabled={busy}
+        onChange={(e) => void save("/api/admin/save-reminder", "POST", { on: e.target.checked })}
+      />
+      A segítő szól, ha egy kitöltött űrlap nincs mentve
+      <Msg msg={msg} />
+    </label>
+  );
+}
+
 /** Lili's package, item 1: where the monthly ZIMS package's mail goes; empty = no mail. */
 export function MonthlyZimsRecipient({ email }: { email: string }) {
   return <RecipientForm email={email} endpoint="/api/admin/monthly-zims-recipient" label="A havi ZIMS-csomag címzettjei" testId="monthly-zims-recipient" />;

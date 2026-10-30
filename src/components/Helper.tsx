@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import type { HelperData } from "@/lib/helpers";
 import { followAnswer, followNotice, type Notice } from "@/lib/helper-notice";
 import { readOff, SWITCH_EVENT } from "@/lib/helper-switch";
+import { REMINDER_EVENT, REMINDER_TEXT } from "@/lib/save-reminder";
 
 const SEEN_KEY = "caparium-segito-latta";
 const GREETED_KEY = "caparium-segito-koszont";
@@ -96,6 +97,38 @@ export function Helper({ data, userName, loginAt }: { data: HelperData; userName
     document.addEventListener("pointerdown", dismiss, true);
     document.addEventListener("keydown", dismiss, true);
     return remove;
+  }, [notice?.kind]);
+
+  // card 0d617f0c: the form announces "Ne felejtsd el menteni!" (src/lib/save-reminder.ts) and takes it back once saved.
+  // Like the greeting it is a text-only bubble that goes with the first click or key anywhere; the form speaks again
+  // after another quiet minute if the values are still not saved.
+  useEffect(() => {
+    const onReminder = (e: Event) => {
+      const on = (e as CustomEvent<boolean>).detail;
+      setNotice((n) => (on ? { kind: "reminder", text: REMINDER_TEXT } : n?.kind === "reminder" ? null : n));
+    };
+    window.addEventListener(REMINDER_EVENT, onReminder);
+    return () => window.removeEventListener(REMINDER_EVENT, onReminder);
+  }, []);
+  useEffect(() => {
+    if (notice?.kind !== "reminder") return;
+    const remove = () => {
+      document.removeEventListener("pointerdown", dismiss, true);
+      document.removeEventListener("keydown", dismiss, true);
+    };
+    // registered after the click that may have announced it (a link's leave warning): the next one takes it away
+    const dismiss = () => {
+      remove();
+      setNotice((n) => (n?.kind === "reminder" ? null : n));
+    };
+    const id = window.setTimeout(() => {
+      document.addEventListener("pointerdown", dismiss, true);
+      document.addEventListener("keydown", dismiss, true);
+    }, 0);
+    return () => {
+      window.clearTimeout(id);
+      remove();
+    };
   }, [notice?.kind]);
 
   useEffect(() => {

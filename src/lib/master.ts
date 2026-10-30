@@ -51,6 +51,9 @@ export const SETTING_DEFAULTS = {
   // caparium-indoklas-ki (Balázs 2026-10-20 19:21 UTC, msg 1562184077489209436): the reasons are off; a setting row
   // "true" brings every reason rule back as it was (src/lib/reasons.ts).
   reason_required: "false",
+  // card 0d617f0c (Lili 2026-10-30 11:39 UTC: "csak addig, amíg nem lesz rutin"): the helper's "Ne felejtsd el menteni!"
+  // on a fully filled, unsaved form (src/lib/save-reminder.ts). On until an admin switches it off in Beállítások.
+  save_reminder: "true",
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
