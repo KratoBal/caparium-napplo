@@ -92,6 +92,44 @@ describe("the proxy: every path is behind the gate", () => {
     expect((await proxy(req("/api/health"))).headers.get("x-middleware-next")).toBe("1");
   });
 
+  // Lili 2026-10-31 (task caparium-webapp-ikon): a phone asks for the manifest and the icons without the site's credentials
+  it.each([
+    "/manifest.webmanifest",
+    "/icons/apple-touch-icon.png",
+    "/icons/icon-32.png",
+    "/icons/icon-192.png",
+    "/icons/icon-512.png",
+    "/icons/maskable-512.png",
+  ])("the web app's file %s passes without credentials for a read, and only for a read", async (path) => {
+    process.env.BASIC_AUTH_USER = "lilian";
+    process.env.BASIC_AUTH_SHA256 = SHA;
+    expect((await proxy(req(path, undefined, "10.5.5.1"))).headers.get("x-middleware-next")).toBe("1");
+    const head = await proxy(new NextRequest(`https://caparium-teszt.example${path}`, { method: "HEAD", headers: { "x-forwarded-for": "10.5.5.2" } }));
+    expect(head.headers.get("x-middleware-next")).toBe("1");
+    const post = await proxy(new NextRequest(`https://caparium-teszt.example${path}`, { method: "POST", headers: { "x-forwarded-for": "10.5.5.3" } }));
+    expect(post.status).toBe(401);
+  });
+
+  it.each([
+    "/icons",
+    "/icons/",
+    "/icons/other.png",
+    "/icons/icon-192.png/",
+    "/icons/icon-192.png/x",
+    "/icons/ICON-192.png",
+    "/manifest.webmanifest/x",
+    "/manifest.json",
+    "/icons/../api/grid",
+    "/icons/%2e%2e/api/grid",
+    "/icons/icon-192.png%2fx",
+    "/api/icons/icon-192.png",
+  ])("%s, a neighbour of the web app's files, stays behind the gate", async (path) => {
+    process.env.BASIC_AUTH_USER = "lilian";
+    process.env.BASIC_AUTH_SHA256 = SHA;
+    const r = await proxy(req(path, undefined, `10.6.${path.length}.1`));
+    expect(r.status, path).toBe(401);
+  });
+
   it("a half configuration closes the site instead of opening it", async () => {
     process.env.BASIC_AUTH_USER = "lilian";
     delete process.env.BASIC_AUTH_SHA256;
