@@ -1091,7 +1091,7 @@ test("settings: a pool goes off for a renovation and comes back", async ({ page 
 });
 
 for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti vízmérés"]] as const) {
-  test(`water measurement (${name}): header row and pool column stay put only when the table is wider than the screen`, async ({ page }) => {
+  test(`water measurement (${name}): the table is as before where it fits, and a phone shows one card per pool instead of the sticky table`, async ({ page }) => {
     // Lili 2026-10-29 (caparium-finomitas-1, item 4)
     await login(page, "teszt.akvarista1");
     await page.getByRole("link", { name: link, exact: true }).first().click();
@@ -1103,18 +1103,13 @@ for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti víz
       await expect(box).not.toHaveClass(/grid-overflow/);
       expect(await head.evaluate((el) => getComputedStyle(el).position)).toBe("static");
     }
-    // a phone: the table is wider than the screen, the header and the pool column stick
+    // a phone (caparium-vizmeres-telefon, Lili 2026-10-30): the table is no longer wider than the screen, because every pool is a card, so the
+    // sticky header and pool column (item 4 of 2026-10-29) have nothing to hold on to: no sideways scroll, no stuck cells, the header row hidden
     await page.setViewportSize({ width: 390, height: 760 });
-    await expect(box).toHaveClass(/grid-overflow/);
-    expect(await head.evaluate((el) => getComputedStyle(el).position)).toBe("sticky");
-    const scrolled = await box.evaluate((el) => {
-      el.scrollLeft = el.scrollWidth;
-      return el.scrollLeft;
-    });
-    expect(scrolled, "the table scrolls sideways").toBeGreaterThan(0);
-    const [boxLeft, cellLeft] = await Promise.all([box.evaluate((el) => el.getBoundingClientRect().left), firstCell.evaluate((el) => el.getBoundingClientRect().left)]);
-    expect(Math.abs(cellLeft - boxLeft), "the pool name stays at the left").toBeLessThan(1);
-    expect(await firstCell.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
+    await expect(box).not.toHaveClass(/grid-overflow/);
+    expect(await head.evaluate((el) => getComputedStyle(el.closest("thead")!).display)).toBe("none");
+    expect(await firstCell.evaluate((el) => getComputedStyle(el).position)).toBe("static");
+    expect(await box.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
     // wide again: as before
     await page.setViewportSize({ width: 1440, height: 900 });
     await expect(box).not.toHaveClass(/grid-overflow/);
