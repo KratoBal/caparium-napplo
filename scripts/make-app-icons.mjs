@@ -8,7 +8,7 @@ import { mkdir } from "node:fs/promises";
 
 const src = process.argv[2];
 if (!src) throw new Error("usage: node scripts/make-app-icons.mjs <logo.png>");
-const out = new URL("../public/icons/", import.meta.url).pathname;
+const out = process.argv[3] ? process.argv[3].replace(/\/?$/, "/") : new URL("../public/icons/", import.meta.url).pathname; // optional 2nd argument: another output folder (a preview of another logo)
 await mkdir(out, { recursive: true });
 
 const img = sharp(src).ensureAlpha();
@@ -56,13 +56,20 @@ const fade = Buffer.from(
 const innerArt = await sharp(art).resize(inner, inner, { kernel: "lanczos3" }).composite([{ input: fade, blend: "dest-in" }]).png().toBuffer();
 await sharp(background).composite([{ input: innerArt, left: Math.round((M - inner) / 2), top: Math.round((M - inner) / 2) }]).removeAlpha().png({ compressionLevel: 9 }).toFile(out + "maskable-512.png");
 
-// the colour of the manifest and of the status bar: the average of the art's rim, a strip 4 % wide on every side
+// the colour of the manifest and of the status bar: the median of the art's teal rim pixels (a strip 4 % wide on every side, hue 160-200,
+// so the copper gears and the dark outline do not pull it), measured on the cropped square
 const strip = Math.round(side * 0.04);
-const rim = await Promise.all([
-  sharp(art).extract({ left: 0, top: 0, width: side, height: strip }).stats(),
-  sharp(art).extract({ left: 0, top: side - strip, width: side, height: strip }).stats(),
-  sharp(art).extract({ left: 0, top: 0, width: strip, height: side }).stats(),
-  sharp(art).extract({ left: side - strip, top: 0, width: strip, height: side }).stats(),
-]);
-const mean = [0, 1, 2].map((c) => Math.round(rim.reduce((s, r) => s + r.channels[c].mean, 0) / rim.length));
-console.log("rim colour", "#" + mean.map((v) => v.toString(16).padStart(2, "0")).join(""));
+const { data: sq, info: sqInfo } = await sharp(art).raw().toBuffer({ resolveWithObject: true });
+const teal = [];
+for (let y = 0; y < side; y++)
+  for (let x = 0; x < side; x++) {
+    if (x >= strip && x < side - strip && y >= strip && y < side - strip) continue;
+    const i = (y * side + x) * sqInfo.channels;
+    const [r, g, b] = [sq[i], sq[i + 1], sq[i + 2]];
+    const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+    if (!d || max <= 40) continue;
+    const h = 60 * (max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4);
+    if (h >= 160 && h <= 200) teal.push([r, g, b]);
+  }
+const median = (c) => teal.map((p) => p[c]).sort((a, b) => a - b)[Math.floor(teal.length / 2)];
+console.log("rim colour", "#" + [0, 1, 2].map((c) => median(c).toString(16).padStart(2, "0")).join(""), `(${teal.length} teal rim pixels)`);
