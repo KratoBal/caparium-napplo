@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AnimalOrder } from "@/components/AnimalOrder";
-import { AnimalActions, AnimalEditForm, InitialAnimalsLoader, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
+import { AnimalActions, AnimalEditForm, GroupActive, InitialAnimalsLoader, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
+import { InactiveListFilter, InactiveRowShell } from "@/components/InactiveListFilter";
 import { Shell } from "@/components/Shell";
 import { withIcon } from "@/lib/icons";
-import { animalEvents, listAnimals, listGroupsWithNames } from "@/lib/animals";
+import { animalEvents, listAnimals, listGroupsAdmin, listGroupsWithNames } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { initialAnimalsStatus } from "@/lib/initial-animals";
 import { pickValid } from "@/lib/master";
@@ -25,9 +26,10 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
   if (user.role !== "ADMIN") redirect("/nincs-jogosultsag");
   const sp = await searchParams;
   const now = new Date();
-  const [animals, groups, pools, species] = await Promise.all([
+  const [animals, groups, allGroups, pools, species] = await Promise.all([
     listAnimals(now),
     listGroupsWithNames(now),
+    listGroupsAdmin(now),
     prisma.pool.findMany({ where: { active: true }, include: { names: true }, orderBy: { code: "asc" } }),
     prisma.species.findMany({ where: { active: true }, orderBy: { scientificName: "asc" } }),
   ]);
@@ -38,6 +40,9 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
   const editable = selected && level === "ADMIN" ? await prisma.animal.findUnique({ where: { id: selected.id }, select: { speciesId: true } }) : null;
   const arrival = events.find((e) => e.type === "ARRIVAL" && e.status === "VALID");
   const canRecord = level === "RECORD" || level === "ADMIN";
+  // the arrival's own group stays a choice of the edit form even if the group was switched off since (it is not newly chosen then)
+  const arrivalGroup = arrival?.toGroupId ? allGroups.find((g) => g.id === arrival.toGroupId) : undefined;
+  const editGroups = arrivalGroup && !arrivalGroup.active ? [...groups, { id: arrivalGroup.id, name: `${arrivalGroup.name} (inaktív)`, sheetColor: null }] : groups;
   const isAdmin = user.role === "ADMIN";
   // Lili 2026-10-27 20:44 UTC (acrobot 37043): the list, the open animal, a new animal, the starting list, the order last.
   return (
@@ -107,7 +112,7 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
               }}
               species={species.map((s) => ({ id: s.id, name: s.hungarianName ? `${s.scientificName} (${s.hungarianName})` : s.scientificName }))}
               pools={poolOpts}
-              groups={groups}
+              groups={editGroups}
             />
           )}
         </div>
@@ -120,6 +125,34 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
           <NewArrival species={species.map((s) => ({ id: s.id, name: s.hungarianName ? `${s.scientificName} (${s.hungarianName})` : s.scientificName }))} pools={poolOpts} groups={groups} />
           <SimpleCreate url="/api/admin/species" label="Új faj tudományos neve" field="scientificName" testId="new-species" />
           <SimpleCreate url="/api/admin/animal-groups" label="Új csoport neve" field="name" testId="new-group" />
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="card" data-testid="groups-card">
+          <h2>Csoportok</h2>
+          <p className="hint">
+            Egy csoport akkor inaktiválható, ha már nincs tagja (a tagokat a Csoportváltás veszi ki). Az inaktív csoport nem jelenik meg a választókban és a mai
+            takarmánylapon; a régi napok tételei, naplói és exportjai változatlanok, a neve megmarad. Az inaktívak az „Inaktívak mutatása” kapcsolóval jönnek elő.
+          </p>
+          <InactiveListFilter inactive={allGroups.filter((g) => !g.active).length}>
+            <div className="table-scroll">
+              <table className="log-table" data-testid="groups-table">
+                <thead>
+                  <tr><th>Csoport</th><th>Tagok most</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {allGroups.map((g) => (
+                    <InactiveRowShell key={g.id} id={g.id} active={g.active}>
+                      <td>{g.name}</td>
+                      <td>{g.members}</td>
+                      <td className="keep"><GroupActive id={g.id} active={g.active} /></td>
+                    </InactiveRowShell>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </InactiveListFilter>
         </div>
       )}
 
