@@ -5,6 +5,7 @@
 // decides every permission and writes the audit entry.
 import { useEffect, useState } from "react";
 import { intakeDefaultUnit } from "@/lib/intake-unit";
+import { formatDay } from "@/lib/time";
 import { DIM, EditBar, EditButton, InvalidateButton, Msg, OtherNames, editFields, showForm, useSend, type EditItem, type FeedOpt } from "./FeedingForms";
 
 export type IntakeRow = {
@@ -189,7 +190,7 @@ export function StockStart({ start, today, canSet }: { start: string | null; tod
     <div data-testid="stock-start">
       <p className="hint">
         {start
-          ? `A készlet kezdete: ${start}. Ami ennél korábbi, az archívum: a naplóban, a kimutatásokban és az exportban teljes értékű, a készletbe nem számít.`
+          ? `A készlet kezdete: ${formatDay(start)}. Ami ennél korábbi, az archívum: a naplóban, a kimutatásokban és az exportban teljes értékű, a készletbe nem számít.`
           : "A készlet kezdete: takarmányonként az első be nem küldött bevételezés napja. Egy kifejezett kezdőnapot adminisztrátor állíthat."}
       </p>
       {canSet && (

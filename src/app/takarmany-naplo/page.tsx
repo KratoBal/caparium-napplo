@@ -8,7 +8,7 @@ import { feedingLog } from "@/lib/feeding-log";
 import { listAnimals } from "@/lib/animals";
 import { moduleLevel, pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
-import { addDays, businessDayOf, isValidDay, weekdayLetter } from "@/lib/time";
+import { addDays, businessDayOf, formatDay, isValidDay, weekdayLetter } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +109,7 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
                         <small className="day-letter" data-testid={`pattern-letter-${d}`}>
                           {weekdayLetter(d)}
                         </small>
-                        {d.slice(5).replace("-", ".")}
+                        {formatDay(d)}
                       </th>
                     ))}
                   </tr>
@@ -152,7 +152,7 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
                 <tbody>
                   {log.rows.map((r) => (
                     <tr key={r.id}>
-                      <td>{r.day}</td>
+                      <td>{formatDay(r.day)}</td>
                       <td>{r.recipient}</td>
                       <td>{r.pools || "–"}</td>
                       <td>{r.feed}</td>

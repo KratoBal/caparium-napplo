@@ -6,7 +6,7 @@ import { canonicalDecimal } from "@/lib/decimal";
 import { monogramResolver, pickValid } from "@/lib/master";
 import { listPending } from "@/lib/pending";
 import { requireModuleRead } from "@/lib/session";
-import { businessDayOf, dateToDay, localTimeOf } from "@/lib/time";
+import { businessDayOf, dateToDay, formatDay, localTimeOf } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -46,14 +46,14 @@ export default async function PendingPage() {
                   <tr key={r.id}>
                     <td>
                       <Link href={`/naplo/${r.id}`}>
-                        {dateToDay(r.businessDay)} {localTimeOf(r.measuredAt)}
+                        {formatDay(dateToDay(r.businessDay))} {localTimeOf(r.measuredAt)}
                       </Link>
                     </td>
                     <td>{pickValid(r.pool.names, r.measuredAt)?.displayName ?? r.pool.code}</td>
                     <td>{pickValid(r.parameter.names, r.measuredAt)?.displayName ?? r.parameter.code}</td>
                     <td>{canonicalDecimal(r.value).replace(".", ",")}</td>
                     <td>{mono.monogram(r.createdById, r.createdAt)}</td>
-                    <td>{r.clientTimestamp ? `${businessDayOf(r.clientTimestamp)} ${localTimeOf(r.clientTimestamp)}` : "–"}</td>
+                    <td>{r.clientTimestamp ? `${formatDay(businessDayOf(r.clientTimestamp))} ${localTimeOf(r.clientTimestamp)}` : "–"}</td>
                     <td>{localTimeOf(r.createdAt)}</td>
                     <td>
                       <PendingActions id={r.id} />

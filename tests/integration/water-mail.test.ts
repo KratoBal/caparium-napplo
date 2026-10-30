@@ -141,7 +141,7 @@ describe("the recipient and the sending", () => {
     // the same request again: nothing is sent, and the answer says what that sending did (review of #32)
     expect(await sendWaterReport(f.aq1, { requestId: req }, now, fake)).toEqual({ replayed: true, to: "vizmeres@example.test", day: "2027-09-08", pools: r.pools });
     expect(sent).toHaveLength(1);
-    expect([sent[0]!.to, sent[0]!.from, sent[0]!.subject]).toEqual(["vizmeres@example.test", "napplo@example.test", "Cápasuli vízmérés - 2027-09-08"]);
+    expect([sent[0]!.to, sent[0]!.from, sent[0]!.subject]).toEqual(["vizmeres@example.test", "napplo@example.test", "Cápasuli vízmérés - 2027.09.08."]);
     // Lili 2026-10-26: the letter is signed by the user who sent it (the seed's aq1 is "Teszt Akvarista Egy")
     expect(sent[0]!.text).toBe("Sziasztok!\n\nKüldöm a heti vízmérések eredményeit.\n\nÜdv,\nTeszt Akvarista Egy");
     const pdf = sent[0]!.attachments[0]!;
@@ -150,7 +150,7 @@ describe("the recipient and the sending", () => {
     expect(lines).toContain("Nagymedence");
     // parameter, value, measurer, then the reference (the common TEMP range here)
     expect(lines.some((l) => l.startsWith("Hőmérséklet 24,6 °C AE "))).toBe(true);
-    expect(lines).toContain("Cápasuli vízmérés - 2027-09-08");
+    expect(lines).toContain("Cápasuli vízmérés - 2027.09.08.");
     const audit = await prisma.auditEntry.findFirstOrThrow({ where: { entityType: "WaterReportMail", entityId: "2027-09-08" } });
     expect([audit.action, audit.userId]).toEqual(["EXPORT", f.aq1.id]);
     expect(audit.changes).toMatchObject({ recipient: { after: "vizmeres@example.test" } });

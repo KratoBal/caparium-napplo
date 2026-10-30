@@ -11,7 +11,7 @@ import { dosingLog, stockLevels } from "@/lib/dosing";
 import { AppError } from "@/lib/errors";
 import { moduleLevel, pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
-import { addDays, businessDayOf, isValidDay, localTimeOf } from "@/lib/time";
+import { addDays, businessDayOf, formatDay, isValidDay, localTimeOf } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -112,7 +112,7 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
             <tbody>
               {log.map((r) => (
                 <tr key={r.id} className={r.status === "VALID" ? undefined : "invalid"}>
-                  <td>{r.day}</td>
+                  <td>{formatDay(r.day)}</td>
                   <td>{localTimeOf(r.at)}</td>
                   <td>{r.pool}</td>
                   <td>{r.chemical}</td>

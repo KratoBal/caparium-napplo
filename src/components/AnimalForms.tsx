@@ -5,6 +5,7 @@
 import { useKeepRow } from "./InactiveListFilter";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { formatDay } from "@/lib/time";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 
 type Opt = { id: string; name: string };
@@ -424,7 +425,7 @@ export function InitialAnimalsLoader(p: { total: number; loaded: number; switchO
   const missing = p.total - p.loaded;
   const load = () => {
     if (!day) return;
-    if (!window.confirm(`${missing} állatot veszel fel a leírás kezdő listájából, ${day} napi érkezéssel, a medencéjükbe és csoportjukba. Folytatod?`)) return;
+    if (!window.confirm(`${missing} állatot veszel fel a leírás kezdő listájából, ${formatDay(day)} napi érkezéssel, a medencéjükbe és csoportjukba. Folytatod?`)) return;
     void call("/api/admin/initial-animals", "POST", { arrivalDay: day }, "Kezdő állatlista betöltve.");
   };
   const why =

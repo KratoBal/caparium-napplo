@@ -38,7 +38,9 @@ describe("water report PDF", () => {
     });
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
     const lines = await readPdfLines(pdf);
-    expect(lines).toContain("Cápasuli vízmérés - 2027-09-08");
+    expect(lines).toContain("Cápasuli vízmérés - 2027.09.08.");
+    // the period line reads dotted too (Lili 2026-10-30), and no ISO date is left in the PDF's title block
+    expect(lines).toContain("Napi értékek: 2027.09.08. Heti értékek: 2027.09.06. – 2027.09.08.");
     expect(lines).toContain("Kismedence ŐŰőű áéíóúöü");
     // no date and no time column (Lili 2026-10-26); the same six columns in both tables (msg 1564363895722737696): parameter,
     // value, measurer, dilution, reference, deviation; an empty cell where there is none

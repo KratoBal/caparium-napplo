@@ -11,7 +11,7 @@ import { canonicalDecimal } from "../decimal";
 import { pickValid } from "../master";
 import { TICK_LABEL, TICK_ORDER } from "../pool-ticks";
 import { evaluateReference } from "../reference";
-import { BUSINESS_TZ, dateToDay, dayToDate, resolveLocalDateTime, wallClock } from "../time";
+import { BUSINESS_TZ, dateToDay, dayToDate, formatDay, resolveLocalDateTime, wallClock } from "../time";
 
 // letter by letter from the template's header row (forras-kivonat/vizmeres-template-fejlecek.json)
 export const TEMPLATE_HEADER = ["Dátum", "Idő", "Akvárium", "Vízparaméter", "Mérés", "Mértékegység", "Mérést végezte", "Gyakornok"];
@@ -34,7 +34,7 @@ export function sheetName(name: string, taken: Set<string>): string {
 
 function localDate(at: Date): string {
   const w = wallClock(at, BUSINESS_TZ);
-  return `${w.year}.${String(w.month).padStart(2, "0")}.${String(w.day).padStart(2, "0")}`;
+  return formatDay(`${w.year}-${String(w.month).padStart(2, "0")}-${String(w.day).padStart(2, "0")}`);
 }
 
 function localTime(at: Date): string {

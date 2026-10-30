@@ -143,27 +143,32 @@ function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-const HU_MONTHS = [
-  "január",
-  "február",
-  "március",
-  "április",
-  "május",
-  "június",
-  "július",
-  "augusztus",
-  "szeptember",
-  "október",
-  "november",
-  "december",
-];
 const HU_WEEKDAYS = ["vasárnap", "hétfő", "kedd", "szerda", "csütörtök", "péntek", "szombat"];
 
-/** "2026. október 15." */
-export function formatDayLong(day: string): string {
-  const d = dayToDate(day);
-  return `${d.getUTCFullYear()}. ${HU_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}.`;
+/**
+ * THE shape of a date wherever a person reads one (Lili 2026-10-30 14:25 UTC, msg 1565733264776372355, acrobot 38840: "az összes exportban meg
+ * mindenhol ami nem zims ponttal"): "2026.10.30." Year, month and day with dots and a closing dot. The one exception is the ZIMS export, which
+ * keeps the format ZIMS expects, and the date input fields, which follow the browser's language. A day is a "YYYY-MM-DD" string; anything
+ * else is returned as it came (a damaged value is not hidden by a made-up date).
+ */
+export function formatDay(day: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? `${day.slice(0, 4)}.${day.slice(5, 7)}.${day.slice(8, 10)}.` : day;
 }
+
+/** "2026.10.01. – 2026.10.30." for a period, "2026.10.01." when it is one day. */
+export function formatPeriod(from: string, to: string): string {
+  return from === to ? formatDay(from) : `${formatDay(from)} – ${formatDay(to)}`;
+}
+
+/** An instant as business-time date and time: "2026.10.30. 09:05" (Europe/Budapest). */
+export function formatDateTime(instant: Date | string, tz: string = BUSINESS_TZ): string {
+  const at = typeof instant === "string" ? new Date(instant) : instant;
+  if (Number.isNaN(at.getTime())) return String(instant);
+  return `${formatDay(businessDayOf(at, tz))} ${localTimeOf(at, tz)}`;
+}
+
+/** The Excel number format of a date cell: 2026.10.30. (the dots quoted, so the month is a month, not minutes). */
+export const EXCEL_DATE_FORMAT = 'yyyy"."mm"."dd"."';
 
 export function weekdayName(day: string): string {
   return HU_WEEKDAYS[dayToDate(day).getUTCDay()];

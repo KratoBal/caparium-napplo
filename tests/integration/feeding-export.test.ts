@@ -10,6 +10,7 @@ import { finalizeList, saveFeedingItem, setSelection } from "@/lib/feeding";
 import { feedingLog } from "@/lib/feeding-log";
 import { otherLabel } from "@/lib/other-name";
 import { recloseDay } from "@/lib/journal";
+import { EXCEL_DATE_FORMAT } from "@/lib/time";
 import { fixtures, rid } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -83,6 +84,8 @@ describe("the feeding Excel (EGY-10, D-30)", () => {
 
     const egy = rowOf(ws, 3, "Teszt Egy");
     expect([val(egy.getCell(lit)), val(egy.getCell(lit + 1))]).toEqual([6, 42.5]);
+    // the date column is a real date cell shown as 2026.10.30. (Lili 2026-10-30), not ISO text
+    expect([egy.getCell(1).numFmt, egy.getCell(1).value instanceof Date]).toEqual([EXCEL_DATE_FORMAT, true]);
     // Lili 2026-10-29 (package item 13): no "Egyéb 1..5" and no note columns; the other name has a column of its own
     const other1 = colOf(ws, 1, "Tintahal-fej"); // the fixed shown form: a capital first letter
     expect(val(egy.getCell(other1))).toBe(20);

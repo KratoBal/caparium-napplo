@@ -5,6 +5,7 @@
 // written), and the run with a reason and a confirmation. Feeding admins only; the server checks it again.
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { formatDateTime, formatDay } from "@/lib/time";
 import { useReasonsOn } from "./ReasonSwitch";
 
 type Op = { op: string; at: string; user: string; count: number; kinds: Record<string, number> };
@@ -33,7 +34,7 @@ const KIND: Record<string, string> = {
   "EatingStatus VALID": "evési állapot vissza",
 };
 
-const time = (iso: string) => new Date(iso).toLocaleString("hu-HU", { timeZone: "Europe/Budapest" });
+const time = (iso: string) => formatDateTime(iso);
 
 export function DayRestore({ day }: { day: string }) {
   const router = useRouter();
@@ -144,7 +145,7 @@ export function DayRestore({ day }: { day: string }) {
                 onClick={() => {
                   const others = plan.ops.slice(1);
                   const also = others.length ? ` Ez a kiválasztotton kívül további ${others.length} műveletet is visszafordít: ${others.map((o) => `${time(o.at)} ${o.user}`).join(", ")}.` : "";
-                  if (!window.confirm(`Visszaállítod a(z) ${day} napot a(z) ${time(plan.since)} előtti állapotra?${also} A fenti változások mind megtörténnek.`)) return;
+                  if (!window.confirm(`Visszaállítod a(z) ${formatDay(day)} napot a(z) ${time(plan.since)} előtti állapotra?${also} A fenti változások mind megtörténnek.`)) return;
                   void call({ mode: "run", op, ...(reasonsOn ? { reason: reason.trim() } : {}) }).then((b) => {
                     if (!b) return;
                     setMsg({ ok: true, text: "A nap visszaállítva." });

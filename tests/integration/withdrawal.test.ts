@@ -8,7 +8,7 @@ import { buildWithdrawalWorkbook } from "@/lib/exports/feeding-excel";
 import { saveFeedingItem, setSelection } from "@/lib/feeding";
 import { recloseDay, reopenDay, runJournalJob } from "@/lib/journal";
 import { closeWithdrawalDay, invalidateWithdrawalItem, saveWithdrawalItem, takenVersusGiven, withdrawalDayView } from "@/lib/withdrawal";
-import { dayToDate } from "@/lib/time";
+import { dayToDate, EXCEL_DATE_FORMAT } from "@/lib/time";
 import { fixtures, rid } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -132,6 +132,8 @@ describe("the withdrawal Excel (KIV-05)", () => {
     // the edited Litopenaeus item: 8 db only (the kg quantity went with the edit)
     expect([2, 3, 4, 5].map((c) => ws.getRow(2).getCell(c).value)).toEqual(["Rákok", "Litopenaeus vannamei", 8, "db"]);
     expect((ws.getRow(2).getCell(6).value as Date).toISOString().slice(0, 10)).toBe("2026-07-07");
+    // both date columns show the dotted date (Lili 2026-10-30)
+    expect([ws.getRow(2).getCell(1).numFmt, ws.getRow(2).getCell(6).numFmt]).toEqual([EXCEL_DATE_FORMAT, EXCEL_DATE_FORMAT]);
     const wb2 = new ExcelJS.Workbook();
     await wb2.xlsx.load((await buildWithdrawalWorkbook({ from: "2026-07-13", to: "2026-07-13" })).buffer as unknown as ArrayBuffer);
     const names: unknown[] = [];

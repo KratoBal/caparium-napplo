@@ -5,7 +5,7 @@ import { formatDecimalHu } from "@/lib/decimal";
 import { pickValid } from "@/lib/master";
 import { searchLog } from "@/lib/queries";
 import { requireModuleRead } from "@/lib/session";
-import { addDays, businessDayOf, isValidDay } from "@/lib/time";
+import { addDays, businessDayOf, formatDay, isValidDay } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +95,7 @@ export default async function LogPage({
                     <tr key={r.id} className={r.status === "INVALIDATED" ? "invalid" : undefined}>
                       <td>
                         <Link href={`/naplo/${r.id}`}>
-                          {r.businessDay.slice(5).replace("-", ".")}. {r.localTime}
+                          {formatDay(r.businessDay)} {r.localTime}
                         </Link>
                       </td>
                       <td>{r.poolName}</td>

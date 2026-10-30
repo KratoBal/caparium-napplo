@@ -8,7 +8,7 @@ import { feedingLog } from "@/lib/feeding-log";
 import { moduleLevel, pickValid } from "@/lib/master";
 import { breakdown } from "@/lib/reports";
 import { requireModuleRead } from "@/lib/session";
-import { addDays, businessDayOf, isValidDay } from "@/lib/time";
+import { addDays, businessDayOf, formatPeriod, isValidDay } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +94,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               <input type="hidden" name="to" value={to} />
               {poolId && <input type="hidden" name="pool" value={poolId} />}
               {animalId && <input type="hidden" name="animal" value={animalId} />}
-              <button className="btn" type="submit" data-testid="excel-kimutatas">Kimutatás (Excel, {from} – {to})</button>
+              <button className="btn" type="submit" data-testid="excel-kimutatas">Kimutatás (Excel, {formatPeriod(from, to)})</button>
             </form>
           )}
         </>

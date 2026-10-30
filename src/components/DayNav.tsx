@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { addDays, formatDayLong, weekdayName } from "@/lib/time";
+import { addDays, formatDay, weekdayName } from "@/lib/time";
 
 /**
  * Previous and next day of a dated page; no step past today. Lili 2026-10-29 (package item 2, msg
@@ -13,7 +13,7 @@ export function DayNav({ path, day, today }: { path: string; day: string; today:
         ‹ előző nap
       </Link>
       <span className="day-shown">
-        <strong data-testid="shown-day">{formatDayLong(day)}</strong>
+        <strong data-testid="shown-day">{formatDay(day)}</strong>
         <small data-testid="shown-weekday">{weekdayName(day)}</small>
       </span>
       {day < today && (

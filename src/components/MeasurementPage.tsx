@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db";
 import { getGrid, listGroups } from "@/lib/queries";
 import { saveReminderOn } from "@/lib/save-reminder-setting";
 import { requireModuleRead } from "@/lib/session";
-import { businessDayOf, formatDayLong, isValidDay, weekdayName } from "@/lib/time";
+import { businessDayOf, formatDay, isValidDay, weekdayName } from "@/lib/time";
 
 /**
  * The two daily group buttons carry a picture above the text (Lili 2026-10-26: Nagy medencék -> the capybara,
@@ -62,7 +62,7 @@ export async function MeasurementPage({
   return (
     <Shell title={title} active={active} user={user} helper={await waterHelper(await helperStockAccess(user))}>
       <p className="hint" style={{ fontSize: 20, marginTop: 0 }}>
-        {formatDayLong(day)} · {weekdayName(day)}
+        {formatDay(day)} · {weekdayName(day)}
       </p>
       <DayControls groupId={group.id} day={day} status={status} isAdmin={level === "ADMIN"} />
       <div className="toolbar">

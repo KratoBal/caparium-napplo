@@ -7,7 +7,7 @@ import { lastBodyWeight, referencesOn } from "@/lib/calculator";
 import { prisma } from "@/lib/db";
 import { getSetting } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
-import { businessDayOf, dateToDay, localDateTimeOf } from "@/lib/time";
+import { businessDayOf, dateToDay, formatDateTime, formatDay } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +59,7 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
             <tbody>
               {saved.map((r) => (
                 <tr key={r.id}>
-                  <td>{localDateTimeOf(r.createdAt).replace("T", " ")}</td>
+                  <td>{formatDateTime(r.createdAt)}</td>
                   <td>{nameOf.get(r.animalId) ?? "?"}</td>
                   <td>{num(r.bwKg.toString())} kg</td>
                   <td>{num(r.frWeekPct.toString())} %</td>
@@ -82,7 +82,7 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
             ))}
           </div>
           <p className="hint">
-            {weighed.name}: utoljára mérve {last ? `${num(last.weightKg)} kg, ${last.day}` : "még nincs"}.
+            {weighed.name}: utoljára mérve {last ? `${num(last.weightKg)} kg, ${formatDay(last.day)}` : "még nincs"}.
           </p>
           {canRecord && <BodyWeightForm animalId={weighed.id} />}
           <table className="log-table" data-testid="body-weights">
@@ -90,7 +90,7 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
             <tbody>
               {weights.map((w) => (
                 <tr key={w.id} className={w.status === "VALID" ? undefined : "invalid"}>
-                  <td>{dateToDay(w.measuredOn)}</td>
+                  <td>{formatDay(dateToDay(w.measuredOn))}</td>
                   <td>{num(w.weightKg.toString())} kg</td>
                   <td className="keep">{w.status === "VALID" ? "érvényes" : `érvénytelenítve${w.invalidationReason ? `: ${w.invalidationReason}` : ""}`}</td>
                   <td className="keep">{canRecord && w.status === "VALID" && <InvalidateButton url={`/api/body-weights/${w.id}/invalidate`} version={w.version} />}</td>

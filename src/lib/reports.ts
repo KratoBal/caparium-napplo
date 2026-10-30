@@ -5,6 +5,7 @@
 // total in #11): a day's sum must not read as if the animal had eaten the group's food alone.
 
 import { compareAnimals } from "./animal-order";
+import { formatDay } from "./time";
 import { byFeedOrder, type FeedPlace } from "./feed-order";
 import type { LogEntry } from "./feeding-log";
 
@@ -67,7 +68,8 @@ export function breakdown(
         (x, y) => x.feed.localeCompare(y.feed, "hu") || x.unit.localeCompare(y.unit),
       )(a, b),
   );
-  const byDay = days.map((d) => line(d, entries.filter((e) => e.day === d), filtered));
+  // the day labels read dotted (2026.11.02.), in the page and in the Excel sheet alike (Lili 2026-10-30)
+  const byDay = days.map((d) => line(formatDay(d), entries.filter((e) => e.day === d), filtered));
   // the animals in the admin's order (Lili 2026-10-26, msg 1564402506396598303); without the positions, by name as before
   const recipients = [...new Set(entries.map((e) => e.recipient))].sort((a, b) =>
     compareAnimals({ name: a, sortOrder: recipientOrder?.get(a) ?? null }, { name: b, sortOrder: recipientOrder?.get(b) ?? null }),

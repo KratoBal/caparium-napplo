@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { buildEatingWorkbook, buildReportWorkbook, WEEK_FILLS } from "@/lib/exports/feeding-excel";
 import { saveFeedingItem, setSelection } from "@/lib/feeding";
+import { EXCEL_DATE_FORMAT } from "@/lib/time";
 import { fixtures, rid } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -39,8 +40,8 @@ describe("the report Excel (EGY-13)", () => {
     const day = wb.getWorksheet("Napokra bontva")!;
     const header = (day.getRow(1).values as unknown[]).slice(1);
     expect(header).toEqual(["Nap", "Litopenaeus vannamei (db)", "Litopenaeus vannamei (g)", "Teszt hal (g)", "Összesen (db)", "Összesen (g)"]);
-    expect((day.getRow(2).values as unknown[]).slice(1)).toEqual(["2026-11-02", 6, 40, 300, 6, 340]);
-    expect(day.getRow(3).getCell(1).value).toBe("2026-11-03");
+    expect((day.getRow(2).values as unknown[]).slice(1)).toEqual(["2026.11.02.", 6, 40, 300, 6, 340]);
+    expect(day.getRow(3).getCell(1).value).toBe("2026.11.03.");
     expect(day.getRow(4).getCell(1).value).toBe("Összesen");
     const who = wb.getWorksheet("Kinek")!;
     const labels: unknown[] = [];
@@ -75,5 +76,11 @@ describe("the eating Excel's weeks (EVE-08)", () => {
     // E = Sunday 11-01 .. M = Monday 11-09; the first three cells keep their headers
     expect([5, 6, 7, 8, 9, 10, 11, 12, 13].map((c) => r2.getCell(c).value)).toEqual(["V", "H", "K", "Sze", "Cs", "P", "Szo", "V", "H"]);
     expect([1, 2, 3].map((c) => r2.getCell(c).value)).toEqual(["Állatfaj", "Név", "Csoport"]);
+  });
+  it("the day headers read the full dotted date, as a real date cell (Lili 2026-10-30)", async () => {
+    const wb = await load((await buildEatingWorkbook({ from: "2026-11-01", to: "2026-11-02" })).buffer);
+    const r1 = wb.worksheets[0].getRow(1);
+    expect([5, 6].map((c) => r1.getCell(c).numFmt)).toEqual([EXCEL_DATE_FORMAT, EXCEL_DATE_FORMAT]);
+    expect([5, 6].map((c) => (r1.getCell(c).value as Date).toISOString().slice(0, 10))).toEqual(["2026-11-01", "2026-11-02"]);
   });
 });

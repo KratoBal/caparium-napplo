@@ -13,7 +13,7 @@ import type { Actor } from "./measurements";
 import { businessDayOf } from "./time";
 import { waterReport } from "./water-report";
 import { waterReportPdf } from "./water-report-pdf";
-import { waterReportMailText, waterReportTitle } from "./water-report-text";
+import { waterReportFileName, waterReportMailText, waterReportTitle } from "./water-report-text";
 
 const requestId = z.string().min(8).max(100);
 
@@ -104,7 +104,7 @@ export async function sendWaterReport(actor: Actor, input: z.infer<typeof sendSc
   const send = sender ?? smtpSender(config);
   // Lili 2026-10-26 (msg 1564350735267921991): file name and subject "Cápasuli vízmérés - <day>", the letter signed by the sender
   const title = waterReportTitle(day);
-  const filename = `${title}.pdf`;
+  const filename = waterReportFileName(day);
   const senderUser = await prisma.user.findUnique({ where: { id: actor.id }, select: { fullName: true } });
   try {
     await send({
