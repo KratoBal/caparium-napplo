@@ -1862,7 +1862,7 @@ test("animals: the starting list's status line, and an admin loads it with one c
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest" }).format(new Date());
     await expect(box.getByLabel("Érkezés napja")).toHaveValue(today);
     page.once("dialog", (d) => {
-      expect(d.message()).toContain(`25 állatot veszel fel a leírás kezdő listájából, ${today} napi érkezéssel`);
+      expect(d.message()).toContain(`25 állatot veszel fel a leírás kezdő listájából, ${today.replaceAll("-", ".")}. napi érkezéssel`);
       void d.accept();
     });
     await button.click();

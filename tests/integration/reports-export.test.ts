@@ -55,7 +55,7 @@ describe("the report Excel (EGY-13)", () => {
     expect(who.getRow(2).getCell(1).value).toBe("Teszt csoport (csoport)");
     const day = wb.getWorksheet("Napokra bontva")!;
     expect((day.getRow(1).values as unknown[]).slice(1)).toEqual(["Nap", "Teszt hal [csoportos tétel] (g)", "Csoportos tételekben, a csoport teljes mennyisége (g)"]);
-    expect((day.getRow(2).values as unknown[]).slice(1)).toEqual(["2026-11-02", 300, 300]);
+    expect((day.getRow(2).values as unknown[]).slice(1)).toEqual(["2026.11.02.", 300, 300]);
   });
 });
 

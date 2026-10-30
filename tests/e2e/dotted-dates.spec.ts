@@ -1,6 +1,6 @@
 // Lili 2026-10-30 (task caparium-datum-ponttal): a date a person reads has the dotted shape, 2026.10.30., on every page
 // (the date input fields keep the browser's own shape and are not text, so `innerText` leaves them out; the ZIMS CSV is
-// not a page). A hyphenated ISO date in the visible text of any page is the miss this test names.
+// not a page, and a download link's text is a file name). A hyphenated ISO date in the visible text of any page is the miss this test names.
 import { expect, test, type Page } from "@playwright/test";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
@@ -46,7 +46,9 @@ test("no page shows a hyphenated ISO date as text; the day pages show the dotted
     const res = await page.goto(path);
     expect(res?.status(), path).toBeLessThan(500);
     await page.waitForLoadState("networkidle");
-    const text = await page.locator("body").innerText();
+    let text = await page.locator("body").innerText();
+    // a file name keeps its ISO day (the ZIMS files' names are fixed): the download links are not date text
+    for (const name of await page.locator("a[download]").allInnerTexts()) text = text.split(name).join("");
     const hit = text.match(isoDate);
     expect(hit ? `${path}: ${hit[0]}` : null, `${path} shows an ISO date`).toBeNull();
     if (dotted.test(text)) seen.push(path);
