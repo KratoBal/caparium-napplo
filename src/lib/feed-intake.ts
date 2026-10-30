@@ -13,6 +13,7 @@ import { AppError } from "./errors";
 import { moduleLevel, pickValid } from "./master";
 import type { Actor } from "./measurements";
 import { canCreate, canModify, effectiveNow, type Decision, type Level } from "./permissions";
+import { RUN_OUT_DAYS } from "./notices";
 import { requireReason } from "./reasons";
 import { addDays, businessDayOf, dateToDay, dayToDate } from "./time";
 
@@ -239,4 +240,15 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
       return { ...r, received: round(r.received), returned: round(r.returned), taken: round(r.taken), week: round(r.week), month: round(r.month), level, negative: level < 0 };
     })
     .sort((a, b) => a.feed.localeCompare(b.feed, "hu") || a.unit.localeCompare(b.unit));
+}
+
+/**
+ * How long a tracked stock lasts at the average withdrawal of the last 30 days, and whether it is "running out" by the
+ * chemicals' rule (notices.ts runningOut): at or below zero, or at most RUN_OUT_DAYS left. Without a withdrawal there is
+ * no estimate (and no notice unless the level is at or below zero). Not tracked (no intake yet): never running out.
+ */
+export function stockStatus(r: Pick<StockRow, "level" | "month" | "tracked">): { daysLeft: number | null; low: boolean } {
+  const perDay = r.month / 30;
+  const daysLeft = perDay > 0 ? Math.round((r.level / perDay) * 10) / 10 : null;
+  return { daysLeft, low: r.tracked && (r.level <= 0 || (daysLeft !== null && daysLeft <= RUN_OUT_DAYS)) };
 }

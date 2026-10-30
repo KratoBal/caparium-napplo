@@ -279,11 +279,11 @@ export function parseAmount(v: string): number | null {
   return Number(t);
 }
 
-const DIM: Record<string, string> = { MASS: "tömeg", COUNT: "darab", VOLUME: "térfogat" };
+export const DIM: Record<string, string> = { MASS: "tömeg", COUNT: "darab", VOLUME: "térfogat" };
 
 /** A feeding item: one recipient, one feed, at most one quantity per dimension (T-08). */
 /** EGY-03: the other feed names used before, offered while typing (a suggestion, not a list to pick from). */
-function OtherNames({ id, names }: { id: string; names?: string[] }) {
+export function OtherNames({ id, names }: { id: string; names?: string[] }) {
   if (!names?.length) return null;
   return (
     <datalist id={id}>
@@ -311,7 +311,7 @@ export type EditItem = {
 };
 
 /** The form's fields from an item: the amounts with a decimal comma, as typed elsewhere. */
-function editFields(item: EditItem) {
+export function editFields(item: EditItem) {
   return {
     values: Object.fromEntries(item.quantities.map((q) => [q.dimension, q.value.replace(".", ",")])),
     units: Object.fromEntries(item.quantities.map((q) => [q.dimension, q.unitId])),
@@ -327,7 +327,7 @@ export function EditButton({ label, onEdit }: { label: string; onEdit: () => voi
   );
 }
 
-function EditBar({ busy, onCancel }: { busy: boolean; onCancel: () => void }) {
+export function EditBar({ busy, onCancel }: { busy: boolean; onCancel: () => void }) {
   return (
     <button className="btn btn-soft" type="button" disabled={busy} onClick={onCancel}>
       Mégse
@@ -336,7 +336,7 @@ function EditBar({ busy, onCancel }: { busy: boolean; onCancel: () => void }) {
 }
 
 /** Brings a form being loaded with an item into view. */
-function showForm(testId: string) {
+export function showForm(testId: string) {
   document.querySelector(`[data-testid=${testId}]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 

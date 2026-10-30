@@ -1112,6 +1112,37 @@ for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti víz
   });
 }
 
+test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows on the list and does not change the stock", async ({ page }, info) => {
+  // each layout receives its own feed
+  const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";
+  await login(page, "teszt.akvarista1");
+  await page.getByRole("link", { name: "Takarmányhűtő" }).click();
+  await expect(page.getByTestId("day-picker").getByRole("button", { name: "Ugrás" })).toBeVisible();
+  const form = page.getByTestId("intake-form");
+  await form.getByLabel("Takarmány", { exact: true }).selectOption({ label: feedName });
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("1000");
+  await form.getByLabel("Megjegyzés").fill("nyitó készlet");
+  await form.getByRole("button", { name: "Mentés" }).click();
+  await expect(form.getByRole("status")).toHaveText("Tétel mentve.");
+  const listed = page.getByTestId("intake-list").getByRole("row").filter({ hasText: feedName });
+  await expect(listed).toHaveCount(1);
+  await expect(listed).toContainText("nyitó készlet");
+  const stockRow = page.getByTestId("feed-stock").getByRole("row").filter({ hasText: feedName });
+  await expect(stockRow).toHaveCount(1);
+  const level = (await stockRow.locator("td").nth(2).textContent()) ?? "";
+  expect(level).not.toBe("");
+  // sent back: the item shows, marked, and the stock stays as it was
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("500");
+  await form.getByLabel("Megjegyzés").fill("nem megfelelő");
+  await form.getByLabel("Visszaküldve").check();
+  await form.getByRole("button", { name: "Mentés" }).click();
+  await expect(form.getByRole("status")).toHaveText("Tétel mentve.");
+  const back = page.getByTestId("intake-list").getByRole("row").filter({ hasText: "nem megfelelő" });
+  await expect(back).toHaveCount(1);
+  await expect(back).toHaveAttribute("data-returned", "yes");
+  await expect(stockRow.locator("td").nth(2)).toHaveText(level);
+});
+
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
   // each layout takes out its own feed: one item per feed and day
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";
@@ -1674,7 +1705,7 @@ test("the day picker: the weekday under the date, the buttons and the calendar o
     const b = (await l.boundingBox())!;
     return b.y + b.height / 2;
   };
-  for (const path of ["/etetes", "/evesi-naplo", "/kivetel"]) {
+  for (const path of ["/etetes", "/evesi-naplo", "/kivetel", "/takarmanyhuto"]) {
     await page.goto(path);
     const nav = page.getByTestId("day-nav");
     await expect(page.getByTestId("shown-weekday")).toHaveText(/^(hétfő|kedd|szerda|csütörtök|péntek|szombat|vasárnap)$/);
