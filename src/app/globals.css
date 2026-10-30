@@ -357,7 +357,11 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
   .home-card-narrow { margin: 0 -18px; }
 }
 .home-card:hover img, .home-card:focus-visible img { outline: 3px solid var(--c-primary); outline-offset: 2px; }
-.home-caption { display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 18px; line-height: 1.3; }
+/* Lili 2026-10-30 14:03 UTC (msg 1565727727531593869): every caption on the home page in small capitals ("kiskapitális"), all alike:
+   all-small-caps sets the capitals of "NAPI VÍZMÉRÉS" and the capital letter of "Nagy medencék" in the same small capitals as the
+   rest. The typeface's own small capitals are used where it has them, else the browser scales its capitals, which have ő and ű; the
+   size is raised a little because small capitals read smaller than lower case at the same size. */
+.home-caption { display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 21px; line-height: 1.3; font-variant-caps: all-small-caps; letter-spacing: 0.04em; }
 @media (max-width: 720px) {
   .home-row { flex-direction: column; gap: 20px; }
   .home-card { flex-basis: auto; }

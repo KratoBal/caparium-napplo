@@ -1478,6 +1478,10 @@ test("home: the customer's illustrated cards, 3-3-3 with a narrow portrait one b
   // the pool group under it; measured by the first line's top edge
   const firstLines = await rows.nth(0).locator(".home-caption > span:first-child").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(new Set(firstLines).size).toBe(1);
+  // Lili 2026-10-30 14:03 UTC: every caption of the home page in small capitals, all alike
+  const caps = await page.locator(".home-caption").evaluateAll((els) => els.map((e) => getComputedStyle(e).fontVariantCaps));
+  expect(caps.length).toBeGreaterThan(5);
+  expect(new Set(caps)).toEqual(new Set(["all-small-caps"]));
   expect(await rows.nth(0).locator(".home-caption > span:first-child").allInnerTexts()).toEqual(["NAPI VÍZMÉRÉS", "NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS"]);
   expect(await captions(1)).toEqual(["Nyomelem és megkötő adagolás", "Fagyasztó", "Takarmány kalkulátor"]);
   expect(await captions(2)).toEqual(["Takarmány kivételi napló", "Egyedi takarmánynapló", "Evési napló"]);
