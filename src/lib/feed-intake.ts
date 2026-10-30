@@ -11,6 +11,7 @@ import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError } from "./errors";
 import { moduleLevel, pickValid } from "./master";
+import { otherKey, otherLabel } from "./other-name";
 import type { Actor } from "./measurements";
 import { canCreate, canModify, effectiveNow, type Decision, type Level } from "./permissions";
 import { RUN_OUT_DAYS } from "./notices";
@@ -164,6 +165,7 @@ export type StockRow = {
   key: string;
   feedId: string;
   feed: string;
+  /** the other name as a key (otherKey), null for a plain feed */
   otherName: string | null;
   dimension: Dimension;
   /** the base unit of the dimension: every number below is in it */
@@ -206,11 +208,13 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
   const todayDate = dayToDate(today);
   const rows = new Map<string, StockRow>();
   const row = (it: { feedId: string; otherName: string | null; feed: { names: { name: string; validFrom: Date; validTo: Date | null }[] } }, dimension: Dimension, unit: string) => {
-    const key = `${it.feedId}|${it.otherName?.toLowerCase() ?? ""}|${dimension}`;
+    // the other name as the reports and the Excel read it (other-name.ts): case and spaces do not make a second row
+    const other = it.otherName ? otherKey(it.otherName) : null;
+    const key = `${it.feedId}|${other ?? ""}|${dimension}`;
     let r = rows.get(key);
     if (!r) {
       const name = pickValid(it.feed.names, now)?.name ?? it.feed.names.at(-1)?.name ?? "?";
-      r = { key, feedId: it.feedId, feed: it.otherName ? `${name}: ${it.otherName}` : name, otherName: it.otherName, dimension, unit, received: 0, returned: 0, taken: 0, level: 0, negative: false, week: 0, month: 0, tracked: false };
+      r = { key, feedId: it.feedId, feed: other ? `${name}: ${otherLabel(other)}` : name, otherName: other, dimension, unit, received: 0, returned: 0, taken: 0, level: 0, negative: false, week: 0, month: 0, tracked: false };
       rows.set(key, r);
     }
     return r;

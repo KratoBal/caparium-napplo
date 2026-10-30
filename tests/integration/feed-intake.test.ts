@@ -84,14 +84,16 @@ describe("the stock is the intake that was not sent back, minus the withdrawals"
     expect(r).toMatchObject({ tracked: false, level: -40, negative: true });
   });
 
-  it("an other feed has its own row per name, whatever the case of the name; the name is required", async () => {
+  it("an other feed has its own row per name, whatever the case or the spaces of the name (as the reports); the name is required", async () => {
     const other = (await prisma.feed.findFirstOrThrow({ where: { type: { code: "EGYEB" } } })).id;
     await expectCode(receive("2026-08-12", other, { quantities: [{ value: "10", unitId: unit.g }] }), "OTHER_NAME");
     await receive("2026-08-12", other, { otherName: "Hűtő-teszt Rák", quantities: [{ value: "10", unitId: unit.g }] });
-    await receive("2026-08-12", other, { otherName: "hűtő-teszt rák", quantities: [{ value: "5", unitId: unit.g }] });
+    await receive("2026-08-12", other, { otherName: "hűtő-teszt  rák ", quantities: [{ value: "5", unitId: unit.g }] });
     await receive("2026-08-12", other, { otherName: "Hűtő-teszt kagyló", quantities: [{ value: "7", unitId: unit.g }] });
     const rows = (await feedStock(at("2026-08-13", "12:00"))).filter((r) => r.otherName && /^hűtő-teszt/i.test(r.otherName));
-    expect(rows.map((r) => [r.otherName?.toLowerCase(), r.level])).toEqual([["hűtő-teszt kagyló", 7], ["hűtő-teszt rák", 15]]);
+    expect(rows.map((r) => [r.otherName, r.level])).toEqual([["hűtő-teszt kagyló", 7], ["hűtő-teszt rák", 15]]);
+    // shown as the reports show it: one fixed form, capital first letter
+    expect(rows.map((r) => r.feed.split(": ")[1])).toEqual(["Hűtő-teszt kagyló", "Hűtő-teszt rák"]);
   });
 });
 
