@@ -340,7 +340,9 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 /* caparium-hibak-5: the home page's illustrated cards, 3-2-3, centred rows; one column on a phone */
 .home-cards { display: flex; flex-direction: column; gap: 28px; margin-top: 28px; }
 .home-row { display: flex; justify-content: center; gap: 28px; }
-.home-card { flex: 0 1 calc((100% - 56px) / 3); display: flex; flex-direction: column; align-items: center; gap: 12px; text-decoration: none; color: var(--c-ink); }
+.home-card { flex: 0 1 calc((100% - 56px) / 3); display: flex; flex-direction: column; align-items: center; gap: 3px; text-decoration: none; color: var(--c-ink); }
+/* Lili 2026-10-30 14:12 UTC (msg 1565730054934364302): "picit mehetnek feljebb a szövegek a képekhez": the distance from a picture to its caption
+   is about half of what it was (12 px gap, 18 px to the capitals) on every card alike; the distance between the rows is as before (28 px) */
 .home-card img { width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--c-line); display: block; }
 /* the narrow portrait card (Lili 2026-10-30): half the width of a landscape card and a 3:4 picture, so it is as tall as the two
    beside it and the row stays symmetric around it */

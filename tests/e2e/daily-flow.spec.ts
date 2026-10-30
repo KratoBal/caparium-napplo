@@ -1494,6 +1494,12 @@ test("home: the customer's illustrated cards, 3-3-3 with a narrow portrait one b
       });
     }),
   );
+  // and 14:12 UTC (msg 1565730054934364302): the caption stands close under its picture, the same distance on every card (was 13 px)
+  const gaps = await page.locator(".home-card").evaluateAll((cards) =>
+    cards.map((c) => Math.round(c.querySelector(".home-caption")!.getBoundingClientRect().top - c.querySelector("img")!.getBoundingClientRect().bottom)),
+  );
+  expect(new Set(gaps).size).toBe(1);
+  expect(gaps[0]).toBeLessThanOrEqual(6);
   for (const card of lines) {
     for (const l of card) {
       expect(l.rects, `${l.text} on one line`).toBe(1);
