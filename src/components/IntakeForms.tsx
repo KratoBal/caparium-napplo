@@ -176,3 +176,45 @@ export function IntakeItems({ day, feeds, otherNames, items, editable }: { day: 
     </>
   );
 }
+
+/**
+ * The stock's first day (Lili 2026-10-30, acrobot 38592): what is dated before it is archive. It stays in the logs, the
+ * reports and the exports at full value and is not in the stock, so old data can be entered back in time without
+ * touching the stock, and nothing has to be deleted. Everyone sees the day; only an admin sets it.
+ */
+export function StockStart({ start, today, canSet }: { start: string | null; today: string; canSet: boolean }) {
+  const [value, setValue] = useState(start ?? "");
+  const { msg, busy, run } = useSend();
+  return (
+    <div data-testid="stock-start">
+      <p className="hint">
+        {start
+          ? `A készlet kezdete: ${start}. Ami ennél korábbi, az archívum: a naplóban, a kimutatásokban és az exportban teljes értékű, a készletbe nem számít.`
+          : "A készlet kezdete: takarmányonként az első be nem küldött bevételezés napja. Egy kifejezett kezdőnapot adminisztrátor állíthat."}
+      </p>
+      {canSet && (
+        <div className="toolbar">
+          <label className="field">
+            A készlet kezdőnapja
+            <input className="input" type="date" max={today} value={value} onChange={(e) => setValue(e.target.value)} aria-label="A készlet kezdőnapja" />
+          </label>
+          <button className="btn" type="button" disabled={busy || !value} onClick={() => void run("/api/feed-intake/stock-start", { start: value }, "A készlet kezdete beállítva.")}>
+            Kezdőnap mentése
+          </button>
+          <button
+            className="btn btn-soft"
+            type="button"
+            disabled={busy || !start}
+            onClick={() => {
+              setValue("");
+              void run("/api/feed-intake/stock-start", { start: "" }, "A kezdőnap törölve: az első bevételezéstől számít.");
+            }}
+          >
+            Alaphelyzet
+          </button>
+          <Msg msg={msg} />
+        </div>
+      )}
+    </div>
+  );
+}

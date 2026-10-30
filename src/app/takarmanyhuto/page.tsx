@@ -1,9 +1,9 @@
 import { DayJump, DayNav } from "@/components/DayNav";
 import type { FeedOpt } from "@/components/FeedingForms";
-import { IntakeItems } from "@/components/IntakeForms";
+import { IntakeItems, StockStart } from "@/components/IntakeForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
-import { feedStock, intakeDayView, stockStatus } from "@/lib/feed-intake";
+import { feedStock, getStockStart, intakeDayView, stockStatus } from "@/lib/feed-intake";
 import { knownOtherNames, listFeeds } from "@/lib/feeds";
 import { plainNumber as num, rowForDisplay } from "@/lib/mass-display";
 import { requireModuleRead } from "@/lib/session";
@@ -20,12 +20,13 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
   const today = businessDayOf(now);
   const sp = await searchParams;
   const day = sp.nap && isValidDay(sp.nap) && sp.nap <= today ? sp.nap : today;
-  const [items, stock, types, units, otherNames] = await Promise.all([
+  const [items, stock, types, units, otherNames, stockStart] = await Promise.all([
     intakeDayView(day),
     feedStock(now),
     listFeeds(),
     prisma.unit.findMany({ where: { active: true }, orderBy: { symbol: "asc" } }),
     knownOtherNames(),
+    getStockStart(),
   ]);
   const canRecord = level === "RECORD" || level === "ADMIN";
   // the server decides: an aquarist records today, an earlier day is the admin's
@@ -59,7 +60,8 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
 
       <div className="card">
         <h2>Készlet</h2>
-        <p className="hint">A bevételezett mínusz a kivett takarmány. A készlet az első be nem küldött (nem visszaküldött) bevételezés napjától számít: az előtti kivételek nem vonódnak le belőle. Amelyik takarmányhoz még nincs ilyen bevétel, az nem szerepel itt, és a kivezetett (inaktív) takarmány sem. A becsült napok 0-ra állnak, ha a készlet elfogyott. A becsült napok az elmúlt 30 nap átlagos kivétele szerint értendők.</p>
+        <p className="hint">A bevételezett mínusz a kivett takarmány, a kezdőnaptól számítva. Amelyik takarmányhoz még nincs be nem küldött bevétel, az nem szerepel itt, és a kivezetett (inaktív) takarmány sem. A becsült napok az elmúlt 30 nap átlagos kivétele szerint értendők, és 0-ra állnak, ha a készlet elfogyott.</p>
+        <StockStart start={stockStart} today={today} canSet={level === "ADMIN"} />
         <div className="table-scroll">
           <table className="log-table" data-testid="feed-stock">
             <thead>

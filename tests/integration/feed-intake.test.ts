@@ -3,7 +3,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { feedStock, intakeDayView, invalidateIntakeItem, saveIntakeItem } from "@/lib/feed-intake";
+import { feedStock, getStockStart, intakeDayView, invalidateIntakeItem, saveIntakeItem, setStockStart } from "@/lib/feed-intake";
 import { createFeed, listFeeds } from "@/lib/feeds";
 import { invalidateWithdrawalItem, saveWithdrawalItem } from "@/lib/withdrawal";
 import { fixtures, rid } from "./fixtures";
@@ -155,5 +155,48 @@ describe("who may record intake, and when", () => {
     expect((await listFeeds()).flatMap((t) => t.feeds).find((x) => x.id === feedId)?.uses).toBe(0);
     await receive("2026-08-19", feedId, { quantities: [{ value: "5", unitId: unit.g }] });
     expect((await listFeeds()).flatMap((t) => t.feeds).find((x) => x.id === feedId)?.uses).toBe(1);
+  });
+});
+
+// Lili 2026-10-30 (acrobot 38592): an explicit first day of the stock; what is dated before it is archive. Last in the file and
+// cleared at its end: the setting is global and the cases above work on days before the one set here.
+describe("the stock's first day, set by an admin", () => {
+  it("only an admin sets it, never a future day; the intake and withdrawals before it are archive, nothing is deleted", async () => {
+    const feedId = await newFeed("Hűtő-teszt kezdőnap");
+    const now = at("2026-08-12", "12:00");
+    const set = (start: string, actor = f.admin, t = "10:00") => setStockStart(actor, { requestId: rid(), start }, at("2026-08-12", t));
+    await receive("2026-08-05", feedId, { quantities: [{ value: "3", unitId: unit.kg }] });
+    await take("2026-08-06", feedId, { quantities: [{ value: "500", unitId: unit.g }] });
+    await receive("2026-08-10", feedId, { quantities: [{ value: "2", unitId: unit.kg }] });
+    await take("2026-08-11", feedId, { quantities: [{ value: "100", unitId: unit.g }] });
+    try {
+      // no day set: from the first intake that was not sent back (the 5th)
+      expect(await getStockStart()).toBeNull();
+      expect((await rowsOf(feedId, now))[0]).toMatchObject({ received: 5000, taken: 600, level: 4400 });
+
+      await expectCode(set("2026-08-08", f.aq1), "ADMIN_ONLY");
+      await expectCode(set("2026-08-13"), "FUTURE_DAY");
+      await set("2026-08-08");
+      expect(await getStockStart()).toBe("2026-08-08");
+      // from the 8th: the intake of the 10th minus the withdrawal of the 11th; the 5th and the 6th are archive
+      expect((await rowsOf(feedId, now))[0]).toMatchObject({ received: 2000, taken: 100, level: 1900, tracked: true });
+      // nothing was deleted: the logs still hold the early items
+      expect((await intakeDayView("2026-08-05")).some((i) => i.feedId === feedId)).toBe(true);
+      expect(await prisma.withdrawalItem.count({ where: { feedId, status: "VALID" } })).toBe(2);
+      // an item recorded back in time, before the day, does not touch the stock
+      await receive("2026-08-02", feedId, { quantities: [{ value: "9", unitId: unit.kg }] }, f.admin);
+      expect((await rowsOf(feedId, now))[0]).toMatchObject({ received: 2000, level: 1900 });
+      // a feed whose only intake is archive has no stock from the day on
+      const archived = await newFeed("Hűtő-teszt csak archív");
+      await receive("2026-08-04", archived, { quantities: [{ value: "1", unitId: unit.kg }] });
+      expect(await rowsOf(archived, now)).toEqual([]);
+
+      await expectCode(set("2026-08-08", f.admin, "10:03"), "NO_CHANGE");
+      await set("", f.admin, "10:05");
+      expect(await getStockStart()).toBeNull();
+      expect((await rowsOf(feedId, now))[0]).toMatchObject({ received: 14000, taken: 600, level: 13400 });
+    } finally {
+      if (await getStockStart()) await set("", f.admin, "10:09");
+    }
   });
 });
