@@ -51,6 +51,10 @@ export const SETTING_DEFAULTS = {
   // caparium-indoklas-ki (Balázs 2026-10-20 19:21 UTC, msg 1562184077489209436): the reasons are off; a setting row
   // "true" brings every reason rule back as it was (src/lib/reasons.ts).
   reason_required: "false",
+  // Lili 2026-10-30 (Takarmányhűtő, acrobot 38592): the day the feed stock starts counting, set by an admin on the
+  // Takarmányhűtő page; empty = each feed counts from its first intake that was not sent back. What lies before it stays
+  // in the logs, the reports and the exports at full value and is not in the stock (src/lib/feed-intake.ts feedStock).
+  feed_stock_start: "",
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

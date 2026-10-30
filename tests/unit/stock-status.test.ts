@@ -17,7 +17,7 @@ describe("stockStatus", () => {
   });
 
   it("never alerts a feed without intake", () => {
-    expect(stockStatus({ level: -40, month: 40, tracked: false, active: true })).toEqual({ daysLeft: -30, low: false });
+    expect(stockStatus({ level: -40, month: 40, tracked: false, active: true })).toEqual({ daysLeft: 0, low: false });
   });
 });
 
@@ -25,5 +25,12 @@ describe("stockStatus, an inactive feed", () => {
   it("never runs out: a feed taken out of the list does not alert, whatever its level", () => {
     expect(stockStatus({ level: 0, month: 0, tracked: true, active: false }).low).toBe(false);
     expect(stockStatus({ level: 0, month: 0, tracked: true, active: true }).low).toBe(true);
+  });
+});
+
+describe("stockStatus, days at or below zero", () => {
+  it("a stock below zero has 0 days, never a negative number", () => {
+    expect(stockStatus({ level: -600, month: 3000, tracked: true, active: true })).toEqual({ daysLeft: 0, low: true });
+    expect(stockStatus({ level: 0, month: 3000, tracked: true, active: true })).toEqual({ daysLeft: 0, low: true });
   });
 });
