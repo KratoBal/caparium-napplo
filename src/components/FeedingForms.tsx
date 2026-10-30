@@ -261,7 +261,7 @@ export function FinalizeList({ day, finalized, editable }: { day: string; finali
 }
 
 /** `color`: the feeding sheet's row colour (sheet-color-palette.ts), set in Beállítások; only the sheet reads it */
-export type Recipient = { key: string; label: string; animalId?: string; groupId?: string; color?: string | null };
+export type Recipient = { key: string; label: string; animalId?: string; groupId?: string; color?: string | null; note?: string };
 export type FeedOpt = {
   id: string;
   name: string;

@@ -18,8 +18,9 @@
 // someone else is a conflict on that cell, never silently overwritten (barracuda #45). Unsaved drafts ask before the
 // page is left, as the measurement page does (#38). A cell keeps one request id per change until it is saved (#42).
 import { useRouter } from "next/navigation";
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { sheetColorBg } from "@/lib/sheet-color-palette";
+import { vanishedDrafts } from "@/lib/sheet-drafts";
 import { formatDay } from "@/lib/time";
 import { ClearX } from "./ClearX";
 import { DayControls, type DayLock } from "./DayControls";
@@ -186,6 +187,32 @@ export function FeedingSheet({
   useLeaveWarning(changed.length, LEAVE_WARNING);
 
   const drop = <T,>(list: T[], key: T) => list.filter((x) => x !== key);
+  // A row that is gone after a refresh (an animal moved into a group, say) takes its drafts with it: they are dropped and the sheet says
+  // which row's draft was lost, instead of keeping them invisible in memory (Lili 2026-10-30, task caparium-csoport-sor). The drafts are
+  // read when the set of rows changes, not on every render.
+  const labels = useRef<Map<string, string>>(new Map(recipients.map((r) => [r.key, r.label])));
+  const rowKeys = recipients.map((r) => r.key).join("\u0000");
+  useEffect(() => {
+    const { drop: gone, message } = vanishedDrafts({
+      draftKeys: Object.keys(drafts),
+      present: new Set(recipients.map((r) => r.key)),
+      dirty: (rec, feedId) => {
+        const f = feeds.find((x) => x.id === feedId);
+        return !!f && isDirty(rec, f);
+      },
+      labelOf: (rec) => labels.current.get(rec) ?? "?",
+      feedName: (feedId) => feeds.find((x) => x.id === feedId)?.name ?? "?",
+    });
+    labels.current = new Map(recipients.map((r) => [r.key, r.label]));
+    if (gone.length === 0) return;
+    const goneSet = new Set(gone);
+    setDrafts((cur) => Object.fromEntries(Object.entries(cur).filter(([k]) => !goneSet.has(k))));
+    setBad((cur) => cur.filter((k) => !goneSet.has(k)));
+    setFailed((cur) => cur.filter((k) => !goneSet.has(k)));
+    setRequestIds((cur) => Object.fromEntries(Object.entries(cur).filter(([k]) => !goneSet.has(k))));
+    if (message) setLocalMsg(message);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowKeys]);
   function type(rec: string, f: FeedOpt, dimension: string, value: string) {
     const key = cellKey(rec, f.id);
     setDrafts((cur) => {
@@ -345,7 +372,7 @@ export function FeedingSheet({
                       data-open={open ? "1" : undefined}
                       onClick={editable ? () => onActive(r.key) : undefined}
                     >
-                      <td className="sheet-name">
+                      <td className="sheet-name" title={r.note}>
                         {phone ? (
                           <button
                             type="button"
@@ -357,7 +384,14 @@ export function FeedingSheet({
                               if (!open && editable) onActive(r.key);
                             }}
                           >
-                            <span className="sheet-label">{r.label}</span>
+                            <span className="sheet-label">
+                              {r.label}
+                              {r.note && (
+                                <small className="sheet-note" aria-hidden="true">
+                                  {r.note}
+                                </small>
+                              )}
+                            </span>
                             <span className="sheet-sum">{fmt(rowTotal(r.key)) || "0"}</span>
                             {rowFailed(r.key) ? (
                               <span className="sheet-dot bad" role="img" aria-label="Nem mentődött érték" data-testid={`sheet-mark-${r.label}`} />
@@ -367,7 +401,15 @@ export function FeedingSheet({
                             <span className="sheet-chevron" aria-hidden="true" />
                           </button>
                         ) : (
-                          r.label
+                          <>
+                            {r.label}
+                            {r.note && (
+                              <span className="hint sheet-note" aria-hidden="true">
+                                {" "}
+                                ({r.note})
+                              </span>
+                            )}
+                          </>
                         )}
                       </td>
                       {feeds.map((f) => {
