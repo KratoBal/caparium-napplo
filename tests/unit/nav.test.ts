@@ -21,15 +21,16 @@ describe("the main navigation", () => {
   });
 
   it("gives admins the extra entries after the common ones, and nobody else", () => {
-    expect(labels("ADMIN").slice(-3)).toEqual(["Függő mentések", "Állatok", "Beállítások"]);
+    expect(labels("ADMIN").slice(-4)).toEqual(["Függő mentések", "Állatok", "Beállítások", "Aktivitás"]);
     for (const role of ["AQUARIST", "SYSTEM"] as const) {
       expect(labels(role)).not.toContain("Függő mentések");
       expect(labels(role)).not.toContain("Beállítások");
+      expect(labels(role)).not.toContain("Aktivitás");
     }
   });
 
   it("keeps every other entry for the aquarist (nothing else was hidden)", () => {
-    expect(labels("AQUARIST")).toEqual(labels("ADMIN").filter((l) => !["Állatok", "Függő mentések", "Beállítások"].includes(l)));
+    expect(labels("AQUARIST")).toEqual(labels("ADMIN").filter((l) => !["Állatok", "Függő mentések", "Beállítások", "Aktivitás"].includes(l)));
     expect(new Set(labels("ADMIN")).size).toBe(labels("ADMIN").length);
   });
 
@@ -38,7 +39,7 @@ describe("the main navigation", () => {
     expect(labels("ADMIN")).toEqual([
       "START", "Napi vízmérés", "Heti vízmérés", "Export", "Takarmánynapló", "Evési napló", "Takarmánykivétel",
       "Takarmánykalkulátor", "Vegyszeradagolás", "Vízmérési napló", "Takarmányozási napló", "Takarmánylista",
-      "Kimutatások", "Függő mentések", "Állatok", "Beállítások",
+      "Kimutatások", "Függő mentések", "Állatok", "Beállítások", "Aktivitás",
     ]);
   });
 
@@ -49,6 +50,6 @@ describe("the main navigation", () => {
       expect(tone(l), l).toBe("feed");
     }
     // the control: the entries Lili marked "szín marad" are really plain, so the two checks above cannot pass on a menu where everything is colored
-    for (const l of ["START", "Export", "Kimutatások", "Függő mentések", "Állatok", "Beállítások"]) expect(tone(l), l).toBeUndefined();
+    for (const l of ["START", "Export", "Kimutatások", "Függő mentések", "Állatok", "Beállítások", "Aktivitás"]) expect(tone(l), l).toBeUndefined();
   });
 });
