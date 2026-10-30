@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Shell } from "@/components/Shell";
+import { helperStockAccess } from "@/lib/helper-access";
 import { feedingHelper, waterHelper } from "@/lib/helpers";
 import { prisma } from "@/lib/db";
 import { moduleLevel } from "@/lib/master";
@@ -50,7 +51,7 @@ export default async function OverviewPage() {
         })
       : [];
   return (
-    <Shell active="overview" user={user} helper={water ? await waterHelper(dosing) : feeding ? await feedingHelper(dosing) : null}>
+    <Shell active="overview" user={user} helper={water ? await waterHelper(await helperStockAccess(user)) : feeding ? await feedingHelper(await helperStockAccess(user)) : null}>
       <h2 style={{ fontSize: 40 }}>Jó munkát!</h2>
       <p className="hint" style={{ fontSize: 17 }}>A mai feladatok és a naplók állapota egy helyen.</p>
       {/* the daily count the old tile carried */}

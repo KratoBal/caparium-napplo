@@ -3,13 +3,12 @@ import { Shell } from "@/components/Shell";
 import type { FeedTypeOpt } from "@/components/FeedingForms";
 import { FeedingListsEditor } from "@/components/FeedingLists";
 import { Timetable } from "@/components/Timetable";
-import { prisma } from "@/lib/db";
 import { feedingDayView } from "@/lib/feeding";
 import { activeFeedingLists } from "@/lib/feeding-lists";
 import { listFeeds } from "@/lib/feeds";
 import { currentPlans } from "@/lib/feeding-plan";
 import { feedingHelper } from "@/lib/helpers";
-import { moduleLevel } from "@/lib/master";
+import { helperStockAccess } from "@/lib/helper-access";
 import { requireModuleRead } from "@/lib/session";
 import { businessDayOf } from "@/lib/time";
 
@@ -30,7 +29,7 @@ export default async function TimetablePage() {
     .filter((t) => t.feeds.length > 0);
   const animals = view.animals.map((a) => ({ id: a.id, name: a.name, groupName: a.groupName, poolName: a.poolName, weekdays: plans[a.id] ?? [] }));
   return (
-    <Shell title="Etetési rend" active="feeding" user={user} helper={await feedingHelper((await moduleLevel(prisma, user.id, user.role, "DOSING")) !== "NONE")}>
+    <Shell title="Etetési rend" active="feeding" user={user} helper={await feedingHelper(await helperStockAccess(user))}>
       <Timetable animals={animals} editable />
       {/* Lili 2026-10-26 (item 1): the named feeding lists, composed by the feeding admin */}
       {

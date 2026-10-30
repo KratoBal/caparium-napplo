@@ -7,7 +7,9 @@
 
 import { eatingDayView } from "./eating";
 import { EAT_LABEL, GIVEN } from "./eating-labels";
+import { feedStock, stockStatus } from "./feed-intake";
 import { feedingDayView } from "./feeding";
+import { rowForDisplay } from "./mass-display";
 import { missedMeasurements, runningOut } from "./notices";
 import { getGrid, listGroups } from "./queries";
 import { businessDayOf } from "./time";
@@ -22,8 +24,15 @@ export type HelperData = {
   /** what the alert is about; it opens by itself once per key and session */
   alertKey?: string;
   /** which picture the figure takes with the alert (Lili 2026-10-29, item 10): the measurement first, as in the text */
-  alertKind?: "measurement" | "stock";
+  alertKind?: "measurement" | "stock" | "feed";
 };
+
+/**
+ * Who sees the stock alerts: the chemicals' (R-17, the dosing module) and the feed's (the Takarmányhűtő, the withdrawal
+ * module). A plain boolean is the chemicals' alone, as before the freezer stock existed.
+ */
+export type StockAccess = boolean | { chemicals: boolean; feed: boolean };
+const accessOf = (a: StockAccess) => (typeof a === "boolean" ? { chemicals: a, feed: false } : a);
 
 /** Several urgent notices in one alert: one sentence each, and one key made of theirs. */
 function joinAlerts(parts: Pick<HelperData, "alert" | "alertKey" | "alertKind">[]): Pick<HelperData, "alert" | "alertKey" | "alertKind"> {
@@ -47,6 +56,26 @@ async function stockAlert(now: Date): Promise<Pick<HelperData, "alert" | "alertK
   };
 }
 
+/**
+ * "Vészesen fogy a(z) <takarmány>!" (Lili 2026-10-29, item 10 and package item 9): a feed of the Takarmányhűtő at or below
+ * zero, or at most a few days left by the average withdrawal (the chemicals' rule, stockStatus). Only a feed with an intake
+ * has a stock, so the first days after the freezer starts raise nothing for the feeds nobody received yet.
+ */
+async function feedAlert(now: Date): Promise<Pick<HelperData, "alert" | "alertKey" | "alertKind">> {
+  const low = (await feedStock(now)).filter((r) => stockStatus(r).low);
+  if (!low.length) return {};
+  const shown = (r: (typeof low)[number]) => {
+    const s = rowForDisplay(r.unit, [r.level]);
+    return `${r.feed} (${s.values[0]} ${s.unit})`;
+  };
+  return {
+    alert: `Vészesen fogy a(z) ${low.map(shown).join(", ")}!`,
+    alertKind: "feed",
+    // which feeds, not their levels: a withdrawal that moves a level does not make it a new alert
+    alertKey: `takarmany:${low.map((r) => r.key).sort().join("|")}`,
+  };
+}
+
 /** The day's measurement still missing after the deadline (JAV-07), as an urgent notice of the water helper. */
 function missedAlert(missed: Awaited<ReturnType<typeof missedMeasurements>>): Pick<HelperData, "alert" | "alertKey" | "alertKind"> {
   if (!missed.due || !missed.pools.length) return {};
@@ -62,7 +91,8 @@ function missedAlert(missed: Awaited<ReturnType<typeof missedMeasurements>>): Pi
 
 /** Antennarius, the water helper. */
 // R-17: the stock alert only for someone who may read the dosing module (`stock`), the rest is the page's own
-export async function waterHelper(stock: boolean, now = new Date()): Promise<HelperData> {
+export async function waterHelper(access: StockAccess, now = new Date()): Promise<HelperData> {
+  const stock = accessOf(access);
   const day = businessDayOf(now);
   const missed = await missedMeasurements(now);
   const grids = (await Promise.all((await listGroups()).filter((g) => g.frequency === "DAILY").map((g) => getGrid(g.id, day)))).filter((g) => g !== null);
@@ -85,12 +115,13 @@ export async function waterHelper(stock: boolean, now = new Date()): Promise<Hel
       { q: "Melyik érték lóg ki ma?", a: out.length ? out.join("; ") + "." : "Ma egyik mért érték sem lóg ki a referenciából." },
       { q: "Késésben vagyunk?", a: missed.due ? (missed.pools.length ? `Elmúlt a határidő, és még vár: ${missed.pools.join(", ")}.` : "Nem: minden megvan.") : "Még nem járt le a mai határidő." },
     ],
-    ...joinAlerts([missedAlert(missed), stock ? await stockAlert(now) : {}]),
+    ...joinAlerts([missedAlert(missed), stock.chemicals ? await stockAlert(now) : {}, stock.feed ? await feedAlert(now) : {}]),
   };
 }
 
 /** Zebracápa, the feeding helper. */
-export async function feedingHelper(stock: boolean, now = new Date()): Promise<HelperData> {
+export async function feedingHelper(access: StockAccess, now = new Date()): Promise<HelperData> {
+  const stock = accessOf(access);
   const day = businessDayOf(now);
   const [feed, eat] = await Promise.all([feedingDayView(day), eatingDayView(day)]);
   const names = new Map(feed.animals.map((a) => [a.id, a.name]));
@@ -113,6 +144,6 @@ export async function feedingHelper(stock: boolean, now = new Date()): Promise<H
       { q: "Kész a mai lista?", a: feed.listState === "FINALIZED" ? "Igen, a lista kész." : "Még nincs kész: akit a kész listán nem választanak ki, a nap végén koplalónapot kap." },
     ],
     perAnimal,
-    ...(stock ? await stockAlert(now) : {}),
+    ...joinAlerts([stock.chemicals ? await stockAlert(now) : {}, stock.feed ? await feedAlert(now) : {}]),
   };
 }
