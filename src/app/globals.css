@@ -87,6 +87,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .topbar h1 { order: 3; flex: 1 1 100%; font-size: 18px; padding-bottom: 2px; }
   .head .pill { margin-left: auto; padding: 6px 10px; font-size: 13px; }
   .head > .topbar > .pill + span[aria-hidden="true"] { display: none; }
+  /* before the page is hydrated the old box is still in the markup: hidden at once, so the row does not jump from two lines to one when the button comes */
+  .topbar > .userbox, .topbar > .helper-toggle { display: none; }
   .nav { grid-row: 2; position: sticky; top: 0; z-index: 30; }
   .main { grid-row: 3; }
   .profile { position: relative; flex: none; }

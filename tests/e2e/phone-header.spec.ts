@@ -22,6 +22,8 @@ test.describe("phone, 390 px", () => {
 
   test("one compact row, a profile button that opens the name, the switch and the Kilépés, the menu row sticks", async ({ page }) => {
     await login(page, "teszt.akvarista1");
+    // the button comes with the hydration; the row is one row before and after it
+    await expect(page.getByTestId("profile-button")).toBeVisible();
     // the start page has no title: the head is the one row (at most 64 px), the menu right under it
     const heights = await page.evaluate(() => ({
       head: document.querySelector(".head")!.getBoundingClientRect().height,
@@ -53,7 +55,8 @@ test.describe("phone, 390 px", () => {
     // a tap elsewhere closes it too
     await button.click();
     await expect(panel).toBeVisible();
-    await page.getByRole("heading", { name: "Jó munkát!" }).click();
+    // (the empty margin of the page, left of the cards: no link there)
+    await page.mouse.click(4, 400);
     await expect(panel).toHaveCount(0);
     // a page with a title: the title is a thin line under the row, the head still well under a quarter of the screen
     await page.goto("/vizmeres");
