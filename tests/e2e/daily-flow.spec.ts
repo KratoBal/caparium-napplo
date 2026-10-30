@@ -2258,3 +2258,87 @@ test("the helper greets after the login, goes with the first click that still wo
   await page.keyboard.press("Tab");
   await expect(page.locator('[data-testid="helper-notice"][data-kind="greeting"]')).toHaveCount(0);
 });
+
+// Lili 2026-10-30 (msg 1565719910833721357, acrobot 38772): the corner figure is a little larger, can be dragged with a mouse (a finger is the
+// same pointer events) inside the screen, keeps its place per user, goes back to the corner on a double click, and a drag does not open the bubble.
+test("the helper figure: dragged inside the screen, its place kept after a reload, no bubble after a drag, back in the corner on a double click", async ({ page }) => {
+  await login(page, "teszt.akvarista1");
+  const helper = page.getByTestId("helper");
+  await expect(helper).toHaveAttribute("data-ready", "1");
+  const button = helper.getByTestId("helper-button");
+  const view = page.viewportSize()!;
+  const box = async () => (await button.boundingBox())!;
+  const centre = (b: { x: number; y: number; width: number; height: number }) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
+  const inside = (b: { x: number; y: number; width: number; height: number }) => b.x >= 0 && b.y >= 0 && b.x + b.width <= view.width && b.y + b.height <= view.height;
+
+  // a click anywhere takes the greeting away (it is not a click on the figure's bubble), then the figure is at rest in its corner
+  await page.mouse.click(5, 5);
+  await expect(helper).not.toHaveAttribute("data-placed", "1");
+  const corner = await box();
+  expect(corner.height, "a little larger than the 100 px of before").toBeGreaterThan(110);
+  expect(corner.x + corner.width, "the corner: the right edge 16 px from the screen's").toBeGreaterThan(view.width - 24);
+
+  // a drag to the upper left: the figure moves, the bubble does not open, the place is marked
+  const from = centre(corner);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x - 300, from.y - 250, { steps: 8 });
+  await page.mouse.up();
+  await expect(helper).toHaveAttribute("data-placed", "1");
+  const moved = await box();
+  expect(moved.x).toBeLessThan(corner.x - 200);
+  expect(moved.y).toBeLessThan(corner.y - 150);
+  expect(inside(moved)).toBe(true);
+  await expect(button).toHaveAttribute("aria-expanded", "false");
+
+  // the place is kept after a reload (per user, in the browser)
+  await page.reload();
+  await expect(helper).toHaveAttribute("data-ready", "1");
+  const kept = await box();
+  expect(Math.abs(kept.x - moved.x)).toBeLessThan(3);
+  expect(Math.abs(kept.y - moved.y)).toBeLessThan(3);
+
+  // dragged far beyond the screen's edges, the figure stays inside it
+  const c = centre(kept);
+  await page.mouse.move(c.x, c.y);
+  await page.mouse.down();
+  await page.mouse.move(-400, -400, { steps: 6 });
+  await page.mouse.up();
+  const topLeft = await box();
+  expect(inside(topLeft)).toBe(true);
+  expect(topLeft.x).toBeLessThan(40);
+  expect(topLeft.y).toBeLessThan(40);
+  await page.mouse.move(centre(topLeft).x, centre(topLeft).y);
+  await page.mouse.down();
+  await page.mouse.move(view.width + 400, view.height + 400, { steps: 6 });
+  await page.mouse.up();
+  expect(inside(await box())).toBe(true);
+
+  // a plain click still opens the bubble, and the bubble stays inside the screen wherever the figure stands: at the bottom right (above it)
+  await button.click();
+  await expect(button).toHaveAttribute("aria-expanded", "true");
+  expect(inside((await page.locator(".helper-bubble").first().boundingBox())!)).toBe(true);
+  // two clicks within 350 ms on one spot are a double click (back to the corner): this one comes later, as a person's second click would
+  await page.waitForTimeout(450);
+  await button.click();
+  await expect(button).toHaveAttribute("aria-expanded", "false");
+  // and at the top left (below it, opening to the right)
+  const here = centre(await box());
+  await page.mouse.move(here.x, here.y);
+  await page.mouse.down();
+  await page.mouse.move(-400, -400, { steps: 6 });
+  await page.mouse.up();
+  await button.click();
+  await expect(button).toHaveAttribute("aria-expanded", "true");
+  expect(inside((await page.locator(".helper-bubble").first().boundingBox())!)).toBe(true);
+
+  // a double click puts it back in the corner (the clicks before it were more than 350 ms ago)
+  await page.waitForTimeout(450);
+  await button.dblclick();
+  await expect(helper).not.toHaveAttribute("data-placed", "1");
+  const back = await box();
+  expect(Math.abs(back.x - corner.x)).toBeLessThan(3);
+  expect(Math.abs(back.y - corner.y)).toBeLessThan(3);
+  await page.reload();
+  await expect(helper).not.toHaveAttribute("data-placed", "1");
+});

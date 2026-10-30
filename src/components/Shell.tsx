@@ -71,7 +71,7 @@ export async function Shell({
       <main className="main">
         <ReasonProvider on={reasons}>{children}</ReasonProvider>
       </main>
-      {helper && <Helper data={helper} userName={user ? greetingName(user) : undefined} loginAt={user?.sessionStartedAt} />}
+      {helper && <Helper data={helper} userName={user ? greetingName(user) : undefined} loginAt={user?.sessionStartedAt} userKey={user?.id} />}
     </div>
   );
 }

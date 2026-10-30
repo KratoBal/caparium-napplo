@@ -14,9 +14,10 @@
 // tablet e2e of #109, where the greeting sat on "Tétel mentése"; barracuda on #109: in the afternoon the
 // measurement alert would open on every water page). The bubble with the questions opens only from the
 // figure, and starts with the alert.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { HelperData } from "@/lib/helpers";
 import { followAnswer, followNotice, type Notice } from "@/lib/helper-notice";
+import { anchorOf, isDoubleTap, isDrag, KEY_STEP, placeKey, placeToPx, pxToPlace, readPlace, writePlace, type Place } from "@/lib/helper-place";
 import { readOff, SWITCH_EVENT } from "@/lib/helper-switch";
 import { REMINDER_EVENT, REMINDER_TEXT } from "@/lib/save-reminder";
 
@@ -28,7 +29,7 @@ const GREETING_PICTURES = 3;
 // the alert waits a beat after the greeting went: a click that LEAVES the page (a menu link) must not mark it heard
 const ALERT_AFTER_GREETING_MS = 600;
 
-export function Helper({ data, userName, loginAt }: { data: HelperData; userName?: string; loginAt?: number }) {
+export function Helper({ data, userName, loginAt, userKey }: { data: HelperData; userName?: string; loginAt?: number; userKey?: string }) {
   const [off, setOff] = useState(false);
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -38,6 +39,16 @@ export function Helper({ data, userName, loginAt }: { data: HelperData; userName
   const [greetingPicture, setGreetingPicture] = useState(1);
   // set once the stored state is read: before that a click could race the auto-open below
   const [ready, setReady] = useState(false);
+  // Lili 2026-10-30 (msg 1565719910833721357): the figure can be dragged (a mouse, a finger), stays inside the screen, keeps its place
+  // per user and goes back to its corner on a double click or tap. `place` null is the corner; a size tick re-reads the screen on a resize.
+  const [place, setPlace] = useState<Place | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [, setScreenTick] = useState(0);
+  const figureRef = useRef<HTMLButtonElement>(null);
+  const press = useRef<{ id: number; x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
+  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
+  const suppressClick = useRef(false);
+  const storeKey = placeKey(userKey);
   const figure = FIGURE[data.who];
   // while it greets the figure wears a greeting picture, even with an alert waiting; then the alert's, else at rest the first
   const picture =
@@ -152,6 +163,94 @@ export function Helper({ data, userName, loginAt }: { data: HelperData; userName
     return () => window.removeEventListener(SWITCH_EVENT, onSwitch);
   }, [data.alert, data.alertKey]);
 
+  // the stored place is read after mounting (the server renders the corner); a resize re-fits it
+  useEffect(() => {
+    setPlace(readPlace(storeKey));
+    const onResize = () => setScreenTick((n) => n + 1);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [storeKey]);
+
+  const screenOf = () => {
+    const r = figureRef.current?.getBoundingClientRect();
+    return { vw: document.documentElement.clientWidth, vh: window.innerHeight, fw: r?.width ?? 100, fh: r?.height ?? 125 };
+  };
+  /** The figure goes to a top-left corner in px, inside the screen, and the place is kept. */
+  const moveTo = (x: number, y: number, keep: boolean) => {
+    const next = pxToPlace(x, y, screenOf());
+    setPlace(next);
+    if (keep) writePlace(storeKey, next);
+  };
+  const backToCorner = () => {
+    setPlace(null);
+    writePlace(storeKey, null);
+  };
+  const onFigureDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    // a new press: the click that followed an earlier drag is long past (CI run 41065294045: a click 60 ms after a drag was swallowed)
+    suppressClick.current = false;
+    const r = e.currentTarget.getBoundingClientRect();
+    press.current = { id: e.pointerId, x: e.clientX, y: e.clientY, left: r.left, top: r.top, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onFigureMove = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const p = press.current;
+    if (!p || p.id !== e.pointerId) return;
+    const dx = e.clientX - p.x;
+    const dy = e.clientY - p.y;
+    if (!p.moved && !isDrag(dx, dy)) return;
+    if (!p.moved) {
+      p.moved = true;
+      setDragging(true);
+    }
+    moveTo(p.left + dx, p.top + dy, false);
+  };
+  const onFigureUp = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const p = press.current;
+    if (!p || p.id !== e.pointerId) return;
+    press.current = null;
+    if (p.moved) {
+      // the click that follows the release of a drag must not open the bubble: it comes right after the release, and the flag is
+      // cleared by the next press or key, not by a timer (a click soon after a drag is a new click and must open it)
+      suppressClick.current = true;
+      setDragging(false);
+      moveTo(p.left + (e.clientX - p.x), p.top + (e.clientY - p.y), true);
+      lastTap.current = null;
+      return;
+    }
+    const tap = { t: Date.now(), x: e.clientX, y: e.clientY };
+    if (isDoubleTap(lastTap.current, tap)) {
+      lastTap.current = null;
+      backToCorner();
+    } else lastTap.current = tap;
+  };
+  const onFigureKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    suppressClick.current = false;
+    const r = figureRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const step = { ArrowLeft: [-KEY_STEP, 0], ArrowRight: [KEY_STEP, 0], ArrowUp: [0, -KEY_STEP], ArrowDown: [0, KEY_STEP] }[e.key as "ArrowLeft"];
+    if (step) {
+      e.preventDefault();
+      moveTo(r.left + step[0], r.top + step[1], true);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      backToCorner();
+    }
+  };
+  /** The container's anchoring for the place: the edges nearest the figure, so the bubble opens towards the room. */
+  const placeStyle = (): CSSProperties | undefined => {
+    if (!place) return undefined;
+    const s = screenOf();
+    const { x, y } = placeToPx(place, s);
+    const a = anchorOf(place);
+    return {
+      left: a.horizontal === "left" ? x : "auto",
+      right: a.horizontal === "right" ? s.vw - x - s.fw : "auto",
+      top: a.vertical === "top" ? y : "auto",
+      bottom: a.vertical === "bottom" ? s.vh - y - s.fh : "auto",
+    };
+  };
+
   if (off) {
     // the urgent notices are not switched off with the figure
     return data.alert ? (
@@ -161,7 +260,13 @@ export function Helper({ data, userName, loginAt }: { data: HelperData; userName
     ) : null;
   }
   return (
-    <div className="helper no-print" data-testid="helper" data-ready={ready ? "1" : undefined}>
+    <div
+      className={`helper no-print${place ? ` helper-placed helper-${anchorOf(place).horizontal} helper-${anchorOf(place).vertical}` : ""}${dragging ? " helper-dragging" : ""}`}
+      style={placeStyle()}
+      data-testid="helper"
+      data-ready={ready ? "1" : undefined}
+      data-placed={place ? "1" : undefined}
+    >
       {notice && !open && (
         <p className="helper-bubble helper-notice" role="status" data-kind={notice.kind} data-testid="helper-notice">
           {notice.text}
@@ -198,9 +303,23 @@ export function Helper({ data, userName, loginAt }: { data: HelperData; userName
         </div>
       )}
       <button
+        ref={figureRef}
         className={`helper-figure${data.alert ? " alert" : ""}`}
         type="button"
+        onPointerDown={onFigureDown}
+        onPointerMove={onFigureMove}
+        onPointerUp={onFigureUp}
+        onPointerCancel={() => {
+          press.current = null;
+          setDragging(false);
+        }}
+        onKeyDown={onFigureKey}
         onClick={() => {
+          if (suppressClick.current) {
+            // the click that follows a drag's release: swallowed once
+            suppressClick.current = false;
+            return;
+          }
           setNotice(null);
           // the bubble starts with the alert: the figure's "!" is about it
           if (!open) setAnswer(data.alert ?? null);
