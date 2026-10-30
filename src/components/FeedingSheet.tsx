@@ -313,7 +313,7 @@ export function FeedingSheet({
         <>
           {editable && (
             <p className="hint no-print">
-              Kattints egy sorra, és írd be a mennyiségeket: amit beírsz, a sor elhagyása után is megmarad és átírható. A végén a „Takarmánylap mentése” ment mindent. Az üres cella 0, nem kerül tételként rögzítésre; egy mentett cella kiürítése a tételét érvényteleníti.{feeds.some((f) => f.tick) ? " A koralltáp oszlopában pipa: adva vagy nem, mennyiség nélkül (a mennyiség a tétel-űrlapon írható be)." : ""}
+              {phone ? "Koppints egy névre" : "Kattints egy sorra"}, és írd be a mennyiségeket: amit beírsz, a sor elhagyása után is megmarad és átírható. A végén a „Takarmánylap mentése” ment mindent. Az üres cella 0, nem kerül tételként rögzítésre; egy mentett cella kiürítése a tételét érvényteleníti.{feeds.some((f) => f.tick) ? " A koralltáp oszlopában pipa: adva vagy nem, mennyiség nélkül (a mennyiség a tétel-űrlapon írható be)." : ""}
             </p>
           )}
           <div className="table-scroll sheet-scroll">

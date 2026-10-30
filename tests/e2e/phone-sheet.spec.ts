@@ -51,6 +51,8 @@ test.describe("phone, 390 px", () => {
     const sheet = page.getByTestId("feeding-sheet");
     const toggle = sheet.getByTestId("sheet-toggle-Teszt Egy");
     const field = sheet.getByLabel("Teszt Egy: Mysis (g)");
+    // the hint speaks of a tap on a name here (on a tablet and a desktop of a click on a row)
+    await expect(sheet.locator(".hint").first()).toContainText("Koppints egy névre");
     // closed: the name is a button with aria-expanded, no field, no header row, nothing scrolls sideways
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(field).toBeHidden();
@@ -101,5 +103,6 @@ test.describe("tablet, 1024 px", () => {
     expect(await sheet.locator("thead").evaluate((el) => getComputedStyle(el).display)).toBe("table-header-group");
     expect(await sheet.locator("tbody tr").first().evaluate((el) => getComputedStyle(el).display)).toBe("table-row");
     await expect(sheet.locator(".sheet-cell-label")).toHaveCount(0);
+    await expect(sheet.locator(".hint").first()).toContainText("Kattints egy sorra");
   });
 });
