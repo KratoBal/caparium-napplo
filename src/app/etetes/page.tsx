@@ -1,3 +1,4 @@
+import { sheetRecipients } from "@/lib/sheet-recipients";
 import Link from "next/link";
 import { DayControls } from "@/components/DayControls";
 import { DayRestore } from "@/components/DayRestore";
@@ -47,10 +48,11 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
     if (a.selected) g.selected += 1;
     groups.set(a.groupId, g);
   }
-  const recipients: Recipient[] = [
-    ...view.animals.filter((a) => a.selected).map((a) => ({ key: a.id, label: a.name, animalId: a.id, color: a.sheetColor })),
-    ...[...groups].filter(([, g]) => g.selected > 0).map(([id, g]) => ({ key: `g:${id}`, label: `${g.name} (csoport)`, groupId: id, color: g.color })),
-  ];
+  // the item form and the "Mai tételek" list: every selected animal and every group with a selected member, as ever
+  const recipients: Recipient[] = sheetRecipients({ animals: view.animals, items: view.items, groupRule: false });
+  // the feeding sheet: today a group member has no row of its own (the group's row stands for it) unless it already has an individual item
+  // (Lili 2026-10-30, task caparium-csoport-sor); an earlier day is as it was
+  const sheetRows: Recipient[] = sheetRecipients({ animals: view.animals, items: view.items, groupRule: day === today });
   const feeds: FeedOpt[] = types.flatMap((t) =>
     t.feeds
       .filter((f) => f.active)
@@ -115,6 +117,7 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         references={references}
         otherNames={otherNames}
         recipients={recipients}
+        sheetRecipients={sheetRows}
         feeds={offered}
         feedTypes={feedTypes}
         dayFeedIds={view.feedIds}

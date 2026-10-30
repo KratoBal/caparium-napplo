@@ -40,6 +40,8 @@ export function FeedingDay(props: {
   /** EGY-08: the reference valid that day, grams per feeding, by recipient key */
   references?: Record<string, number>;
   recipients: Recipient[];
+  /** the feeding sheet's own rows: today a group member has none of its own (src/lib/sheet-recipients.ts); the item form keeps `recipients` */
+  sheetRecipients?: Recipient[];
   /** the day's lock, for the close action under the sheet's save button */
   lock?: DayLock;
   feeds: FeedOpt[];
@@ -51,7 +53,8 @@ export function FeedingDay(props: {
   sheetFeeds?: FeedOpt[];
 }) {
   const { day, editable, animals, groups, items, totals, recipients, feeds } = props;
-  const [active, setActive] = useState(recipients[0]?.key ?? "");
+  const sheetRows = props.sheetRecipients ?? recipients;
+  const [active, setActive] = useState(sheetRows[0]?.key ?? recipients[0]?.key ?? "");
   const [draft, setDraft] = useState<Record<string, number>>({});
   const onDraft = useCallback((d: Record<string, number>) => setDraft(d), []);
   const names = new Map(animals.map((a) => [a.id, a.name]));
@@ -136,7 +139,7 @@ export function FeedingDay(props: {
       )}
       {/* keyed by the day: DayNav changes ?nap= on the same route, which keeps a client component's state, so a
           draft typed on one day would show (and save) on the next; a new day is a new sheet (barracuda #45) */}
-      <FeedingSheet key={day} day={day} editable={editable} recipients={recipients} lock={props.lock} feeds={props.sheetFeeds ?? []} items={items} active={active} onActive={setActive} />
+      <FeedingSheet key={day} day={day} editable={editable} recipients={sheetRows} lock={props.lock} feeds={props.sheetFeeds ?? []} items={items} active={active} onActive={setActive} />
       {editable && (
         <div className="card">
           <h2>Új tétel</h2>

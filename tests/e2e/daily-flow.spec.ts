@@ -200,6 +200,21 @@ function budapestDay(offsetDays: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Lili 2026-10-30 (task caparium-csoport-sor): today a group member has a row of its own on the sheet only with an individual item. This gives
+// `name` one (a small Mysis item through the item form) when the earlier tests left none, and waits for its row.
+async function ensureOwnRow(page: Page, name: string) {
+  const sheet = page.getByTestId("feeding-sheet");
+  const row = sheet.getByRole("row").filter({ has: page.getByRole("cell", { name, exact: true }) });
+  if (await row.count()) return;
+  const form = page.getByTestId("item-form");
+  await form.getByLabel("Kinek", { exact: true }).selectOption({ label: name });
+  await form.getByLabel("Takarmány", { exact: true }).selectOption({ label: "Mysis" });
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("1");
+  await form.getByRole("button", { name: "Tétel mentése" }).click();
+  await expect(form.getByRole("status")).toHaveText("Tétel mentve.");
+  await expect(row).toHaveCount(1);
+}
+
 test("admin corrects and invalidates an earlier day's measurement with a reason (the reasons on); an aquarist gets no form", async ({ page, browser }, info) => {
   // caparium-indoklas-ki: the reasons are off by default; this test is the "on" branch, the forms as they were
   const db = new PrismaClient();
@@ -601,8 +616,10 @@ test("one button: \"Takarmánylap kész\" saves the day's feeds ticked above and
 });
 
 test("feeding sheet: a group selected from its header, the day's feeds, drafts kept on leaving a row, one save, corrections", async ({ page }, info) => {
+  // Lili 2026-10-30 (task caparium-csoport-sor): today a group member (Teszt Egy and Teszt Kettő are in "Teszt csoport") has a row of its own on the
+  // sheet only with an individual item (ensureOwnRow gives it one if the earlier tests left none); the "other" row this test clicks is the group's
   const name = info.project.name === "tablet" ? "Teszt Egy" : "Teszt Kettő";
-  const other = info.project.name === "tablet" ? "Teszt Kettő" : "Teszt Egy";
+  const other = "Teszt csoport (csoport)";
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
   // step 1: the pool's header row selects every animal in it at once (Lili 2026-10-26: the list is by pool)
@@ -639,6 +656,7 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   // step 3. Lili 2026-10-21 11:44 UTC (a): a feed weighed AND counted takes both units
   const sheet = page.getByTestId("feeding-sheet");
   await expect(sheet.getByRole("columnheader", { name: "Litopenaeus vannamei (g + db)" })).toBeVisible();
+  await ensureOwnRow(page, name);
   // Lili 2026-10-27: the header row stays on top while the sheet scrolls down, like a frozen row in Excel. The box has
   // a height of its own; here it is made short so that this run's few rows scroll, and the header must stay at its top
   const box = sheet.locator(".sheet-scroll");
@@ -819,7 +837,9 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
 });
 
 test("feeding sheet: a row colour set in the settings colours that animal's or group's row, the highlighted row keeps its ink", async ({ page }) => {
-  // Lili 2026-10-28 13:49 UTC (acrobot 37542). Teszt Egy and Teszt Kettő are in Nagymedence and in Teszt csoport.
+  // Lili 2026-10-28 13:49 UTC (acrobot 37542). Teszt Egy and Teszt Kettő are in Nagymedence and in Teszt csoport; since 2026-10-30
+  // (caparium-csoport-sor) a group member has a row of its own on today's sheet only with an individual item, so the rows here are Teszt Egy's
+  // (ensureOwnRow) and the group's.
   await login(page, "teszt.admin");
   await page.getByRole("link", { name: "Beállítások" }).click();
   const colours = page.getByTestId("sheet-colors");
@@ -833,7 +853,6 @@ test("feeding sheet: a row colour set in the settings colours that animal's or g
     await expect(form.getByRole("status")).toHaveText("Mentve.");
   };
   await setColour("Teszt Egy", "Zöld");
-  await setColour("Teszt Kettő", "Zöld");
   await setColour("Teszt csoport (csoport)", "Lila");
   await page.reload();
   await expect(colours.getByLabel("Teszt Egy sorszíne", { exact: true })).toHaveValue("GREEN");
@@ -848,14 +867,15 @@ test("feeding sheet: a row colour set in the settings colours that animal's or g
   if (await saveFeeds.count()) await saveFeeds.click();
   else if (await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).count()) await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).click();
   const sheet = page.getByTestId("feeding-sheet");
+  await ensureOwnRow(page, "Teszt Egy");
   const row = (label: string) => sheet.getByRole("row").filter({ has: page.getByRole("cell", { name: label, exact: true }) });
   const cells = (label: string) => row(label).locator("td").evaluateAll((tds) => [...new Set(tds.map((td) => getComputedStyle(td).backgroundColor))]);
-  await row("Teszt Kettő").click();
+  await row("Teszt csoport (csoport)").click();
   expect(await cells("Teszt Egy"), "every cell of the row, the stuck name too").toEqual([GREEN]);
-  expect(await cells("Teszt csoport (csoport)")).toEqual([PURPLE]);
-  expect(await cells("Teszt Kettő"), "the highlighted row keeps its ink").not.toContain(GREEN);
+  expect(await cells("Teszt csoport (csoport)"), "the highlighted row keeps its ink").not.toContain(PURPLE);
   await row("Teszt Egy").click();
-  expect(await cells("Teszt Kettő")).toEqual([GREEN]);
+  expect(await cells("Teszt Egy"), "the highlighted animal row keeps its ink too").not.toContain(GREEN);
+  expect(await cells("Teszt csoport (csoport)")).toEqual([PURPLE]);
   // the eating log is not coloured: the colour is the feeding sheet's only
   expect(await page.locator('table:not([data-testid="feeding-sheet-table"]) td').evaluateAll((tds) => tds.some((td) => ["rgb(217, 236, 217)", "rgb(228, 219, 242)"].includes(getComputedStyle(td).backgroundColor)))).toBe(false);
 
@@ -875,6 +895,7 @@ test("feeding sheet: a small X empties an amount field in one click, on g and db
   if (await saveFeeds.count()) await saveFeeds.click();
   else if (await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).count()) await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).click();
   const sheet = page.getByTestId("feeding-sheet");
+  await ensureOwnRow(page, "Teszt Egy");
   await sheet.getByRole("row").filter({ has: page.getByRole("cell", { name: "Teszt Egy", exact: true }) }).click();
   const g = sheet.getByLabel("Teszt Egy: Litopenaeus vannamei (g)", { exact: true });
   const db = sheet.getByLabel("Teszt Egy: Litopenaeus vannamei (db)", { exact: true });
