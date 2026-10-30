@@ -1,7 +1,7 @@
 // Switching an animal group off and on (Lili 2026-10-30, task caparium-csoport-inaktiv; acrobot 38969, 38970). Days in May 2026: no other test
 // file writes there.
 import { beforeAll, describe, expect, it } from "vitest";
-import { createGroup, createLifecycleEvent, listGroupsAdmin, listGroupsWithNames, setGroupActive } from "@/lib/animals";
+import { createGroup, createLifecycleEvent, invalidateLifecycleEvent, listGroupsAdmin, listGroupsWithNames, setGroupActive } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { feedingDayView } from "@/lib/feeding";
@@ -139,6 +139,41 @@ describe("the event that takes out the last member says so (the page asks whethe
       at("2026-05-11", "10:00"),
     );
     expect(arrived.emptiedGroups).toEqual([]);
+  });
+});
+
+describe("an invalidation does not put an animal back into an inactive group (barracuda on #155)", () => {
+  const invalidate = (eventId: string) => invalidateLifecycleEvent(f.admin, eventId, { requestId: rid(), expectedVersion: 1, reason: "teszt" }, at("2026-05-11", "16:00"));
+
+  it("the event that took the animal out is invalidated while the group is off: refused, nothing changes; on again it works", async () => {
+    const g = await newGroup();
+    const a = await arrive(unique("Visszatérő"), g.id);
+    const left = await leaveGroup(a);
+    await off(g.id);
+    await expectCode(invalidate(left.eventId), "GROUP_INACTIVE");
+    expect((await listGroupsAdmin()).find((x) => x.id === g.id)).toMatchObject({ active: false, members: 0 });
+    expect((await prisma.lifecycleEvent.findUniqueOrThrow({ where: { id: left.eventId } })).status).toBe("VALID");
+    await on(g.id);
+    await invalidate(left.eventId);
+    expect((await listGroupsAdmin()).find((x) => x.id === g.id)!.members).toBe(1);
+  });
+
+  it("the same for a death that is invalidated: the animal would be back in the group it was the last member of", async () => {
+    const g = await newGroup();
+    const a = await arrive(unique("Elhullt"), g.id);
+    const died = await createLifecycleEvent(f.admin, { requestId: rid(), type: "DEATH", animalId: a, occurredAtLocal: "2026-05-11T12:00", reason: "teszt" }, at("2026-05-11", "13:00"));
+    await off(g.id);
+    await expectCode(invalidate(died.eventId), "GROUP_INACTIVE");
+    expect((await listGroupsAdmin()).find((x) => x.id === g.id)!.members).toBe(0);
+  });
+
+  it("an invalidation that does not touch the group is not stopped by an inactive group the animal is not in", async () => {
+    const g = await newGroup();
+    const a = await arrive(unique("Másik"), null);
+    const moved = await createLifecycleEvent(f.admin, { requestId: rid(), type: "TRANSFER", animalId: a, toPoolId: f.pool("KARANTEN"), occurredAtLocal: "2026-05-11T12:00", reason: "teszt" }, at("2026-05-11", "13:00"));
+    await off(g.id);
+    await invalidate(moved.eventId);
+    expect((await prisma.lifecycleEvent.findUniqueOrThrow({ where: { id: moved.eventId } })).status).toBe("INVALIDATED");
   });
 });
 

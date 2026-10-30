@@ -113,6 +113,21 @@ function eventSnapshot(e: LifecycleEvent): Record<string, unknown> {
   };
 }
 
+/**
+ * An inactive group has no member (task caparium-csoport-inaktiv; barracuda on #155). The memberships are derived from the valid events, so
+ * a change that does not name the group can still open one again: invalidating the event that took the animal out of it, or the animal's
+ * death or release, puts it back. After such a rebuild the animal's open memberships are looked at (the group rows locked after the
+ * animal's, the order everywhere; setGroupActive takes the group's only), and an inactive one stops the change: switched back on first.
+ */
+async function refuseInactiveGroupMembership(tx: Tx, animalId: string) {
+  const open = await tx.animalGroupMembership.findMany({ where: { animalId, ...openNow() }, select: { groupId: true } });
+  for (const { groupId } of open) {
+    await lockGroup(tx, groupId);
+    const g = await tx.animalGroup.findUnique({ where: { id: groupId }, select: { active: true } });
+    if (!g?.active) throw new AppError(422, "GROUP_INACTIVE", "A csoport, amelybe ez a változás visszatenné az állatot, inaktív: előbb kapcsold vissza, utána érvényteleníthető az esemény.");
+  }
+}
+
 /** R-1 (2): stop, with the list, if the change leaves manual rows on days the animal was not alive. */
 async function refuseOrphanRows(tx: Tx, animalId: string) {
   const rows = await manualRowsOutsideLife(tx, animalId);
@@ -269,6 +284,7 @@ export async function invalidateLifecycleEvent(
     });
     if (res.count !== 1) throw new AppError(409, "VERSION_CONFLICT", "Az esemény időközben megváltozott.");
     await rebuildAnimal(tx, cur.animalId);
+    await refuseInactiveGroupMembership(tx, cur.animalId);
     await refuseOrphanRows(tx, cur.animalId);
     await recomputeClosedDaysFrom(tx, dateToDay(cur.businessDay), actor.id, input.requestId);
     const after = await tx.lifecycleEvent.findUniqueOrThrow({ where: { id } });
@@ -497,6 +513,7 @@ export async function editAnimal(actor: Actor, animalId: string, raw: EditAnimal
           });
           if (res.count !== 1) throw new AppError(409, "VERSION_CONFLICT", "Az érkezés időközben megváltozott.");
           await rebuildAnimal(tx, animalId);
+          await refuseInactiveGroupMembership(tx, animalId);
           await refuseOrphanRows(tx, animalId);
           const newDay = data.businessDay ? dateToDay(data.businessDay as Date) : dateToDay(arr.businessDay);
           const oldDay = dateToDay(arr.businessDay);
