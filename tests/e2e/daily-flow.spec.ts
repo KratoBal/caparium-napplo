@@ -1472,8 +1472,13 @@ test("home: the customer's illustrated cards, 3-3-3 with a narrow portrait one b
   await expect(page.getByRole("link", { name: "Vízmérési napló" }), "the log is still in the menu").toBeVisible();
   await expect(page.getByTestId("home-nagymedencek"), "the daily water pages are still cards").toBeVisible();
   const captions = async (i: number) => (await rows.nth(i).locator(".home-caption").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
-  expect(await captions(0)).toEqual(["Nagy medencék NAPI VÍZMÉRÉS", "Kis Akváriumok NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS"]);
+  expect(await captions(0)).toEqual(["NAPI VÍZMÉRÉS Nagy medencék", "NAPI VÍZMÉRÉS Kis Akváriumok", "HETI VÍZMÉRÉS"]);
   // Lili 2026-10-30: the fridge card between the two landscape ones
+  // Lili 2026-10-30 14:02 UTC (msg 1565727535310839809): the first line of the three cards is "NAPI VÍZMÉRÉS", "NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS" on one level,
+  // the pool group under it; measured by the first line's top edge
+  const firstLines = await rows.nth(0).locator(".home-caption > span:first-child").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(firstLines).size).toBe(1);
+  expect(await rows.nth(0).locator(".home-caption > span:first-child").allInnerTexts()).toEqual(["NAPI VÍZMÉRÉS", "NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS"]);
   expect(await captions(1)).toEqual(["Nyomelem és megkötő adagolás", "Fagyasztó", "Takarmány kalkulátor"]);
   expect(await captions(2)).toEqual(["Takarmány kivételi napló", "Egyedi takarmánynapló", "Evési napló"]);
   // every picture is the web-sized one and loads

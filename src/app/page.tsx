@@ -16,8 +16,8 @@ type HomeCard = { id: string; href: string; caption: string[]; module: "water" |
 // the captions and the order of the customer's sample (exchange/caparium/kezdolap-csempek-minta-2026-10-20.jpg)
 const HOME_ROWS: HomeCard[][] = [
   [
-    { id: "nagymedencek", href: "/vizmeres?csoport=NAPI_NAGY", caption: ["Nagy medencék", "NAPI VÍZMÉRÉS"], module: "water" },
-    { id: "kismedencek", href: "/vizmeres?csoport=NAPI_KIS", caption: ["Kis Akváriumok", "NAPI VÍZMÉRÉS"], module: "water" },
+    { id: "nagymedencek", href: "/vizmeres?csoport=NAPI_NAGY", caption: ["NAPI VÍZMÉRÉS", "Nagy medencék"], module: "water" },
+    { id: "kismedencek", href: "/vizmeres?csoport=NAPI_KIS", caption: ["NAPI VÍZMÉRÉS", "Kis Akváriumok"], module: "water" },
     { id: "heti", href: "/heti", caption: ["HETI VÍZMÉRÉS"], module: "water" },
   ],
   [
