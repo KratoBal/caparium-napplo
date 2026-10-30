@@ -25,6 +25,7 @@ import { ClearX } from "./ClearX";
 import { DayControls, type DayLock } from "./DayControls";
 import { Msg, parseAmount, useSend, type FeedOpt, type Recipient } from "./FeedingForms";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
+import { useIsPhone } from "./useIsPhone";
 import { useLeaveWarning } from "./useLeaveWarning";
 
 const LEAVE_WARNING = "Van még nem mentett érték a takarmánylapon. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?";
@@ -102,6 +103,11 @@ export function FeedingSheet({
   const { msg, busy, run } = useSend();
   const router = useRouter();
   const reasonsOn = useReasonsOn();
+  // Lili 2026-10-30 17:17 UTC (msg 1565776571346976861, task caparium-takarmanylap-telefon): on a phone every row is a collapsed card, the name
+  // and the row's total on top, and a tap on the name opens the row (it becomes the active one, its fields in two columns under their labels),
+  // a second tap closes it. One card is open at a time. Tablet and desktop keep the table; there this stays null and no button is rendered.
+  const phone = useIsPhone();
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const keyOf = (i: SheetItem) => i.animalId ?? `g:${i.groupId}`;
   const cellKey = (rec: string, feedId: string) => `${rec}|${feedId}`;
   const cellItems = (rec: string, feedId: string) => items.filter((i) => keyOf(i) === rec && i.feedId === feedId);
@@ -158,6 +164,19 @@ export function FeedingSheet({
   for (const f of feeds) for (const [u, v] of Object.entries(colTotal(f))) add(grand, u, v);
   const changed = recipients.flatMap((r) => feeds.filter((f) => isDirty(r.key, f)).map((f) => ({ r, f })));
   const rowDirty = (rec: string) => feeds.some((f) => isDirty(rec, f));
+  // a cell the save refused or could not read, on a closed card as well as an unsaved one: a mark on the name
+  const rowFailed = (rec: string) => feeds.some((f) => failed.includes(cellKey(rec, f.id)) || bad.includes(cellKey(rec, f.id)));
+  const unitText = (f: FeedOpt) => (f.tick ? (f.dose ? `pipa = ${f.dose}` : "adva") : cellUnits(f).map((u) => u.symbol).join(" + "));
+  const headLabel = (f: FeedOpt) => `${f.name} (${unitText(f)})`;
+  // on a phone each field stands under its feed's name and unit (two lines, so a pair of fields stays level); rendered there only,
+  // so the cells' text on the tablet and the desktop is as before
+  const cellLabel = (f: FeedOpt) =>
+    phone ? (
+      <span className="sheet-cell-label">
+        <span className="sheet-cell-name">{f.name}</span>
+        <span className="sheet-cell-unit">{unitText(f)}</span>
+      </span>
+    ) : null;
   const colDirty = (f: FeedOpt) => recipients.some((r) => isDirty(r.key, f));
   // a total that counts a value not saved yet is marked like the draft cell itself (barracuda #45)
   const totalMark = (dirty: boolean, text: string) => (dirty ? <span className="badge badge-pending" title="Nem mentett értéket is tartalmaz">{text}*</span> : text);
@@ -304,7 +323,7 @@ export function FeedingSheet({
                   <th>Állat</th>
                   {feeds.map((f) => (
                     <th key={f.id}>
-                      {f.name} ({f.tick ? (f.dose ? `pipa = ${f.dose}` : "adva") : cellUnits(f).map((u) => u.symbol).join(" + ")})
+                      {headLabel(f)}
                     </th>
                   ))}
                   <th>Összesen</th>
@@ -312,7 +331,9 @@ export function FeedingSheet({
               </thead>
               <tbody>
                 {recipients.map((r) => {
-                  const isActive = editable && r.key === active;
+                  // on a phone a row's fields show only while its card is open (it opened by being made the active one)
+                  const open = phone && openKey === r.key;
+                  const isActive = editable && r.key === active && (!phone || open);
                   const bg = sheetColorBg(r.color);
                   return (
                     <tr
@@ -321,9 +342,34 @@ export function FeedingSheet({
                       style={bg ? ({ "--row-bg": bg } as CSSProperties) : undefined}
                       data-color={bg ? r.color ?? undefined : undefined}
                       aria-selected={isActive}
+                      data-open={open ? "1" : undefined}
                       onClick={editable ? () => onActive(r.key) : undefined}
                     >
-                      <td>{r.label}</td>
+                      <td className="sheet-name">
+                        {phone ? (
+                          <button
+                            type="button"
+                            className="sheet-toggle"
+                            aria-expanded={open}
+                            data-testid={`sheet-toggle-${r.label}`}
+                            onClick={() => {
+                              setOpenKey(open ? null : r.key);
+                              if (!open && editable) onActive(r.key);
+                            }}
+                          >
+                            <span className="sheet-label">{r.label}</span>
+                            <span className="sheet-sum">{fmt(rowTotal(r.key)) || "0"}</span>
+                            {rowFailed(r.key) ? (
+                              <span className="sheet-dot bad" role="img" aria-label="Nem mentődött érték" data-testid={`sheet-mark-${r.label}`} />
+                            ) : rowDirty(r.key) ? (
+                              <span className="sheet-dot" role="img" aria-label="Nem mentett érték" data-testid={`sheet-mark-${r.label}`} />
+                            ) : null}
+                            <span className="sheet-chevron" aria-hidden="true" />
+                          </button>
+                        ) : (
+                          r.label
+                        )}
+                      </td>
                       {feeds.map((f) => {
                         const key = cellKey(r.key, f.id);
                         const d = shown(r.key, f);
@@ -331,6 +377,7 @@ export function FeedingSheet({
                         const conflict = failed.includes(key);
                         return (
                           <td key={f.id} className="keep" data-testid={`sheet-cell-${r.label}-${f.name}`} data-failed={conflict || undefined}>
+                            {cellLabel(f)}
                             {multi(r.key, f.id) ? (
                               <span className="hint" title="Egy cellában több tétel: a tétel-űrlapon javítsd">
                                 {fmt(cellTotals(r.key, f))} (több tétel)
@@ -353,6 +400,7 @@ export function FeedingSheet({
                                     className={`input small${bad.includes(key) || conflict ? " input-invalid" : ""}`}
                                     aria-invalid={bad.includes(key) || conflict}
                                     inputMode="decimal"
+                                    placeholder={phone ? u.symbol : undefined}
                                     value={d[u.dimension] ?? ""}
                                     onClick={(e) => e.stopPropagation()}
                                     onChange={(e) => type(r.key, f, u.dimension, e.target.value)}
@@ -373,7 +421,7 @@ export function FeedingSheet({
                           </td>
                         );
                       })}
-                      <td>{totalMark(rowDirty(r.key), fmt(rowTotal(r.key)) || "0")}</td>
+                      <td className="sheet-total-cell">{totalMark(rowDirty(r.key), fmt(rowTotal(r.key)) || "0")}</td>
                     </tr>
                   );
                 })}
@@ -383,10 +431,16 @@ export function FeedingSheet({
                   <td>Összesen</td>
                   {feeds.map((f) => (
                     <td key={f.id} data-testid={`sheet-total-${f.id}`}>
+                      {cellLabel(f)}
                       {totalMark(colDirty(f), fmt(colTotal(f)) || "0")}
                     </td>
                   ))}
-                  <td data-testid="sheet-grand-total">{totalMark(changed.length > 0, fmt(grand) || "0")}</td>
+                  <td data-testid="sheet-grand-total">
+                    {phone && (
+                      <span className="sheet-cell-label">
+                        <span className="sheet-cell-name">Mind együtt</span>
+                      </span>
+                    )}{totalMark(changed.length > 0, fmt(grand) || "0")}</td>
                 </tr>
               </tfoot>
             </table>
