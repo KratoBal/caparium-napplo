@@ -1977,7 +1977,8 @@ test("animals page: the blocks in Lili's order, the starting list without its ex
   await expect(page.getByTestId("animal-detail")).toBeVisible();
   // the list's heading carries the living count, "Állatok (25 élő)"
   const headings = (await page.locator(".card > h2").allInnerTexts()).map((h, i) => (i === 0 ? h.replace(/ \(\d+ élő\)$/, "") : h));
-  expect(headings).toEqual(["Állatok", name, "Új állat, faj, csoport", "Kezdő állatlista", "Sorrend"]);
+  // the Csoportok card (task caparium-csoport-inaktiv) stands after the order block, so Lili's order above it is as it was
+  expect(headings).toEqual(["Állatok", name, "Új állat, faj, csoport", "Kezdő állatlista", "Sorrend", "Csoportok"]);
   await expect(page.getByTestId("initial-animals-status")).toBeVisible();
   await expect(page.getByText("Kétszer nem tölt be semmit")).toHaveCount(0);
 });
