@@ -3,8 +3,8 @@
 // of the water report's PDF. The data is intakeReport's, as the Excel's is.
 import PDFDocument from "pdfkit";
 import { pdfFont } from "../pdf-font";
-import { formatDayLong } from "../time";
 import { intakeReport, type IntakeReport } from "./intake-report";
+import { huDay, huPeriod, reportTitle } from "./intake-report-text";
 
 /** The red ink of a delivery that was sent back, as in the Excel. */
 export const RETURNED_INK = "#c00000";
@@ -13,9 +13,8 @@ const BG_HEADER = "#E6F0F3";
 const LEFT = 48;
 const WIDTH = 499;
 
-export function intakeTitle(r: Pick<IntakeReport, "from" | "to">): string {
-  return r.from === r.to ? `Takarmányhűtő: ${r.from}` : `Takarmányhűtő: ${r.from} – ${r.to}`;
-}
+/** The title of the document (kept under its earlier name for the callers): "Cápasuli takarmányegyenleg: 2026.10.01. – 2026.10.30.". */
+export const intakeTitle = reportTitle;
 
 export async function intakePdfFrom(report: IntakeReport): Promise<Buffer> {
   const doc = new PDFDocument({ size: "A4", margin: 48, info: { Title: intakeTitle(report), Author: "Cápárium nAPPló" } });
@@ -27,28 +26,37 @@ export async function intakePdfFrom(report: IntakeReport): Promise<Buffer> {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
   });
+  const bottom = () => doc.page.height - doc.page.margins.bottom;
 
-  doc.fontSize(16).text(intakeTitle(report));
-  doc.fontSize(9).fillColor("#555").text(`Időszak: ${formatDayLong(report.from)} – ${formatDayLong(report.to)}. A visszaküldött szállítmány pirossal szerepel, a készletbe nem számít.`);
+  doc.fontSize(16).text(intakeTitle(report), { width: WIDTH });
+  doc.fontSize(9).fillColor("#555").text(`Időszak: ${huPeriod(report)} A visszaküldött szállítmány pirossal szerepel, a készletbe nem számít.`, { width: WIDTH });
   doc.fillColor("#000").moveDown();
 
   const band = (text: string) => {
-    if (doc.y > 740) doc.addPage();
+    if (doc.y + 24 > bottom()) doc.addPage();
     const y = doc.y;
     doc.save().rect(LEFT, y - 2, WIDTH, 18).fill(BG_SECTION).restore();
     doc.fontSize(11).fillColor("#000").text(text, LEFT + 4, y + 1, { width: WIDTH - 8 });
     doc.x = LEFT;
     doc.y = y + 22;
   };
-  const table = (cols: number[], head: string[], rows: { cells: string[]; red?: boolean }[]) => {
+  /**
+   * A table: each column has a width, each cell WRAPS inside it, and a row is as tall as its tallest cell (a long type or note
+   * made a second line that hung into the next band when the row was a fixed 14 pt, Lili's picture of 2026-10-30). The header
+   * labels fit their columns, so none breaks in the middle of a word.
+   */
+  const table = (widths: number[], head: string[], rows: { cells: string[]; red?: boolean }[]) => {
+    const xs = widths.map((_, i) => LEFT + widths.slice(0, i).reduce((a, b) => a + b, 0));
     const line = (cells: string[], opts: { header?: boolean; red?: boolean }) => {
-      if (doc.y > 770) doc.addPage();
+      doc.fontSize(9);
+      const h = Math.max(...cells.map((c, i) => doc.heightOfString(c, { width: widths[i] - 6 }))) + 4;
+      if (doc.y + h > bottom()) doc.addPage();
       const y = doc.y;
-      if (opts.header) doc.save().rect(LEFT, y - 2, WIDTH, 14).fill(BG_HEADER).restore();
+      if (opts.header) doc.save().rect(LEFT, y - 2, WIDTH, h).fill(BG_HEADER).restore();
       doc.fontSize(9).fillColor(opts.red ? RETURNED_INK : opts.header ? "#333" : "#000");
-      cells.forEach((c, i) => doc.text(c, cols[i], y, { width: (cols[i + 1] ?? LEFT + WIDTH) - cols[i] - 4, lineBreak: false, ellipsis: true }));
+      cells.forEach((c, i) => doc.text(c, xs[i] + 2, y, { width: widths[i] - 6 }));
       doc.x = LEFT;
-      doc.y = y + 14;
+      doc.y = y + h;
     };
     line(head, { header: true });
     for (const r of rows) line(r.cells, { red: r.red });
@@ -59,19 +67,19 @@ export async function intakePdfFrom(report: IntakeReport): Promise<Buffer> {
   if (report.intake.length === 0) doc.fontSize(9).text("Az időszakban nem érkezett takarmány.");
   else {
     table(
-      [48, 110, 172, 302, 357, 487],
+      [62, 82, 118, 62, 98, 77],
       ["Dátum", "Típus", "Takarmány", "Mennyiség", "Megjegyzés", "Visszaküldve"],
-      report.intake.map((i) => ({ cells: [i.day, i.type, i.feed, `${i.quantity} ${i.unit}`, i.note, i.returned ? "igen" : ""], red: i.returned })),
+      report.intake.map((i) => ({ cells: [huDay(i.day), i.type, i.feed, `${i.quantity} ${i.unit}`, i.note, i.returned ? "igen" : ""], red: i.returned })),
     );
   }
   band("Kivételek takarmányonként");
   if (report.taken.length === 0) doc.fontSize(9).text("Az időszakban nem volt kivétel.");
-  else table([48, 330], ["Takarmány", "Összesen"], report.taken.map((t) => ({ cells: [t.feed, `${t.quantity} ${t.unit}`] })));
-  band(`Záró készlet (${report.to} végén)`);
+  else table([282, 217], ["Takarmány", "Összesen"], report.taken.map((t) => ({ cells: [t.feed, `${t.quantity} ${t.unit}`] })));
+  band(`Záró készlet (${huDay(report.to)} végén)`);
   if (report.closing.length === 0) doc.fontSize(9).text("Nincs követett készlet.");
   else
     table(
-      [48, 330, 430],
+      [282, 100, 117],
       ["Takarmány", "Készlet", "Jelzés"],
       report.closing.map((k) => ({ cells: [k.feed, `${k.level} ${k.unit}`, k.negative ? "negatív készlet" : k.low ? "fogyóban" : ""] })),
     );

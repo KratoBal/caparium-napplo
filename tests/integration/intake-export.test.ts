@@ -86,19 +86,23 @@ describe("the Excel", () => {
     await wb.xlsx.load((await buildIntakeWorkbook({ from: "2026-09-01", to: "2026-09-30" })).buffer as unknown as ArrayBuffer);
     expect(wb.worksheets.map((w) => w.name)).toEqual(["Bevételek", "Kivételek", "Záró készlet"]);
     const a = wb.getWorksheet("Bevételek")!;
-    expect([1, 2, 3, 4, 5, 6, 7].map((c) => a.getRow(1).getCell(c).value)).toEqual(["Dátum", "Takarmány típusa", "Takarmány", "Mennyiség", "Mértékegység", "Megjegyzés", "Visszaküldve"]);
+    // the document's title in A1 (Lili 2026-10-30), the header on row 3, the data under it
+    expect(a.getRow(1).getCell(1).value).toBe("Cápasuli takarmányegyenleg: 2026.09.01. – 2026.09.30.");
+    expect([1, 2, 3, 4, 5, 6, 7].map((c) => a.getRow(3).getCell(c).value)).toEqual(["Dátum", "Takarmány típusa", "Takarmány", "Mennyiség", "Mértékegység", "Megjegyzés", "Visszaküldve"]);
+    expect(wb.title).toBe("Cápasuli takarmányegyenleg: 2026.09.01. – 2026.09.30.");
+    expect(a.getRow(4).getCell(1).numFmt).toBe('yyyy"."mm"."dd"."');
     const rows: ExcelJS.Row[] = [];
-    a.eachRow((row, n) => n > 1 && row.getCell(3).value === FEED && rows.push(row));
+    a.eachRow((row, n) => n > 3 && row.getCell(3).value === FEED && rows.push(row));
     expect(rows.map((r) => [r.getCell(4).value, r.getCell(5).value, r.getCell(7).value])).toEqual([[3, "kg", ""], [10, "kg", "igen"]]);
     expect(rows[0].getCell(3).font?.color?.argb).not.toBe(RETURNED_ARGB);
     expect(rows[1].getCell(3).font?.color?.argb).toBe(RETURNED_ARGB);
     const taken = wb.getWorksheet("Kivételek")!;
     let tk: unknown[] = [];
-    taken.eachRow((row, n) => n > 1 && row.getCell(1).value === FEED && (tk = [row.getCell(2).value, row.getCell(3).value]));
+    taken.eachRow((row, n) => n > 3 && row.getCell(1).value === FEED && (tk = [row.getCell(2).value, row.getCell(3).value]));
     expect(tk).toEqual([1.1, "kg"]);
     const closing = wb.getWorksheet("Záró készlet")!;
     let cl: unknown[] = [];
-    closing.eachRow((row, n) => n > 1 && row.getCell(1).value === FEED && (cl = [row.getCell(2).value, row.getCell(3).value]));
+    closing.eachRow((row, n) => n > 3 && row.getCell(1).value === FEED && (cl = [row.getCell(2).value, row.getCell(3).value]));
     expect(cl).toEqual([1.9, "kg"]);
   });
 });
@@ -107,8 +111,8 @@ describe("the PDF", () => {
   it("the title and the three sections read back with their accents, the returned row in red and nothing else red", async () => {
     const { buffer } = await buildIntakePdf({ from: "2026-09-01", to: "2026-09-30" });
     const lines = await readPdfLines(new Uint8Array(buffer));
-    expect(lines[0]).toBe("Takarmányhűtő: 2026-09-01 – 2026-09-30");
-    for (const s of ["Bevételek", "Kivételek takarmányonként", "Záró készlet (2026-09-30 végén)"]) expect(lines.some((l) => l.includes(s)), s).toBe(true);
+    expect(lines[0]).toBe("Cápasuli takarmányegyenleg: 2026.09.01. – 2026.09.30.");
+    for (const s of ["Bevételek", "Kivételek takarmányonként", "Záró készlet (2026.09.30. végén)"]) expect(lines.some((l) => l.includes(s)), s).toBe(true);
     const mineLines = lines.filter((l) => l.includes(FEED));
     expect(mineLines.some((l) => l.includes("nyitó készlet"))).toBe(true);
     expect(mineLines.some((l) => l.includes("nem megfelelő") && l.includes("igen"))).toBe(true);

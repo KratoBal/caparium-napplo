@@ -1166,9 +1166,9 @@ test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows
   // the report (Lili 2026-10-30): the PDF and the Excel of the period, from the Takarmányhűtő page
   await page.getByRole("link", { name: "Takarmányhűtő" }).click();
   const pdf = await Promise.all([page.waitForEvent("download"), page.getByTestId("intake-pdf").click()]);
-  expect(pdf[0].suggestedFilename()).toMatch(/^Takarmanyhuto_\d{4}-\d{2}-\d{2}(_\d{4}-\d{2}-\d{2})?\.pdf$/);
+  expect(pdf[0].suggestedFilename()).toMatch(/^Capasuli_takarmanyegyenleg_\d{4}-\d{2}-\d{2}(_\d{4}-\d{2}-\d{2})?\.pdf$/);
   const xlsx = await Promise.all([page.waitForEvent("download"), page.getByTestId("intake-excel").click()]);
-  expect(xlsx[0].suggestedFilename()).toMatch(/^Takarmanyhuto_\d{4}-\d{2}-\d{2}(_\d{4}-\d{2}-\d{2})?\.xlsx$/);
+  expect(xlsx[0].suggestedFilename()).toMatch(/^Capasuli_takarmanyegyenleg_\d{4}-\d{2}-\d{2}(_\d{4}-\d{2}-\d{2})?\.xlsx$/);
 });
 
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {

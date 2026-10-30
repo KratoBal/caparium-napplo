@@ -2,6 +2,7 @@ import { writeAudit } from "@/lib/audit";
 import { sameOrigin, userFromRequest } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { REPORT_FILE_BASE } from "@/lib/exports/intake-report-text";
 import { buildIntakePdf } from "@/lib/exports/intake-pdf";
 import { buildIntakeWorkbook } from "@/lib/exports/intake-excel";
 import { buildEatingWorkbook, buildFeedingWorkbook, buildReportWorkbook, buildWithdrawalWorkbook } from "@/lib/exports/feeding-excel";
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
       changes: { export: { before: null, after: { kind: exportKind, from, to, rows: built.rows } } },
     });
   });
-  const base = kind === "huto" ? "Takarmanyhuto" : kind === "etetes" ? "Egyedi_takarmanynaplo" : kind === "evesi" ? "Evesi_minta" : kind === "kivetel" ? "Takarmanykivetel" : "Kimutatas";
+  const base = kind === "huto" ? REPORT_FILE_BASE : kind === "etetes" ? "Egyedi_takarmanynaplo" : kind === "evesi" ? "Evesi_minta" : kind === "kivetel" ? "Takarmanykivetel" : "Kimutatas";
   const name = `${base}_${from}${from === to ? "" : `_${to}`}.${pdf ? "pdf" : "xlsx"}`;
   return new Response(new Uint8Array(built.buffer), {
     headers: {
