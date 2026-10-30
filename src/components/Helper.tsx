@@ -187,6 +187,8 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
   };
   const onFigureDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    // a new press: the click that followed an earlier drag is long past (CI run 41065294045: a click 60 ms after a drag was swallowed)
+    suppressClick.current = false;
     const r = e.currentTarget.getBoundingClientRect();
     press.current = { id: e.pointerId, x: e.clientX, y: e.clientY, left: r.left, top: r.top, moved: false };
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -208,9 +210,9 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
     if (!p || p.id !== e.pointerId) return;
     press.current = null;
     if (p.moved) {
-      // the click that follows the release of a drag must not open the bubble
+      // the click that follows the release of a drag must not open the bubble: it comes right after the release, and the flag is
+      // cleared by the next press or key, not by a timer (a click soon after a drag is a new click and must open it)
       suppressClick.current = true;
-      window.setTimeout(() => (suppressClick.current = false), 60);
       setDragging(false);
       moveTo(p.left + (e.clientX - p.x), p.top + (e.clientY - p.y), true);
       lastTap.current = null;
@@ -223,6 +225,7 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
     } else lastTap.current = tap;
   };
   const onFigureKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    suppressClick.current = false;
     const r = figureRef.current?.getBoundingClientRect();
     if (!r) return;
     const step = { ArrowLeft: [-KEY_STEP, 0], ArrowRight: [KEY_STEP, 0], ArrowUp: [0, -KEY_STEP], ArrowDown: [0, KEY_STEP] }[e.key as "ArrowLeft"];
@@ -312,7 +315,11 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
         }}
         onKeyDown={onFigureKey}
         onClick={() => {
-          if (suppressClick.current) return;
+          if (suppressClick.current) {
+            // the click that follows a drag's release: swallowed once
+            suppressClick.current = false;
+            return;
+          }
           setNotice(null);
           // the bubble starts with the alert: the figure's "!" is about it
           if (!open) setAnswer(data.alert ?? null);
