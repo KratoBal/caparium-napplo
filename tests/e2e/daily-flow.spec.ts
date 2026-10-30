@@ -200,6 +200,21 @@ function budapestDay(offsetDays: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Lili 2026-10-30 (task caparium-csoport-sor): today a group member has a row of its own on the sheet only with an individual item. This gives
+// `name` one (a small Mysis item through the item form) when the earlier tests left none, and waits for its row.
+async function ensureOwnRow(page: Page, name: string) {
+  const sheet = page.getByTestId("feeding-sheet");
+  const row = sheet.getByRole("row").filter({ has: page.getByRole("cell", { name, exact: true }) });
+  if (await row.count()) return;
+  const form = page.getByTestId("item-form");
+  await form.getByLabel("Kinek", { exact: true }).selectOption({ label: name });
+  await form.getByLabel("Takarmány", { exact: true }).selectOption({ label: "Mysis" });
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("1");
+  await form.getByRole("button", { name: "Tétel mentése" }).click();
+  await expect(form.getByRole("status")).toHaveText("Tétel mentve.");
+  await expect(row).toHaveCount(1);
+}
+
 test("admin corrects and invalidates an earlier day's measurement with a reason (the reasons on); an aquarist gets no form", async ({ page, browser }, info) => {
   // caparium-indoklas-ki: the reasons are off by default; this test is the "on" branch, the forms as they were
   const db = new PrismaClient();
@@ -601,10 +616,9 @@ test("one button: \"Takarmánylap kész\" saves the day's feeds ticked above and
 });
 
 test("feeding sheet: a group selected from its header, the day's feeds, drafts kept on leaving a row, one save, corrections", async ({ page }, info) => {
-  // Lili 2026-10-30 (task caparium-csoport-sor): today a group member (Teszt Egy and Teszt Kettő are in "Teszt csoport") has no row of its own
-  // on the sheet, the group's row stands for it. The row this test fills is Teszt Három's, who is outside every group (the animals test moves him
-  // to another pool, so he is ticked by his own box, not by the pool's switch); the "other" row it clicks is the group's.
-  const name = "Teszt Három";
+  // Lili 2026-10-30 (task caparium-csoport-sor): today a group member (Teszt Egy and Teszt Kettő are in "Teszt csoport") has a row of its own on the
+  // sheet only with an individual item (ensureOwnRow gives it one if the earlier tests left none); the "other" row this test clicks is the group's
+  const name = info.project.name === "tablet" ? "Teszt Egy" : "Teszt Kettő";
   const other = "Teszt csoport (csoport)";
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
@@ -614,12 +628,7 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   // the pool and feed type names bold black two steps larger with their icon before them
   await expect(page.getByRole("button", { name: /összes kijelölése|Egyik sem/i })).toHaveCount(0);
   await page.getByRole("switch", { name: "Nagymedence: mind kijelölve" }).check();
-  await page.waitForLoadState("networkidle");
-  // Teszt Három is in no pool the switch covers any more (the animals test moved him): ticked by his own box; Teszt Egy gives the group its row
-  await page.getByLabel(`${name} a mai listán`).check();
   await expect(page.getByLabel(`${name} a mai listán`)).toBeChecked();
-  await page.waitForLoadState("networkidle");
-  await expect(page.getByLabel("Teszt Egy a mai listán")).toBeChecked();
   // Lili 2026-10-26 (Caparium channel msg 1564401863950995497): the animals only, no group names, in the "Ki eszik ma" list
   // (Teszt Egy and Teszt Kettő belong to "Teszt csoport", which the old list wrote after their names)
   await expect(page.getByTestId("animal-chooser")).toContainText(name);
@@ -647,6 +656,7 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   // step 3. Lili 2026-10-21 11:44 UTC (a): a feed weighed AND counted takes both units
   const sheet = page.getByTestId("feeding-sheet");
   await expect(sheet.getByRole("columnheader", { name: "Litopenaeus vannamei (g + db)" })).toBeVisible();
+  await ensureOwnRow(page, name);
   // Lili 2026-10-27: the header row stays on top while the sheet scrolls down, like a frozen row in Excel. The box has
   // a height of its own; here it is made short so that this run's few rows scroll, and the header must stay at its top
   const box = sheet.locator(".sheet-scroll");
@@ -827,8 +837,9 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
 });
 
 test("feeding sheet: a row colour set in the settings colours that animal's or group's row, the highlighted row keeps its ink", async ({ page }) => {
-  // Lili 2026-10-28 13:49 UTC (acrobot 37542). Teszt Egy and Teszt Kettő are in Nagymedence and in Teszt csoport; since 2026-10-30 (caparium-csoport-sor) a
-  // group member has no row of its own on today's sheet, so the rows here are Teszt Három (outside every group) and the group's.
+  // Lili 2026-10-28 13:49 UTC (acrobot 37542). Teszt Egy and Teszt Kettő are in Nagymedence and in Teszt csoport; since 2026-10-30
+  // (caparium-csoport-sor) a group member has a row of its own on today's sheet only with an individual item, so the rows here are Teszt Egy's
+  // (ensureOwnRow) and the group's.
   await login(page, "teszt.admin");
   await page.getByRole("link", { name: "Beállítások" }).click();
   const colours = page.getByTestId("sheet-colors");
@@ -841,58 +852,55 @@ test("feeding sheet: a row colour set in the settings colours that animal's or g
     await save.click();
     await expect(form.getByRole("status")).toHaveText("Mentve.");
   };
-  await setColour("Teszt Három", "Zöld");
+  await setColour("Teszt Egy", "Zöld");
   await setColour("Teszt csoport (csoport)", "Lila");
   await page.reload();
-  await expect(colours.getByLabel("Teszt Három sorszíne", { exact: true })).toHaveValue("GREEN");
+  await expect(colours.getByLabel("Teszt Egy sorszíne", { exact: true })).toHaveValue("GREEN");
   const GREEN = "rgb(217, 236, 217)";
   const PURPLE = "rgb(228, 219, 242)";
 
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
   await page.getByRole("switch", { name: "Nagymedence: mind kijelölve" }).check();
-  // Teszt Három is in no pool the switch covers any more (the animals test moved him): his own box; Teszt Egy gives the group its row
-  await page.getByLabel("Teszt Három a mai listán").check();
-  await page.waitForLoadState("networkidle");
   const dayFeeds = page.getByTestId("day-feeds");
   await dayFeeds.getByLabel("A nap takarmánya: Mysis").check();
   const saveFeeds = dayFeeds.getByRole("button", { name: "A nap takarmányainak mentése" });
   if (await saveFeeds.count()) await saveFeeds.click();
   else if (await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).count()) await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).click();
   const sheet = page.getByTestId("feeding-sheet");
+  await ensureOwnRow(page, "Teszt Egy");
   const row = (label: string) => sheet.getByRole("row").filter({ has: page.getByRole("cell", { name: label, exact: true }) });
   const cells = (label: string) => row(label).locator("td").evaluateAll((tds) => [...new Set(tds.map((td) => getComputedStyle(td).backgroundColor))]);
   await row("Teszt csoport (csoport)").click();
-  expect(await cells("Teszt Három"), "every cell of the row, the stuck name too").toEqual([GREEN]);
+  expect(await cells("Teszt Egy"), "every cell of the row, the stuck name too").toEqual([GREEN]);
   expect(await cells("Teszt csoport (csoport)"), "the highlighted row keeps its ink").not.toContain(PURPLE);
-  await row("Teszt Három").click();
-  expect(await cells("Teszt Három"), "the highlighted animal row keeps its ink too").not.toContain(GREEN);
+  await row("Teszt Egy").click();
+  expect(await cells("Teszt Egy"), "the highlighted animal row keeps its ink too").not.toContain(GREEN);
   expect(await cells("Teszt csoport (csoport)")).toEqual([PURPLE]);
   // the eating log is not coloured: the colour is the feeding sheet's only
   expect(await page.locator('table:not([data-testid="feeding-sheet-table"]) td').evaluateAll((tds) => tds.some((td) => ["rgb(217, 236, 217)", "rgb(228, 219, 242)"].includes(getComputedStyle(td).backgroundColor)))).toBe(false);
 
   // back to none: the later runs start from no colour
   await page.getByRole("link", { name: "Beállítások" }).click();
-  for (const label of ["Teszt Három", "Teszt csoport (csoport)"]) await setColour(label, "Nincs szín");
+  for (const label of ["Teszt Egy", "Teszt Kettő", "Teszt csoport (csoport)"]) await setColour(label, "Nincs szín");
 });
 
 test("feeding sheet: a small X empties an amount field in one click, on g and db each, only while it holds something", async ({ page }) => {
   // Lili 2026-10-29 (caparium-cella-torles-x): the same as deleting it by hand, no retyping
   await login(page, "teszt.admin");
   await page.getByRole("link", { name: "Takarmánynapló", exact: true }).click();
-  // Teszt Három, outside every group (a group member has no row of its own on today's sheet), by his own box: the animals test moved him out of Nagymedence
-  await page.getByLabel("Teszt Három a mai listán").check();
-  await page.waitForLoadState("networkidle");
+  await page.getByRole("switch", { name: "Nagymedence: mind kijelölve" }).check();
   const dayFeeds = page.getByTestId("day-feeds");
   await dayFeeds.getByLabel("A nap takarmánya: Litopenaeus vannamei").check();
   const saveFeeds = dayFeeds.getByRole("button", { name: "A nap takarmányainak mentése" });
   if (await saveFeeds.count()) await saveFeeds.click();
   else if (await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).count()) await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).click();
   const sheet = page.getByTestId("feeding-sheet");
-  await sheet.getByRole("row").filter({ has: page.getByRole("cell", { name: "Teszt Három", exact: true }) }).click();
-  const g = sheet.getByLabel("Teszt Három: Litopenaeus vannamei (g)", { exact: true });
-  const db = sheet.getByLabel("Teszt Három: Litopenaeus vannamei (db)", { exact: true });
-  const clearG = sheet.getByRole("button", { name: "g kiürítése, Teszt Három, Litopenaeus vannamei" });
-  const clearDb = sheet.getByRole("button", { name: "db kiürítése, Teszt Három, Litopenaeus vannamei" });
+  await ensureOwnRow(page, "Teszt Egy");
+  await sheet.getByRole("row").filter({ has: page.getByRole("cell", { name: "Teszt Egy", exact: true }) }).click();
+  const g = sheet.getByLabel("Teszt Egy: Litopenaeus vannamei (g)", { exact: true });
+  const db = sheet.getByLabel("Teszt Egy: Litopenaeus vannamei (db)", { exact: true });
+  const clearG = sheet.getByRole("button", { name: "g kiürítése, Teszt Egy, Litopenaeus vannamei" });
+  const clearDb = sheet.getByRole("button", { name: "db kiürítése, Teszt Egy, Litopenaeus vannamei" });
   await g.fill("");
   await db.fill("");
   await expect(clearG, "an empty field shows no X").toHaveCount(0);
