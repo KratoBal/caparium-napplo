@@ -59,7 +59,7 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
 
       <div className="card">
         <h2>Készlet</h2>
-        <p className="hint">A bevételezett mínusz a kivett takarmány. A készlet az első bevételezéstől számít: amelyik takarmányhoz még nincs bevétel, az nem szerepel itt, és a kivezetett (inaktív) takarmány sem. A becsült napok az elmúlt 30 nap átlagos kivétele szerint értendők.</p>
+        <p className="hint">A bevételezett mínusz a kivett takarmány. A készlet az első be nem küldött (nem visszaküldött) bevételezés napjától számít: az előtti kivételek nem vonódnak le belőle. Amelyik takarmányhoz még nincs ilyen bevétel, az nem szerepel itt, és a kivezetett (inaktív) takarmány sem. A becsült napok 0-ra állnak, ha a készlet elfogyott. A becsült napok az elmúlt 30 nap átlagos kivétele szerint értendők.</p>
         <div className="table-scroll">
           <table className="log-table" data-testid="feed-stock">
             <thead>

@@ -97,6 +97,27 @@ describe("the stock is the intake that was not sent back, minus the withdrawals"
   });
 });
 
+describe("the stock counts from the first intake that was not sent back (Lili's screen, 2026-10-30)", () => {
+  it("the withdrawals before it are not taken from it; a delivery only ever sent back starts nothing", async () => {
+    const feedId = await newFeed("Hűtő-teszt kezdet");
+    const now = at("2026-08-12", "12:00");
+    // a withdrawal from before the stock was kept, then a delivery that was sent back: still no stock, and not tracked
+    await take("2026-08-02", feedId, { quantities: [{ value: "50", unitId: unit.g }] });
+    await receive("2026-08-03", feedId, { quantities: [{ value: "10", unitId: unit.kg }], returned: true });
+    let [r] = await rowsOf(feedId, now);
+    expect(r).toMatchObject({ tracked: false, received: 0, returned: 10000 });
+    // the first received intake on the 4th: the withdrawal of the 2nd is before it and does not count
+    await receive("2026-08-04", feedId, { quantities: [{ value: "1", unitId: unit.kg }] });
+    [r] = await rowsOf(feedId, now);
+    expect(r).toMatchObject({ tracked: true, received: 1000, returned: 10000, taken: 0, level: 1000, negative: false });
+    // from the day of the first intake on, a withdrawal counts: the same day, and after
+    await take("2026-08-04", feedId, { quantities: [{ value: "200", unitId: unit.g }] });
+    await take("2026-08-05", feedId, { quantities: [{ value: "100", unitId: unit.g }] });
+    [r] = await rowsOf(feedId, now);
+    expect(r).toMatchObject({ taken: 300, level: 700 });
+  });
+});
+
 describe("who may record intake, and when", () => {
   it("an aquarist records today and changes only their own; an earlier day is an admin's; the future is nobody's", async () => {
     const feedId = await newFeed("Hűtő-teszt négy");

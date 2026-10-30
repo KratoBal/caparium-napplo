@@ -189,8 +189,10 @@ const round = (v: number) => Math.round(v * 10000) / 10000;
 
 /**
  * The feed stock per feed (and other name) and dimension, in base units, from the valid intake and withdrawals.
- * A feed with withdrawals but no intake is listed with tracked = false: it has no starting stock, so its level is
- * only a count of what was taken and must not raise an alert.
+ * It counts from the day of the first intake that was not sent back: the intake from then on, minus the withdrawals from
+ * then on (Lili's "az első bevételezéstől számít"; the withdrawals of before are from a time the stock was not kept). A
+ * delivery that was only ever sent back does not start it. A feed with withdrawals but no received intake is listed with
+ * tracked = false: it has no starting stock, so its level is only a count of what was taken and must not raise an alert.
  */
 export async function feedStock(now = new Date()): Promise<StockRow[]> {
   const today = businessDayOf(now);
@@ -221,13 +223,20 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
     }
     return r;
   };
+  // the day of each row's first intake that was NOT sent back: the stock counts from there (Lili's screen, 2026-10-30 11:26 UTC)
+  const from = new Map<string, Date>();
   for (const it of intake) {
     for (const q of it.quantities) {
       const r = row(it, q.unit.dimension, baseOf.get(q.unit.dimension) ?? q.unit.symbol);
       const v = Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
+      if (it.returned) {
+        r.returned += v;
+        continue;
+      }
+      r.received += v;
       r.tracked = true;
-      if (it.returned) r.returned += v;
-      else r.received += v;
+      const first = from.get(r.key);
+      if (!first || it.intakeDay < first) from.set(r.key, it.intakeDay);
     }
   }
   for (const it of taken) {
@@ -235,6 +244,9 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
     for (const q of it.quantities) {
       const r = row(it, q.unit.dimension, baseOf.get(q.unit.dimension) ?? q.unit.symbol);
       const v = Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
+      // a withdrawal before the first received intake is from before the stock existed: it is not taken from it
+      const start = from.get(r.key);
+      if (start && d < start) continue;
       r.taken += v;
       if (d > weekFrom && d <= todayDate) r.week += v;
       if (d > monthFrom && d <= todayDate) r.month += v;
@@ -256,6 +268,7 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
  */
 export function stockStatus(r: Pick<StockRow, "level" | "month" | "tracked" | "active">): { daysLeft: number | null; low: boolean } {
   const perDay = r.month / 30;
-  const daysLeft = perDay > 0 ? Math.round((r.level / perDay) * 10) / 10 : null;
+  // never negative: a stock at or below zero has run out, "0 days", not "-30"
+  const daysLeft = perDay > 0 ? Math.max(0, Math.round((r.level / perDay) * 10) / 10) : null;
   return { daysLeft, low: r.tracked && r.active && (r.level <= 0 || (daysLeft !== null && daysLeft <= RUN_OUT_DAYS)) };
 }
