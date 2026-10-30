@@ -1137,7 +1137,8 @@ test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows
   await form.getByLabel("Visszaküldve").check();
   await form.getByRole("button", { name: "Mentés" }).click();
   await expect(form.getByRole("status")).toHaveText("Tétel mentve.");
-  const back = page.getByTestId("intake-list").getByRole("row").filter({ hasText: "nem megfelelő" });
+  // the other layout's project has recorded the same note on its own feed on the same day: the row is this feed's
+  const back = page.getByTestId("intake-list").getByRole("row").filter({ hasText: feedName }).filter({ hasText: "nem megfelelő" });
   await expect(back).toHaveCount(1);
   await expect(back).toHaveAttribute("data-returned", "yes");
   await expect(stockRow.locator("td").nth(2)).toHaveText(level);
