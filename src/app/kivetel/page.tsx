@@ -80,7 +80,7 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
           feeds={feeds}
           otherNames={otherNames}
           // the Takarmányhűtő stock: only a feed with an intake has one
-          stock={stock.filter((s) => s.tracked).map((s) => ({ feedId: s.feedId, otherName: s.otherName?.toLowerCase() ?? null, dimension: s.dimension, unit: s.unit, level: s.level }))}
+          stock={stock.filter((s) => s.tracked).map((s) => ({ feedId: s.feedId, otherName: s.otherName, dimension: s.dimension, unit: s.unit, level: s.level }))}
           items={view.items}
           editable={editable}
         />
