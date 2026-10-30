@@ -1115,30 +1115,33 @@ for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti víz
 test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows on the list and does not change the stock", async ({ page }, info) => {
   // each layout receives its own feed
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";
+  // a retry of this test (same database) must not meet its own first attempt's rows: the notes are unique per attempt
+  const tag = `${info.project.name}-${info.retry}-${Date.now()}`;
+  const opening = `nyitó készlet ${tag}`;
+  const sentBack = `nem megfelelő ${tag}`;
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Takarmányhűtő" }).click();
   await expect(page.getByTestId("day-picker").getByRole("button", { name: "Ugrás" })).toBeVisible();
   const form = page.getByTestId("intake-form");
   await form.getByLabel("Takarmány", { exact: true }).selectOption({ label: feedName });
   await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("1000");
-  await form.getByLabel("Megjegyzés").fill("nyitó készlet");
+  await form.getByLabel("Megjegyzés").fill(opening);
   await form.getByRole("button", { name: "Mentés" }).click();
   await expect(form.getByRole("status")).toHaveText("Tétel mentve.");
-  const listed = page.getByTestId("intake-list").getByRole("row").filter({ hasText: feedName });
+  const listed = page.getByTestId("intake-list").getByRole("row").filter({ hasText: opening });
   await expect(listed).toHaveCount(1);
-  await expect(listed).toContainText("nyitó készlet");
+  await expect(listed).toContainText(feedName);
   const stockRow = page.getByTestId("feed-stock").getByRole("row").filter({ hasText: feedName });
   await expect(stockRow).toHaveCount(1);
   const level = (await stockRow.locator("td").nth(2).textContent()) ?? "";
   expect(level).not.toBe("");
   // sent back: the item shows, marked, and the stock stays as it was
   await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("500");
-  await form.getByLabel("Megjegyzés").fill("nem megfelelő");
+  await form.getByLabel("Megjegyzés").fill(sentBack);
   await form.getByLabel("Visszaküldve").check();
   await form.getByRole("button", { name: "Mentés" }).click();
   await expect(form.getByRole("status")).toHaveText("Tétel mentve.");
-  // the other layout's project has recorded the same note on its own feed on the same day: the row is this feed's
-  const back = page.getByTestId("intake-list").getByRole("row").filter({ hasText: feedName }).filter({ hasText: "nem megfelelő" });
+  const back = page.getByTestId("intake-list").getByRole("row").filter({ hasText: sentBack });
   await expect(back).toHaveCount(1);
   await expect(back).toHaveAttribute("data-returned", "yes");
   await expect(stockRow.locator("td").nth(2)).toHaveText(level);
