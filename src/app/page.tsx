@@ -24,7 +24,7 @@ const HOME_ROWS: HomeCard[][] = [
     { id: "adagolas", href: "/adagolas", caption: ["Nyomelem és megkötő adagolás"], module: "dosing" },
     // Lili 2026-10-30: between the two landscape cards, a narrower portrait one with the fridge picture (hely-jelolve.png)
     { id: "takarmanyhuto", href: "/takarmanyhuto", caption: ["Fagyasztó"], module: "withdrawal", narrow: true },
-    { id: "kalkulator", href: "/kalkulator", caption: ["Takarmány", "kalkulátor"], module: "feeding" },
+    { id: "kalkulator", href: "/kalkulator", caption: ["Takarmány kalkulátor"], module: "feeding" },
   ],
   [
     { id: "kivetel", href: "/kivetel", caption: ["Takarmány kivételi napló"], module: "feeding" },

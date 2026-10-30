@@ -362,11 +362,11 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
    rest. The typeface's own small capitals are used where it has them, else the browser scales its capitals, which have ő and ű.
    And 14:05 UTC (msg 1565728416660201483): "nem kell hatalmas legyen, de férjen ki szépen": the main line is no larger than needed,
    and every caption stands on ONE line in its card, the longest ("NYOMELEM ÉS MEGKÖTŐ ADAGOLÁS") on a tablet too: its size follows
-   the width of the cards' container (one third of it, less the gaps, over the 28 letters of that caption), at most 19 px; the second
+   the width of the cards' container (one third of it, less the gaps, over the 28 letters of that caption, with a margin), at most 19 px; the second
    line ("Nagy medencék", "Kis Akváriumok") is 2 px smaller than that, and at most 16 px (the original size 18 less 2). A phone's
    column is as wide as its card, so there the size is a fixed 17 px. */
 .home-cards { container-type: inline-size; }
-.home-caption { --cap: clamp(12px, calc((100cqw - 56px) / 44), 19px); display: flex; flex-direction: column; align-items: center; text-align: center; font-size: var(--cap); line-height: 1.3; font-variant-caps: all-small-caps; letter-spacing: 0.04em; }
+.home-caption { --cap: clamp(12px, calc((100cqw - 56px) / 46), 19px); display: flex; flex-direction: column; align-items: center; text-align: center; font-size: var(--cap); line-height: 1.3; font-variant-caps: all-small-caps; letter-spacing: 0.04em; }
 .home-caption > span { white-space: nowrap; }
 .home-caption > span:nth-child(2) { font-size: min(16px, calc(var(--cap) - 2px)); }
 @media (max-width: 720px) {
