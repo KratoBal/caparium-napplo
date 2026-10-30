@@ -1121,7 +1121,7 @@ for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti víz
   });
 }
 
-test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows on the list and does not change the stock", async ({ page }, info) => {
+test("intake (Fagyasztó): an item in the stock; a returned delivery shows on the list and does not change the stock", async ({ page }, info) => {
   // each layout receives its own feed
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";
   // a retry of this test (same database) must not meet its own first attempt's rows: the notes are unique per attempt
@@ -1129,7 +1129,7 @@ test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows
   const opening = `nyitó készlet ${tag}`;
   const sentBack = `nem megfelelő ${tag}`;
   await login(page, "teszt.akvarista1");
-  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Takarmányhűtő" }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Fagyasztó" }).click();
   await expect(page.getByTestId("day-picker").getByRole("button", { name: "Ugrás" })).toBeVisible();
   const form = page.getByTestId("intake-form");
   await form.getByLabel("Takarmány", { exact: true }).selectOption({ label: feedName });
@@ -1164,7 +1164,7 @@ test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows
   await take.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("99999999");
   await expect(take.getByTestId("stock-hint").first()).toContainText("meghaladja a készletet");
   // the report (Lili 2026-10-30): the PDF and the Excel of the period, from the Takarmányhűtő page
-  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Takarmányhűtő" }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Fagyasztó" }).click();
   const pdf = await Promise.all([page.waitForEvent("download"), page.getByTestId("intake-pdf").click()]);
   expect(pdf[0].suggestedFilename()).toMatch(/^Capasuli_takarmanyegyenleg_\d{4}-\d{2}-\d{2}(_\d{4}-\d{2}-\d{2})?\.pdf$/);
   const xlsx = await Promise.all([page.waitForEvent("download"), page.getByTestId("intake-excel").click()]);
@@ -1472,9 +1472,44 @@ test("home: the customer's illustrated cards, 3-3-3 with a narrow portrait one b
   await expect(page.getByRole("link", { name: "Vízmérési napló" }), "the log is still in the menu").toBeVisible();
   await expect(page.getByTestId("home-nagymedencek"), "the daily water pages are still cards").toBeVisible();
   const captions = async (i: number) => (await rows.nth(i).locator(".home-caption").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
-  expect(await captions(0)).toEqual(["Nagy medencék NAPI VÍZMÉRÉS", "Kis medencék NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS"]);
+  expect(await captions(0)).toEqual(["NAPI VÍZMÉRÉS Nagy medencék", "NAPI VÍZMÉRÉS Kis Akváriumok", "HETI VÍZMÉRÉS"]);
   // Lili 2026-10-30: the fridge card between the two landscape ones
-  expect(await captions(1)).toEqual(["Nyomelem és megkötő adagolás", "Takarmányhűtő", "Takarmány kalkulátor"]);
+  // Lili 2026-10-30 14:02 UTC (msg 1565727535310839809): the first line of the three cards is "NAPI VÍZMÉRÉS", "NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS" on one level,
+  // the pool group under it; measured by the first line's top edge
+  const firstLines = await rows.nth(0).locator(".home-caption > span:first-child").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(firstLines).size).toBe(1);
+  // Lili 2026-10-30 14:03 UTC: every caption of the home page in small capitals, all alike
+  const caps = await page.locator(".home-caption").evaluateAll((els) => els.map((e) => getComputedStyle(e).fontVariantCaps));
+  expect(caps.length).toBeGreaterThan(5);
+  expect(new Set(caps)).toEqual(new Set(["all-small-caps"]));
+  // and 14:05 UTC (msg 1565728416660201483): every caption line stands on ONE line inside its card (the longest, "NYOMELEM ÉS MEGKÖTŐ ADAGOLÁS",
+  // on a tablet too), the main line at most 19 px, the second line (the pool group) 2 px or more smaller than it
+  const lines = await page.locator(".home-card").evaluateAll((cards) =>
+    cards.map((card) => {
+      const width = card.getBoundingClientRect().width;
+      return [...card.querySelectorAll(".home-caption > span")].map((s) => {
+        const range = document.createRange();
+        range.selectNodeContents(s);
+        return { text: s.textContent, rects: range.getClientRects().length, fits: range.getBoundingClientRect().width <= width + 0.5, size: parseFloat(getComputedStyle(s).fontSize) };
+      });
+    }),
+  );
+  // and 14:12 UTC (msg 1565730054934364302): the caption stands close under its picture, the same distance on every card (was 13 px)
+  const gaps = await page.locator(".home-card").evaluateAll((cards) =>
+    cards.map((c) => Math.round(c.querySelector(".home-caption")!.getBoundingClientRect().top - c.querySelector("img")!.getBoundingClientRect().bottom)),
+  );
+  expect(new Set(gaps).size).toBe(1);
+  expect(gaps[0]).toBeLessThanOrEqual(6);
+  for (const card of lines) {
+    for (const l of card) {
+      expect(l.rects, `${l.text} on one line`).toBe(1);
+      expect(l.fits, `${l.text} fits its card`).toBe(true);
+    }
+    expect(card[0].size).toBeLessThanOrEqual(19);
+    if (card[1]) expect(card[0].size - card[1].size).toBeGreaterThanOrEqual(1.9);
+  }
+  expect(await rows.nth(0).locator(".home-caption > span:first-child").allInnerTexts()).toEqual(["NAPI VÍZMÉRÉS", "NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS"]);
+  expect(await captions(1)).toEqual(["Nyomelem és megkötő adagolás", "Fagyasztó", "Takarmány kalkulátor"]);
   expect(await captions(2)).toEqual(["Takarmány kivételi napló", "Egyedi takarmánynapló", "Evési napló"]);
   // every picture is the web-sized one and loads
   for (const img of await page.locator(".home-card img").all()) {
@@ -1495,6 +1530,13 @@ test("home: the customer's illustrated cards, 3-3-3 with a narrow portrait one b
   const [li, mi, ri] = [await img(1, 0), await img(1, 1), await img(1, 2)];
   expect(Math.abs(mi.height - li.height)).toBeLessThan(3);
   expect(Math.abs(ri.height - li.height)).toBeLessThan(3);
+  // the landscape cards come close to the fridge picture (Lili 2026-10-30 13:33 UTC): a gap of about 10 px, the same on both sides,
+  // and still a gap (the pictures do not touch), not the row's 28 px
+  const gapLeft = mi.x - (li.x + li.width);
+  const gapRight = ri.x - (mi.x + mi.width);
+  expect(gapLeft).toBeGreaterThan(4);
+  expect(gapLeft).toBeLessThan(16);
+  expect(Math.abs(gapLeft - gapRight)).toBeLessThan(2);
   // the fridge card goes to the Takarmányhűtő
   await page.getByTestId("home-takarmanyhuto").click();
   await expect(page).toHaveURL(/\/takarmanyhuto$/);

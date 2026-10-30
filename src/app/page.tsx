@@ -16,15 +16,15 @@ type HomeCard = { id: string; href: string; caption: string[]; module: "water" |
 // the captions and the order of the customer's sample (exchange/caparium/kezdolap-csempek-minta-2026-10-20.jpg)
 const HOME_ROWS: HomeCard[][] = [
   [
-    { id: "nagymedencek", href: "/vizmeres?csoport=NAPI_NAGY", caption: ["Nagy medencék", "NAPI VÍZMÉRÉS"], module: "water" },
-    { id: "kismedencek", href: "/vizmeres?csoport=NAPI_KIS", caption: ["Kis medencék", "NAPI VÍZMÉRÉS"], module: "water" },
+    { id: "nagymedencek", href: "/vizmeres?csoport=NAPI_NAGY", caption: ["NAPI VÍZMÉRÉS", "Nagy medencék"], module: "water" },
+    { id: "kismedencek", href: "/vizmeres?csoport=NAPI_KIS", caption: ["NAPI VÍZMÉRÉS", "Kis Akváriumok"], module: "water" },
     { id: "heti", href: "/heti", caption: ["HETI VÍZMÉRÉS"], module: "water" },
   ],
   [
     { id: "adagolas", href: "/adagolas", caption: ["Nyomelem és megkötő adagolás"], module: "dosing" },
     // Lili 2026-10-30: between the two landscape cards, a narrower portrait one with the fridge picture (hely-jelolve.png)
-    { id: "takarmanyhuto", href: "/takarmanyhuto", caption: ["Takarmányhűtő"], module: "withdrawal", narrow: true },
-    { id: "kalkulator", href: "/kalkulator", caption: ["Takarmány", "kalkulátor"], module: "feeding" },
+    { id: "takarmanyhuto", href: "/takarmanyhuto", caption: ["Fagyasztó"], module: "withdrawal", narrow: true },
+    { id: "kalkulator", href: "/kalkulator", caption: ["Takarmány kalkulátor"], module: "feeding" },
   ],
   [
     { id: "kivetel", href: "/kivetel", caption: ["Takarmány kivételi napló"], module: "feeding" },

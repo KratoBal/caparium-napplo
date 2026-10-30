@@ -30,7 +30,7 @@ export const ACTIVITY_KINDS: readonly ActivityKind[] = [
     label: "Takarmánynapló",
     entityTypes: ["FeedingDay", "FeedingItem", "FeedingList", "FeedingSelection", "FeedingPlan", "FeedingReference", "CalculatorRun"],
   },
-  { key: "withdrawal", label: "Takarmányhűtő és kivétel", entityTypes: ["FeedIntakeItem", "WithdrawalItem"] },
+  { key: "withdrawal", label: "Fagyasztó és kivétel", entityTypes: ["FeedIntakeItem", "WithdrawalItem"] },
   { key: "dosing", label: "Vegyszeradagolás", entityTypes: ["Dosing", "StockMovement"] },
   { key: "animals", label: "Állatok", entityTypes: ["Animal", "AnimalGroup", "AnimalOrder", "LifecycleEvent", "InitialAnimalList", "Species"] },
   {

@@ -38,7 +38,7 @@ describe("the main navigation", () => {
   it("keeps Lili's order for an admin", () => {
     expect(labels("ADMIN")).toEqual([
       "START", "Napi vízmérés", "Heti vízmérés", "Export", "Takarmánynapló", "Evési napló", "Takarmánykivétel",
-      "Takarmánykalkulátor", "Vegyszeradagolás", "Vízmérési napló", "Takarmányozási napló", "Takarmányhűtő",
+      "Takarmánykalkulátor", "Vegyszeradagolás", "Vízmérési napló", "Takarmányozási napló", "Fagyasztó",
       "Takarmánylista", "Kimutatások", "Függő mentések", "Állatok", "Beállítások", "Aktivitás",
     ]);
   });
@@ -46,7 +46,7 @@ describe("the main navigation", () => {
   it("puts each entry in its color group, and leaves the rest plain", () => {
     const tone = (label: string) => navFor("ADMIN").find((n) => n.label === label)?.tone;
     for (const l of ["Napi vízmérés", "Heti vízmérés", "Vegyszeradagolás", "Vízmérési napló"]) expect(tone(l), l).toBe("water");
-    for (const l of ["Takarmánynapló", "Evési napló", "Takarmánykivétel", "Takarmánykalkulátor", "Takarmányozási napló", "Takarmányhűtő", "Takarmánylista"]) {
+    for (const l of ["Takarmánynapló", "Evési napló", "Takarmánykivétel", "Takarmánykalkulátor", "Takarmányozási napló", "Fagyasztó", "Takarmánylista"]) {
       expect(tone(l), l).toBe("feed");
     }
     // the control: the entries Lili marked "szín marad" are really plain, so the two checks above cannot pass on a menu where everything is colored
@@ -64,7 +64,7 @@ describe("the main navigation", () => {
       Takarmánykivétel: "➖",
       Takarmánykalkulátor: "🧮",
       Vegyszeradagolás: "🧪",
-      Takarmányhűtő: "🧊",
+      Fagyasztó: "🧊",
     });
     // the label is the name alone: no emoji, nothing outside letters, spaces and the hyphen
     for (const n of navFor("ADMIN")) expect(n.label, n.label).toMatch(/^[\p{L} -]+$/u);
