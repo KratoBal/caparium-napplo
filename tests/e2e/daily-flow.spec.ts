@@ -1142,6 +1142,13 @@ test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows
   await expect(back).toHaveCount(1);
   await expect(back).toHaveAttribute("data-returned", "yes");
   await expect(stockRow.locator("td").nth(2)).toHaveText(level);
+  // the withdrawal page shows that stock under the chosen feed, and warns when the typed amount is more than it
+  await page.getByRole("link", { name: "Takarmánykivétel" }).click();
+  const take = page.getByTestId("withdrawal-form");
+  await take.getByLabel("Takarmány", { exact: true }).selectOption({ label: feedName });
+  await expect(take.getByTestId("stock-hint").first()).toContainText("Készlet:");
+  await take.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("99999999");
+  await expect(take.getByTestId("stock-hint").first()).toContainText("meghaladja a készletet");
 });
 
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
