@@ -6,7 +6,12 @@ export type NavKey =
 /** The label color group of an entry: the water measurement group or the feeding group (Lili 2026-10-26). */
 export type NavTone = "water" | "feed";
 
-export type NavItem = { key: NavKey; href: string; label: string; tone?: NavTone };
+/**
+ * `icon`: an emoji before the label (Lili 2026-10-30 11:36-11:37 UTC, card 464e46b8: only where similar names need telling
+ * apart, "nem raknék mindegyikhez"). Kept apart from `label`, which stays the plain name: the menu shows the icon hidden
+ * from screen readers, so a link's accessible name (the tests' handle) does not change.
+ */
+export type NavItem = { key: NavKey; href: string; label: string; tone?: NavTone; icon?: string };
 
 // Lili 2026-10-26 (caparium-menu-sorrend-szinek, channel msg 1564292920016904403 and 1564295015704957030): the
 // order of the list she sent, and a label color for two groups (#A8DDE0 water, #FFCFC2 feeding, in globals.css).
@@ -15,18 +20,18 @@ export type NavItem = { key: NavKey; href: string; label: string; tone?: NavTone
 const NAV: NavItem[] = [
   // Lili 2026-10-27 13:02 UTC: the first entry is called START
   { key: "overview", href: "/", label: "START" },
-  { key: "daily", href: "/vizmeres", label: "Napi vízmérés", tone: "water" },
-  { key: "weekly", href: "/heti", label: "Heti vízmérés", tone: "water" },
+  { key: "daily", href: "/vizmeres", label: "Napi vízmérés", tone: "water", icon: "💧" },
+  { key: "weekly", href: "/heti", label: "Heti vízmérés", tone: "water", icon: "📅" },
   { key: "export", href: "/export", label: "Export" },
-  { key: "feeding", href: "/etetes", label: "Takarmánynapló", tone: "feed" },
-  { key: "eating", href: "/evesi-naplo", label: "Evési napló", tone: "feed" },
-  { key: "withdrawal", href: "/kivetel", label: "Takarmánykivétel", tone: "feed" },
-  { key: "calculator", href: "/kalkulator", label: "Takarmánykalkulátor", tone: "feed" },
-  { key: "dosing", href: "/adagolas", label: "Vegyszeradagolás", tone: "water" },
+  { key: "feeding", href: "/etetes", label: "Takarmánynapló", tone: "feed", icon: "🍤" },
+  { key: "eating", href: "/evesi-naplo", label: "Evési napló", tone: "feed", icon: "🦈" },
+  { key: "withdrawal", href: "/kivetel", label: "Takarmánykivétel", tone: "feed", icon: "➖" },
+  { key: "calculator", href: "/kalkulator", label: "Takarmánykalkulátor", tone: "feed", icon: "🧮" },
+  { key: "dosing", href: "/adagolas", label: "Vegyszeradagolás", tone: "water", icon: "🧪" },
   { key: "log", href: "/naplo", label: "Vízmérési napló", tone: "water" },
   { key: "feedlog", href: "/takarmany-naplo", label: "Takarmányozási napló", tone: "feed" },
   // Lili 2026-10-29 (package item 9): "Takarmányhűtő" directly above "Takarmánylista"
-  { key: "intake", href: "/takarmanyhuto", label: "Takarmányhűtő", tone: "feed" },
+  { key: "intake", href: "/takarmanyhuto", label: "Takarmányhűtő", tone: "feed", icon: "🧊" },
   { key: "feeds", href: "/takarmanyok", label: "Takarmánylista", tone: "feed" },
   { key: "reports", href: "/kimutatasok", label: "Kimutatások" },
 ];

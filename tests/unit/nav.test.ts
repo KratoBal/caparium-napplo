@@ -52,4 +52,21 @@ describe("the main navigation", () => {
     // the control: the entries Lili marked "szín marad" are really plain, so the two checks above cannot pass on a menu where everything is colored
     for (const l of ["START", "Export", "Kimutatások", "Függő mentések", "Állatok", "Beállítások", "Aktivitás"]) expect(tone(l), l).toBeUndefined();
   });
+
+  // Lili 2026-10-30 11:36-11:37 UTC (card 464e46b8): an emoji before these eight only, "nem raknék mindegyikhez".
+  it("puts Lili's emoji before exactly her eight entries, and keeps every label plain text", () => {
+    const icons = Object.fromEntries(navFor("ADMIN").filter((n) => n.icon).map((n) => [n.label, n.icon]));
+    expect(icons).toEqual({
+      "Napi vízmérés": "💧",
+      "Heti vízmérés": "📅",
+      Takarmánynapló: "🍤",
+      "Evési napló": "🦈",
+      Takarmánykivétel: "➖",
+      Takarmánykalkulátor: "🧮",
+      Vegyszeradagolás: "🧪",
+      Takarmányhűtő: "🧊",
+    });
+    // the label is the name alone: no emoji, nothing outside letters, spaces and the hyphen
+    for (const n of navFor("ADMIN")) expect(n.label, n.label).toMatch(/^[\p{L} -]+$/u);
+  });
 });

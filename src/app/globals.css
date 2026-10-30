@@ -52,6 +52,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Label colors of two menu groups (Lili 2026-10-26): water measurement and feeding. Also on the active entry. */
 .nav a.nav-water { color: #a8dde0; }
 .nav a.nav-feed { color: #ffcfc2; }
+/* the menu emoji (card 464e46b8): inline before the label, not the block that `.nav span` makes of a span */
+.nav a .nav-icon { display: inline; min-height: 0; padding: 0; margin-right: 8px; font-size: 16px; line-height: 1; }
 .nav span.disabled { color: #99b8bf; }
 .nav small { font-size: 11px; margin-left: 6px; }
 .nav-foot { margin-top: auto; padding: 16px; font-size: 11px; letter-spacing: 0.06em; color: #99b8bf; font-weight: 600; }
