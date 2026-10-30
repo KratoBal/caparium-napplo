@@ -1,6 +1,7 @@
 // A draft on the feeding sheet lives in the browser, under its row's key and the feed. When the sheet is refreshed and a row is gone (an
-// animal moved into a group while the page was open, say), its draft must neither stay invisible in memory nor vanish without a word:
-// it is dropped, and the sheet says which row's draft was lost (Lili 2026-10-30, msg 1565798789183447103; acrobot 38947, b).
+// animal moved into a group while the page was open, or its only individual item invalidated), its draft must neither stay invisible in memory
+// nor vanish without a word: it is dropped, and the sheet says which row's draft was lost (Lili 2026-10-30, msg 1565798789183447103; acrobot
+// 38947, b; the wording names no cause, since a row also goes when its individual item is invalidated: barracuda on #153).
 // A draft that equals what is saved is nothing lost, and is dropped silently.
 
 export function vanishedDrafts(input: {
@@ -26,6 +27,6 @@ export function vanishedDrafts(input: {
     feeds.push(input.feedName(feedId));
     lost.set(row, feeds);
   }
-  const parts = [...lost].map(([row, feeds]) => `${input.labelOf(row)} sor piszkozata a csoportváltás miatt elveszett: ${feeds.join(", ")}.`);
+  const parts = [...lost].map(([row, feeds]) => `${input.labelOf(row)} sor eltűnt a lapról, a piszkozata elveszett: ${feeds.join(", ")}.`);
   return { drop, message: parts.length ? parts.join(" ") : null };
 }

@@ -11,7 +11,7 @@ describe("drafts of rows that are gone", () => {
   it("a typed draft of a vanished row is dropped and named, with its feeds, in one sentence per row", () => {
     const r = vanishedDrafts({ ...base, draftKeys: ["a1|f1", "a1|f2", "a3|f1"], present: new Set(["a3"]), dirty: () => true });
     expect(r.drop).toEqual(["a1|f1", "a1|f2"]);
-    expect(r.message).toBe("Gnocchi sor piszkozata a csoportváltás miatt elveszett: Mysis, Szardínia.");
+    expect(r.message).toBe("Gnocchi sor eltűnt a lapról, a piszkozata elveszett: Mysis, Szardínia.");
   });
 
   it("a draft that equals what is saved is dropped without a word: nothing was lost", () => {
@@ -22,7 +22,7 @@ describe("drafts of rows that are gone", () => {
   it("a group row's key (g:...) is cut at the last bar, and two rows give two sentences", () => {
     const r = vanishedDrafts({ ...base, draftKeys: ["g:g1|f1", "a1|f2"], present: new Set(), dirty: () => true });
     expect(r.drop).toEqual(["g:g1|f1", "a1|f2"]);
-    expect(r.message).toBe("Hímek (csoport) sor piszkozata a csoportváltás miatt elveszett: Mysis. Gnocchi sor piszkozata a csoportváltás miatt elveszett: Szardínia.");
+    expect(r.message).toBe("Hímek (csoport) sor eltűnt a lapról, a piszkozata elveszett: Mysis. Gnocchi sor eltűnt a lapról, a piszkozata elveszett: Szardínia.");
   });
 
   it("drafts of rows that are still there are left alone", () => {
@@ -32,7 +32,7 @@ describe("drafts of rows that are gone", () => {
 
   it("only the dirty feed of a vanished row is named", () => {
     const r = vanishedDrafts({ ...base, draftKeys: ["a1|f1", "a1|f2"], present: new Set(), dirty: (_row, feed) => feed === "f2" });
-    expect(r.message).toBe("Gnocchi sor piszkozata a csoportváltás miatt elveszett: Szardínia.");
+    expect(r.message).toBe("Gnocchi sor eltűnt a lapról, a piszkozata elveszett: Szardínia.");
     expect(r.drop).toEqual(["a1|f1", "a1|f2"]);
   });
 });
