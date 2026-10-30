@@ -45,6 +45,9 @@ test.describe("phone, 390 px", () => {
     const panel = page.getByTestId("profile-panel");
     await expect(panel.getByTestId("current-user")).toContainText("akvarista");
     await expect(panel.getByRole("button", { name: "Kilépés" })).toBeVisible();
+    // the start page has a helper, so its switch is in the panel (and only there: the header's own is gone on a phone)
+    await expect(panel.getByTestId("helper-toggle")).toBeVisible();
+    await expect(page.getByTestId("helper-toggle")).toHaveCount(1);
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
     // a tap elsewhere closes it too
