@@ -1495,6 +1495,13 @@ test("home: the customer's illustrated cards, 3-3-3 with a narrow portrait one b
   const [li, mi, ri] = [await img(1, 0), await img(1, 1), await img(1, 2)];
   expect(Math.abs(mi.height - li.height)).toBeLessThan(3);
   expect(Math.abs(ri.height - li.height)).toBeLessThan(3);
+  // the landscape cards come close to the fridge picture (Lili 2026-10-30 13:33 UTC): a gap of about 10 px, the same on both sides,
+  // and still a gap (the pictures do not touch), not the row's 28 px
+  const gapLeft = mi.x - (li.x + li.width);
+  const gapRight = ri.x - (mi.x + mi.width);
+  expect(gapLeft).toBeGreaterThan(4);
+  expect(gapLeft).toBeLessThan(16);
+  expect(Math.abs(gapLeft - gapRight)).toBeLessThan(2);
   // the fridge card goes to the Takarmányhűtő
   await page.getByTestId("home-takarmanyhuto").click();
   await expect(page).toHaveURL(/\/takarmanyhuto$/);
