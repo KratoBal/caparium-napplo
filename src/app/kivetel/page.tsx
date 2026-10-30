@@ -73,7 +73,7 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
       </div>
       <div className="card">
         <h2>Kivett takarmány</h2>
-        <p className="hint">Amit ma kiveszel a fagyasztóból; a felhasználás napja alapból a holnap. A darab és a tömeg külön összeg. A kivétel a Takarmányhűtő készletéből vonódik le.</p>
+        <p className="hint">Amit ma kiveszel a fagyasztóból; a felhasználás napja alapból a holnap. A darab és a tömeg külön összeg. A kivétel a Fagyasztó készletéből vonódik le.</p>
         <WithdrawalItems
           day={day}
           useDay={addDays(day, 1)}

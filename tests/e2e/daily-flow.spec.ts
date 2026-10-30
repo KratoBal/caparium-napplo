@@ -1121,7 +1121,7 @@ for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti víz
   });
 }
 
-test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows on the list and does not change the stock", async ({ page }, info) => {
+test("intake (Fagyasztó): an item in the stock; a returned delivery shows on the list and does not change the stock", async ({ page }, info) => {
   // each layout receives its own feed
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";
   // a retry of this test (same database) must not meet its own first attempt's rows: the notes are unique per attempt
@@ -1129,7 +1129,7 @@ test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows
   const opening = `nyitó készlet ${tag}`;
   const sentBack = `nem megfelelő ${tag}`;
   await login(page, "teszt.akvarista1");
-  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Takarmányhűtő" }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Fagyasztó" }).click();
   await expect(page.getByTestId("day-picker").getByRole("button", { name: "Ugrás" })).toBeVisible();
   const form = page.getByTestId("intake-form");
   await form.getByLabel("Takarmány", { exact: true }).selectOption({ label: feedName });
@@ -1164,7 +1164,7 @@ test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows
   await take.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("99999999");
   await expect(take.getByTestId("stock-hint").first()).toContainText("meghaladja a készletet");
   // the report (Lili 2026-10-30): the PDF and the Excel of the period, from the Takarmányhűtő page
-  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Takarmányhűtő" }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Fagyasztó" }).click();
   const pdf = await Promise.all([page.waitForEvent("download"), page.getByTestId("intake-pdf").click()]);
   expect(pdf[0].suggestedFilename()).toMatch(/^Capasuli_takarmanyegyenleg_\d{4}-\d{2}-\d{2}(_\d{4}-\d{2}-\d{2})?\.pdf$/);
   const xlsx = await Promise.all([page.waitForEvent("download"), page.getByTestId("intake-excel").click()]);
@@ -1474,7 +1474,7 @@ test("home: the customer's illustrated cards, 3-3-3 with a narrow portrait one b
   const captions = async (i: number) => (await rows.nth(i).locator(".home-caption").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
   expect(await captions(0)).toEqual(["Nagy medencék NAPI VÍZMÉRÉS", "Kis medencék NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS"]);
   // Lili 2026-10-30: the fridge card between the two landscape ones
-  expect(await captions(1)).toEqual(["Nyomelem és megkötő adagolás", "Takarmányhűtő", "Takarmány kalkulátor"]);
+  expect(await captions(1)).toEqual(["Nyomelem és megkötő adagolás", "Fagyasztó", "Takarmány kalkulátor"]);
   expect(await captions(2)).toEqual(["Takarmány kivételi napló", "Egyedi takarmánynapló", "Evési napló"]);
   // every picture is the web-sized one and loads
   for (const img of await page.locator(".home-card img").all()) {

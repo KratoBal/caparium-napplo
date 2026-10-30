@@ -348,7 +348,8 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 /* the word "Takarmányhűtő" is wider than the narrow card on a tablet: it must not widen the card (and so its picture), it overflows the
    card's centre evenly into the gaps instead (CI run 41060337750, tablet 1024 px: the card was 139 px, not about half of 224) */
 .home-card-narrow .home-caption { white-space: nowrap; }
-.home-card-narrow img { aspect-ratio: 3 / 4; }
+/* a transparent picture (Lili 2026-10-30, her PNG): no frame, so its white watercolour edge melts into the page instead of standing in a box */
+.home-card-narrow img { aspect-ratio: 3 / 4; border: 0; border-radius: 0; }
 .home-card:hover img, .home-card:focus-visible img { outline: 3px solid var(--c-primary); outline-offset: 2px; }
 .home-caption { display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 18px; line-height: 1.3; }
 @media (max-width: 720px) {

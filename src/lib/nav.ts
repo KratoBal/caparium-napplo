@@ -30,8 +30,9 @@ const NAV: NavItem[] = [
   { key: "dosing", href: "/adagolas", label: "Vegyszeradagolás", tone: "water", icon: "🧪" },
   { key: "log", href: "/naplo", label: "Vízmérési napló", tone: "water" },
   { key: "feedlog", href: "/takarmany-naplo", label: "Takarmányozási napló", tone: "feed" },
-  // Lili 2026-10-29 (package item 9): "Takarmányhűtő" directly above "Takarmánylista"
-  { key: "intake", href: "/takarmanyhuto", label: "Takarmányhűtő", tone: "feed", icon: "🧊" },
+  // Lili 2026-10-29 (package item 9): the freezer page directly above "Takarmánylista"; called "Fagyasztó" everywhere since 2026-10-30 13:28 UTC
+  // (msg 1565718949457567755: "sok lesz már a takarmány takarmányhátán")
+  { key: "intake", href: "/takarmanyhuto", label: "Fagyasztó", tone: "feed", icon: "🧊" },
   { key: "feeds", href: "/takarmanyok", label: "Takarmánylista", tone: "feed" },
   { key: "reports", href: "/kimutatasok", label: "Kimutatások" },
 ];

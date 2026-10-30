@@ -49,14 +49,14 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
   );
   const tracked = stock.filter((r) => r.tracked && r.active);
   return (
-    <Shell title="Takarmányhűtő" active="intake" user={user}>
+    <Shell title="Fagyasztó" active="intake" user={user}>
       <div className="toolbar toolbar-end">
         <DayNav path="/takarmanyhuto" day={day} today={today} />
         <DayJump path="/takarmanyhuto" day={day} today={today} />
       </div>
       <div className="card">
         <h2>Beérkezett takarmány</h2>
-        <p className="hint">A hűtőbe érkezett készlet. Ha a szállítmányt visszaküldik, pipáld be a „Visszaküldve” jelölőt: látszik a listán, de nem kerül a készletre.</p>
+        <p className="hint">A fagyasztóba érkezett készlet. Ha a szállítmányt visszaküldik, pipáld be a „Visszaküldve” jelölőt: látszik a listán, de nem kerül a készletre.</p>
         <IntakeItems day={day} feeds={feeds} otherNames={otherNames} items={items} editable={editable} />
       </div>
 
