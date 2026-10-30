@@ -3,12 +3,14 @@ import { redirect } from "next/navigation";
 import { Shell } from "@/components/Shell";
 import {
   ACTIVITY_KINDS,
+  activityHref,
   type ActivityKindKey,
   clampPeriod,
   describeSave,
   groupSaves,
   loadActivityRows,
   MAX_ACTIVITY_DAYS,
+  readActivityParams,
   summarize,
 } from "@/lib/activity";
 import { prisma } from "@/lib/db";
@@ -25,17 +27,19 @@ type KindParam = ActivityKindKey | "other";
 export default async function ActivityPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tol?: string; ig?: string; ember?: string; nap?: string; fajta?: string; oldal?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await requireUser();
   if (user.role !== "ADMIN") redirect("/nincs-jogosultsag");
-  const sp = await searchParams;
+  const sp = readActivityParams(await searchParams);
   const today = businessDayOf(new Date());
   const to = sp.ig && isValidDay(sp.ig) ? sp.ig : today;
   const period = clampPeriod(sp.tol && isValidDay(sp.tol) ? sp.tol : addDays(to, -6), to);
 
   const users = await prisma.user.findMany({ where: { role: { in: ["ADMIN", "AQUARIST"] } }, orderBy: { fullName: "asc" } });
+  // `ember` filters the summary, `ki` is the person of the opened cell: two keys, each written once by every link
   const person = users.some((u) => u.id === sp.ember) ? sp.ember : undefined;
+  const detailPerson = users.some((u) => u.id === sp.ki) ? sp.ki : undefined;
   const name = (id: string) => users.find((u) => u.id === id)?.fullName ?? "ismeretlen felhasználó";
   const loginOf = (id: string) => users.find((u) => u.id === id)?.loginId ?? id;
 
@@ -47,18 +51,20 @@ export default async function ActivityPage({
     ...(showOther ? [{ key: "other" as const, label: "Egyéb" }] : []),
   ];
 
-  const base = `/aktivitas?tol=${period.from}&ig=${period.to}${person ? `&ember=${person}` : ""}`;
-  const cellHref = (day: string, userId: string, kind: KindParam) => `${base}&nap=${day}&ember=${userId}&fajta=${kind}#reszlet`;
+  const view = { from: period.from, to: period.to, filter: person };
+  const cellHref = (day: string, userId: string, kind: KindParam) => activityHref(view, { day, person: userId, kind });
 
   // the detail of one cell: one day, one person, one kind
   const kind = columns.find((c) => c.key === sp.fajta);
   const detailDay = sp.nap && isValidDay(sp.nap) ? sp.nap : undefined;
   const detail =
-    kind && detailDay && person ? saves.filter((s) => s.day === detailDay && s.userId === person && s.kind === kind.key) : null;
+    kind && detailDay && detailPerson
+      ? saves.filter((s) => s.day === detailDay && s.userId === detailPerson && s.kind === kind.key)
+      : null;
   const page = Math.max(1, Number(sp.oldal) || 1);
   const pages = detail ? Math.max(1, Math.ceil(detail.length / PAGE_SIZE)) : 1;
   const shown = detail ? detail.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : [];
-  const detailHref = (p: number) => `${base}&nap=${detailDay}&fajta=${kind?.key}&oldal=${p}#reszlet`;
+  const detailHref = (p: number) => activityHref(view, { day: detailDay!, person: detailPerson!, kind: kind!.key, page: p });
 
   return (
     <Shell title="Aktivitás" active="activity" user={user}>
@@ -138,10 +144,10 @@ export default async function ActivityPage({
         )}
       </div>
 
-      {detail && kind && detailDay && person && (
+      {detail && kind && detailDay && detailPerson && (
         <div className="card" id="reszlet" data-testid="activity-detail">
           <h2>
-            {name(person)}, {detailDay} ({weekdayLetter(detailDay)}): {kind.label}
+            {name(detailPerson)}, {detailDay} ({weekdayLetter(detailDay)}): {kind.label}
           </h2>
           {detail.length === 0 ? (
             <p className="hint">Ezen a napon ebben a fajtában nincs mentés.</p>

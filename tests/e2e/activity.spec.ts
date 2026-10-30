@@ -34,6 +34,21 @@ test("an admin sees the day's saves per person and opens one cell", async ({ pag
   const detail = page.getByTestId("activity-detail");
   await expect(detail.getByRole("heading")).toContainText("Export, levél, napzárás");
   await expect(detail).toContainText("export: export");
+
+  // a second click from the opened page, and a click from a view filtered to one person: the detail stays
+  // (barracuda, #136: the person key was written twice and the detail vanished)
+  // the URL first: the old detail stays on screen until a new page renders, so the text alone would pass too early
+  await cell.getByRole("link").click();
+  await expect(page).toHaveURL((url) => {
+    const q = url.searchParams;
+    return [...new Set(q.keys())].every((k) => q.getAll(k).length === 1) && q.get("ki") !== null;
+  });
+  await expect(detail).toContainText("export: export");
+  await page.getByLabel("Felhasználó").selectOption({ label: "Teszt Admin" });
+  await page.getByRole("button", { name: "Szűrés" }).click();
+  await expect(page.getByTestId("activity-detail")).toHaveCount(0);
+  await page.getByTestId(`activity-cell-${today}-teszt.admin-export`).getByRole("link").click();
+  await expect(page.getByTestId("activity-detail")).toContainText("export: export");
 });
 
 test("an aquarist is sent to the no-access page", async ({ page }) => {

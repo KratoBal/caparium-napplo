@@ -2,7 +2,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ACTIVITY_KINDS, clampPeriod, describeSave, ENTITY_LABEL, groupSaves, kindOf, MAX_ACTIVITY_DAYS, summarize, type ActivityRow } from "@/lib/activity";
+import { ACTIVITY_KINDS, activityHref, clampPeriod, describeSave, ENTITY_LABEL, groupSaves, kindOf, MAX_ACTIVITY_DAYS, readActivityParams, summarize, type ActivityRow } from "@/lib/activity";
 import { SYSTEM_USER_ID } from "@/lib/db";
 
 const U1 = "11111111-1111-1111-1111-111111111111";
@@ -148,5 +148,29 @@ describe("labels", () => {
       row({ entityType: "FeedingSelection" }),
     ]);
     expect(text).toBe("érvénytelenítés: evési állapot; rögzítés: 2 etetett állat");
+  });
+});
+
+describe("the page's links (barracuda, #136: the second click lost the detail)", () => {
+  const keys = (href: string) => [...new URL(href, "http://x").searchParams.keys()];
+  const view = { from: "2026-10-24", to: "2026-10-30", filter: U1 };
+
+  it("a cell link from a filtered view names every key once, the filter and the opened person apart", () => {
+    const href = activityHref(view, { day: "2026-10-30", person: U1, kind: "export" });
+    expect(keys(href).sort()).toEqual(["ember", "fajta", "ig", "ki", "nap", "tol"]);
+    const q = new URL(href, "http://x").searchParams;
+    expect([q.get("ember"), q.get("ki")]).toEqual([U1, U1]);
+  });
+
+  it("a link from an opened cell's page opens the next one with each key once", () => {
+    // the shape that broke: the link of a page that already shows a detail
+    const opened = readActivityParams(Object.fromEntries(new URL(activityHref(view, { day: "2026-10-30", person: U1, kind: "export" }), "http://x").searchParams));
+    const next = activityHref({ from: opened.tol!, to: opened.ig!, filter: opened.ember }, { day: "2026-10-29", person: U2, kind: "water", page: 2 });
+    const all = keys(next);
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it("reads a repeated key by its first value, not as missing", () => {
+    expect(readActivityParams({ ember: [U1, U2], ki: U2, nap: undefined })).toEqual({ ember: U1, ki: U2 });
   });
 });

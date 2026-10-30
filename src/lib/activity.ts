@@ -218,3 +218,33 @@ export function describeSave(rows: readonly ActivityRow[]): string {
     })
     .join("; ");
 }
+
+/** The page's query keys: `ember` filters the summary, `ki` is the person of the opened cell. */
+export type ActivityParams = Partial<Record<"tol" | "ig" | "ember" | "ki" | "nap" | "fajta" | "oldal", string>>;
+
+/**
+ * The page's query, one value per key. Next.js gives a key that appears twice as an array; its first value counts.
+ * Before this, a cell link repeated `ember` and the detail vanished on the second click (barracuda, #136).
+ */
+export function readActivityParams(raw: Record<string, string | string[] | undefined>): ActivityParams {
+  const out: ActivityParams = {};
+  for (const key of ["tol", "ig", "ember", "ki", "nap", "fajta", "oldal"] as const) {
+    const v = raw[key];
+    const value = Array.isArray(v) ? v[0] : v;
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
+/** A link of the page: the period and the filter, then what the link opens; every key at most once. */
+export function activityHref(view: { from: string; to: string; filter?: string }, open?: { day: string; person: string; kind: string; page?: number }): string {
+  const q = new URLSearchParams({ tol: view.from, ig: view.to });
+  if (view.filter) q.set("ember", view.filter);
+  if (open) {
+    q.set("nap", open.day);
+    q.set("ki", open.person);
+    q.set("fajta", open.kind);
+    if (open.page && open.page > 1) q.set("oldal", String(open.page));
+  }
+  return `/aktivitas?${q.toString()}${open ? "#reszlet" : ""}`;
+}
