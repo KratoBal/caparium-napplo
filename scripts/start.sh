@@ -23,8 +23,14 @@ DATABASE_URL="$OWNER_URL" node dist/base-data.cjs
 # The test seed runs only on the explicit switch, never on the password alone: Coolify fills every
 # SERVICE_PASSWORD_* the compose file names, SERVICE_PASSWORD_SEED included, so on a live system the
 # password is never empty and would have created the test users there (release runbook 1.1, 2026-10-30).
+#
+# A failed test seed does not stop the app: it is test data, and a used test database can disagree with it (stage,
+# 2026-10-30: the container restarted for an hour on a seed error). It is said aloud, and the CI compose job still
+# requires "seed ok:".
 if [ "${CAPARIUM_TEST_SEED:-}" = "on" ]; then
-  DATABASE_URL="$OWNER_URL" node dist/seed.cjs
+  if ! DATABASE_URL="$OWNER_URL" node dist/seed.cjs; then
+    echo "start: TEST SEED FAILED (see above); the app starts without it" >&2
+  fi
 elif [ -n "${SEED_TEST_PASSWORD:-}" ]; then
   echo "start: test seed off (CAPARIUM_TEST_SEED is not on); the seed password alone does not run it" >&2
 fi
