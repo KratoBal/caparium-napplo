@@ -1,7 +1,7 @@
 // The main navigation as data, so its order and who sees which entry can be tested without rendering.
 export type NavKey =
   | "overview" | "daily" | "weekly" | "log" | "export" | "animals" | "feeds" | "feeding" | "eating"
-  | "feedlog" | "intake" | "withdrawal" | "calculator" | "dosing" | "reports" | "pending" | "settings";
+  | "feedlog" | "intake" | "withdrawal" | "calculator" | "dosing" | "reports" | "pending" | "settings" | "activity";
 
 /** The label color group of an entry: the water measurement group or the feeding group (Lili 2026-10-26). */
 export type NavTone = "water" | "feed";
@@ -32,11 +32,13 @@ const NAV: NavItem[] = [
 ];
 
 // The admin entries, in Lili's order: Függő mentések, Állatok, Beállítások. The animal list is admin only for
-// now (Lili 2026-10-26 09:51 UTC, msg 1564214896453750805).
+// now (Lili 2026-10-26 09:51 UTC, msg 1564214896453750805). Aktivitás (who recorded what, card 70cadcf8) closes
+// the admin block (acrobot 38464).
 const ADMIN_EXTRA: NavItem[] = [
   { key: "pending", href: "/fuggo", label: "Függő mentések" },
   { key: "animals", href: "/allatok", label: "Állatok" },
   { key: "settings", href: "/beallitasok", label: "Beállítások" },
+  { key: "activity", href: "/aktivitas", label: "Aktivitás" },
 ];
 
 /**
