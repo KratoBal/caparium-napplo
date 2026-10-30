@@ -619,7 +619,11 @@ export function MeasurementGrid({
       )}
 
       <div className="card">
-        <h2>Napi paraméterek{grid.selectedRound ? ` · ${grid.selectedRound.seq}. mérés` : ""}</h2>
+        <h2>
+          {/* Lili 2026-10-30 18:58 UTC (msg 1565802152033521714): the weekly page said "Napi paraméterek" */}
+          {weekly ? "Heti paraméterek" : "Napi paraméterek"}
+          {grid.selectedRound ? ` · ${grid.selectedRound.seq}. mérés` : ""}
+        </h2>
         <p className="hint">
           A beírt értékek a Mentés gombbal rögzülnek, addig szabadon javíthatók. Egy új mérés nem írja felül a korábbit.
         </p>
