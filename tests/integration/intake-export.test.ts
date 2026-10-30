@@ -64,6 +64,21 @@ describe("the report's data", () => {
   });
 });
 
+describe("the closing stock's mark is read at the period's end, not today (barracuda on #143)", () => {
+  it("a period that closed more than 30 days ago still says \"fogyóban\" for a stock that was running out then", async () => {
+    const type = await prisma.feedType.findUniqueOrThrow({ where: { code: "RAK" } });
+    const id = (await createFeed(f.admin, { requestId: rid(), typeId: type.id, name: "Hűtő-export fogyóban", dimensions: ["MASS"], defaultUnitId: unit.g }, new Date("2026-09-01T08:00:00Z"))).id;
+    await saveIntakeItem(f.aq1, { requestId: rid(), day: "2026-09-05", feedId: id, quantities: [{ value: "1", unitId: unit.kg }] }, at("2026-09-05", "08:00"));
+    await saveWithdrawalItem(f.aq1, { requestId: rid(), day: "2026-09-10", feedId: id, quantities: [{ value: "950", unitId: unit.g }] }, at("2026-09-10", "09:00"));
+    // 950 g taken in the 30 days before the 20th, 50 g left: about 1,6 days. "Today" is 40 days after the period's end.
+    const r = await intakeReport({ from: "2026-09-01", to: "2026-09-20" }, at("2026-10-30", "12:00"));
+    expect(r.closing.filter((c) => c.feed === "Hűtő-export fogyóban")).toEqual([{ feed: "Hűtő-export fogyóban", unit: "g", level: "50", negative: false, low: true }]);
+    // a period that ends in the future is read as of now: the mark is today's
+    const later = await intakeReport({ from: "2026-09-01", to: "2026-12-31" }, at("2026-10-30", "12:00"));
+    expect(later.closing.find((c) => c.feed === "Hűtő-export fogyóban")?.level).toBe("50");
+  });
+});
+
 describe("the Excel", () => {
   it("three sheets, the numbers are numbers, the returned delivery's row is red, the others are not", async () => {
     const wb = new ExcelJS.Workbook();

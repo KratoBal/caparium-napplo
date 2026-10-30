@@ -27,6 +27,10 @@ export async function intakeReport(f: { from: string; to: string }, now = new Da
   if (f.from > f.to) throw new AppError(422, "BAD_PERIOD", "Az időszak vége nem lehet a kezdete előtt.");
   if ((dayToDate(f.to).getTime() - dayToDate(f.from).getTime()) / 86_400_000 >= MAX_DAYS) throw new AppError(422, "PERIOD_TOO_LONG", "Az időszak legfeljebb egy év lehet.");
   const range = { gte: dayToDate(f.from), lte: dayToDate(f.to) };
+  // "as of the end of the period": the stock's windows (the 7 and 30 day withdrawal, so the "fogyóban" mark) and the names are
+  // read at the period's last day, not today, so a stock that was running out then still says so (barracuda on #143). Never
+  // later than now: a period that ends in the future is read as of now.
+  const asOf = new Date(Math.min(now.getTime(), dayBounds(f.to).end.getTime() - 1));
   const [received, withdrawn, stock, baseUnits] = await Promise.all([
     prisma.feedIntakeItem.findMany({
       where: { status: "VALID", intakeDay: range },
@@ -37,7 +41,7 @@ export async function intakeReport(f: { from: string; to: string }, now = new Da
       where: { status: "VALID", withdrawalDay: { businessDay: range } },
       include: { quantities: { include: { unit: true } }, feed: { include: { names: true } } },
     }),
-    feedStock(now, f.to),
+    feedStock(asOf, f.to),
     prisma.unit.findMany({ where: { isBase: true } }),
   ]);
   const baseOf = new Map(baseUnits.map((u) => [u.dimension, u.symbol]));
@@ -55,7 +59,7 @@ export async function intakeReport(f: { from: string; to: string }, now = new Da
   // withdrawals added up per feed (and other name) and base unit; a gram total from 1000 g reads in kg, as on the pages
   const sums = new Map<string, { feed: string; unit: string; sum: number }>();
   for (const it of withdrawn) {
-    const name = pickValid(it.feed.names, now)?.name ?? it.feed.names.at(-1)?.name ?? "?";
+    const name = pickValid(it.feed.names, asOf)?.name ?? it.feed.names.at(-1)?.name ?? "?";
     const other = it.otherName ? otherKey(it.otherName) : null;
     for (const q of it.quantities) {
       const unit = baseOf.get(q.unit.dimension) ?? q.unit.symbol;
