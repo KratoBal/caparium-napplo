@@ -174,6 +174,33 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .cell-meta .ref { color: var(--c-error); }
 .cell-meta .err { color: var(--c-error); font-weight: 600; }
 .cell-meta .wait { color: var(--c-warn-ink); font-weight: 600; }
+/* Lili 2026-10-30 17:26 UTC (msg 1565763773397209230, card 10bd670f, task caparium-vizmeres-telefon): on a phone the table was "kis drabalis": the
+   pool column took half the width and the fields ran off to the right under a sideways scroll. Below the phone breakpoint (720 px, as the home
+   page's) each pool is a CARD: the name on top with its ticks on the same line, the fields under it in two columns, each under its own label with
+   the unit (the header row's text, carried by the cell's data-label). Tablet and desktop keep the table. The same markup, only the CSS differs. */
+@media (max-width: 720px) {
+  .table-scroll, .grid-overflow { overflow: visible; max-height: none; }
+  .grid-table, .grid-table tbody { display: block; }
+  .grid-table thead { display: none; }
+  .grid-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; margin-top: 12px; border: 1px solid var(--c-line); border-radius: var(--radius-sm); }
+  .grid-table tr.active-row { background: #f7fbfc; border-color: var(--c-primary); }
+  .grid-table td { display: block; min-width: 0; padding: 0; border: 0; }
+  .grid-table tr.active-row td, .grid-overflow .grid-table tr.active-row > td:first-child { background: none; }
+  .grid-overflow .grid-table tr > :first-child { position: static; box-shadow: none; background: none; }
+  .grid-table td.pool-cell { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 16px; min-width: 0; }
+  .pool-cell button { min-height: 44px; }
+  .pool-ticks { flex-direction: row; flex-wrap: wrap; gap: 2px 16px; margin-top: 0; }
+  .pool-tick { min-height: 44px; }
+  /* one line, so a pair of fields stands level; a label too long for its half ends in an ellipsis rather than wrapping */
+  .grid-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--c-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cell-input, .cell-value, .meta-row, .clearable-block { min-width: 0; max-width: none; }
+  .cell-input, .cell-value { min-height: 48px; }
+  /* the weekly nitrate and phosphate cells carry the dilution and the diluent water: they take the whole card width, the two selects side by side under the field */
+  .grid-table td:has(.meta-row) { grid-column: 1 / -1; }
+  .meta-select { height: 44px; font-size: 15px; }
+  /* the figure is smaller where the fields are, so a column of fields is not hidden behind it */
+  .shell:has(.grid-table) .helper-face { height: 64px; }
+}
 
 /* ---- log ---- */
 .log-table { width: 100%; border-collapse: collapse; }
