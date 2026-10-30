@@ -865,6 +865,7 @@ test("feeding sheet: a row colour set in the settings colours that animal's or g
   expect(await cells("Teszt Három"), "every cell of the row, the stuck name too").toEqual([GREEN]);
   expect(await cells("Teszt csoport (csoport)"), "the highlighted row keeps its ink").not.toContain(PURPLE);
   await row("Teszt Három").click();
+  expect(await cells("Teszt Három"), "the highlighted animal row keeps its ink too").not.toContain(GREEN);
   expect(await cells("Teszt csoport (csoport)")).toEqual([PURPLE]);
   // the eating log is not coloured: the colour is the feeding sheet's only
   expect(await page.locator('table:not([data-testid="feeding-sheet-table"]) td').evaluateAll((tds) => tds.some((td) => ["rgb(217, 236, 217)", "rgb(228, 219, 242)"].includes(getComputedStyle(td).backgroundColor)))).toBe(false);
