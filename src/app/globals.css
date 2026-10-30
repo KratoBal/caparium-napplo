@@ -330,11 +330,17 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .home-row { display: flex; justify-content: center; gap: 28px; }
 .home-card { flex: 0 1 calc((100% - 56px) / 3); display: flex; flex-direction: column; align-items: center; gap: 12px; text-decoration: none; color: var(--c-ink); }
 .home-card img { width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--c-line); display: block; }
+/* the narrow portrait card (Lili 2026-10-30): half the width of a landscape card and a 3:4 picture, so it is as tall as the two
+   beside it and the row stays symmetric around it */
+.home-card-narrow { flex: 0 1 calc((100% - 56px) / 6); }
+.home-card-narrow img { aspect-ratio: 3 / 4; }
 .home-card:hover img, .home-card:focus-visible img { outline: 3px solid var(--c-primary); outline-offset: 2px; }
 .home-caption { display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 18px; line-height: 1.3; }
 @media (max-width: 720px) {
   .home-row { flex-direction: column; gap: 20px; }
   .home-card { flex-basis: auto; }
+  /* on a phone the narrow card keeps a portrait shape of its own width, centred in the column */
+  .home-card-narrow { flex-basis: auto; width: 56%; align-self: center; }
 }
 /* named feeding lists (Lili 2026-10-26, item 1): a list is an opened row of the editor */
 .pick-details { border: 1px solid var(--c-line); border-radius: var(--radius-sm); padding: 8px 14px; margin: 10px 0; }

@@ -11,7 +11,8 @@ import { businessDayOf, dateToDay } from "@/lib/time";
 export const dynamic = "force-dynamic";
 
 
-type HomeCard = { id: string; href: string; caption: string[]; module: "water" | "feeding" | "dosing" };
+// `narrow`: a portrait card (3:4) half as wide as the others, so the row stays symmetric around it (Lili 2026-10-30, msg 1565711099435819098)
+type HomeCard = { id: string; href: string; caption: string[]; module: "water" | "feeding" | "dosing" | "withdrawal"; narrow?: true };
 // the captions and the order of the customer's sample (exchange/caparium/kezdolap-csempek-minta-2026-10-20.jpg)
 const HOME_ROWS: HomeCard[][] = [
   [
@@ -21,6 +22,8 @@ const HOME_ROWS: HomeCard[][] = [
   ],
   [
     { id: "adagolas", href: "/adagolas", caption: ["Nyomelem és megkötő adagolás"], module: "dosing" },
+    // Lili 2026-10-30: between the two landscape cards, a narrower portrait one with the fridge picture (hely-jelolve.png)
+    { id: "takarmanyhuto", href: "/takarmanyhuto", caption: ["Takarmányhűtő"], module: "withdrawal", narrow: true },
     { id: "kalkulator", href: "/kalkulator", caption: ["Takarmány", "kalkulátor"], module: "feeding" },
   ],
   [
@@ -38,6 +41,7 @@ export default async function OverviewPage() {
   const { done, total } = water ? await dailyProgress(today) : { done: 0, total: 0 };
   const feeding = (await moduleLevel(prisma, user.id, user.role, "FEEDING")) !== "NONE";
   const dosing = (await moduleLevel(prisma, user.id, user.role, "DOSING")) !== "NONE";
+  const withdrawal = (await moduleLevel(prisma, user.id, user.role, "WITHDRAWAL")) !== "NONE";
   // JAV-07, ADA-07: in-app notices (NY-09 default: no e-mail)
   const missed = water ? await missedMeasurements() : { due: false, pools: [] as string[] };
   const low = dosing ? await runningOut() : [];
@@ -94,13 +98,13 @@ export default async function OverviewPage() {
           above, the caption below, each to its module; a card shows only with access to its module, as the tiles did */}
       <nav className="home-cards" aria-label="Modulok">
         {HOME_ROWS.map((row, i) => {
-          const visible = row.filter((c) => ({ water, feeding, dosing })[c.module]);
+          const visible = row.filter((c) => ({ water, feeding, dosing, withdrawal })[c.module]);
           return visible.length ? (
             <div className="home-row" key={i}>
               {visible.map((c) => (
-                <Link key={c.href} className="home-card" href={c.href} data-testid={`home-${c.id}`}>
+                <Link key={c.href} className={c.narrow ? "home-card home-card-narrow" : "home-card"} href={c.href} data-testid={`home-${c.id}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element -- static webp, already sized for the web */}
-                  <img src={`/kezdolap/${c.id}.webp`} alt="" width={960} height={640} loading={i === 0 ? "eager" : "lazy"} />
+                  <img src={`/kezdolap/${c.id}.webp`} alt="" width={c.narrow ? 720 : 960} height={c.narrow ? 960 : 640} loading={i === 0 ? "eager" : "lazy"} />
                   <span className="home-caption">
                     {c.caption.map((line) => (
                       <span key={line}>{line}</span>

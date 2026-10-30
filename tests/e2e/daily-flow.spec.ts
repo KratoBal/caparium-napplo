@@ -1461,7 +1461,7 @@ test("reports: the tables and the Excel; no daily report menu any more", async (
   await expect(page.getByTestId("home-evesi")).toBeVisible();
 });
 
-test("home: the customer's illustrated cards, 3-2-3, each to its module, only with access; one column on a phone", async ({ page }) => {
+test("home: the customer's illustrated cards, 3-3-3 with a narrow portrait one between two, each to its module, only with access; one column on a phone", async ({ page }) => {
   // caparium-hibak-5 (Balázs 2026-10-20 11:37 UTC)
   await login(page, "teszt.akvarista1");
   const rows = page.locator(".home-row");
@@ -1473,7 +1473,8 @@ test("home: the customer's illustrated cards, 3-2-3, each to its module, only wi
   await expect(page.getByTestId("home-nagymedencek"), "the daily water pages are still cards").toBeVisible();
   const captions = async (i: number) => (await rows.nth(i).locator(".home-caption").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
   expect(await captions(0)).toEqual(["Nagy medencék NAPI VÍZMÉRÉS", "Kis medencék NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS"]);
-  expect(await captions(1)).toEqual(["Nyomelem és megkötő adagolás", "Takarmány kalkulátor"]);
+  // Lili 2026-10-30: the fridge card between the two landscape ones
+  expect(await captions(1)).toEqual(["Nyomelem és megkötő adagolás", "Takarmányhűtő", "Takarmány kalkulátor"]);
   expect(await captions(2)).toEqual(["Takarmány kivételi napló", "Egyedi takarmánynapló", "Evési napló"]);
   // every picture is the web-sized one and loads
   for (const img of await page.locator(".home-card img").all()) {
@@ -1481,11 +1482,23 @@ test("home: the customer's illustrated cards, 3-2-3, each to its module, only wi
     await expect.poll(() => img.evaluate((e) => (e as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     expect(await img.getAttribute("src")).toMatch(/^\/kezdolap\/[a-z]+\.webp$/);
   }
-  // the middle row is centred: its two cards sit between the first row's outer cards
+  // the middle row is symmetric around the narrow card: the two landscape cards are as wide as the first row's, the narrow one is
+  // about half as wide, and its picture is as tall as theirs (Lili 2026-10-30: "a szimmetria ne boruljon fel")
   const box = async (row: number, i: number) => (await rows.nth(row).locator(".home-card").nth(i).boundingBox())!;
-  const [a, b, c] = [await box(0, 0), await box(1, 0), await box(1, 1)];
-  expect(b.x).toBeGreaterThan(a.x + a.width / 4);
-  expect(Math.abs(a.x + (await box(0, 2)).x + (await box(0, 2)).width - (b.x + c.x + c.width))).toBeLessThan(4);
+  const img = async (row: number, i: number) => (await rows.nth(row).locator(".home-card").nth(i).locator("img").boundingBox())!;
+  const [a, left, mid, right] = [await box(0, 0), await box(1, 0), await box(1, 1), await box(1, 2)];
+  expect(Math.abs(left.width - a.width)).toBeLessThan(2);
+  expect(Math.abs(right.width - left.width)).toBeLessThan(2);
+  expect(mid.width).toBeLessThan(left.width * 0.6);
+  expect(mid.width).toBeGreaterThan(left.width * 0.4);
+  expect(Math.abs(mid.x + mid.width / 2 - (left.x + right.x + right.width) / 2)).toBeLessThan(4);
+  const [li, mi, ri] = [await img(1, 0), await img(1, 1), await img(1, 2)];
+  expect(Math.abs(mi.height - li.height)).toBeLessThan(3);
+  expect(Math.abs(ri.height - li.height)).toBeLessThan(3);
+  // the fridge card goes to the Takarmányhűtő
+  await page.getByTestId("home-takarmanyhuto").click();
+  await expect(page).toHaveURL(/\/takarmanyhuto$/);
+  await page.goto("/");
   await page.getByTestId("home-kismedencek").click();
   await expect(page).toHaveURL(/\/vizmeres\?csoport=NAPI_KIS/);
   await expect(page.getByRole("tab", { name: "Kis Akváriumok" })).toHaveAttribute("aria-selected", "true");
