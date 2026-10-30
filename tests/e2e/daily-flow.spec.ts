@@ -1506,22 +1506,32 @@ test("home: the customer's illustrated cards, 3-3-3 with a narrow portrait one b
   // phone width: one column
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  const xs = await page.locator(".home-card").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().x)));
-  expect(new Set(xs).size).toBe(1);
+  // the cards stand in one centred column: every card's CENTRE is the same (the narrow card is narrower, so its left edge is not),
+  // and the narrow one is about 56% of the column (Lili 2026-10-30: centred, in the existing wrapping)
+  const cards = await page.locator(".home-card").evaluateAll((els) => els.map((e) => ({ narrow: e.classList.contains("home-card-narrow"), r: e.getBoundingClientRect() })));
+  expect(new Set(cards.map((c) => Math.round(c.r.x + c.r.width / 2))).size).toBe(1);
+  const full = cards.find((c) => !c.narrow)!.r.width;
+  const narrow = cards.find((c) => c.narrow)!.r.width;
+  expect(narrow / full).toBeGreaterThan(0.5);
+  expect(narrow / full).toBeLessThan(0.62);
+  expect(new Set(cards.filter((c) => !c.narrow).map((c) => Math.round(c.r.x))).size).toBe(1);
 
   // no access to a module: its cards are gone (the dosing module set to NONE for a fresh aquarist)
   const db = new PrismaClient();
   try {
     const u = await db.user.findUniqueOrThrow({ where: { loginId: "teszt.akvarista2" } });
     await db.modulePermission.upsert({ where: { userId_module: { userId: u.id, module: "DOSING" } }, update: { level: "NONE" }, create: { userId: u.id, module: "DOSING", level: "NONE" } });
+    // and the fridge card follows the withdrawal module (the page's own), as the dosing card follows dosing
+    await db.modulePermission.upsert({ where: { userId_module: { userId: u.id, module: "WITHDRAWAL" } }, update: { level: "NONE" }, create: { userId: u.id, module: "WITHDRAWAL", level: "NONE" } });
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.context().clearCookies(); // a new login, not the first user's session
     await login(page, "teszt.akvarista2");
     await expect(page.getByTestId("home-kalkulator")).toBeVisible();
     await expect(page.getByTestId("home-adagolas")).toHaveCount(0);
+    await expect(page.getByTestId("home-takarmanyhuto")).toHaveCount(0);
   } finally {
     const u = await db.user.findUniqueOrThrow({ where: { loginId: "teszt.akvarista2" } });
-    await db.modulePermission.deleteMany({ where: { userId: u.id, module: "DOSING" } });
+    await db.modulePermission.deleteMany({ where: { userId: u.id, module: { in: ["DOSING", "WITHDRAWAL"] } } });
     await db.$disconnect();
   }
 });
