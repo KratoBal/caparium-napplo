@@ -22,7 +22,7 @@ import { readOff, SWITCH_EVENT } from "@/lib/helper-switch";
 const SEEN_KEY = "caparium-segito-latta";
 const GREETED_KEY = "caparium-segito-koszont";
 const FIGURE = { water: { slug: "antennarius", name: "Antennarius" }, feeding: { slug: "zebracapa", name: "Zebracápa" } } as const;
-const ALERT_PICTURE = { measurement: "feladatok", stock: "vegyszer" } as const;
+const ALERT_PICTURE = { measurement: "feladatok", stock: "vegyszer", feed: "takarmany" } as const;
 const GREETING_PICTURES = 3;
 // the alert waits a beat after the greeting went: a click that LEAVES the page (a menu link) must not mark it heard
 const ALERT_AFTER_GREETING_MS = 600;

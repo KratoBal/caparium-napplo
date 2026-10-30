@@ -5,7 +5,10 @@ import { prisma } from "@/lib/db";
 import { createChemical, saveDosing } from "@/lib/dosing";
 import { setEatingStatus } from "@/lib/eating";
 import { saveFeedingItem, setSelection } from "@/lib/feeding";
+import { saveIntakeItem } from "@/lib/feed-intake";
+import { createFeed, updateFeed } from "@/lib/feeds";
 import { feedingHelper, waterHelper } from "@/lib/helpers";
+import { saveWithdrawalItem } from "@/lib/withdrawal";
 import { createMeasurement } from "@/lib/measurements";
 import { fixtures, rid } from "./fixtures";
 
@@ -80,6 +83,49 @@ describe("the alert's picture (Lili 2026-10-29, item 10)", () => {
     expect(h.alertKind).toBe("stock");
     expect(h.alert).toMatch(/^Vészesen fogy a\(z\) /);
     expect((await feedingHelper(false, at("2028-08-12T17:00"))).alertKind).toBeUndefined();
+  });
+});
+
+describe("the feed stock alert (Takarmányhűtő, Lili 2026-10-29)", () => {
+  it("a feed with an intake at zero speaks, with its own picture and key; one with no intake, or without the right, does not", async () => {
+    const type = await prisma.feedType.findUniqueOrThrow({ where: { code: "RAK" } });
+    const mk = async (name: string) => (await createFeed(f.admin, { requestId: rid(), typeId: type.id, name, dimensions: ["MASS"], defaultUnitId: unit.g }, at("2028-08-01T08:00"))).id;
+    const received = await mk("Teszt segítő-hűtő");
+    const never = await mk("Teszt segítő-hűtő nincs bevétel");
+    const day = "2028-08-14";
+    const now = at(`${day}T12:00`);
+    const intake = (feedId: string, value: string) =>
+      saveIntakeItem(f.aq1, { requestId: rid(), day, feedId, quantities: [{ value, unitId: unit.g }] }, at(`${day}T08:00`));
+    const take = (feedId: string, value: string) =>
+      saveWithdrawalItem(f.aq1, { requestId: rid(), day, feedId, quantities: [{ value, unitId: unit.g }] }, at(`${day}T09:00`));
+    const both = { chemicals: false, feed: true };
+
+    await intake(received, "100");
+    // a stock with no withdrawal at all has no estimate and is above zero: no alert for it
+    expect((await feedingHelper(both, now)).alert ?? "").not.toContain("Teszt segítő-hűtő");
+    // all of it taken: at zero. Withdrawals alone on another feed: no intake, no stock, no alert
+    await take(received, "100");
+    await take(never, "40");
+    const h = await feedingHelper(both, now);
+    expect(h.alertKind).toBe("feed");
+    expect(h.alert).toMatch(/Vészesen fogy a\(z\) .*Teszt segítő-hűtő \(0 g\)/);
+    expect(h.alert).not.toContain("nincs bevétel");
+    expect(h.alertKey).toMatch(/^takarmany:/);
+    // the water helper says the same, with the same key
+    const w = await waterHelper(both, at(`${day}T12:00`));
+    expect(w.alert).toContain("Teszt segítő-hűtő (0 g)");
+    expect(w.alertKey).toBe(h.alertKey);
+    // without the withdrawal right, or with the chemicals' right alone (a plain boolean), nothing about feed
+    expect((await feedingHelper({ chemicals: true, feed: false }, now)).alert ?? "").not.toContain("Teszt segítő-hűtő");
+    expect((await feedingHelper(true, now)).alert ?? "").not.toContain("Teszt segítő-hűtő");
+    // a feed taken out of the list (inactive) does not speak, with the same level
+    await updateFeed(f.admin, received, { requestId: rid(), active: false }, at(`${day}T12:30`));
+    expect((await feedingHelper(both, now)).alert ?? "").not.toContain("Teszt segítő-hűtő (");
+    await updateFeed(f.admin, received, { requestId: rid(), active: true }, at(`${day}T12:31`));
+    expect((await feedingHelper(both, now)).alert ?? "").toContain("Teszt segítő-hűtő (0 g)");
+    // a new intake lifts it: the alert is gone for this feed
+    await intake(received, "5000");
+    expect((await feedingHelper(both, now)).alert ?? "").not.toContain("Teszt segítő-hűtő (");
   });
 });
 

@@ -8,7 +8,7 @@ import { ApplyList } from "@/components/FeedingLists";
 import type { FeedOpt, FeedTypeOpt, Recipient } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { feedingHelper } from "@/lib/helpers";
-import { moduleLevel } from "@/lib/master";
+import { helperStockAccess } from "@/lib/helper-access";
 import { referencesOn } from "@/lib/calculator";
 import { prisma } from "@/lib/db";
 import { feedingDayView } from "@/lib/feeding";
@@ -78,7 +78,7 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
     .map((t) => ({ code: t.code, name: t.name, emoji: t.emoji, feeds: t.feeds.filter((f) => f.active).map((f) => ({ id: f.id, name: f.name })) }))
     .filter((t) => t.feeds.length > 0);
   return (
-    <Shell title="Takarmánynapló" active="feeding" user={user} helper={await feedingHelper((await moduleLevel(prisma, user.id, user.role, "DOSING")) !== "NONE")}>
+    <Shell title="Takarmánynapló" active="feeding" user={user} helper={await feedingHelper(await helperStockAccess(user))}>
       <div className="toolbar toolbar-end">
         <DayNav path="/etetes" day={day} today={today} />
         {/* Lili 2026-10-27 12:32 and 12:36 UTC (item 7): the jump calendar beside the arrows, as on the eating log */}

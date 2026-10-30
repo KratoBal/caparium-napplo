@@ -3,8 +3,7 @@ import { DayJump, DayNav } from "@/components/DayNav";
 import { EatingTable } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { feedingHelper } from "@/lib/helpers";
-import { moduleLevel } from "@/lib/master";
-import { prisma } from "@/lib/db";
+import { helperStockAccess } from "@/lib/helper-access";
 import { eatingDayView } from "@/lib/eating";
 import { feedingDayView } from "@/lib/feeding";
 import { dayStatus } from "@/lib/journal";
@@ -25,7 +24,7 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
   const editable = canRecord && (isAdmin || (day === today && lock.state === "OPEN"));
   const rows = new Map(eat.rows.map((r) => [r.animalId, r]));
   return (
-    <Shell title="Evési napló" active="eating" user={user} helper={await feedingHelper((await moduleLevel(prisma, user.id, user.role, "DOSING")) !== "NONE")}>
+    <Shell title="Evési napló" active="eating" user={user} helper={await feedingHelper(await helperStockAccess(user))}>
       <div className="toolbar toolbar-end">
         <DayNav path="/evesi-naplo" day={day} today={today} />
         {/* Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 4): the jump calendar, as on the water measurement
