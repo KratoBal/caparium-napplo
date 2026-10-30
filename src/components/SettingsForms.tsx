@@ -3,7 +3,7 @@
 // Settings rows (Figma 25, 26): every save says whether it is a CHANGE (from now on, the past keeps
 // the old value) or a CORRECTION (a typo, acts on the past too, reason required) — adatmodell K3.
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SHEET_COLORS, sheetColorBg } from "@/lib/sheet-color-palette";
 import { useReasonsOn } from "./ReasonSwitch";
 
@@ -400,15 +400,23 @@ export function WaterReportRecipient({ email }: { email: string }) {
 /** Card 0d617f0c: the helper's "Ne felejtsd el menteni!" on a filled, unsaved form; saved as soon as it is switched. */
 export function SaveReminderSwitch({ on }: { on: boolean }) {
   const { msg, busy, save } = useSave();
+  // the switch moves at once and goes back if the save fails; after the refresh it follows the stored value. Bound to the
+  // prop alone it stood still until the refresh (the e2e of #142: "Clicking the checkbox did not change its state").
+  const [checked, setChecked] = useState(on);
+  useEffect(() => setChecked(on), [on]);
   return (
     <label className="toolbar" data-testid="save-reminder">
       <input
         className="switch"
         type="checkbox"
         role="switch"
-        checked={on}
+        checked={checked}
         disabled={busy}
-        onChange={(e) => void save("/api/admin/save-reminder", "POST", { on: e.target.checked })}
+        onChange={async (e) => {
+          const next = e.target.checked;
+          setChecked(next);
+          if (!(await save("/api/admin/save-reminder", "POST", { on: next }))) setChecked(!next);
+        }}
       />
       A segítő szól, ha egy kitöltött űrlap nincs mentve
       <Msg msg={msg} />
