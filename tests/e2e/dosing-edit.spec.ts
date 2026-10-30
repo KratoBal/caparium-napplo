@@ -20,8 +20,8 @@ test.beforeAll(() => {
 test("a dosing's amount is corrected in its log row, not only invalidated", async ({ page }, info) => {
   await login(page, "teszt.akvarista1");
   await page.goto("/adagolas");
-  // an amount of its own per project and attempt, so the row is found among the others
-  const before = info.project.name === "tablet" ? 371 : 373;
+  // an amount of its own per project and per attempt (a retry must not find the first attempt's uncorrected row), so the row is found among the others
+  const before = (info.project.name === "tablet" ? 371 : 373) + 10 * info.retry;
   const after = before + 1;
   const form = page.getByTestId("dosing-form");
   await form.getByLabel("Medence", { exact: true }).selectOption({ label: "Sózó" });
