@@ -58,6 +58,11 @@ export async function Shell({
               href={n.href}
               className={[n.tone ? `nav-${n.tone}` : "", n.key === active ? "active" : ""].filter(Boolean).join(" ") || undefined}
             >
+              {n.icon && (
+                <span className="nav-icon" aria-hidden="true">
+                  {n.icon}
+                </span>
+              )}
               {n.label}
             </Link>
           ))}
