@@ -44,7 +44,7 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
         })),
       })),
   );
-  const tracked = stock.filter((r) => r.tracked);
+  const tracked = stock.filter((r) => r.tracked && r.active);
   return (
     <Shell title="Takarmányhűtő" active="intake" user={user}>
       <div className="toolbar toolbar-end">
@@ -59,7 +59,7 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
 
       <div className="card">
         <h2>Készlet</h2>
-        <p className="hint">A bevételezett mínusz a kivett takarmány. A készlet az első bevételezéstől számít: amelyik takarmányhoz még nincs bevétel, az nem szerepel itt. A becsült napok az elmúlt 30 nap átlagos kivétele szerint értendők.</p>
+        <p className="hint">A bevételezett mínusz a kivett takarmány. A készlet az első bevételezéstől számít: amelyik takarmányhoz még nincs bevétel, az nem szerepel itt, és a kivezetett (inaktív) takarmány sem. A becsült napok az elmúlt 30 nap átlagos kivétele szerint értendők.</p>
         <div className="table-scroll">
           <table className="log-table" data-testid="feed-stock">
             <thead>

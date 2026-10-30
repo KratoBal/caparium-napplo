@@ -181,6 +181,8 @@ export type StockRow = {
   month: number;
   /** at least one intake exists: only then is the level a stock and not a count from zero (no starting stock) */
   tracked: boolean;
+  /** the feed is in use: an inactive feed (Lili takes it out of the list) stays in the history but raises no alert and is not on the stock card */
+  active: boolean;
 };
 
 const round = (v: number) => Math.round(v * 10000) / 10000;
@@ -207,14 +209,14 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
   const monthFrom = dayToDate(addDays(today, -30));
   const todayDate = dayToDate(today);
   const rows = new Map<string, StockRow>();
-  const row = (it: { feedId: string; otherName: string | null; feed: { names: { name: string; validFrom: Date; validTo: Date | null }[] } }, dimension: Dimension, unit: string) => {
+  const row = (it: { feedId: string; otherName: string | null; feed: { active: boolean; names: { name: string; validFrom: Date; validTo: Date | null }[] } }, dimension: Dimension, unit: string) => {
     // the other name as the reports and the Excel read it (other-name.ts): case and spaces do not make a second row
     const other = it.otherName ? otherKey(it.otherName) : null;
     const key = `${it.feedId}|${other ?? ""}|${dimension}`;
     let r = rows.get(key);
     if (!r) {
       const name = pickValid(it.feed.names, now)?.name ?? it.feed.names.at(-1)?.name ?? "?";
-      r = { key, feedId: it.feedId, feed: other ? `${name}: ${otherLabel(other)}` : name, otherName: other, dimension, unit, received: 0, returned: 0, taken: 0, level: 0, negative: false, week: 0, month: 0, tracked: false };
+      r = { key, feedId: it.feedId, feed: other ? `${name}: ${otherLabel(other)}` : name, otherName: other, dimension, unit, received: 0, returned: 0, taken: 0, level: 0, negative: false, week: 0, month: 0, tracked: false, active: it.feed.active };
       rows.set(key, r);
     }
     return r;
@@ -249,10 +251,11 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
 /**
  * How long a tracked stock lasts at the average withdrawal of the last 30 days, and whether it is "running out" by the
  * chemicals' rule (notices.ts runningOut): at or below zero, or at most RUN_OUT_DAYS left. Without a withdrawal there is
- * no estimate (and no notice unless the level is at or below zero). Not tracked (no intake yet): never running out.
+ * no estimate (and no notice unless the level is at or below zero). Not tracked (no intake yet) or inactive (taken out of the
+ * feed list): never running out, so a feed Lili retired with a stock of zero does not speak at every login.
  */
-export function stockStatus(r: Pick<StockRow, "level" | "month" | "tracked">): { daysLeft: number | null; low: boolean } {
+export function stockStatus(r: Pick<StockRow, "level" | "month" | "tracked" | "active">): { daysLeft: number | null; low: boolean } {
   const perDay = r.month / 30;
   const daysLeft = perDay > 0 ? Math.round((r.level / perDay) * 10) / 10 : null;
-  return { daysLeft, low: r.tracked && (r.level <= 0 || (daysLeft !== null && daysLeft <= RUN_OUT_DAYS)) };
+  return { daysLeft, low: r.tracked && r.active && (r.level <= 0 || (daysLeft !== null && daysLeft <= RUN_OUT_DAYS)) };
 }

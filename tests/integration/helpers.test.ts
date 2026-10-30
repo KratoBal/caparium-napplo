@@ -6,7 +6,7 @@ import { createChemical, saveDosing } from "@/lib/dosing";
 import { setEatingStatus } from "@/lib/eating";
 import { saveFeedingItem, setSelection } from "@/lib/feeding";
 import { saveIntakeItem } from "@/lib/feed-intake";
-import { createFeed } from "@/lib/feeds";
+import { createFeed, updateFeed } from "@/lib/feeds";
 import { feedingHelper, waterHelper } from "@/lib/helpers";
 import { saveWithdrawalItem } from "@/lib/withdrawal";
 import { createMeasurement } from "@/lib/measurements";
@@ -118,6 +118,11 @@ describe("the feed stock alert (Takarmányhűtő, Lili 2026-10-29)", () => {
     // without the withdrawal right, or with the chemicals' right alone (a plain boolean), nothing about feed
     expect((await feedingHelper({ chemicals: true, feed: false }, now)).alert ?? "").not.toContain("Teszt segítő-hűtő");
     expect((await feedingHelper(true, now)).alert ?? "").not.toContain("Teszt segítő-hűtő");
+    // a feed taken out of the list (inactive) does not speak, with the same level
+    await updateFeed(f.admin, received, { requestId: rid(), active: false }, at(`${day}T12:30`));
+    expect((await feedingHelper(both, now)).alert ?? "").not.toContain("Teszt segítő-hűtő (");
+    await updateFeed(f.admin, received, { requestId: rid(), active: true }, at(`${day}T12:31`));
+    expect((await feedingHelper(both, now)).alert ?? "").toContain("Teszt segítő-hűtő (0 g)");
     // a new intake lifts it: the alert is gone for this feed
     await intake(received, "5000");
     expect((await feedingHelper(both, now)).alert ?? "").not.toContain("Teszt segítő-hűtő (");
