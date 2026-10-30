@@ -124,7 +124,7 @@ async function refuseInactiveGroupMembership(tx: Tx, animalId: string) {
   for (const { groupId } of open) {
     await lockGroup(tx, groupId);
     const g = await tx.animalGroup.findUnique({ where: { id: groupId }, select: { active: true } });
-    if (!g?.active) throw new AppError(422, "GROUP_INACTIVE", "A csoport, amelybe ez a változás visszatenné az állatot, inaktív: előbb kapcsold vissza, utána érvényteleníthető az esemény.");
+    if (!g?.active) throw new AppError(422, "GROUP_INACTIVE", "A csoport, amelybe ez a változás visszatenné az állatot, inaktív: előbb kapcsold vissza, utána elvégezhető a változtatás.");
   }
 }
 
