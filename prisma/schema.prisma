@@ -578,6 +578,8 @@ enum ExportKind {
   EXCEL_FEEDING
   EXCEL_EATING
   EXCEL_WITHDRAWAL
+  EXCEL_INTAKE
+  PDF_INTAKE
 }
 
 enum ExportPurpose {
