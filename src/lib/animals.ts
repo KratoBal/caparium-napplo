@@ -113,6 +113,21 @@ function eventSnapshot(e: LifecycleEvent): Record<string, unknown> {
   };
 }
 
+/**
+ * An inactive group has no member (task caparium-csoport-inaktiv; barracuda on #155). The memberships are derived from the valid events, so
+ * a change that does not name the group can still open one again: invalidating the event that took the animal out of it, or the animal's
+ * death or release, puts it back. After such a rebuild the animal's open memberships are looked at (the group rows locked after the
+ * animal's, the order everywhere; setGroupActive takes the group's only), and an inactive one stops the change: switched back on first.
+ */
+async function refuseInactiveGroupMembership(tx: Tx, animalId: string) {
+  const open = await tx.animalGroupMembership.findMany({ where: { animalId, ...openNow() }, select: { groupId: true } });
+  for (const { groupId } of open) {
+    await lockGroup(tx, groupId);
+    const g = await tx.animalGroup.findUnique({ where: { id: groupId }, select: { active: true } });
+    if (!g?.active) throw new AppError(422, "GROUP_INACTIVE", "A csoport, amelybe ez a változás visszatenné az állatot, inaktív: előbb kapcsold vissza, utána elvégezhető a változtatás.");
+  }
+}
+
 /** R-1 (2): stop, with the list, if the change leaves manual rows on days the animal was not alive. */
 async function refuseOrphanRows(tx: Tx, animalId: string) {
   const rows = await manualRowsOutsideLife(tx, animalId);
@@ -140,11 +155,17 @@ async function lockAnimal(tx: Tx, animalId: string): Promise<boolean> {
   return rows.length === 1;
 }
 
+/** A group row is locked while its members or its state change, so a new member and an inactivation cannot pass each other (task caparium-csoport-inaktiv). */
+async function lockGroup(tx: Tx, groupId: string): Promise<boolean> {
+  const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "animal_group" WHERE "id" = ${groupId}::uuid FOR NO KEY UPDATE`;
+  return rows.length === 1;
+}
+
 const SAME_INSTANT = "Erre az állatra ugyanerre az időpontra már van érvényes esemény. Adj meg másik időpontot.";
 
 export async function createLifecycleEvent(actor: Actor, input: LifecycleInput, serverNow = new Date()) {
   const prior = await prisma.lifecycleEvent.findUnique({ where: { requestId: input.requestId } });
-  if (prior) return { eventId: prior.id, animalId: prior.animalId, replayed: true };
+  if (prior) return { eventId: prior.id, animalId: prior.animalId, replayed: true, emptiedGroups: [] as { id: string; name: string }[] };
   const level = await moduleLevel(prisma, actor.id, actor.role, "FEEDING");
   const denied = lifecycleAccessProblem(level, input.type);
   if (denied) throw new AppError(403, "ADMIN_ONLY", denied);
@@ -182,6 +203,14 @@ async function createInTx(tx: Tx, actor: Actor, input: LifecycleInput, at: { occ
   } else if (!animalId || !(await lockAnimal(tx, animalId))) {
     throw new AppError(404, "ANIMAL_NOT_FOUND", "Az állat nem található.");
   }
+  // an inactive group takes no new member (Lili 2026-10-30, task caparium-csoport-inaktiv): switched back on first
+  if (input.toGroupId) {
+    if (!(await lockGroup(tx, input.toGroupId))) throw new AppError(422, "GROUP_NOT_FOUND", "A csoport nem található.");
+    const target = await tx.animalGroup.findUnique({ where: { id: input.toGroupId }, select: { active: true } });
+    if (!target?.active) throw new AppError(422, "GROUP_INACTIVE", "Ez a csoport inaktív: előbb kapcsold vissza, utána kerülhet bele állat.");
+  }
+  // the groups this animal is in now, to tell afterwards which of them the event left empty
+  const groupsBefore = input.type === "ARRIVAL" ? [] : (await tx.animalGroupMembership.findMany({ where: { animalId: animalId!, ...openNow() }, select: { groupId: true } })).map((m) => m.groupId);
   const e = await tx.lifecycleEvent.create({
     data: {
       animalId: animalId!,
@@ -210,7 +239,16 @@ async function createInTx(tx: Tx, actor: Actor, input: LifecycleInput, at: { occ
     requestId: input.requestId,
     clientTimestamp: clientTs,
   });
-  return { eventId: e.id, animalId: animalId!, replayed: false };
+  // a group the event left without a member: the page asks whether to switch it off (it is never switched off by itself, so a group
+  // emptied for a while can still be filled again from the selectors)
+  const emptiedGroups: { id: string; name: string }[] = [];
+  for (const groupId of [...new Set(groupsBefore)]) {
+    const left = await tx.animalGroupMembership.count({ where: { groupId, ...openNow() } });
+    if (left > 0) continue;
+    const g = await tx.animalGroup.findUnique({ where: { id: groupId }, include: { names: true } });
+    if (g?.active) emptiedGroups.push({ id: g.id, name: nameAt(g.names, new Date())?.name ?? "?" });
+  }
+  return { eventId: e.id, animalId: animalId!, replayed: false, emptiedGroups };
 }
 
 export async function invalidateLifecycleEvent(
@@ -246,6 +284,7 @@ export async function invalidateLifecycleEvent(
     });
     if (res.count !== 1) throw new AppError(409, "VERSION_CONFLICT", "Az esemény időközben megváltozott.");
     await rebuildAnimal(tx, cur.animalId);
+    await refuseInactiveGroupMembership(tx, cur.animalId);
     await refuseOrphanRows(tx, cur.animalId);
     await recomputeClosedDaysFrom(tx, dateToDay(cur.businessDay), actor.id, input.requestId);
     const after = await tx.lifecycleEvent.findUniqueOrThrow({ where: { id } });
@@ -454,9 +493,9 @@ export async function editAnimal(actor: Actor, animalId: string, raw: EditAnimal
           after.arrivalPool = a.toPoolId;
         }
         if (a.toGroupId !== undefined && a.toGroupId !== arr.toGroupId) {
-          if (a.toGroupId && !(await tx.animalGroup.findUnique({ where: { id: a.toGroupId } }))) {
-            throw new AppError(422, "GROUP_NOT_FOUND", "A csoport nem található.");
-          }
+          const chosen = a.toGroupId ? await tx.animalGroup.findUnique({ where: { id: a.toGroupId } }) : null;
+          if (a.toGroupId && !chosen) throw new AppError(422, "GROUP_NOT_FOUND", "A csoport nem található.");
+          if (chosen && !chosen.active) throw new AppError(422, "GROUP_INACTIVE", "Ez a csoport inaktív: előbb kapcsold vissza, utána kerülhet bele állat.");
           data.toGroupId = a.toGroupId;
           before.arrivalGroup = arr.toGroupId;
           after.arrivalGroup = a.toGroupId;
@@ -474,6 +513,7 @@ export async function editAnimal(actor: Actor, animalId: string, raw: EditAnimal
           });
           if (res.count !== 1) throw new AppError(409, "VERSION_CONFLICT", "Az érkezés időközben megváltozott.");
           await rebuildAnimal(tx, animalId);
+          await refuseInactiveGroupMembership(tx, animalId);
           await refuseOrphanRows(tx, animalId);
           const newDay = data.businessDay ? dateToDay(data.businessDay as Date) : dateToDay(arr.businessDay);
           const oldDay = dateToDay(arr.businessDay);
@@ -616,6 +656,61 @@ export async function animalEvents(animalId: string) {
     include: { toPool: { include: { names: true } }, toGroup: { include: { names: true } } },
     orderBy: [{ occurredAt: "asc" }, { createdAt: "asc" }],
   });
+}
+
+/** The memberships open at this moment (a death or a release closes them: deriveLifecycle). */
+function openNow(at = new Date()) {
+  return { validFrom: { lte: at }, OR: [{ validTo: null }, { validTo: { gt: at } }] };
+}
+
+export const groupActiveSchema = z.object({ requestId: z.string().min(8).max(100), active: z.boolean() });
+
+/**
+ * A group is switched off and on (Lili 2026-10-30, task caparium-csoport-inaktiv; as the feeds' active flag, feeds.ts): an inactive group is
+ * not offered in the selectors and has no row on the feeding sheet. The earlier days, the items, the logs and the exports are not touched:
+ * they read the group and its name themselves. Switched OFF only without a member (a group with members would leave the feeding sheet's
+ * rows in a contradiction): the answer names the members to take out first. The change is an audit row, as the feeds'.
+ */
+export async function setGroupActive(actor: Actor, groupId: string, input: z.infer<typeof groupActiveSchema>, now = new Date()) {
+  await requireAdmin(actor);
+  if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId, entityId: groupId } })) return { replayed: true };
+  return prisma.$transaction(async (tx) => {
+    if (!(await lockGroup(tx, groupId))) throw new AppError(404, "NOT_FOUND", "A csoport nem található.");
+    const g = await tx.animalGroup.findUniqueOrThrow({ where: { id: groupId }, include: { names: true } });
+    if (g.active === input.active) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
+    if (!input.active) {
+      const members = await tx.animalGroupMembership.findMany({ where: { groupId, ...openNow(now) }, include: { animal: { include: { names: true } } } });
+      if (members.length > 0) {
+        const names = members.map((m) => nameAt(m.animal.names, now)?.name ?? "?").sort((a, b) => a.localeCompare(b, "hu"));
+        throw new AppError(
+          409,
+          "GROUP_HAS_MEMBERS",
+          `A(z) ${nameAt(g.names, now)?.name ?? "?"} csoportnak még vannak tagjai: ${names.join(", ")}. Előbb vedd ki őket a csoportból (Állatok, Csoportváltás), utána inaktiválható.`,
+          { members: names },
+        );
+      }
+    }
+    await tx.animalGroup.update({ where: { id: groupId }, data: { active: input.active } });
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: "MASTER_CHANGE",
+      entityType: "AnimalGroup",
+      entityId: groupId,
+      changes: { active: { before: g.active, after: input.active } },
+      requestId: input.requestId,
+    });
+    return { replayed: false };
+  });
+}
+
+/** Every group, the inactive ones too, with the animals in it now: the admin's list for switching them (the selectors use listGroupsWithNames). */
+export async function listGroupsAdmin(at = new Date()) {
+  const groups = await prisma.animalGroup.findMany({
+    include: { names: true, memberships: { where: openNow(at), select: { animalId: true } } },
+  });
+  return groups
+    .map((g) => ({ id: g.id, name: nameAt(g.names, at)?.name ?? "?", active: g.active, members: g.memberships.length }))
+    .sort((a, b) => a.name.localeCompare(b.name, "hu"));
 }
 
 export async function listGroupsWithNames(at = new Date()) {

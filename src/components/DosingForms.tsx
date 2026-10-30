@@ -125,6 +125,93 @@ export function DosingForm({ pools, chemicals }: { pools: Opt[]; chemicals: Chem
   );
 }
 
+export type DosingRowEdit = { id: string; version: number; atLocal: string; poolId: string; chemicalId: string; quantity: string; unitId: string };
+
+/**
+ * "Javítás" in a dosing log row (Lili 2026-10-30 19:34 UTC, msg 1565811224229453956, card f5f97479: "csak érvényteleníteni lehet, azt nem ha
+ * elírta, az értéket"): the amount, the unit, the chemical and the pool of a row can be corrected. It is the server's own change of a dosing
+ * (saveDosing with its id and version: the row is updated in place, its stock movement with it in the same transaction, the audit row says
+ * before and after), the same way a feeding sheet cell is corrected; the time stays. Offered only where the row's chemical and pool are
+ * still active (the server refuses an inactive one).
+ */
+export function DosingEdit({ row, pools, chemicals }: { row: DosingRowEdit; pools: Opt[]; chemicals: ChemicalOpt[] }) {
+  const [open, setOpen] = useState(false);
+  const [pool, setPool] = useState(row.poolId);
+  const [chemId, setChemId] = useState(row.chemicalId);
+  const [quantity, setQuantity] = useState(row.quantity.replace(".", ","));
+  const [unitId, setUnitId] = useState(row.unitId);
+  const [reason, setReason] = useState("");
+  const { msg, busy, run } = useSend();
+  const reasonsOn = useReasonsOn();
+  const chem = chemicals.find((c) => c.id === chemId);
+  const unit = chem?.units.find((u) => u.id === unitId)?.id ?? chem?.units[0]?.id ?? "";
+  if (!pools.some((p) => p.id === row.poolId) || !chemicals.some((c) => c.id === row.chemicalId)) return null;
+  if (!open) {
+    return (
+      <span>
+        <button className="btn btn-row" type="button" onClick={() => setOpen(true)}>
+          Javítás
+        </button>
+        <Msg msg={msg} />
+      </span>
+    );
+  }
+  return (
+    <div className="toolbar" data-testid={`dosing-edit-${row.id}`} style={{ margin: 0 }}>
+      <select className="input" value={pool} onChange={(e) => setPool(e.target.value)} aria-label="Medence (javítás)">
+        {pools.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      <select className="input" value={chemId} onChange={(e) => setChemId(e.target.value)} aria-label="Szer (javítás)">
+        {chemicals.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+      <input className="input" inputMode="decimal" style={{ width: 100 }} value={quantity} onChange={(e) => setQuantity(e.target.value)} aria-label="Mennyiség (javítás)" />
+      <select className="input" value={unit} onChange={(e) => setUnitId(e.target.value)} aria-label="Egység (javítás)">
+        {chem?.units.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.symbol}
+          </option>
+        ))}
+      </select>
+      {reasonsOn && <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Indoklás" aria-label="Indoklás (javítás)" />}
+      <button
+        className="btn"
+        type="button"
+        disabled={busy}
+        onClick={() =>
+          void run(
+            "/api/dosings",
+            {
+              dosingId: row.id,
+              expectedVersion: row.version,
+              performedAtLocal: row.atLocal,
+              poolId: pool,
+              chemicalId: chemId,
+              quantity: quantity.replace(",", "."),
+              unitId: unit,
+              ...(reason.trim() ? { reason: reason.trim() } : {}),
+            },
+            "Javítva.",
+          ).then((ok) => ok && setOpen(false))
+        }
+      >
+        Mentés
+      </button>
+      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => setOpen(false)}>
+        Mégse
+      </button>
+      <Msg msg={msg} />
+    </div>
+  );
+}
+
 export function MovementForm({ chemicals }: { chemicals: ChemicalOpt[] }) {
   const [chemId, setChemId] = useState(chemicals[0]?.id ?? "");
   const [kind, setKind] = useState<"INTAKE" | "PLUS" | "MINUS">("INTAKE");

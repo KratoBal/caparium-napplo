@@ -102,4 +102,61 @@ describe("the log (ADA-05)", () => {
     expect(ca[0].by).not.toBe("?");
     await expect(dosingLog({ from: "2026-09-10", to: "2026-09-07", poolId: null, chemicalId: null })).rejects.toMatchObject({ code: "BAD_PERIOD" });
   });
+
+  // Lili 2026-10-30 19:33 UTC (msg 1565810865788166185, task caparium-vegyszer-nev): a chemical was added and dosed at once, and the log read "?" in
+  // its place: the first name began at the instant of the adding (seconds), the dose is dated by the minute, a few seconds before it
+  it("a chemical added a moment ago is named in the log for a dose dated by the minute before its adding; its first name is from the beginning of time", async () => {
+    const d = "2026-09-17";
+    const name = `Teszt új szer ${Date.now()}`;
+    const made = await createChemical(f.admin, { requestId: rid(), name, stockUnitId: unit.kg }, new Date(`${d}T09:00:45+02:00`));
+    expect("id" in made).toBe(true);
+    const id = (made as { id: string }).id;
+    expect((await prisma.chemicalName.findFirstOrThrow({ where: { chemicalId: id } })).validFrom.toISOString()).toBe("1970-01-01T00:00:00.000Z");
+    await saveDosing(f.admin, { requestId: rid(), performedAtLocal: `${d}T09:00`, poolId: f.pool("SOZO"), chemicalId: id, quantity: "500", unitId: unit.g }, at(d, "09:01"));
+    const log = await dosingLog({ from: d, to: d, poolId: null, chemicalId: id });
+    expect(log.map((r) => r.chemical)).toEqual([name]);
+  });
+
+  it("a chemical whose first name began after a dose (made before this fix) is still named by its first name, not by a question mark", async () => {
+    const d = "2026-09-17";
+    const name = `Teszt régi szer ${Date.now()}`;
+    const old = await prisma.chemical.create({ data: { stockUnitId: unit.kg, names: { create: { name, validFrom: new Date(`${d}T10:00:00+02:00`) } } } });
+    await saveDosing(f.admin, { requestId: rid(), performedAtLocal: `${d}T09:00`, poolId: f.pool("SOZO"), chemicalId: old.id, quantity: "500", unitId: unit.g }, at(d, "09:01"));
+    const log = await dosingLog({ from: d, to: d, poolId: null, chemicalId: old.id });
+    expect(log.map((r) => r.chemical)).toEqual([name]);
+  });
+});
+
+// Lili 2026-10-30 19:34 UTC (msg 1565811224229453956, card f5f97479, second point): "csak érvényteleníteni lehet, azt nem ha elírta, az értéket".
+// The log row's "Javítás" is saveDosing with the row's id and version: the chemical, the pool and the amount are corrected in place.
+describe("a correction of a dosing (card f5f97479)", () => {
+  it("changes the chemical, the pool and the amount of a row: the log reads it, the stock moves from the old chemical to the new one, the audit says before and after", async () => {
+    const d = "2026-09-18";
+    const saltBefore = (await level("Teszt só", at(d, "08:00"))).level;
+    const calciumBefore = (await level("Teszt kalcium", at(d, "08:00"))).level;
+    const r = (await dose(d, "09:00", "Teszt só", "500", "g")) as { dosingId: string };
+    expect((await level("Teszt só", at(d, "10:00"))).level).toBeCloseTo(saltBefore - 0.5, 4);
+    // it was calcium, 200 ml, in another pool
+    await saveDosing(
+      f.aq1,
+      { requestId: rid(), dosingId: r.dosingId, expectedVersion: 1, performedAtLocal: `${d}T09:00`, poolId: f.pool("KARANTEN"), chemicalId: chem["Teszt kalcium"], quantity: "200", unitId: unit.ml },
+      at(d, "09:10"),
+    );
+    expect((await level("Teszt só", at(d, "10:00"))).level, "the salt is back").toBeCloseTo(saltBefore, 4);
+    expect((await level("Teszt kalcium", at(d, "10:00"))).level).toBeCloseTo(calciumBefore - 0.2, 4);
+    const row = (await dosingLog({ from: d, to: d, poolId: null, chemicalId: chem["Teszt kalcium"] })).find((x) => x.id === r.dosingId)!;
+    expect([row.chemical, row.quantity, row.unit, row.pool, row.version, row.status]).toEqual(["Teszt kalcium", "200", "ml", "Karantén", 2, "VALID"]);
+    expect((await dosingLog({ from: d, to: d, poolId: null, chemicalId: chem["Teszt só"] })).some((x) => x.id === r.dosingId), "no longer under the salt").toBe(false);
+    const audit = await prisma.auditEntry.findFirstOrThrow({ where: { entityType: "Dosing", entityId: r.dosingId, action: "UPDATE" } });
+    expect(audit.changes).toMatchObject({
+      chemical: { before: chem["Teszt só"], after: chem["Teszt kalcium"] },
+      pool: { before: f.pool("SOZO"), after: f.pool("KARANTEN") },
+      quantity: { before: "500", after: "200" },
+    });
+    // the same version again is refused (another sheet changed it meanwhile)
+    await expectCode(
+      saveDosing(f.aq1, { requestId: rid(), dosingId: r.dosingId, expectedVersion: 1, performedAtLocal: `${d}T09:00`, poolId: f.pool("SOZO"), chemicalId: chem["Teszt só"], quantity: "1", unitId: unit.g }, at(d, "09:20")),
+      "VERSION_CONFLICT",
+    );
+  });
 });

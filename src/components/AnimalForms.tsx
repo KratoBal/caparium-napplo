@@ -26,7 +26,7 @@ function useApi() {
   const router = useRouter();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  async function call(url: string, method: string, body: Record<string, unknown>, okText = "Mentve.") {
+  async function call(url: string, method: string, body: Record<string, unknown>, okText = "Mentve.", onOk?: (answer: Record<string, unknown>) => void | Promise<void>) {
     setBusy(true);
     setMsg(null);
     try {
@@ -41,6 +41,7 @@ function useApi() {
         return false;
       }
       setMsg({ ok: true, text: okText });
+      await onOk?.(b as Record<string, unknown>);
       router.refresh();
       return true;
     } catch {
@@ -74,6 +75,25 @@ export function AnimalActions({ animalId, pools, groups }: { animalId: string; p
   const [note, setNote] = useState("");
   const { msg, busy, call } = useApi();
   const reasonsOn = useReasonsOn();
+  // Lili 2026-10-30 (task caparium-csoport-inaktiv; acrobot 38970): when an event takes the last member out of a group, the page asks whether to
+  // switch the group off; never by itself (a group emptied for a while can still be filled again from the selectors), and a "no" leaves the
+  // switch on the Állatok page.
+  async function askAboutEmptied(answer: Record<string, unknown>) {
+    const emptied = Array.isArray(answer.emptiedGroups) ? (answer.emptiedGroups as { id: string; name: string }[]) : [];
+    for (const g of emptied) {
+      if (window.confirm(`A(z) ${g.name} csoport kiürült. Inaktiválod?`)) {
+        const res = await fetch(`/api/admin/animal-groups/${g.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requestId: requestId(), active: false }),
+        }).catch(() => null);
+        if (!res?.ok) {
+          const b = (await res?.json().catch(() => ({}))) as { error?: { message?: string } } | undefined;
+          window.alert(b?.error?.message ?? `A(z) ${g.name} csoportot nem sikerült inaktiválni: az Állatok oldalon a Csoportok listában próbáld újra.`);
+        }
+      }
+    }
+  }
   return (
     <div className="toolbar" data-testid="animal-actions">
       <label className="field">
@@ -138,7 +158,7 @@ export function AnimalActions({ animalId, pools, groups }: { animalId: string; p
             ...(type === "GROUP_CHANGE" ? { toGroupId: group || null } : {}),
             ...(note.trim() ? { note: note.trim() } : {}),
             ...(reason.trim() ? { reason: reason.trim() } : {}),
-          }, `${ACTION_LABEL[type]} rögzítve.`)
+          }, `${ACTION_LABEL[type]} rögzítve.`, askAboutEmptied)
         }
       >
         Rögzítés
@@ -310,6 +330,28 @@ export function FeedActive({ id, active }: { id: string; active: boolean }) {
         onClick={() => {
           keep(id);
           void call(`/api/admin/feeds/${id}`, "PATCH", { active: !active }, active ? "Inaktiválva." : "Újra aktív.");
+        }}
+      >
+        {active ? "Inaktiválás" : "Aktiválás"}
+      </button>
+      <Msg msg={msg} />
+    </>
+  );
+}
+
+/** The switch of a group on the Állatok page (Lili 2026-10-30, task caparium-csoport-inaktiv): the feeds' button, with the server's answer when the group still has members. */
+export function GroupActive({ id, active }: { id: string; active: boolean }) {
+  const { msg, busy, call } = useApi();
+  const keep = useKeepRow();
+  return (
+    <>
+      <button
+        className="btn btn-row"
+        type="button"
+        disabled={busy}
+        onClick={() => {
+          keep(id);
+          void call(`/api/admin/animal-groups/${id}`, "PATCH", { active: !active }, active ? "Inaktiválva." : "Újra aktív.");
         }}
       >
         {active ? "Inaktiválás" : "Aktiválás"}
