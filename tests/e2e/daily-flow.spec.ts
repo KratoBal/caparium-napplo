@@ -1482,6 +1482,26 @@ test("home: the customer's illustrated cards, 3-3-3 with a narrow portrait one b
   const caps = await page.locator(".home-caption").evaluateAll((els) => els.map((e) => getComputedStyle(e).fontVariantCaps));
   expect(caps.length).toBeGreaterThan(5);
   expect(new Set(caps)).toEqual(new Set(["all-small-caps"]));
+  // and 14:05 UTC (msg 1565728416660201483): every caption line stands on ONE line inside its card (the longest, "NYOMELEM ÉS MEGKÖTŐ ADAGOLÁS",
+  // on a tablet too), the main line at most 19 px, the second line (the pool group) 2 px or more smaller than it
+  const lines = await page.locator(".home-card").evaluateAll((cards) =>
+    cards.map((card) => {
+      const width = card.getBoundingClientRect().width;
+      return [...card.querySelectorAll(".home-caption > span")].map((s) => {
+        const range = document.createRange();
+        range.selectNodeContents(s);
+        return { text: s.textContent, rects: range.getClientRects().length, fits: range.getBoundingClientRect().width <= width + 0.5, size: parseFloat(getComputedStyle(s).fontSize) };
+      });
+    }),
+  );
+  for (const card of lines) {
+    for (const l of card) {
+      expect(l.rects, `${l.text} on one line`).toBe(1);
+      expect(l.fits, `${l.text} fits its card`).toBe(true);
+    }
+    expect(card[0].size).toBeLessThanOrEqual(19);
+    if (card[1]) expect(card[0].size - card[1].size).toBeGreaterThanOrEqual(1.9);
+  }
   expect(await rows.nth(0).locator(".home-caption > span:first-child").allInnerTexts()).toEqual(["NAPI VÍZMÉRÉS", "NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS"]);
   expect(await captions(1)).toEqual(["Nyomelem és megkötő adagolás", "Fagyasztó", "Takarmány kalkulátor"]);
   expect(await captions(2)).toEqual(["Takarmány kivételi napló", "Egyedi takarmánynapló", "Evési napló"]);
