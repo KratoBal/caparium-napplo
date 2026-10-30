@@ -101,13 +101,17 @@ async function main() {
       await prisma.chemical.create({ data: { stockUnitId: unitId.get(c.unit)!, names: { create: { name: c.name, validFrom: SINCE } } } });
     }
   }
-  // by the first synthetic animal's name, not "no species yet": the basic data's starting list brings species
-  if (synthetic && !(await prisma.animalName.findFirst({ where: { name: ANIMALS[0].name } }))) {
-    const species: { id: string }[] = [];
-    for (const name of SPECIES) species.push(await prisma.species.create({ data: { scientificName: name } }));
-    const group = await prisma.animalGroup.create({ data: { names: { create: { name: "Teszt csoport", validFrom: SINCE } } } });
-    for (const [i, a] of ANIMALS.entries()) {
-      await prisma.$transaction(async (tx) => {
+  // by the seed's own first arrival, never by a name: a name CORRECTION overwrites the name row (src/lib/animals.ts),
+  // so "Teszt Egy" can vanish from a used database while its animal and its arrival `seed-arrival-1` stay. Looked up
+  // by name, the seed then made the animals again, and the unique requestId stopped it (and the container) on every
+  // start, after the species and the group were already written (stage, 2026-10-30, acrobot 38512). One
+  // transaction: a failure leaves nothing behind.
+  if (synthetic && !(await prisma.lifecycleEvent.findUnique({ where: { requestId: "seed-arrival-1" } }))) {
+    await prisma.$transaction(async (tx) => {
+      const species: { id: string }[] = [];
+      for (const name of SPECIES) species.push(await tx.species.create({ data: { scientificName: name } }));
+      const group = await tx.animalGroup.create({ data: { names: { create: { name: "Teszt csoport", validFrom: SINCE } } } });
+      for (const [i, a] of ANIMALS.entries()) {
         const animal = await tx.animal.create({
           data: { speciesId: species[a.species].id, sex: a.sex, names: { create: { name: a.name, validFrom: SINCE } } },
         });
@@ -125,8 +129,8 @@ async function main() {
           },
         });
         await rebuildAnimal(tx, animal.id);
-      });
-    }
+      }
+    });
   }
 
   console.log(`seed ok: ${USERS.length} users, ${PARAMETERS.length} reference ranges at most, synthetic master data ${synthetic ? "on" : "off"}`);
