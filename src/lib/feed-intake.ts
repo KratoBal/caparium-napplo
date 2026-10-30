@@ -10,7 +10,7 @@ import { diffFields, writeAudit } from "./audit";
 import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError } from "./errors";
-import { moduleLevel, pickValid } from "./master";
+import { getSetting, moduleLevel, pickValid } from "./master";
 import { otherKey, otherLabel } from "./other-name";
 import type { Actor } from "./measurements";
 import { canCreate, canModify, effectiveNow, type Decision, type Level } from "./permissions";
@@ -187,12 +187,51 @@ export type StockRow = {
 
 const round = (v: number) => Math.round(v * 10000) / 10000;
 
+const startDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const stockStartSchema = z.object({
+  requestId,
+  /** the first day the stock counts; empty puts it back to "from each feed's first intake that was not sent back" */
+  start: z.union([startDay, z.literal("")]),
+});
+
+/** The set start of the stock ("YYYY-MM-DD"), or null when none is set. Read at the real now: an operational setting. */
+export async function getStockStart(tx: Tx | typeof prisma = prisma): Promise<string | null> {
+  const v = (await getSetting(tx as Tx, "feed_stock_start")).trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
+
+/** An admin sets the stock's first day, or clears it. The intake and the withdrawals before it are archive: nothing is deleted. */
+export async function setStockStart(actor: Actor, raw: z.input<typeof stockStartSchema>, serverNow = new Date()) {
+  const input = stockStartSchema.parse(raw);
+  if ((await moduleLevel(prisma, actor.id, actor.role, "WITHDRAWAL")) !== "ADMIN") {
+    throw new AppError(403, "ADMIN_ONLY", "A készlet kezdetét csak adminisztrátor állíthatja.");
+  }
+  if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true };
+  if (input.start > businessDayOf(serverNow)) throw new AppError(422, "FUTURE_DAY", "A készlet kezdete nem lehet jövőbeli nap.");
+  return prisma.$transaction(async (tx) => {
+    const before = await getStockStart(tx);
+    if ((before ?? "") === input.start) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
+    const row = await tx.setting.create({ data: { key: "feed_stock_start", value: input.start, validFrom: serverNow, changedById: actor.id } });
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: "MASTER_CHANGE",
+      entityType: "Setting",
+      entityId: row.id,
+      changes: { feed_stock_start: { before, after: input.start || null } },
+      requestId: input.requestId,
+    });
+    return { replayed: false };
+  });
+}
+
 /**
  * The feed stock per feed (and other name) and dimension, in base units, from the valid intake and withdrawals.
- * A feed with withdrawals but no intake is listed with tracked = false: it has no starting stock, so its level is
- * only a count of what was taken and must not raise an alert.
+ * `until` (a day): the stock at the end of that day. With a start day set (setStockStart) only the intake and withdrawals from that day count. It counts from the day of the first intake that was not sent back: the intake from then on, minus the withdrawals from
+ * then on (Lili's "az első bevételezéstől számít"; the withdrawals of before are from a time the stock was not kept). A
+ * delivery that was only ever sent back does not start it. A feed with withdrawals but no received intake is listed with
+ * tracked = false: it has no starting stock, so its level is only a count of what was taken and must not raise an alert.
  */
-export async function feedStock(now = new Date()): Promise<StockRow[]> {
+export async function feedStock(now = new Date(), until?: string): Promise<StockRow[]> {
   const today = businessDayOf(now);
   const [intake, taken, baseOf] = await Promise.all([
     prisma.feedIntakeItem.findMany({
@@ -208,6 +247,11 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
   const weekFrom = dayToDate(addDays(today, -7));
   const monthFrom = dayToDate(addDays(today, -30));
   const todayDate = dayToDate(today);
+  // the explicit start of the stock (an admin's, Takarmányhűtő page): what is dated before it is archive, not stock
+  const set = await getStockStart();
+  const archiveBefore = set ? dayToDate(set) : null;
+  // `until`: the stock as it stood at the end of that day (the export's closing stock); later items are not yet in it
+  const untilDate = until ? dayToDate(until) : null;
   const rows = new Map<string, StockRow>();
   const row = (it: { feedId: string; otherName: string | null; feed: { active: boolean; names: { name: string; validFrom: Date; validTo: Date | null }[] } }, dimension: Dimension, unit: string) => {
     // the other name as the reports and the Excel read it (other-name.ts): case and spaces do not make a second row
@@ -221,20 +265,34 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
     }
     return r;
   };
+  // the day of each row's first intake that was NOT sent back: the stock counts from there (Lili's screen, 2026-10-30 11:26 UTC)
+  const from = new Map<string, Date>();
   for (const it of intake) {
+    if (archiveBefore && it.intakeDay < archiveBefore) continue;
+    if (untilDate && it.intakeDay > untilDate) continue;
     for (const q of it.quantities) {
       const r = row(it, q.unit.dimension, baseOf.get(q.unit.dimension) ?? q.unit.symbol);
       const v = Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
+      if (it.returned) {
+        r.returned += v;
+        continue;
+      }
+      r.received += v;
       r.tracked = true;
-      if (it.returned) r.returned += v;
-      else r.received += v;
+      const first = from.get(r.key);
+      if (!first || it.intakeDay < first) from.set(r.key, it.intakeDay);
     }
   }
   for (const it of taken) {
     const d = it.withdrawalDay.businessDay;
+    if (archiveBefore && d < archiveBefore) continue;
+    if (untilDate && d > untilDate) continue;
     for (const q of it.quantities) {
       const r = row(it, q.unit.dimension, baseOf.get(q.unit.dimension) ?? q.unit.symbol);
       const v = Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
+      // a withdrawal before the first received intake is from before the stock existed: it is not taken from it
+      const start = from.get(r.key);
+      if (start && d < start) continue;
       r.taken += v;
       if (d > weekFrom && d <= todayDate) r.week += v;
       if (d > monthFrom && d <= todayDate) r.month += v;
@@ -256,6 +314,7 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
  */
 export function stockStatus(r: Pick<StockRow, "level" | "month" | "tracked" | "active">): { daysLeft: number | null; low: boolean } {
   const perDay = r.month / 30;
-  const daysLeft = perDay > 0 ? Math.round((r.level / perDay) * 10) / 10 : null;
+  // never negative: a stock at or below zero has run out, "0 days", not "-30"
+  const daysLeft = perDay > 0 ? Math.max(0, Math.round((r.level / perDay) * 10) / 10) : null;
   return { daysLeft, low: r.tracked && r.active && (r.level <= 0 || (daysLeft !== null && daysLeft <= RUN_OUT_DAYS)) };
 }

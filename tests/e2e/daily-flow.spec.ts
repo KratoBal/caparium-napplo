@@ -4,6 +4,15 @@ import { PrismaClient } from "@prisma/client";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
 
+// "Kilépés" is a form POST that clears the session and answers 303 to /belepes. The next login's goto("/belepes") must
+// wait for it: while the old session still stands, /belepes sends a logged-in user to "/", and the login form never
+// comes (the tablet run of the feeding day restore timed out so on #139's CI, 41050732517).
+async function logout(page: Page) {
+  await page.getByRole("button", { name: "Kilépés" }).click();
+  await expect(page).toHaveURL(/\/belepes(\?|$)/);
+  await expect(page.getByLabel("Felhasználónév")).toBeVisible();
+}
+
 async function login(page: Page, loginId: string) {
   await page.goto("/belepes");
   await page.getByLabel("Felhasználónév").fill(loginId);
@@ -248,7 +257,7 @@ test("the pending list is for admins; an aquarist is sent to the no-access page"
   await login(page, "teszt.admin");
   await page.getByRole("link", { name: "Függő mentések" }).click();
   await expect(page.getByRole("heading", { name: "Késve érkezett mentések" })).toBeVisible();
-  await page.getByRole("button", { name: "Kilépés" }).click();
+  await logout(page);
   await login(page, "teszt.akvarista2");
   await expect(page.getByRole("link", { name: "Függő mentések" })).toHaveCount(0);
   await page.goto("/fuggo");
@@ -306,7 +315,7 @@ test("settings: an admin changes a reference range and creates a user who can lo
   await expect(nu.getByRole("status")).toHaveText("Felhasználó létrehozva.");
   await expect(page.getByTestId(`user-${login1}`)).toBeVisible();
 
-  await page.getByRole("button", { name: "Kilépés" }).click();
+  await logout(page);
   await page.getByLabel("Felhasználónév").fill(login1);
   await page.getByLabel("Jelszó").fill("uj-akvarista-jelszo");
   await page.getByRole("button", { name: "Bejelentkezés" }).click();
@@ -966,7 +975,7 @@ test("feeding day restore: the day's operations, a dry run before one, the run w
   await expect(restore.getByRole("status")).toHaveText("A nap visszaállítva.");
   await expect(sw).not.toBeChecked();
   // an aquarist does not see it
-  await page.getByRole("button", { name: "Kilépés" }).click();
+  await logout(page);
   await login(page, "teszt.akvarista1");
   await page.goto(`/etetes?nap=${day}`);
   await expect(page.getByTestId("day-restore")).toHaveCount(0);
@@ -1018,7 +1027,7 @@ for (const [name, link, tab, param] of [["daily", "Napi vízmérés", "Nagy mede
     await page.getByTestId("save-all").click();
     await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
 
-    await page.getByRole("button", { name: "Kilépés" }).click();
+    await logout(page);
     await open("teszt.akvarista2");
     await expect(cell).toHaveValue("8,1");
     await x.click();
@@ -1115,30 +1124,35 @@ for (const [name, link] of [["daily", "Napi vízmérés"], ["weekly", "Heti víz
 test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows on the list and does not change the stock", async ({ page }, info) => {
   // each layout receives its own feed
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";
+  // a retry of this test (same database) must not meet its own first attempt's rows: the notes are unique per attempt
+  const tag = `${info.project.name}-${info.retry}-${Date.now()}`;
+  const opening = `nyitó készlet ${tag}`;
+  const sentBack = `nem megfelelő ${tag}`;
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Takarmányhűtő" }).click();
   await expect(page.getByTestId("day-picker").getByRole("button", { name: "Ugrás" })).toBeVisible();
   const form = page.getByTestId("intake-form");
   await form.getByLabel("Takarmány", { exact: true }).selectOption({ label: feedName });
-  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("1000");
-  await form.getByLabel("Megjegyzés").fill("nyitó készlet");
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("1");
+  // Lili 2026-10-30: the intake unit list starts on kg
+  await expect(form.getByLabel("Egység (tömeg)").locator("option:checked")).toHaveText("kg");
+  await form.getByLabel("Megjegyzés").fill(opening);
   await form.getByRole("button", { name: "Mentés" }).click();
   await expect(form.getByRole("status")).toHaveText("Tétel mentve.");
-  const listed = page.getByTestId("intake-list").getByRole("row").filter({ hasText: feedName });
+  const listed = page.getByTestId("intake-list").getByRole("row").filter({ hasText: opening });
   await expect(listed).toHaveCount(1);
-  await expect(listed).toContainText("nyitó készlet");
+  await expect(listed).toContainText(feedName);
   const stockRow = page.getByTestId("feed-stock").getByRole("row").filter({ hasText: feedName });
   await expect(stockRow).toHaveCount(1);
   const level = (await stockRow.locator("td").nth(2).textContent()) ?? "";
   expect(level).not.toBe("");
   // sent back: the item shows, marked, and the stock stays as it was
-  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("500");
-  await form.getByLabel("Megjegyzés").fill("nem megfelelő");
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("0,5");
+  await form.getByLabel("Megjegyzés").fill(sentBack);
   await form.getByLabel("Visszaküldve").check();
   await form.getByRole("button", { name: "Mentés" }).click();
   await expect(form.getByRole("status")).toHaveText("Tétel mentve.");
-  // the other layout's project has recorded the same note on its own feed on the same day: the row is this feed's
-  const back = page.getByTestId("intake-list").getByRole("row").filter({ hasText: feedName }).filter({ hasText: "nem megfelelő" });
+  const back = page.getByTestId("intake-list").getByRole("row").filter({ hasText: sentBack });
   await expect(back).toHaveCount(1);
   await expect(back).toHaveAttribute("data-returned", "yes");
   await expect(stockRow.locator("td").nth(2)).toHaveText(level);
@@ -1149,6 +1163,12 @@ test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows
   await expect(take.getByTestId("stock-hint").first()).toContainText("Készlet:");
   await take.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("99999999");
   await expect(take.getByTestId("stock-hint").first()).toContainText("meghaladja a készletet");
+  // the report (Lili 2026-10-30): the PDF and the Excel of the period, from the Takarmányhűtő page
+  await page.getByRole("link", { name: "Takarmányhűtő" }).click();
+  const pdf = await Promise.all([page.waitForEvent("download"), page.getByTestId("intake-pdf").click()]);
+  expect(pdf[0].suggestedFilename()).toMatch(/^Takarmanyhuto_\d{4}-\d{2}-\d{2}(_\d{4}-\d{2}-\d{2})?\.pdf$/);
+  const xlsx = await Promise.all([page.waitForEvent("download"), page.getByTestId("intake-excel").click()]);
+  expect(xlsx[0].suggestedFilename()).toMatch(/^Takarmanyhuto_\d{4}-\d{2}-\d{2}(_\d{4}-\d{2}-\d{2})?\.xlsx$/);
 });
 
 test("withdrawal: an item for tomorrow, the day's total, taken against given, the Excel", async ({ page }, info) => {
@@ -2063,8 +2083,12 @@ test("feeding lists: the admin composes one, the header's switch and dropdown ma
   const dayFeeds = page.getByTestId("day-feeds");
   await dayFeeds.getByLabel("A nap takarmánya: Litopenaeus vannamei").check();
   const saveFeeds = dayFeeds.getByRole("button", { name: "A nap takarmányainak mentése" });
-  if (await saveFeeds.count()) await saveFeeds.click();
-  else await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).click();
+  // both buttons POST the day's feeds; the goto below must not cancel it, so the answer is waited for
+  const [feedsSaved] = await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith("/api/feeding/day-feeds") && r.request().method() === "POST"),
+    (await saveFeeds.count()) ? saveFeeds.click() : dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).click(),
+  ]);
+  expect(feedsSaved.ok(), `day feeds save: HTTP ${feedsSaved.status()}`).toBe(true);
   await expect(dayFeeds.getByLabel("A nap takarmánya: Litopenaeus vannamei")).toBeChecked();
   const sheet = page.getByTestId("feeding-sheet");
   await expect(sheet.getByRole("columnheader", { name: /^Litopenaeus vannamei/ })).toBeVisible();

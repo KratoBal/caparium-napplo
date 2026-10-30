@@ -1,11 +1,12 @@
 import { DayJump, DayNav } from "@/components/DayNav";
 import type { FeedOpt } from "@/components/FeedingForms";
-import { IntakeItems } from "@/components/IntakeForms";
+import { IntakeItems, StockStart } from "@/components/IntakeForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
-import { feedStock, intakeDayView, stockStatus } from "@/lib/feed-intake";
+import { feedStock, getStockStart, intakeDayView, stockStatus } from "@/lib/feed-intake";
 import { knownOtherNames, listFeeds } from "@/lib/feeds";
 import { plainNumber as num, rowForDisplay } from "@/lib/mass-display";
+import { moduleLevel } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
 import { businessDayOf, isValidDay } from "@/lib/time";
 
@@ -20,12 +21,14 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
   const today = businessDayOf(now);
   const sp = await searchParams;
   const day = sp.nap && isValidDay(sp.nap) && sp.nap <= today ? sp.nap : today;
-  const [items, stock, types, units, otherNames] = await Promise.all([
+  const [items, stock, types, units, otherNames, stockStart, exportLevel] = await Promise.all([
     intakeDayView(day),
     feedStock(now),
     listFeeds(),
     prisma.unit.findMany({ where: { active: true }, orderBy: { symbol: "asc" } }),
     knownOtherNames(),
+    getStockStart(),
+    moduleLevel(prisma, user.id, user.role, "EXPORT"),
   ]);
   const canRecord = level === "RECORD" || level === "ADMIN";
   // the server decides: an aquarist records today, an earlier day is the admin's
@@ -59,7 +62,8 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
 
       <div className="card">
         <h2>Készlet</h2>
-        <p className="hint">A bevételezett mínusz a kivett takarmány. A készlet az első bevételezéstől számít: amelyik takarmányhoz még nincs bevétel, az nem szerepel itt, és a kivezetett (inaktív) takarmány sem. A becsült napok az elmúlt 30 nap átlagos kivétele szerint értendők.</p>
+        <p className="hint">A bevételezett mínusz a kivett takarmány, a kezdőnaptól számítva. Amelyik takarmányhoz még nincs be nem küldött bevétel, az nem szerepel itt, és a kivezetett (inaktív) takarmány sem. A becsült napok az elmúlt 30 nap átlagos kivétele szerint értendők, és 0-ra állnak, ha a készlet elfogyott.</p>
+        <StockStart start={stockStart} today={today} canSet={level === "ADMIN"} />
         <div className="table-scroll">
           <table className="log-table" data-testid="feed-stock">
             <thead>
@@ -83,6 +87,25 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
           </table>
         </div>
       </div>
+      {exportLevel !== "NONE" && (
+        <div className="card">
+          <h2>Kimutatás</h2>
+          <p className="hint">Az időszak bevételei (a visszaküldött szállítmány pirossal), a kivételek takarmányonként összesítve és a záró készlet. Nyomtatható PDF vagy Excel.</p>
+          <form method="post" action="/api/exports/feeding" className="filters" data-testid="intake-export">
+            <input type="hidden" name="kind" value="huto" />
+            <label className="field">
+              Naptól
+              <input className="input" type="date" name="from" defaultValue={`${today.slice(0, 8)}01`} max={today} required />
+            </label>
+            <label className="field">
+              Napig
+              <input className="input" type="date" name="to" defaultValue={today} max={today} required />
+            </label>
+            <button className="btn" type="submit" name="format" value="pdf" data-testid="intake-pdf">PDF</button>
+            <button className="btn btn-soft" type="submit" name="format" value="xlsx" data-testid="intake-excel">Excel</button>
+          </form>
+        </div>
+      )}
     </Shell>
   );
 }
