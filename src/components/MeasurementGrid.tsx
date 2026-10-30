@@ -707,7 +707,7 @@ export function MeasurementGrid({
                           : cell?.reference === "LOW" || cell?.reference === "HIGH";
                       const range = cell?.range ?? grid.currentRanges[key];
                       return (
-                        <td key={param.id}>
+                        <td key={param.id} data-label={`${param.name}${param.unit.symbol !== param.name ? ` · ${param.unit.symbol}` : ""}`}>
                           {active ? (
                             // Lili 2026-10-29: the same corner X as on the feeding sheet (ClearX)
                             <span className="clearable clearable-block">
