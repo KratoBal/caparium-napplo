@@ -361,6 +361,10 @@ export async function dosingLog(f: DosingFilter) {
     invalidationReason: r.invalidationReason,
     day: dateToDay(r.businessDay),
     at: r.performedAt,
+    // the ids the log's "Javítás" starts from (Lili 2026-10-30, card f5f97479, second point)
+    poolId: r.poolId,
+    chemicalId: r.chemicalId,
+    unitId: r.unitId,
     pool: pickValid(r.pool.names, r.performedAt)?.displayName ?? r.pool.code,
     chemical: pickValid(r.chemical.names, r.performedAt)?.name ?? "?",
     quantity: canonicalDecimal(r.quantity),

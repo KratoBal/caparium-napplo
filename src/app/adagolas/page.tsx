@@ -1,6 +1,6 @@
 import { ChemistryCalculator } from "@/components/ChemistryCalculator";
 import { InactiveListFilter, InactiveRowShell } from "@/components/InactiveListFilter";
-import { ChemicalActive, ChemicalEdit, DosingForm, MovementForm, NewChemical, type ChemicalOpt } from "@/components/DosingForms";
+import { ChemicalActive, ChemicalEdit, DosingEdit, DosingForm, MovementForm, NewChemical, type ChemicalOpt } from "@/components/DosingForms";
 import { InvalidateButton } from "@/components/FeedingForms";
 import { PrintButton } from "@/components/PrintButton";
 import { Shell } from "@/components/Shell";
@@ -11,7 +11,7 @@ import { dosingLog, stockLevels } from "@/lib/dosing";
 import { AppError } from "@/lib/errors";
 import { moduleLevel, pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
-import { addDays, businessDayOf, formatDay, isValidDay, localTimeOf } from "@/lib/time";
+import { addDays, businessDayOf, formatDay, isValidDay, localDateTimeOf, localTimeOf } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -121,7 +121,16 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
                   </td>
                   <td>{r.by}</td>
                   <td className="keep no-print">
-                    {r.status === "VALID" ? canRecord && <InvalidateButton url={`/api/dosings/${r.id}/invalidate`} version={r.version} /> : `érvénytelenítve${r.invalidationReason ? `: ${r.invalidationReason}` : ""}`}
+                    {r.status === "VALID" ? canRecord && (
+                      <>
+                        <DosingEdit
+                          row={{ id: r.id, version: r.version, atLocal: localDateTimeOf(r.at), poolId: r.poolId, chemicalId: r.chemicalId, quantity: r.quantity, unitId: r.unitId }}
+                          pools={poolOpts}
+                          chemicals={chemOpts}
+                        />{" "}
+                        <InvalidateButton url={`/api/dosings/${r.id}/invalidate`} version={r.version} />
+                      </>
+                    ) : `érvénytelenítve${r.invalidationReason ? `: ${r.invalidationReason}` : ""}`}
                   </td>
                 </tr>
               ))}
