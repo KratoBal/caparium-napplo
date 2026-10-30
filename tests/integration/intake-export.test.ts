@@ -51,7 +51,8 @@ describe("the report's data", () => {
 
   it("the closing stock is the stock at the end of the period's last day: a later withdrawal is not yet in it; a period without the intake has none", async () => {
     const early = await intakeReport({ from: "2026-09-01", to: "2026-09-10" }, at("2026-09-30", "12:00"));
-    expect(mine(early.closing)).toEqual([{ feed: FEED, unit: "g", level: "2600", negative: false, low: false }]);
+    // 3 kg minus 400 g = 2600 g, shown as the pages show it: kg from 1000 g
+    expect(mine(early.closing)).toEqual([{ feed: FEED, unit: "kg", level: "2,60", negative: false, low: false }]);
     expect(mine(early.taken)).toEqual([{ feed: FEED, unit: "g", quantity: "400" }]);
     const before = await intakeReport({ from: "2026-08-20", to: "2026-09-01" }, at("2026-09-30", "12:00"));
     expect(mine(before.closing)).toEqual([]);
@@ -88,7 +89,7 @@ describe("the Excel", () => {
     expect([1, 2, 3, 4, 5, 6, 7].map((c) => a.getRow(1).getCell(c).value)).toEqual(["Dátum", "Takarmány típusa", "Takarmány", "Mennyiség", "Mértékegység", "Megjegyzés", "Visszaküldve"]);
     const rows: ExcelJS.Row[] = [];
     a.eachRow((row, n) => n > 1 && row.getCell(3).value === FEED && rows.push(row));
-    expect(rows.map((r) => [r.getCell(4).value, r.getCell(5).value, r.getCell(7).value])).toEqual([[3, "kg", null], [10, "kg", "igen"]]);
+    expect(rows.map((r) => [r.getCell(4).value, r.getCell(5).value, r.getCell(7).value])).toEqual([[3, "kg", ""], [10, "kg", "igen"]]);
     expect(rows[0].getCell(3).font?.color?.argb).not.toBe(RETURNED_ARGB);
     expect(rows[1].getCell(3).font?.color?.argb).toBe(RETURNED_ARGB);
     const taken = wb.getWorksheet("Kivételek")!;
