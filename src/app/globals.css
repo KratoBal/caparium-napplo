@@ -38,6 +38,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---- shell ---- */
 .shell { display: grid; grid-template-columns: 240px 1fr; grid-template-rows: auto 1fr; min-height: 100vh; }
+/* the brand and the topbar stand in the head: no box of its own above a phone (its children are the grid's cells as before) */
+.head { display: contents; }
 .brand { grid-row: 1; grid-column: 1; background: var(--c-white); border-left: 8px solid var(--c-primary); padding: 18px 20px; }
 .brand-title { font-size: 22px; font-weight: 600; letter-spacing: 0.02em; }
 .brand-sub { color: var(--c-primary); font-weight: 600; font-size: 13px; }
@@ -69,6 +71,29 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .nav a, .nav span { white-space: nowrap; }
   .nav-foot { display: none; }
   .main { grid-row: 4; grid-column: 1; padding: 16px; }
+}
+
+/* Lili 2026-10-30 20:43 UTC (msg 1565813299197517825, task caparium-fejlec-telefon): on a phone the header took about a quarter of the screen above
+   the menu. Below 720 px it is ONE compact row: the brand small at the left, the day, and at the right a button with the user's monogram that
+   opens the name and the role, the helper's switch and the Kilépés (TopbarUser); the page's title, where it has one, is a thin line under it; the
+   menu row sticks to the top while the page scrolls. A tablet and a desktop keep what they had (the 900 px rules above for a narrow tablet). */
+@media (max-width: 720px) {
+  .shell { grid-template-rows: auto auto 1fr; }
+  .head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; grid-row: 1; grid-column: 1; padding: 6px 12px; background: var(--c-white); border-left: 5px solid var(--c-primary); }
+  .brand { display: flex; align-items: baseline; gap: 6px; flex: none; padding: 0; border: 0; background: none; }
+  .brand-title { font-size: 17px; }
+  .brand-sub { font-size: 12px; }
+  .topbar { display: contents; }
+  .topbar h1 { order: 3; flex: 1 1 100%; font-size: 18px; padding-bottom: 2px; }
+  .head .pill { margin-left: auto; padding: 6px 10px; font-size: 13px; }
+  .head > .topbar > .pill + span[aria-hidden="true"] { display: none; }
+  .nav { grid-row: 2; position: sticky; top: 0; z-index: 30; }
+  .main { grid-row: 3; }
+  .profile { position: relative; flex: none; }
+  .profile-btn { min-width: 44px; height: 44px; padding: 0 8px; border-radius: 22px; border: 0; background: var(--c-primary); color: var(--c-white); font-size: 14px; font-weight: 700; cursor: pointer; }
+  .profile-btn:focus-visible { outline: 3px solid var(--c-ink); outline-offset: 2px; }
+  .profile-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-width: 230px; padding: 14px; background: var(--c-white); border: 1px solid var(--c-line); border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgba(17, 47, 62, 0.22); font-size: 14px; color: var(--c-muted); }
+  .profile-panel form { margin: 0; }
 }
 
 /* ---- building blocks ---- */
