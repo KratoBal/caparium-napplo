@@ -363,6 +363,10 @@ export async function dosingLog(f: DosingFilter) {
     invalidationReason: r.invalidationReason,
     day: dateToDay(r.businessDay),
     at: r.performedAt,
+    // the ids the log's "Javítás" starts from (Lili 2026-10-30, card f5f97479, second point)
+    poolId: r.poolId,
+    chemicalId: r.chemicalId,
+    unitId: r.unitId,
     pool: pickValid(r.pool.names, r.performedAt)?.displayName ?? r.pool.code,
     // nameAt, not pickValid: a dose entered by the minute right after the chemical was added is dated BEFORE its first name's instant, and
     // read "?" (Lili 2026-10-30 19:33 UTC, msg 1565810865788166185; the groups had the same, master.ts nameAt)
