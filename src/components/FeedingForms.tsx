@@ -7,6 +7,7 @@ import { DayControls, type DayLock } from "./DayControls";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { EAT_LABEL } from "@/lib/eating-labels";
+import { stockHint, type StockInfo } from "@/lib/stock-hint";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 import { useLeaveWarning } from "./useLeaveWarning";
 
@@ -508,6 +509,7 @@ export function WithdrawalForm({
   useDay,
   feeds,
   otherNames,
+  stock,
   editing,
   onEditDone,
 }: {
@@ -515,6 +517,8 @@ export function WithdrawalForm({
   useDay: string;
   feeds: FeedOpt[];
   otherNames?: string[];
+  /** the feed stock (Takarmányhűtő): the line under the feed, and a warning above it */
+  stock?: StockInfo[];
   /** item 8: the item loaded by a row's "Módosítás" */
   editing?: EditItem | null;
   onEditDone?: () => void;
@@ -604,6 +608,21 @@ export function WithdrawalForm({
           </span>
         </label>
       ))}
+      {feed &&
+        stockHint(
+          stock ?? [],
+          feed.id,
+          feed.isOther ? other : null,
+          feed.dims.map((d) => ({
+            dimension: d.dimension,
+            value: parseAmount(values[d.dimension] ?? ""),
+            factor: (d.units.find((u) => u.id === (units[d.dimension] ?? d.units[0]?.id)) ?? d.units[0])?.factor ?? 1,
+          })),
+        ).map((h, i) => (
+          <span key={i} className={h.over ? "err" : "hint"} role="note" data-testid="stock-hint">
+            {h.text}
+          </span>
+        ))}
       <label className="field">
         Felhasználás napja
         <input className="input" type="date" value={use} onChange={(e) => setUse(e.target.value)} aria-label="Felhasználás napja" />
@@ -632,7 +651,7 @@ export type WithdrawalRow = {
  * KIV-01 and item 8 (Lili 2026-10-27 12:42 UTC): the day's withdrawal items and the form under them. A row's "Módosítás" loads the
  * item into the form; saving updates that item. A feed no longer active cannot be chosen in the form, so its row has no "Módosítás".
  */
-export function WithdrawalItems({ day, useDay, feeds, otherNames, items, editable }: { day: string; useDay: string; feeds: FeedOpt[]; otherNames?: string[]; items: WithdrawalRow[]; editable: boolean }) {
+export function WithdrawalItems({ day, useDay, feeds, otherNames, stock, items, editable }: { day: string; useDay: string; feeds: FeedOpt[]; otherNames?: string[]; stock?: StockInfo[]; items: WithdrawalRow[]; editable: boolean }) {
   const [editing, setEditing] = useState<EditItem | null>(null);
   return (
     <>
@@ -664,7 +683,7 @@ export function WithdrawalItems({ day, useDay, feeds, otherNames, items, editabl
           </tbody>
         </table>
       </div>
-      {editable && <WithdrawalForm day={day} useDay={useDay} feeds={feeds} otherNames={otherNames} editing={editing} onEditDone={() => setEditing(null)} />}
+      {editable && <WithdrawalForm day={day} useDay={useDay} feeds={feeds} otherNames={otherNames} stock={stock} editing={editing} onEditDone={() => setEditing(null)} />}
     </>
   );
 }

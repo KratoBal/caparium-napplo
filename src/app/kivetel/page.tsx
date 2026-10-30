@@ -4,6 +4,7 @@ import { CloseWithdrawalDay, WithdrawalItems, type FeedOpt } from "@/components/
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { feedStock } from "@/lib/feed-intake";
 import { knownOtherNames, listFeeds } from "@/lib/feeds";
 import { dayStatus } from "@/lib/journal";
 import { plainNumber as num, rowForDisplay } from "@/lib/mass-display";
@@ -23,13 +24,14 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
   const day = sp.nap && isValidDay(sp.nap) && sp.nap <= today ? sp.nap : today;
   const to = sp.ig && isValidDay(sp.ig) ? sp.ig : today;
   const from = sp.tol && isValidDay(sp.tol) ? sp.tol : addDays(to, -6);
-  const [view, lock, types, units, exportLevel, otherNames] = await Promise.all([
+  const [view, lock, types, units, exportLevel, otherNames, stock] = await Promise.all([
     withdrawalDayView(day),
     dayStatus(null, day, "WITHDRAWAL"),
     listFeeds(),
     prisma.unit.findMany({ where: { active: true }, orderBy: { symbol: "asc" } }),
     moduleLevel(prisma, user.id, user.role, "EXPORT"),
     knownOtherNames(),
+    feedStock(),
   ]);
   let compare: Awaited<ReturnType<typeof takenVersusGiven>> = [];
   let compareError: string | null = null;
@@ -71,8 +73,17 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
       </div>
       <div className="card">
         <h2>Kivett takarmány</h2>
-        <p className="hint">Amit ma kiveszel a fagyasztóból; a felhasználás napja alapból a holnap. A darab és a tömeg külön összeg.</p>
-        <WithdrawalItems day={day} useDay={addDays(day, 1)} feeds={feeds} otherNames={otherNames} items={view.items} editable={editable} />
+        <p className="hint">Amit ma kiveszel a fagyasztóból; a felhasználás napja alapból a holnap. A darab és a tömeg külön összeg. A kivétel a Takarmányhűtő készletéből vonódik le.</p>
+        <WithdrawalItems
+          day={day}
+          useDay={addDays(day, 1)}
+          feeds={feeds}
+          otherNames={otherNames}
+          // the Takarmányhűtő stock: only a feed with an intake has one
+          stock={stock.filter((s) => s.tracked).map((s) => ({ feedId: s.feedId, otherName: s.otherName, dimension: s.dimension, unit: s.unit, level: s.level }))}
+          items={view.items}
+          editable={editable}
+        />
       </div>
 
       <div className="card">
