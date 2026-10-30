@@ -1124,7 +1124,9 @@ test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows
   await expect(page.getByTestId("day-picker").getByRole("button", { name: "Ugrás" })).toBeVisible();
   const form = page.getByTestId("intake-form");
   await form.getByLabel("Takarmány", { exact: true }).selectOption({ label: feedName });
-  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("1000");
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("1");
+  // Lili 2026-10-30: the intake unit list starts on kg
+  await expect(form.getByLabel("Egység (tömeg)").locator("option:checked")).toHaveText("kg");
   await form.getByLabel("Megjegyzés").fill(opening);
   await form.getByRole("button", { name: "Mentés" }).click();
   await expect(form.getByRole("status")).toHaveText("Tétel mentve.");
@@ -1136,7 +1138,7 @@ test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows
   const level = (await stockRow.locator("td").nth(2).textContent()) ?? "";
   expect(level).not.toBe("");
   // sent back: the item shows, marked, and the stock stays as it was
-  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("500");
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("0,5");
   await form.getByLabel("Megjegyzés").fill(sentBack);
   await form.getByLabel("Visszaküldve").check();
   await form.getByRole("button", { name: "Mentés" }).click();

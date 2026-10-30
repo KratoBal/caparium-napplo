@@ -4,6 +4,7 @@
 // withdrawal form's (feed, amounts, units) with a note and a "Visszaküldve" tick instead of the use day. The server
 // decides every permission and writes the audit entry.
 import { useEffect, useState } from "react";
+import { intakeDefaultUnit } from "@/lib/intake-unit";
 import { DIM, EditBar, EditButton, InvalidateButton, Msg, OtherNames, editFields, showForm, useSend, type EditItem, type FeedOpt } from "./FeedingForms";
 
 export type IntakeRow = {
@@ -50,7 +51,7 @@ export function IntakeForm({ day, feeds, otherNames, editing, onEditDone }: { da
     if (!feed) return;
     const quantities = feed.dims
       .filter((d) => (values[d.dimension] ?? "").trim())
-      .map((d) => ({ value: values[d.dimension].trim(), unitId: units[d.dimension] ?? d.units[0].id }));
+      .map((d) => ({ value: values[d.dimension].trim(), unitId: units[d.dimension] ?? intakeDefaultUnit(d.units)! }));
     const ok = await run(
       "/api/feed-intake/items",
       {
@@ -100,7 +101,7 @@ export function IntakeForm({ day, feeds, otherNames, editing, onEditDone }: { da
               onChange={(e) => setValues({ ...values, [d.dimension]: e.target.value })}
               aria-label={`Mennyiség (${DIM[d.dimension] ?? d.dimension})`}
             />
-            <select className="input" value={units[d.dimension] ?? d.units[0]?.id} onChange={(e) => setUnits({ ...units, [d.dimension]: e.target.value })} aria-label={`Egység (${DIM[d.dimension] ?? d.dimension})`}>
+            <select className="input" value={units[d.dimension] ?? intakeDefaultUnit(d.units)} onChange={(e) => setUnits({ ...units, [d.dimension]: e.target.value })} aria-label={`Egység (${DIM[d.dimension] ?? d.dimension})`}>
               {d.units.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.symbol}
