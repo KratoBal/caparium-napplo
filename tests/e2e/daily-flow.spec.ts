@@ -1129,7 +1129,7 @@ test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows
   const opening = `nyitó készlet ${tag}`;
   const sentBack = `nem megfelelő ${tag}`;
   await login(page, "teszt.akvarista1");
-  await page.getByRole("link", { name: "Takarmányhűtő" }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Takarmányhűtő" }).click();
   await expect(page.getByTestId("day-picker").getByRole("button", { name: "Ugrás" })).toBeVisible();
   const form = page.getByTestId("intake-form");
   await form.getByLabel("Takarmány", { exact: true }).selectOption({ label: feedName });
@@ -1164,7 +1164,7 @@ test("intake (Takarmányhűtő): an item in the stock; a returned delivery shows
   await take.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("99999999");
   await expect(take.getByTestId("stock-hint").first()).toContainText("meghaladja a készletet");
   // the report (Lili 2026-10-30): the PDF and the Excel of the period, from the Takarmányhűtő page
-  await page.getByRole("link", { name: "Takarmányhűtő" }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Takarmányhűtő" }).click();
   const pdf = await Promise.all([page.waitForEvent("download"), page.getByTestId("intake-pdf").click()]);
   expect(pdf[0].suggestedFilename()).toMatch(/^Capasuli_takarmanyegyenleg_\d{4}-\d{2}-\d{2}(_\d{4}-\d{2}-\d{2})?\.pdf$/);
   const xlsx = await Promise.all([page.waitForEvent("download"), page.getByTestId("intake-excel").click()]);

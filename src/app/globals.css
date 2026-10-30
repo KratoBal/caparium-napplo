@@ -332,7 +332,10 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .home-card img { width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--c-line); display: block; }
 /* the narrow portrait card (Lili 2026-10-30): half the width of a landscape card and a 3:4 picture, so it is as tall as the two
    beside it and the row stays symmetric around it */
-.home-card-narrow { flex: 0 1 calc((100% - 56px) / 6); }
+.home-card-narrow { flex: 0 1 calc((100% - 56px) / 6); min-width: 0; }
+/* the word "Takarmányhűtő" is wider than the narrow card on a tablet: it must not widen the card (and so its picture), it overflows the
+   card's centre evenly into the gaps instead (CI run 41060337750, tablet 1024 px: the card was 139 px, not about half of 224) */
+.home-card-narrow .home-caption { white-space: nowrap; }
 .home-card-narrow img { aspect-ratio: 3 / 4; }
 .home-card:hover img, .home-card:focus-visible img { outline: 3px solid var(--c-primary); outline-offset: 2px; }
 .home-caption { display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 18px; line-height: 1.3; }
