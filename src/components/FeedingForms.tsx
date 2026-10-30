@@ -885,10 +885,10 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
     const folded = !r.selected && !opened.has(r.animalId) && !manual && !changed(r);
     return (
       <tr key={r.animalId} className={changed(r) ? "active-row" : undefined}>
-        <td>{r.name}</td>
-        <td>{r.groupName ?? "–"}</td>
-        <td>{r.poolName ?? "–"}</td>
-        <td className="keep">
+        <td className="eat-name">{r.name}</td>
+        <td className="eat-group">{r.groupName ?? "–"}</td>
+        <td className="eat-pool">{r.poolName ?? "–"}</td>
+        <td className="keep eat-state">
           {s ? (
             <span className={`badge eat-${s.state}`} data-testid={`state-${r.name}`}>
               {EAT_LABEL[s.state]}
@@ -900,12 +900,12 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
             <span className="hint" data-testid={`state-${r.name}`}>{r.selected ? "nincs rögzítve" : "–"}</span>
           )}
         </td>
-        <td>
+        <td className="eat-mark">
           {s?.vitamin ? "V " : ""}
           {s?.medicine ? `Gy${s.medicineNote ? `: ${s.medicineNote}` : ""}` : ""}
         </td>
         {editable && folded && (
-          <td className="keep">
+          <td className="keep eat-ctl">
             <button
               className="btn btn-soft small"
               type="button"
@@ -917,7 +917,7 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
           </td>
         )}
         {editable && !folded && (
-          <td className="keep">
+          <td className="keep eat-ctl">
             <div className="toolbar" style={{ margin: 0 }} data-testid={`eating-${r.name}`}>
               <select className="input" value={d.state} onChange={(e) => set(r.animalId, { state: e.target.value })} aria-label={`${r.name} evési állapota`}>
                 <option value="">– válassz –</option>
@@ -949,7 +949,7 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
   return (
     <>
       <div className="table-scroll">
-        <table className="log-table" data-testid="eating-table">
+        <table className="log-table eating-log" data-testid="eating-table">
           {head}
           <tbody>{fed.map(row)}</tbody>
         </table>
@@ -961,7 +961,7 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
             Koplalónapos állatok ({fasting.length}): nincsenek a napi listán, a lista lezárásakor automatikusan koplalónapot kapnak; csak a kivételt kell rögzíteni (például vitamin vagy gyógyszer)
           </summary>
           <div className="table-scroll">
-            <table className="log-table" data-testid="eating-fasting-table">
+            <table className="log-table eating-log" data-testid="eating-fasting-table">
               {head}
               <tbody>{fasting.map(row)}</tbody>
             </table>

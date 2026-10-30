@@ -236,6 +236,30 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .eat-NOT_EATEN { background: #e9d3d3; color: #b62323; }
 .eat-FASTING { background: #c6d7e4; color: #1b608b; }
 .eat-pending { background: var(--c-field); color: #1d6694; border: 1px dashed #8fbfdf; }
+/* Lili 2026-10-30 19:30 UTC (msg 1565794906130092052, task caparium-evesi-telefon): on a phone the eating states table fell apart: the name on the
+   left and the picker on the right, a sideways scroll apart. Below 720 px every animal is one CARD, always open (every row needs an answer, so
+   nothing folds): the name on top with the recorded state beside it, then the picker across the whole width and the V and Gy ticks under it.
+   And 18:31 UTC (2a1484e0, acrobot 38921): "nem vagyok biztos benne, hogy kell a csoport meg a medence ennél, hiszen tudjuk ki kicsoda": the group and
+   the pool are left off the card, which gains the room (on a phone only; the table keeps its columns). The same markup. */
+@media (max-width: 720px) {
+  .eating-log, .eating-log tbody { display: block; }
+  .eating-log thead { display: none; }
+  .table-scroll:has(.eating-log) { overflow: visible; }
+  .eating-log tr { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; margin-top: 10px; padding: 12px; border: 1px solid var(--c-line); border-radius: var(--radius-sm); background: var(--c-white); }
+  .eating-log tr.active-row { background: var(--c-primary-soft); border-color: var(--c-primary); }
+  .eating-log td { display: block; min-width: 0; padding: 0; border: 0; background: none; font-size: 14px; }
+  .eating-log td.eat-group, .eating-log td.eat-pool { display: none; }
+  .eating-log td.eat-name { flex: 1 1 auto; font-size: 17px; font-weight: 600; overflow-wrap: break-word; }
+  .eating-log td.eat-state { flex: 0 0 auto; margin-left: auto; }
+  .eating-log td.eat-mark { flex: 1 1 100%; }
+  .eating-log td.eat-mark:empty { display: none; }
+  .eating-log td.eat-ctl { flex: 1 1 100%; margin-top: 4px; }
+  .eating-log td.eat-ctl .toolbar { gap: 10px 20px; align-items: center; }
+  .eating-log td.eat-ctl .toolbar > select.input, .eating-log td.eat-ctl .toolbar > input.input { flex: 1 1 100%; width: 100%; min-height: 48px; }
+  .eating-log td.eat-ctl .check { min-height: 44px; font-size: 16px; }
+  .eating-log td.eat-ctl .check input { width: 24px; height: 24px; }
+  .eating-log td.eat-ctl .btn { min-height: 44px; }
+}
 /* the feeding log's eating pattern (Lili 2026-10-29, package item 7): firmer, not loud, only in this table (the eating
    log keeps its shades); a bar without a letter is a thick one; the day's letter above the date. The text stays 4.5:1 */
 .eat-pattern .eat-EATEN { background: #9fc29b; color: #134d24; }
