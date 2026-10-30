@@ -226,12 +226,12 @@ export async function setStockStart(actor: Actor, raw: z.input<typeof stockStart
 
 /**
  * The feed stock per feed (and other name) and dimension, in base units, from the valid intake and withdrawals.
- * With a start day set (setStockStart) only the intake and withdrawals from that day count. It counts from the day of the first intake that was not sent back: the intake from then on, minus the withdrawals from
+ * `until` (a day): the stock at the end of that day. With a start day set (setStockStart) only the intake and withdrawals from that day count. It counts from the day of the first intake that was not sent back: the intake from then on, minus the withdrawals from
  * then on (Lili's "az első bevételezéstől számít"; the withdrawals of before are from a time the stock was not kept). A
  * delivery that was only ever sent back does not start it. A feed with withdrawals but no received intake is listed with
  * tracked = false: it has no starting stock, so its level is only a count of what was taken and must not raise an alert.
  */
-export async function feedStock(now = new Date()): Promise<StockRow[]> {
+export async function feedStock(now = new Date(), until?: string): Promise<StockRow[]> {
   const today = businessDayOf(now);
   const [intake, taken, baseOf] = await Promise.all([
     prisma.feedIntakeItem.findMany({
@@ -250,6 +250,8 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
   // the explicit start of the stock (an admin's, Takarmányhűtő page): what is dated before it is archive, not stock
   const set = await getStockStart();
   const archiveBefore = set ? dayToDate(set) : null;
+  // `until`: the stock as it stood at the end of that day (the export's closing stock); later items are not yet in it
+  const untilDate = until ? dayToDate(until) : null;
   const rows = new Map<string, StockRow>();
   const row = (it: { feedId: string; otherName: string | null; feed: { active: boolean; names: { name: string; validFrom: Date; validTo: Date | null }[] } }, dimension: Dimension, unit: string) => {
     // the other name as the reports and the Excel read it (other-name.ts): case and spaces do not make a second row
@@ -267,6 +269,7 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
   const from = new Map<string, Date>();
   for (const it of intake) {
     if (archiveBefore && it.intakeDay < archiveBefore) continue;
+    if (untilDate && it.intakeDay > untilDate) continue;
     for (const q of it.quantities) {
       const r = row(it, q.unit.dimension, baseOf.get(q.unit.dimension) ?? q.unit.symbol);
       const v = Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
@@ -283,6 +286,7 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
   for (const it of taken) {
     const d = it.withdrawalDay.businessDay;
     if (archiveBefore && d < archiveBefore) continue;
+    if (untilDate && d > untilDate) continue;
     for (const q of it.quantities) {
       const r = row(it, q.unit.dimension, baseOf.get(q.unit.dimension) ?? q.unit.symbol);
       const v = Number(q.quantity) * Number(q.unit.factorToBase ?? 1);

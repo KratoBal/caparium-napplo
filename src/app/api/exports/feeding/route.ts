@@ -2,12 +2,15 @@ import { writeAudit } from "@/lib/audit";
 import { sameOrigin, userFromRequest } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { buildIntakePdf } from "@/lib/exports/intake-pdf";
+import { buildIntakeWorkbook } from "@/lib/exports/intake-excel";
 import { buildEatingWorkbook, buildFeedingWorkbook, buildReportWorkbook, buildWithdrawalWorkbook } from "@/lib/exports/feeding-excel";
 import { moduleLevel } from "@/lib/master";
 import { seeOther } from "@/lib/redirect";
 import { dayToDate, isValidDay } from "@/lib/time";
 
 // A plain form POST like the water Excel: kind=etetes (EGY-10) or evesi (EVE-07); the answer is the file.
+// kind=huto (Takarmányhűtő, Lili 2026-10-30): the intake, the withdrawals per feed and the closing stock of a period, format=pdf or xlsx.
 export async function POST(req: Request) {
   if (!sameOrigin(req)) return new Response("Érvénytelen kérés-forrás.", { status: 403 });
   const user = await userFromRequest(req);
@@ -17,21 +20,26 @@ export async function POST(req: Request) {
   // the withdrawal log needs the WITHDRAWAL module, the other two the FEEDING one
   const [exportLevel, dataLevel] = await Promise.all([
     moduleLevel(prisma, user.id, user.role, "EXPORT"),
-    moduleLevel(prisma, user.id, user.role, kind === "kivetel" ? "WITHDRAWAL" : "FEEDING"),
+    moduleLevel(prisma, user.id, user.role, kind === "kivetel" || kind === "huto" ? "WITHDRAWAL" : "FEEDING"),
   ]);
   if (exportLevel === "NONE" || dataLevel === "NONE") return new Response("Ehhez az exporthoz nincs jogosultságod.", { status: 403 });
   const from = String(form?.get("from") ?? "");
   const to = String(form?.get("to") ?? "");
-  if (kind !== "etetes" && kind !== "evesi" && kind !== "kivetel" && kind !== "kimutatas") return new Response("Ismeretlen export.", { status: 422 });
+  if (kind !== "etetes" && kind !== "evesi" && kind !== "kivetel" && kind !== "kimutatas" && kind !== "huto") return new Response("Ismeretlen export.", { status: 422 });
   const uuid = /^[0-9a-f-]{36}$/;
   const poolId = String(form?.get("pool") ?? "");
   const animalId = String(form?.get("animal") ?? "");
   if (!isValidDay(from) || !isValidDay(to) || from > to) return new Response("Az időszak érvénytelen.", { status: 422 });
 
+  const pdf = kind === "huto" && String(form?.get("format") ?? "") === "pdf";
   let built: { buffer: Buffer; rows: number };
   try {
     built =
-      kind === "etetes"
+      kind === "huto"
+        ? pdf
+          ? await buildIntakePdf({ from, to })
+          : await buildIntakeWorkbook({ from, to })
+        : kind === "etetes"
         ? await buildFeedingWorkbook({ from, to })
         : kind === "evesi"
           ? await buildEatingWorkbook({ from, to })
@@ -42,7 +50,8 @@ export async function POST(req: Request) {
     if (e instanceof AppError) return new Response(e.message, { status: e.status });
     throw e;
   }
-  const exportKind = kind === "etetes" || kind === "kimutatas" ? "EXCEL_FEEDING" : kind === "evesi" ? "EXCEL_EATING" : "EXCEL_WITHDRAWAL";
+  const exportKind =
+    kind === "huto" ? (pdf ? "PDF_INTAKE" : "EXCEL_INTAKE") : kind === "etetes" || kind === "kimutatas" ? "EXCEL_FEEDING" : kind === "evesi" ? "EXCEL_EATING" : "EXCEL_WITHDRAWAL";
   await prisma.$transaction(async (tx) => {
     const run = await tx.exportRun.create({
       // the page's own kind too: a report and the feeding log share EXCEL_FEEDING (review note on #17)
@@ -56,11 +65,11 @@ export async function POST(req: Request) {
       changes: { export: { before: null, after: { kind: exportKind, from, to, rows: built.rows } } },
     });
   });
-  const base = kind === "etetes" ? "Egyedi_takarmanynaplo" : kind === "evesi" ? "Evesi_minta" : kind === "kivetel" ? "Takarmanykivetel" : "Kimutatas";
-  const name = `${base}_${from}${from === to ? "" : `_${to}`}.xlsx`;
+  const base = kind === "huto" ? "Takarmanyhuto" : kind === "etetes" ? "Egyedi_takarmanynaplo" : kind === "evesi" ? "Evesi_minta" : kind === "kivetel" ? "Takarmanykivetel" : "Kimutatas";
+  const name = `${base}_${from}${from === to ? "" : `_${to}`}.${pdf ? "pdf" : "xlsx"}`;
   return new Response(new Uint8Array(built.buffer), {
     headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Type": pdf ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${name}"`,
       "Cache-Control": "no-store",
     },
