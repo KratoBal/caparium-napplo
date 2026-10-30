@@ -17,7 +17,7 @@ type HomeCard = { id: string; href: string; caption: string[]; module: "water" |
 const HOME_ROWS: HomeCard[][] = [
   [
     { id: "nagymedencek", href: "/vizmeres?csoport=NAPI_NAGY", caption: ["Nagy medencék", "NAPI VÍZMÉRÉS"], module: "water" },
-    { id: "kismedencek", href: "/vizmeres?csoport=NAPI_KIS", caption: ["Kis medencék", "NAPI VÍZMÉRÉS"], module: "water" },
+    { id: "kismedencek", href: "/vizmeres?csoport=NAPI_KIS", caption: ["Kis Akváriumok", "NAPI VÍZMÉRÉS"], module: "water" },
     { id: "heti", href: "/heti", caption: ["HETI VÍZMÉRÉS"], module: "water" },
   ],
   [

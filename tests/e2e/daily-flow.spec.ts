@@ -1472,7 +1472,7 @@ test("home: the customer's illustrated cards, 3-3-3 with a narrow portrait one b
   await expect(page.getByRole("link", { name: "Vízmérési napló" }), "the log is still in the menu").toBeVisible();
   await expect(page.getByTestId("home-nagymedencek"), "the daily water pages are still cards").toBeVisible();
   const captions = async (i: number) => (await rows.nth(i).locator(".home-caption").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
-  expect(await captions(0)).toEqual(["Nagy medencék NAPI VÍZMÉRÉS", "Kis medencék NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS"]);
+  expect(await captions(0)).toEqual(["Nagy medencék NAPI VÍZMÉRÉS", "Kis Akváriumok NAPI VÍZMÉRÉS", "HETI VÍZMÉRÉS"]);
   // Lili 2026-10-30: the fridge card between the two landscape ones
   expect(await captions(1)).toEqual(["Nyomelem és megkötő adagolás", "Fagyasztó", "Takarmány kalkulátor"]);
   expect(await captions(2)).toEqual(["Takarmány kivételi napló", "Egyedi takarmánynapló", "Evési napló"]);
