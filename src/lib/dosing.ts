@@ -11,7 +11,7 @@ import { diffFields, writeAudit } from "./audit";
 import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError } from "./errors";
-import { ensureJournalDay, FIRST_NAME_FROM, moduleLevel, monogramResolver, nameAt, pickValid, validAt } from "./master";
+import { ensureJournalDay, moduleLevel, monogramResolver, pickValid, validAt } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { closedAt } from "./measurements";
@@ -231,9 +231,7 @@ export async function createChemical(actor: Actor, raw: z.input<typeof chemicalS
     if (!unit || !["MASS", "VOLUME", "COUNT"].includes(unit.dimension)) throw new AppError(422, "UNIT", "A készlet egysége tömeg, térfogat vagy darab legyen.");
     const names = await tx.chemicalName.findMany({ where: { validTo: null } });
     if (names.some((n) => n.name.toLowerCase() === input.name.toLowerCase())) throw new AppError(409, "NAME_TAKEN", "Ilyen nevű vegyszer már van.");
-    // the first name from the beginning of time, as a pool's and a group's (FIRST_NAME_FROM): the chemical is known by it on any day, a dose
-    // entered by the minute right after it was added included; a later rename is a new row from its own moment
-    const chem = await tx.chemical.create({ data: { stockUnitId: unit.id, names: { create: { name: input.name, validFrom: FIRST_NAME_FROM } } } });
+    const chem = await tx.chemical.create({ data: { stockUnitId: unit.id, names: { create: { name: input.name, validFrom: serverNow } } } });
     await writeAudit(tx, { userId: actor.id, action: "MASTER_CHANGE", entityType: "Chemical", entityId: chem.id, changes: { name: { before: null, after: input.name }, stockUnit: { before: null, after: unit.symbol } }, requestId: input.requestId });
     return { replayed: false, id: chem.id };
   });
@@ -368,9 +366,7 @@ export async function dosingLog(f: DosingFilter) {
     chemicalId: r.chemicalId,
     unitId: r.unitId,
     pool: pickValid(r.pool.names, r.performedAt)?.displayName ?? r.pool.code,
-    // nameAt, not pickValid: a dose entered by the minute right after the chemical was added is dated BEFORE its first name's instant, and
-    // read "?" (Lili 2026-10-30 19:33 UTC, msg 1565810865788166185; the groups had the same, master.ts nameAt)
-    chemical: nameAt(r.chemical.names, r.performedAt)?.name ?? "?",
+    chemical: pickValid(r.chemical.names, r.performedAt)?.name ?? "?",
     quantity: canonicalDecimal(r.quantity),
     unit: r.unit.symbol,
     by: mono.monogram(r.performedById, r.performedAt),
