@@ -11,8 +11,10 @@ import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError } from "./errors";
 import { moduleLevel, pickValid } from "./master";
+import { otherKey, otherLabel } from "./other-name";
 import type { Actor } from "./measurements";
 import { canCreate, canModify, effectiveNow, type Decision, type Level } from "./permissions";
+import { RUN_OUT_DAYS } from "./notices";
 import { requireReason } from "./reasons";
 import { addDays, businessDayOf, dateToDay, dayToDate } from "./time";
 
@@ -163,6 +165,7 @@ export type StockRow = {
   key: string;
   feedId: string;
   feed: string;
+  /** the other name as a key (otherKey), null for a plain feed */
   otherName: string | null;
   dimension: Dimension;
   /** the base unit of the dimension: every number below is in it */
@@ -205,11 +208,13 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
   const todayDate = dayToDate(today);
   const rows = new Map<string, StockRow>();
   const row = (it: { feedId: string; otherName: string | null; feed: { names: { name: string; validFrom: Date; validTo: Date | null }[] } }, dimension: Dimension, unit: string) => {
-    const key = `${it.feedId}|${it.otherName?.toLowerCase() ?? ""}|${dimension}`;
+    // the other name as the reports and the Excel read it (other-name.ts): case and spaces do not make a second row
+    const other = it.otherName ? otherKey(it.otherName) : null;
+    const key = `${it.feedId}|${other ?? ""}|${dimension}`;
     let r = rows.get(key);
     if (!r) {
       const name = pickValid(it.feed.names, now)?.name ?? it.feed.names.at(-1)?.name ?? "?";
-      r = { key, feedId: it.feedId, feed: it.otherName ? `${name}: ${it.otherName}` : name, otherName: it.otherName, dimension, unit, received: 0, returned: 0, taken: 0, level: 0, negative: false, week: 0, month: 0, tracked: false };
+      r = { key, feedId: it.feedId, feed: other ? `${name}: ${otherLabel(other)}` : name, otherName: other, dimension, unit, received: 0, returned: 0, taken: 0, level: 0, negative: false, week: 0, month: 0, tracked: false };
       rows.set(key, r);
     }
     return r;
@@ -239,4 +244,15 @@ export async function feedStock(now = new Date()): Promise<StockRow[]> {
       return { ...r, received: round(r.received), returned: round(r.returned), taken: round(r.taken), week: round(r.week), month: round(r.month), level, negative: level < 0 };
     })
     .sort((a, b) => a.feed.localeCompare(b.feed, "hu") || a.unit.localeCompare(b.unit));
+}
+
+/**
+ * How long a tracked stock lasts at the average withdrawal of the last 30 days, and whether it is "running out" by the
+ * chemicals' rule (notices.ts runningOut): at or below zero, or at most RUN_OUT_DAYS left. Without a withdrawal there is
+ * no estimate (and no notice unless the level is at or below zero). Not tracked (no intake yet): never running out.
+ */
+export function stockStatus(r: Pick<StockRow, "level" | "month" | "tracked">): { daysLeft: number | null; low: boolean } {
+  const perDay = r.month / 30;
+  const daysLeft = perDay > 0 ? Math.round((r.level / perDay) * 10) / 10 : null;
+  return { daysLeft, low: r.tracked && (r.level <= 0 || (daysLeft !== null && daysLeft <= RUN_OUT_DAYS)) };
 }

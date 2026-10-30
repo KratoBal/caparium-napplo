@@ -1,7 +1,7 @@
 // The main navigation as data, so its order and who sees which entry can be tested without rendering.
 export type NavKey =
   | "overview" | "daily" | "weekly" | "log" | "export" | "animals" | "feeds" | "feeding" | "eating"
-  | "feedlog" | "withdrawal" | "calculator" | "dosing" | "reports" | "pending" | "settings";
+  | "feedlog" | "intake" | "withdrawal" | "calculator" | "dosing" | "reports" | "pending" | "settings";
 
 /** The label color group of an entry: the water measurement group or the feeding group (Lili 2026-10-26). */
 export type NavTone = "water" | "feed";
@@ -25,6 +25,8 @@ const NAV: NavItem[] = [
   { key: "dosing", href: "/adagolas", label: "Vegyszeradagolás", tone: "water" },
   { key: "log", href: "/naplo", label: "Vízmérési napló", tone: "water" },
   { key: "feedlog", href: "/takarmany-naplo", label: "Takarmányozási napló", tone: "feed" },
+  // Lili 2026-10-29 (package item 9): "Takarmányhűtő" directly above "Takarmánylista"
+  { key: "intake", href: "/takarmanyhuto", label: "Takarmányhűtő", tone: "feed" },
   { key: "feeds", href: "/takarmanyok", label: "Takarmánylista", tone: "feed" },
   { key: "reports", href: "/kimutatasok", label: "Kimutatások" },
 ];
