@@ -38,15 +38,15 @@ describe("the main navigation", () => {
   it("keeps Lili's order for an admin", () => {
     expect(labels("ADMIN")).toEqual([
       "START", "Napi vízmérés", "Heti vízmérés", "Export", "Takarmánynapló", "Evési napló", "Takarmánykivétel",
-      "Takarmánykalkulátor", "Vegyszeradagolás", "Vízmérési napló", "Takarmányozási napló", "Takarmánylista",
-      "Kimutatások", "Függő mentések", "Állatok", "Beállítások", "Aktivitás",
+      "Takarmánykalkulátor", "Vegyszeradagolás", "Vízmérési napló", "Takarmányozási napló", "Takarmányhűtő",
+      "Takarmánylista", "Kimutatások", "Függő mentések", "Állatok", "Beállítások", "Aktivitás",
     ]);
   });
 
   it("puts each entry in its color group, and leaves the rest plain", () => {
     const tone = (label: string) => navFor("ADMIN").find((n) => n.label === label)?.tone;
     for (const l of ["Napi vízmérés", "Heti vízmérés", "Vegyszeradagolás", "Vízmérési napló"]) expect(tone(l), l).toBe("water");
-    for (const l of ["Takarmánynapló", "Evési napló", "Takarmánykivétel", "Takarmánykalkulátor", "Takarmányozási napló", "Takarmánylista"]) {
+    for (const l of ["Takarmánynapló", "Evési napló", "Takarmánykivétel", "Takarmánykalkulátor", "Takarmányozási napló", "Takarmányhűtő", "Takarmánylista"]) {
       expect(tone(l), l).toBe("feed");
     }
     // the control: the entries Lili marked "szín marad" are really plain, so the two checks above cannot pass on a menu where everything is colored

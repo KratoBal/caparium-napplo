@@ -241,6 +241,7 @@ model Unit {
   coralDoses           CoralFeedDose[]
   feedingQuantities    FeedingQuantity[]
   withdrawalQuantities WithdrawalQuantity[]
+  intakeQuantities     FeedIntakeQuantity[]
   chemicalStocks       Chemical[]
   dosings              Dosing[]
   movementsOriginal    StockMovement[]
@@ -861,6 +862,7 @@ model Feed {
   listMembers FeedingListFeed[]
   items       FeedingItem[]
   withdrawals WithdrawalItem[]
+  intakes     FeedIntakeItem[]
 
   @@map("feed")
 }
@@ -1097,6 +1099,50 @@ model WithdrawalQuantity {
 
   @@unique([itemId, dimension])
   @@map("withdrawal_quantity")
+}
+
+// ---------------------------------------------------------------------------
+// Feed intake: the "Takarmányhűtő" (Lili 2026-10-29, package item 9; Balázs 2026-10-30 10:17 UTC)
+// ---------------------------------------------------------------------------
+
+// What arrives in the freezer, a few times a week. The feed stock is the sum of the valid intake that was not sent back,
+// minus the valid withdrawals (never a stored level, as the chemicals, R-16). A returned delivery stays on the list (it
+// was here) but does not count. No cell index: several deliveries of one feed may arrive on one day.
+model FeedIntakeItem {
+  id                 String               @id @default(uuid()) @db.Uuid
+  intakeDay          DateTime             @db.Date
+  feedId             String               @db.Uuid
+  otherName          String?
+  note               String?
+  returned           Boolean              @default(false)
+  version            Int                  @default(1)
+  requestId          String               @unique
+  status             RecordStatus         @default(VALID)
+  invalidationReason String?
+  createdById        String               @db.Uuid
+  createdAt          DateTime             @default(now()) @db.Timestamptz(3)
+  updatedById        String               @db.Uuid
+  updatedAt          DateTime             @default(now()) @db.Timestamptz(3)
+  feed               Feed                 @relation(fields: [feedId], references: [id])
+  quantities         FeedIntakeQuantity[]
+
+  @@index([intakeDay])
+  @@index([feedId])
+  @@map("feed_intake_item")
+}
+
+// T-08: at most one quantity per dimension, as for the withdrawal items
+model FeedIntakeQuantity {
+  id        String         @id @default(uuid()) @db.Uuid
+  itemId    String         @db.Uuid
+  quantity  Decimal        @db.Decimal(14, 4)
+  unitId    String         @db.Uuid
+  dimension Dimension
+  item      FeedIntakeItem @relation(fields: [itemId], references: [id])
+  unit      Unit           @relation(fields: [unitId], references: [id])
+
+  @@unique([itemId, dimension])
+  @@map("feed_intake_quantity")
 }
 
 // ---------------------------------------------------------------------------

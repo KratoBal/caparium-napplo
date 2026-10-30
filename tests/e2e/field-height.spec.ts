@@ -24,6 +24,7 @@ const PAGES = [
   "/takarmany-naplo",
   "/kalkulator",
   "/kivetel",
+  "/takarmanyhuto",
   "/adagolas",
   "/kimutatasok",
   "/fuggo",
