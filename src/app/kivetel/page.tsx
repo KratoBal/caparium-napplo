@@ -10,7 +10,7 @@ import { dayStatus } from "@/lib/journal";
 import { plainNumber as num, rowForDisplay } from "@/lib/mass-display";
 import { moduleLevel } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
-import { addDays, businessDayOf, isValidDay } from "@/lib/time";
+import { addDays, businessDayOf, formatPeriod, isValidDay } from "@/lib/time";
 import { takenVersusGiven, withdrawalDayView } from "@/lib/withdrawal";
 
 export const dynamic = "force-dynamic";
@@ -128,7 +128,7 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
             <input type="hidden" name="kind" value="kivetel" />
             <input type="hidden" name="from" value={from} />
             <input type="hidden" name="to" value={to} />
-            <button className="btn" type="submit" data-testid="excel-kivetel">Takarmánykivétel (Excel, {from} – {to})</button>
+            <button className="btn" type="submit" data-testid="excel-kivetel">Takarmánykivétel (Excel, {formatPeriod(from, to)})</button>
           </form>
         )}
       </div>

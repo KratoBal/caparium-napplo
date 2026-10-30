@@ -6,6 +6,7 @@
 // as a suggestion, the pool's latest measured value and its reference band; every field can be overwritten.
 // Nothing is saved: it is a calculation, the dosing itself is recorded in the form above.
 import { useMemo, useState } from "react";
+import { formatDay } from "@/lib/time";
 import { dailyPlan, SYSTEM_LABEL, type SystemType } from "@/lib/daily-limit";
 import { alkalinityElevation, calciumElevation, magnesiumElevation, type MagnesiumSalt, type ReefChemistryElevationResult } from "@/lib/reef-chemistry";
 
@@ -71,7 +72,7 @@ function Card({
       </div>
       {latest && (
         <p className="hint">
-          Legutóbbi mérés: {hu(latest.value)} {unit} ({latest.day}){" "}
+          Legutóbbi mérés: {hu(latest.value)} {unit} ({formatDay(latest.day)}){" "}
           <button className="btn btn-soft" type="button" onClick={() => setCurrent(hu(latest.value))}>
             Átvétel
           </button>

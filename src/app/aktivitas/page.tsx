@@ -15,7 +15,7 @@ import {
 } from "@/lib/activity";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { addDays, businessDayOf, isValidDay, localTimeOf, weekdayLetter } from "@/lib/time";
+import { addDays, businessDayOf, formatDay, isValidDay, localTimeOf, weekdayLetter } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -122,7 +122,7 @@ export default async function ActivityPage({
                 {rows.map((r) => (
                   <tr key={`${r.day}|${r.userId}`}>
                     <td>
-                      {r.day} <span className="hint">{weekdayLetter(r.day)}</span>
+                      {formatDay(r.day)} <span className="hint">{weekdayLetter(r.day)}</span>
                     </td>
                     <td>{name(r.userId)}</td>
                     {columns.map((c) => {
@@ -147,7 +147,7 @@ export default async function ActivityPage({
       {detail && kind && detailDay && detailPerson && (
         <div className="card" id="reszlet" data-testid="activity-detail">
           <h2>
-            {name(detailPerson)}, {detailDay} ({weekdayLetter(detailDay)}): {kind.label}
+            {name(detailPerson)}, {formatDay(detailDay)} ({weekdayLetter(detailDay)}): {kind.label}
           </h2>
           {detail.length === 0 ? (
             <p className="hint">Ezen a napon ebben a fajtában nincs mentés.</p>

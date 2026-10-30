@@ -2,6 +2,7 @@
 // weekly values, with the measurer's monogram and the out-of-range mark. Embedded DejaVuSans (src/lib/pdf-font.ts).
 import PDFDocument from "pdfkit";
 import { pdfFont } from "./pdf-font";
+import { formatDay, formatPeriod } from "./time";
 import { waterReportTitle } from "./water-report-text";
 import type { ReportValue, WaterReport } from "./water-report";
 
@@ -49,7 +50,7 @@ export async function waterReportPdf(report: WaterReport): Promise<Buffer> {
   });
 
   doc.fontSize(16).text(waterReportTitle(report.day));
-  doc.fontSize(9).fillColor("#555").text(`Napi értékek: ${report.day}. Heti értékek: ${report.weekFrom} – ${report.day}.`);
+  doc.fontSize(9).fillColor("#555").text(`Napi értékek: ${formatDay(report.day)} Heti értékek: ${formatPeriod(report.weekFrom, report.day)}`);
   doc.fillColor("#000").moveDown();
 
   if (report.pools.length === 0) {

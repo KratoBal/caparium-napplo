@@ -152,7 +152,7 @@ describe("Excel (VIZ-11)", () => {
     expect(values.some((v) => v[4] === "Sűrűség")).toBe(false);
     const kis = wb.getWorksheet("Kismedence")!;
     const r = kis.getRow(2);
-    expect(r.getCell(1).value).toBe("2026.03.10");
+    expect(r.getCell(1).value).toBe("2026.03.10.");
     expect(r.getCell(2).value).toBe("08:09");
     expect(r.getCell(5).value).toBe(7.88);
     expect(r.getCell(5).font?.color?.argb).toBe("FFDF5B5B");

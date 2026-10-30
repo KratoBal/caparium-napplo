@@ -8,7 +8,7 @@ import { ReasonProvider } from "./ReasonSwitch";
 import { prisma } from "@/lib/db";
 import { navFor, type NavKey } from "@/lib/nav";
 import { reasonsRequired } from "@/lib/reasons";
-import { businessDayOf, formatDayLong } from "@/lib/time";
+import { businessDayOf, formatDay } from "@/lib/time";
 
 export async function Shell({
   title,
@@ -25,7 +25,7 @@ export async function Shell({
   helper?: HelperData | null;
   children: React.ReactNode;
 }) {
-  const today = formatDayLong(businessDayOf(new Date()));
+  const today = formatDay(businessDayOf(new Date()));
   const reasons = await reasonsRequired(prisma);
   return (
     <div className="shell">

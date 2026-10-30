@@ -6,7 +6,7 @@ import { previousMonth } from "@/lib/exports/zims";
 import { SYSTEM_USER_ID } from "@/lib/db";
 import { getSetting, moduleLevel, pickValid } from "@/lib/master";
 import { requireUser } from "@/lib/session";
-import { addDays, businessDayOf, dateToDay, dayToDate, isValidDay, localTimeOf } from "@/lib/time";
+import { addDays, businessDayOf, dateToDay, dayToDate, formatDay, formatPeriod, isValidDay, localTimeOf } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -80,7 +80,7 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
           {chosen.map((id) => (
             <input key={id} type="hidden" name="pool" value={id} />
           ))}
-          <button className="btn" type="submit" data-testid="excel-download">Excel letöltése ({from} – {to})</button>
+          <button className="btn" type="submit" data-testid="excel-download">Excel letöltése ({formatPeriod(from, to)})</button>
         </form>
       </div>
 
@@ -98,7 +98,7 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
                 <input type="hidden" name="from" value={from} />
                 <input type="hidden" name="to" value={to} />
                 <button className="btn" type="submit" data-testid={`excel-${kind}`}>
-                  {kind === "etetes" ? "Egyedi takarmánynapló" : "Evési minta"} ({from} – {to})
+                  {kind === "etetes" ? "Egyedi takarmánynapló" : "Evési minta"} ({formatPeriod(from, to)})
                 </button>
               </form>
             ))}
@@ -130,8 +130,8 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
               <tbody>
                 {runs.map((r) => (
                   <tr key={r.id}>
-                    <td>{businessDayOf(r.createdAt)} {localTimeOf(r.createdAt)}</td>
-                    <td>{dateToDay(r.periodFrom)} – {dateToDay(r.periodTo)}</td>
+                    <td>{formatDay(businessDayOf(r.createdAt))} {localTimeOf(r.createdAt)}</td>
+                    <td>{formatPeriod(dateToDay(r.periodFrom), dateToDay(r.periodTo))}</td>
                     <td>{PURPOSE[r.purpose]}</td>
                     <td>{r.submissionState ? STATE[r.submissionState] : "–"}</td>
                     <td>
@@ -162,7 +162,7 @@ async function MonthlyPackage() {
   });
   return (
     <div className="card" data-testid="monthly-package">
-      <h2 className="title-small">Havi ZIMS-csomag ({from} – {to})</h2>
+      <h2 className="title-small">Havi ZIMS-csomag ({formatPeriod(from, to)})</h2>
       <p className="hint">
         A rendszer havonta egyszer előkészíti az előző hónap ZIMS-fájljait letöltésre (e-mailt nem küld). Ez előnézet, nem leadás: a ZIMS-be
         feltöltött futást továbbra is egy adminisztrátor jelöli leadottnak.

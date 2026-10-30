@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { EAT_LABEL } from "@/lib/eating-labels";
 import { stockHint, type StockInfo } from "@/lib/stock-hint";
+import { formatDay } from "@/lib/time";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 import { useLeaveWarning } from "./useLeaveWarning";
 
@@ -668,7 +669,7 @@ export function WithdrawalItems({ day, useDay, feeds, otherNames, stock, items, 
                   <td>{i.type}</td>
                   <td>{name}</td>
                   <td>{i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")}</td>
-                  <td>{i.useDay}</td>
+                  <td>{formatDay(i.useDay)}</td>
                   <td className="keep">
                     {editable && (
                       <span className="row-actions">

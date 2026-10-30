@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { moduleLevel } from "@/lib/master";
 import { requireUser } from "@/lib/session";
 import { dailyProgress, missedMeasurements, MEASUREMENT_DEADLINE, RUN_OUT_DAYS, runningOut } from "@/lib/notices";
-import { businessDayOf, dateToDay } from "@/lib/time";
+import { businessDayOf, dateToDay, formatDay } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +71,7 @@ export default async function OverviewPage() {
             <span key={j.id}>
               {i > 0 && ", "}
               <Link href={`/${j.group?.frequency === "WEEKLY" ? "heti" : "vizmeres"}?csoport=${j.group?.code}&nap=${dateToDay(j.businessDay)}`}>
-                {dateToDay(j.businessDay)} ({j.group?.name})
+                {formatDay(dateToDay(j.businessDay))} ({j.group?.name})
               </Link>
             </span>
           ))}

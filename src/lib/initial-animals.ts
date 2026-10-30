@@ -38,7 +38,7 @@ export async function initialAnimalsStatus(db: PrismaClient = prisma): Promise<I
 export async function loadInitialAnimalsByAdmin(actor: Actor, input: { requestId: string; arrivalDay: string }, db: PrismaClient = prisma, now = new Date()) {
   const { requestId, arrivalDay } = input;
   if (actor.role !== "ADMIN") throw new AppError(403, "ADMIN_ROLE_ONLY", "A kezdő állatlistát csak adminisztrátor töltheti be.");
-  if (!isValidDay(arrivalDay)) throw new AppError(422, "ARRIVAL_DAY", "Add meg az érkezés napját (ÉÉÉÉ-HH-NN).");
+  if (!isValidDay(arrivalDay)) throw new AppError(422, "ARRIVAL_DAY", "Add meg az érkezés napját (ÉÉÉÉ.HH.NN.).");
   if (arrivalDay > businessDayOf(now)) throw new AppError(422, "FUTURE_DAY", "Az érkezés napja nem lehet jövőbeli.");
   // the start of that local day: the arrival is the day's first event
   const since = resolveLocalDateTime(`${arrivalDay}T00:00`)!.instant;

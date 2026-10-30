@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db";
 import { initialAnimalsStatus } from "@/lib/initial-animals";
 import { pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
-import { businessDayOf, localDateTimeOf, localTimeOf } from "@/lib/time";
+import { businessDayOf, formatDay, localDateTimeOf, localTimeOf } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -58,9 +58,9 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
                   <td>{SEX[a.sex]}</td>
                   <td>{a.poolName ? withIcon(a.poolEmoji, a.poolName) : "–"}</td>
                   <td>{a.groupName ?? "–"}</td>
-                  <td>{a.arrived ?? "–"}</td>
+                  <td>{a.arrived ? formatDay(a.arrived) : "–"}</td>
                   <td className="keep">
-                    {a.alive ? <span className="badge badge-valid">él</span> : <span className="badge badge-invalid">{a.ended ? `${TYPE[a.ended.type]} ${a.ended.day}` : "–"}</span>}
+                    {a.alive ? <span className="badge badge-valid">él</span> : <span className="badge badge-invalid">{a.ended ? `${TYPE[a.ended.type]} ${formatDay(a.ended.day)}` : "–"}</span>}
                   </td>
                 </tr>
               ))}
@@ -78,7 +78,7 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
             <tbody>
               {events.map((e) => (
                 <tr key={e.id} className={e.status === "VALID" ? undefined : "invalid"}>
-                  <td>{businessDayOf(e.occurredAt)} {localTimeOf(e.occurredAt)}</td>
+                  <td>{formatDay(businessDayOf(e.occurredAt))} {localTimeOf(e.occurredAt)}</td>
                   <td>{TYPE[e.type]}</td>
                   <td>
                     {e.toPool ? pickValid(e.toPool.names, e.occurredAt)?.displayName ?? e.toPool.code : ""}

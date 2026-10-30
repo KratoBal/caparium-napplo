@@ -216,6 +216,7 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .eat-pattern .eat-NOT_EATEN { background: #dca8a8; color: #7a1212; }
 .eat-pattern .eat-FASTING { background: #a8c3da; color: #134a6c; }
 .eat-pattern .eat-bar { min-width: 30px; height: 14px; padding: 0; vertical-align: middle; }
+.eat-pattern thead th { white-space: nowrap; font-size: 12px; } /* the full dotted date (2026.10.30.) over a narrow bar */
 .eat-pattern .day-letter { display: block; font-size: 12px; color: var(--c-muted); font-weight: 600; }
 /* Lili 2026-10-29 (package item 15b): the eating pattern's rows banded in a very pale grey, paler than the reports' bands,
    so the coloured bars keep standing out; the band stays on paper too */

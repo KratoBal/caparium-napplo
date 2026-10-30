@@ -18,7 +18,7 @@ import { isDerivedFasting, listFacts } from "../eating-pattern";
 import { pickValid } from "../master";
 import { feedingLog } from "../feeding-log";
 import { breakdown, type ReportLine } from "../reports";
-import { addDays, businessDayOf, dateToDay, dayToDate, resolveLocalDateTime, weekdayLetter } from "../time";
+import { addDays, businessDayOf, dateToDay, dayToDate, EXCEL_DATE_FORMAT, resolveLocalDateTime, weekdayLetter } from "../time";
 
 // the template's theme fills, resolved (theme_note of the extracts): Excel tints in HSL lightness
 const FILL = {
@@ -228,7 +228,7 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
   sorted.forEach((row, n) => {
     const r = ws.getRow(firstData + n);
     r.getCell(1).value = dayToDate(row.day);
-    r.getCell(1).numFmt = "yyyy.mm.dd";
+    r.getCell(1).numFmt = EXCEL_DATE_FORMAT;
     r.getCell(2).value = row.species;
     r.getCell(3).value = row.name;
     for (const [i, v] of row.values) r.getCell(FIRST + i).value = v;
@@ -321,7 +321,7 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
   r1.getCell(4).value = "Dátum";
   days.forEach((d, i) => {
     r1.getCell(FIRST + i).value = dayToDate(d);
-    r1.getCell(FIRST + i).numFmt = "mm.dd";
+    r1.getCell(FIRST + i).numFmt = EXCEL_DATE_FORMAT;
     // EVE-08: the weeks in two alternating colours (Monday starts a week)
     fill(r1.getCell(FIRST + i), weekShade(f.from, d));
     // Lili 2026-10-29 (package item 7): the day's letter under the date
@@ -373,7 +373,7 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
     noteRow.getCell(c).alignment = { wrapText: true, vertical: "top" };
     noteRow.getCell(c).font = { bold: false };
   }
-  ws.columns.forEach((c, i) => (c.width = i < 4 ? [22, 18, 16, 8][i] : 7));
+  ws.columns.forEach((c, i) => (c.width = i < 4 ? [22, 18, 16, 8][i] : 11.5));
   ws.views = [{ state: "frozen", xSplit: 4, ySplit: 2 }];
   return { buffer: Buffer.from(await wb.xlsx.writeBuffer()), rows: list.length };
 }
@@ -407,12 +407,12 @@ export async function buildWithdrawalWorkbook(f: FeedingExcelFilter): Promise<{ 
     const name = it.otherName ?? pickValid(it.feed.names, dayBounds(day).start)?.name ?? it.feed.names.at(-1)?.name ?? "?";
     for (const q of it.quantities) {
       const r = ws.addRow([dayToDate(day), it.feed.type.name, name, Number(q.quantity), q.unit.symbol, dayToDate(dateToDay(it.useDay))]);
-      r.getCell(1).numFmt = "yyyy.mm.dd";
-      r.getCell(6).numFmt = "yyyy.mm.dd";
+      r.getCell(1).numFmt = EXCEL_DATE_FORMAT;
+      r.getCell(6).numFmt = EXCEL_DATE_FORMAT;
       rows += 1;
     }
   }
-  ws.columns.forEach((c, i) => (c.width = [10.8, 22, 16.7, 15, 17.3, 16][i] ?? 10.8));
+  ws.columns.forEach((c, i) => (c.width = [11.6, 22, 16.7, 15, 17.3, 16][i] ?? 10.8));
   ws.views = [{ state: "frozen", ySplit: 1 }];
   return { buffer: Buffer.from(await wb.xlsx.writeBuffer()), rows };
 }

@@ -17,9 +17,9 @@ describe("breakdown (EGY-13)", () => {
     );
     expect(r.columns.map((c) => c.key)).toEqual(["Litopenaeus vannamei|db", "Litopenaeus vannamei|g", "Teszt hal|g"]);
     expect(r.byDay.map((l) => [l.label, l.totals])).toEqual([
-      ["2026-11-02", { db: 6, g: 340 }],
-      ["2026-11-03", {}],
-      ["2026-11-04", { g: 100 }],
+      ["2026.11.02.", { db: 6, g: 340 }],
+      ["2026.11.03.", {}],
+      ["2026.11.04.", { g: 100 }],
     ]);
     expect(r.byRecipient.map((l) => [l.label, l.cells["Teszt hal|g"] ?? 0])).toEqual([
       ["Teszt csoport (csoport)", 300],

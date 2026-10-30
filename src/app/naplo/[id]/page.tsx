@@ -7,7 +7,7 @@ import { canModify } from "@/lib/permissions";
 import { formatDecimalHu } from "@/lib/decimal";
 import { measurementHistory } from "@/lib/queries";
 import { requireModuleRead } from "@/lib/session";
-import { businessDayOf, dayToDate } from "@/lib/time";
+import { businessDayOf, dayToDate, formatDateTime, formatDay } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -30,8 +30,9 @@ function show(v: unknown): string {
   if (v === null || v === undefined || v === "") return "–";
   if (typeof v === "boolean") return v ? "igen" : "nem";
   if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
-    return new Date(v).toLocaleString("hu-HU", { timeZone: "Europe/Budapest" });
+    return formatDateTime(v);
   }
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return formatDay(v);
   return String(v);
 }
 
@@ -74,7 +75,7 @@ export default async function MeasurementHistoryPage({ params }: { params: Promi
           {m.poolName} · {m.parameterName}
         </h2>
         <p className="hint">
-          {m.businessDay} {m.localTime} · {m.groupName}, {m.roundSeq}. mérés · mérte: {m.responsibleMonogram} · rögzítette:{" "}
+          {formatDay(m.businessDay)} {m.localTime} · {m.groupName}, {m.roundSeq}. mérés · mérte: {m.responsibleMonogram} · rögzítette:{" "}
           {m.createdByName}
         </p>
         <p style={{ fontSize: 28, margin: "16px 0 0" }} className={out ? "value-out" : undefined} data-testid="history-value">
@@ -118,7 +119,7 @@ export default async function MeasurementHistoryPage({ params }: { params: Promi
         {h.entries.map((e) => (
           <div key={e.id} className="history-item" data-testid="history-entry">
             <div className="when">
-              {e.localDay} {e.localTime} · {e.userName} ({e.userMonogram})
+              {formatDay(e.localDay)} {e.localTime} · {e.userName} ({e.userMonogram})
             </div>
             <b>{e.actionLabel}</b>
             {e.reason && <div>Indoklás: {e.reason}</div>}

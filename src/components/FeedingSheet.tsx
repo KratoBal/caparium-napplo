@@ -20,6 +20,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type CSSProperties } from "react";
 import { sheetColorBg } from "@/lib/sheet-color-palette";
+import { formatDay } from "@/lib/time";
 import { ClearX } from "./ClearX";
 import { DayControls, type DayLock } from "./DayControls";
 import { Msg, parseAmount, useSend, type FeedOpt, type Recipient } from "./FeedingForms";
@@ -279,7 +280,7 @@ export function FeedingSheet({
   return (
     <div className="card feeding-sheet" data-testid="feeding-sheet">
       <div className="toolbar">
-        <h2>Takarmánylap, {day}</h2>
+        <h2>Takarmánylap, {formatDay(day)}</h2>
         <span className="spacer" />
         <button className="btn btn-soft no-print" type="button" onClick={printSheet}>
           Takarmánylap nyomtatása
