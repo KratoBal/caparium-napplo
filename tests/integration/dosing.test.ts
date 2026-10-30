@@ -102,4 +102,27 @@ describe("the log (ADA-05)", () => {
     expect(ca[0].by).not.toBe("?");
     await expect(dosingLog({ from: "2026-09-10", to: "2026-09-07", poolId: null, chemicalId: null })).rejects.toMatchObject({ code: "BAD_PERIOD" });
   });
+
+  // Lili 2026-10-30 19:33 UTC (msg 1565810865788166185, task caparium-vegyszer-nev): a chemical was added and dosed at once, and the log read "?" in
+  // its place: the first name began at the instant of the adding (seconds), the dose is dated by the minute, a few seconds before it
+  it("a chemical added a moment ago is named in the log for a dose dated by the minute before its adding; its first name is from the beginning of time", async () => {
+    const d = "2026-09-17";
+    const name = `Teszt új szer ${Date.now()}`;
+    const made = await createChemical(f.admin, { requestId: rid(), name, stockUnitId: unit.kg }, new Date(`${d}T09:00:45+02:00`));
+    expect("id" in made).toBe(true);
+    const id = (made as { id: string }).id;
+    expect((await prisma.chemicalName.findFirstOrThrow({ where: { chemicalId: id } })).validFrom.toISOString()).toBe("1970-01-01T00:00:00.000Z");
+    await saveDosing(f.admin, { requestId: rid(), performedAtLocal: `${d}T09:00`, poolId: f.pool("SOZO"), chemicalId: id, quantity: "500", unitId: unit.g }, at(d, "09:01"));
+    const log = await dosingLog({ from: d, to: d, poolId: null, chemicalId: id });
+    expect(log.map((r) => r.chemical)).toEqual([name]);
+  });
+
+  it("a chemical whose first name began after a dose (made before this fix) is still named by its first name, not by a question mark", async () => {
+    const d = "2026-09-17";
+    const name = `Teszt régi szer ${Date.now()}`;
+    const old = await prisma.chemical.create({ data: { stockUnitId: unit.kg, names: { create: { name, validFrom: new Date(`${d}T10:00:00+02:00`) } } } });
+    await saveDosing(f.admin, { requestId: rid(), performedAtLocal: `${d}T09:00`, poolId: f.pool("SOZO"), chemicalId: old.id, quantity: "500", unitId: unit.g }, at(d, "09:01"));
+    const log = await dosingLog({ from: d, to: d, poolId: null, chemicalId: old.id });
+    expect(log.map((r) => r.chemical)).toEqual([name]);
+  });
 });
