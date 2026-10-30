@@ -90,6 +90,25 @@ test.describe("phone, 390 px", () => {
     await picker.selectOption("EATEN");
     await table.getByLabel("Teszt Egy vitamin").check();
     await expect(page.getByTestId("eating-save-all")).toHaveText("Mentés (1 sor)");
+    // the row being filled in (tinted, "active-row") is the same card: no group, no pool, the name as large as on any other card
+    const filled = await page.evaluate(() => {
+      const t = document.querySelector('[data-testid="eating-table"]') as HTMLElement;
+      const rows = [...t.querySelectorAll("tbody tr")] as HTMLElement[];
+      const mine = rows.find((r) => r.querySelector("td")?.textContent === "Teszt Egy")!;
+      const size = (r: HTMLElement) => getComputedStyle(r.querySelector("td.eat-name")!).fontSize;
+      return {
+        tinted: mine.classList.contains("active-row"),
+        group: getComputedStyle(mine.querySelector("td.eat-group")!).display,
+        pool: getComputedStyle(mine.querySelector("td.eat-pool")!).display,
+        nameSize: size(mine),
+        otherSizes: [...new Set(rows.filter((r) => r !== mine).map(size))],
+      };
+    });
+    expect(filled.tinted).toBe(true);
+    expect(filled.group).toBe("none");
+    expect(filled.pool).toBe("none");
+    expect(filled.nameSize).toBe("17px");
+    expect(filled.otherSizes.every((x) => x === filled.nameSize)).toBe(true);
   });
 });
 

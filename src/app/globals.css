@@ -247,7 +247,7 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
   .table-scroll:has(.eating-log) { overflow: visible; }
   .eating-log tr { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; margin-top: 10px; padding: 12px; border: 1px solid var(--c-line); border-radius: var(--radius-sm); background: var(--c-white); }
   .eating-log tr.active-row { background: var(--c-primary-soft); border-color: var(--c-primary); }
-  .eating-log td, .eating-log tr.active-row td { display: block; min-width: 0; padding: 0; border: 0; background: none; font-size: 14px; }
+  .eating-log td { display: block; min-width: 0; padding: 0; border: 0; background: none; font-size: 14px; }
   .eating-log td.eat-group, .eating-log td.eat-pool { display: none; }
   .eating-log td.eat-name { flex: 1 1 auto; font-size: 17px; font-weight: 600; overflow-wrap: break-word; }
   .eating-log td.eat-state { flex: 0 0 auto; margin-left: auto; }
