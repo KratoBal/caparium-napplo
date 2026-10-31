@@ -13,6 +13,8 @@ export const metadata: Metadata = {
     apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   appleWebApp: { capable: true, title: "Caparium", statusBarStyle: "default" },
+  // Next 16 writes appleWebApp.capable as "mobile-web-app-capable" (the name Chrome reads); iOS Safari's own, older name is added next to it
+  other: { "apple-mobile-web-app-capable": "yes" },
 };
 
 export const viewport: Viewport = {

@@ -7,6 +7,8 @@ test("the login page names the manifest, the touch icon and the iOS full-screen 
   await page.goto("/belepes");
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", /\/icons\/apple-touch-icon\.png/);
+  // Next 16 renders appleWebApp.capable as mobile-web-app-capable (measured in CI, 2026-10-31); layout.tsx adds the apple- name for iOS Safari
+  await expect(page.locator('meta[name="mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
   await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
   await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute("content", "Caparium");
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", /^#[0-9a-f]{6}$/);
