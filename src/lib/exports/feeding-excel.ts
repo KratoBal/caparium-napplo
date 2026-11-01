@@ -496,7 +496,8 @@ export async function buildWithdrawalWorkbook(f: FeedingExcelFilter): Promise<{ 
       const r = sw.getRow(at + 2 + i);
       r.getCell(1).value = name;
       r.getCell(2).value = round3(s.g);
-      r.getCell(3).value = { formula: `B${r.number}/1000`, result: round3(s.g / 1000) };
+      // ExcelJS drops a formula's 0 result from the file, and a viewer that does not recalculate shows an empty cell: a plain 0 then
+      r.getCell(3).value = s.g ? { formula: `B${r.number}/1000`, result: round3(s.g / 1000) } : 0;
       r.getCell(3).numFmt = "0.000";
       if (anyPieces) r.getCell(4).value = s.db || null;
     });
@@ -505,10 +506,11 @@ export async function buildWithdrawalWorkbook(f: FeedingExcelFilter): Promise<{ 
     const total = sw.getRow(lastFeed + 1);
     const g = feeds.reduce((a, [, s]) => a + s.g, 0);
     total.getCell(1).value = "Összesen";
-    total.getCell(2).value = { formula: `SUM(B${first}:B${lastFeed})`, result: round3(g) };
-    total.getCell(3).value = { formula: `SUM(C${first}:C${lastFeed})`, result: round3(g / 1000) };
+    total.getCell(2).value = g ? { formula: `SUM(B${first}:B${lastFeed})`, result: round3(g) } : 0;
+    total.getCell(3).value = g ? { formula: `SUM(C${first}:C${lastFeed})`, result: round3(g / 1000) } : 0;
     total.getCell(3).numFmt = "0.000";
-    if (anyPieces) total.getCell(4).value = { formula: `SUM(D${first}:D${lastFeed})`, result: feeds.reduce((a, [, s]) => a + s.db, 0) };
+    const pieces = feeds.reduce((a, [, s]) => a + s.db, 0);
+    if (anyPieces) total.getCell(4).value = pieces ? { formula: `SUM(D${first}:D${lastFeed})`, result: pieces } : 0;
     for (let c = 1; c <= heads.length; c++) fill(total.getCell(c), TOTAL_FILL);
     total.font = { bold: true };
     if (g > 0) {
