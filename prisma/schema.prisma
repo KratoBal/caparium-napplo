@@ -606,6 +606,8 @@ enum ExportKind {
   EXCEL_WITHDRAWAL
   EXCEL_INTAKE
   PDF_INTAKE
+  PDF_DOSING
+  PDF_REPORT
 }
 
 enum ExportPurpose {

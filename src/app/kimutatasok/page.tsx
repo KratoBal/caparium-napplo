@@ -1,4 +1,3 @@
-import { PrintButton } from "@/components/PrintButton";
 import { ReportTable } from "@/components/ReportTable";
 import { Shell } from "@/components/Shell";
 import { listAnimals } from "@/lib/animals";
@@ -72,8 +71,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           </select>
         </label>
         <button className="btn btn-soft" type="submit">Lekérés</button>
-        <span className="spacer" />
-        <PrintButton />
       </form>
       {error && <div className="banner banner-error">{error}</div>}
       {report && (
@@ -95,6 +92,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               {poolId && <input type="hidden" name="pool" value={poolId} />}
               {animalId && <input type="hidden" name="animal" value={animalId} />}
               <button className="btn" type="submit" data-testid="excel-kimutatas">Kimutatás (Excel, {formatPeriod(from, to)})</button>
+              {/* Lili 2026-11-01 (point 8): the PDF made on the server, landscape, a table per feed group (the browser's print is gone) */}
+              <button className="btn btn-soft" type="submit" name="format" value="pdf" data-testid="pdf-kimutatas">
+                Kimutatás (PDF, {formatPeriod(from, to)})
+              </button>
             </form>
           )}
         </>
