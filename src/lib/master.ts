@@ -87,6 +87,8 @@ export type LayoutParameter = {
   unit: { id: string; symbol: string; dimension: string; factorToBase: string | null };
   plausibleMin: string | null;
   plausibleMax: string | null;
+  /** point 9: the pools this column is filled in; null = every pool of the group */
+  pools: string[] | null;
 };
 
 /** The rows (pools) and columns (parameters) of a measurement group at an instant. */
@@ -123,6 +125,7 @@ export async function groupLayout(
       },
       plausibleMin: gp.parameter.plausibleMin?.toString() ?? null,
       plausibleMax: gp.parameter.plausibleMax?.toString() ?? null,
+      pools: gp.poolIds.length ? gp.poolIds : null,
     })),
   };
 }

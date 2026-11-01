@@ -428,3 +428,115 @@ export function SaveReminderSwitch({ on }: { on: boolean }) {
 export function MonthlyZimsRecipient({ email }: { email: string }) {
   return <RecipientForm email={email} endpoint="/api/admin/monthly-zims-recipient" label="A havi ZIMS-csomag címzettjei" testId="monthly-zims-recipient" />;
 }
+
+/**
+ * Lili 2026-11-01 (point 9, msg 1566532615530352863): a new measurement type, as a new animal: name, unit, decimals, the plausible
+ * range (outside it the grid asks "biztos?"), the reference, the ZIMS name and unit, the daily or weekly table it goes into, the
+ * pools it is measured in, from a day. The table gets a new column, filled in the chosen pools only.
+ */
+export function NewMeasurementForm({ units, groups, today }: { units: { id: string; symbol: string }[]; groups: { id: string; name: string; pools: { id: string; name: string }[] }[]; today: string }) {
+  const empty = { name: "", unitId: "", decimals: "1", pMin: "", pMax: "", rMin: "", rMax: "", zimsName: "", zimsUnit: "", groupId: "", poolIds: [] as string[], from: today };
+  const [f, setF] = useState(empty);
+  const { msg, busy, save } = useSave();
+  const set = (k: keyof typeof empty, v: string) => setF((x) => ({ ...x, [k]: v }));
+  const group = groups.find((g) => g.id === f.groupId);
+  const ready = f.name.trim().length >= 2 && f.unitId && f.zimsName.trim() && f.zimsUnit.trim() && f.groupId && f.poolIds.length > 0 && f.from;
+  const text = (k: keyof typeof empty, label: string, opts: { small?: boolean; decimal?: boolean } = {}) => (
+    <label className="field">
+      {label}
+      <input className={`input${opts.small ? " small" : ""}`} inputMode={opts.decimal ? "decimal" : undefined} value={f[k] as string} onChange={(e) => set(k, e.target.value)} />
+    </label>
+  );
+  return (
+    <div data-testid="new-measurement">
+      <div className="form-grid">
+        {text("name", "Név (például Nitrit)")}
+        <label className="field">
+          Mértékegység
+          <select className="input" value={f.unitId} onChange={(e) => set("unitId", e.target.value)}>
+            <option value="">Válassz</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>{u.symbol}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          Tizedesjegyek
+          <select className="input small" value={f.decimals} onChange={(e) => set("decimals", e.target.value)}>
+            {[0, 1, 2, 3, 4].map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </label>
+        {text("pMin", "Hihető tartomány alja", { small: true, decimal: true })}
+        {text("pMax", "Hihető tartomány teteje", { small: true, decimal: true })}
+        {text("rMin", "Referencia alja", { small: true, decimal: true })}
+        {text("rMax", "Referencia teteje", { small: true, decimal: true })}
+        {text("zimsName", "ZIMS-név")}
+        {text("zimsUnit", "ZIMS-mértékegység")}
+        <label className="field">
+          Napi vagy heti mérés
+          <select className="input" value={f.groupId} onChange={(e) => setF((x) => ({ ...x, groupId: e.target.value, poolIds: [] }))}>
+            <option value="">Válassz</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          Mettől
+          <input className="input" type="date" value={f.from} onChange={(e) => set("from", e.target.value)} />
+        </label>
+      </div>
+      {group && (
+        <fieldset className="field" style={{ border: 0, padding: 0, marginTop: 12 }}>
+          Melyik medencékben
+          <span style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {group.pools.map((p) => (
+              <label key={p.id} className="check">
+                <input
+                  type="checkbox"
+                  checked={f.poolIds.includes(p.id)}
+                  onChange={(e) => setF((x) => ({ ...x, poolIds: e.target.checked ? [...x.poolIds, p.id] : x.poolIds.filter((id) => id !== p.id) }))}
+                />
+                {p.name}
+              </label>
+            ))}
+          </span>
+        </fieldset>
+      )}
+      <div className="toolbar" style={{ marginTop: 12 }}>
+        <button
+          className="btn"
+          type="button"
+          disabled={busy || !ready}
+          onClick={async () => {
+            const ok = await save(
+              "/api/admin/measurement-types",
+              "POST",
+              {
+                name: f.name.trim(),
+                unitId: f.unitId,
+                decimals: Number(f.decimals),
+                plausibleMin: f.pMin || null,
+                plausibleMax: f.pMax || null,
+                referenceMin: f.rMin || null,
+                referenceMax: f.rMax || null,
+                zimsName: f.zimsName.trim(),
+                zimsUnit: f.zimsUnit.trim(),
+                groupId: f.groupId,
+                poolIds: f.poolIds,
+                from: f.from,
+              },
+              "Mérésfajta felvéve.",
+            );
+            if (ok) setF(empty);
+          }}
+        >
+          Mérésfajta felvétele
+        </button>
+        <Msg msg={msg} />
+      </div>
+    </div>
+  );
+}

@@ -200,6 +200,9 @@ model GroupParameter {
   groupId     String           @db.Uuid
   parameterId String           @db.Uuid
   sortOrder   Int
+  // Lili 2026-11-01 (point 9, msg 1566532615530352863): a measurement started in some pools only. Empty: every pool of the group
+  // (every parameter before point 9); else only these pools fill the column, the others show a dash.
+  poolIds     String[]         @default([]) @db.Uuid
   validFrom   DateTime         @db.Timestamptz(3)
   validTo     DateTime?        @db.Timestamptz(3)
   group       MeasurementGroup @relation(fields: [groupId], references: [id])

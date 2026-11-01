@@ -316,6 +316,8 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
       }
       // a pool off for a while (a renovation) takes no new measurement; a recorded one can still be corrected
       if (!pool.active) throw new AppError(422, "POOL_INACTIVE", "Ez a medence most inaktív (például felújítás), új mérés nem rögzíthető rá.");
+      // point 9: a measurement started in some pools only; the others have no field for it
+      if (param.pools && !param.pools.includes(pool.id)) throw new AppError(422, "NOT_MEASURED_HERE", `A(z) ${param.name} mérést ebben a medencében nem végzik.`);
       checkPlausible(value, param, input.confirmPlausibility);
       checkDilutionAllowed(param, input);
 

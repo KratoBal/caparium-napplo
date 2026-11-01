@@ -29,7 +29,7 @@ type Grid = {
   day: string;
   layout: {
     pools: { id: string; name: string; active: boolean }[];
-    parameters: { id: string; name: string; decimals: number; unit: { symbol: string }; dilution: boolean }[];
+    parameters: { id: string; name: string; decimals: number; unit: { symbol: string }; dilution: boolean; pools?: string[] | null }[];
   };
   /** the pool ticks this group offers (Lili 2026-10-29, item 8): empty for the weekly groups */
   tickKinds: TickKind[];
@@ -553,7 +553,7 @@ export function MeasurementGrid({
   const unsaved = new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)]).size;
   // every field of the active pools has a value, typed or saved: the form is "filled" for the save reminder
   const complete = formComplete(
-    grid.layout.pools.filter((p) => p.active).flatMap((p) => grid.layout.parameters.map((x) => `${p.id}:${x.id}`)),
+    grid.layout.pools.filter((p) => p.active).flatMap((p) => grid.layout.parameters.filter((x) => !x.pools || x.pools.includes(p.id)).map((x) => `${p.id}:${x.id}`)),
     (k) => drafts[k] ?? grid.cells[k]?.value,
   );
   useEffect(() => {
@@ -710,6 +710,16 @@ export function MeasurementGrid({
                           ? draftOutOfRange(draft, grid.currentRanges[key])
                           : cell?.reference === "LOW" || cell?.reference === "HIGH";
                       const range = cell?.range ?? grid.currentRanges[key];
+                      // point 9 (Lili 2026-11-01): a measurement started in some pools only; in the others its column is a dash
+                      if (param.pools && !param.pools.includes(pool.id) && !cell) {
+                        return (
+                          <td key={param.id} className="cell-na" data-label={`${param.name}${param.unit.symbol !== param.name ? ` · ${param.unit.symbol}` : ""}`}>
+                            <div className="cell-value empty" data-testid={`na-${pool.name}-${param.name}`} title="Ebben a medencében ezt nem mérik">
+                              –
+                            </div>
+                          </td>
+                        );
+                      }
                       return (
                         <td key={param.id} data-label={`${param.name}${param.unit.symbol !== param.name ? ` · ${param.unit.symbol}` : ""}`}>
                           {active ? (
