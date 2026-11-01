@@ -1,5 +1,6 @@
 // Lili 2026-11-01 (point 16): a pool's periods of use. The hard condition (acrobot, Caparium channel msg 1566458497246437448): for
-// TODAY every list shows exactly what it showed before; that is the first describe. Days in 2019, used by no other test.
+// TODAY every list shows exactly what it showed before; that is the first describe. The measured days in January, February and April
+// 2026 (the group's parameters start in 2026), each used by no other test for this pool.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -73,25 +74,25 @@ describe("a day's lists follow the periods", () => {
     const t = tag();
     const name = `Kis idoszak ${t}`;
     const pool = ((await createPool(f.admin, { requestId: rid(), name, code: `KISID_${t}`, volumeLiters: "500", groupIds: [f.group("NAPI_NAGY")] })) as { id: string }).id;
-    // in use 2019, renovated 2020, back from 2021
-    await setPoolPeriods(f.admin, pool, { requestId: rid(), periods: [{ firstDay: "2019-01-01", lastDay: "2019-12-31" }, { firstDay: "2021-01-01", lastDay: null }] });
-    // the group membership the grid needs, from 2019 (createPool gives one from today)
-    await prisma.groupMembership.updateMany({ where: { poolId: pool }, data: { validFrom: new Date("2018-12-31T23:00:00Z") } });
+    // in use in January 2026, renovated in February and March, back from April
+    await setPoolPeriods(f.admin, pool, { requestId: rid(), periods: [{ firstDay: "2026-01-01", lastDay: "2026-01-31" }, { firstDay: "2026-04-01", lastDay: null }] });
+    // the group membership the grid needs, from January (createPool gives one from today)
+    await prisma.groupMembership.updateMany({ where: { poolId: pool }, data: { validFrom: new Date("2025-12-31T23:00:00Z") } });
     const measure = (day: string) =>
       createMeasurement(f.admin, { requestId: rid(), groupId: f.group("NAPI_NAGY"), poolId: pool, parameterId: f.param("TEMP"), value: "25", measuredAtLocal: `${day}T08:00`, reason: "régi adat" } as Parameters<typeof createMeasurement>[1], new Date());
-    await measure("2019-06-03");
-    expect(await code(measure("2020-06-03"))).toBe("POOL_INACTIVE");
-    await measure("2021-06-03");
+    await measure("2026-01-27");
+    expect(await code(measure("2026-02-26"))).toBe("POOL_INACTIVE");
+    await measure("2026-04-28");
     const row = async (day: string) => ((await getGrid(f.group("NAPI_NAGY"), day))?.layout.pools ?? []).find((p) => p.id === pool);
-    expect((await row("2019-06-04"))?.active).toBe(true);
-    expect(await row("2020-06-04")).toBeUndefined(); // not in use, not measured: off the grid
-    expect((await row("2019-06-03"))?.active).toBe(true);
+    expect((await row("2026-01-28"))?.active).toBe(true);
+    expect(await row("2026-02-27")).toBeUndefined(); // not in use, not measured: off the grid
+    expect((await row("2026-01-27"))?.active).toBe(true);
     // Sunny's case: an animal arrives on an old day into the pool in use then
     const species = await prisma.species.findFirstOrThrow({ where: { active: true } });
     const arrive = (day: string) =>
       createLifecycleEvent(f.admin, { requestId: rid(), type: "ARRIVAL", newAnimal: { speciesId: species.id, name: `Sunny ${t} ${day}`, sex: "UNKNOWN" }, toPoolId: pool, occurredAtLocal: `${day}T09:00`, reason: "régi adat" } as Parameters<typeof createLifecycleEvent>[1], new Date());
-    await arrive("2019-03-01");
-    expect(await code(arrive("2020-03-02"))).toBe("POOL_NOT_IN_USE");
+    await arrive("2026-01-29");
+    expect(await code(arrive("2026-03-03"))).toBe("POOL_NOT_IN_USE");
     // one pool: its measurements on both sides of the gap
     expect(await prisma.measurement.count({ where: { poolId: pool } })).toBe(2);
   });
