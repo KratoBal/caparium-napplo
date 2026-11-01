@@ -1,6 +1,6 @@
 // Lili 2026-11-01 (point 9, msg 1566532615530352863): a new measurement type in some pools of a table. A group of its own, so no other
 // file's table gets the new column; days in late May 2026.
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { createMeasurement } from "@/lib/measurements";
@@ -21,6 +21,12 @@ beforeAll(async () => {
   }
   // the group's existing column, every pool
   await prisma.groupParameter.create({ data: { groupId, parameterId: f.param("TEMP"), sortOrder: 1, validFrom: new Date("2025-12-31T23:00:00Z") } });
+});
+
+// the group off at the end: an active daily group counts in the water helper's and the home page's "still to measure" (helpers.test)
+afterAll(async () => {
+  await prisma.measurementGroup.update({ where: { id: groupId }, data: { active: false } });
+  await prisma.groupMembership.updateMany({ where: { groupId, validTo: null }, data: { validTo: new Date("2025-12-31T23:00:00Z") } });
 });
 
 async function code(p: Promise<unknown>): Promise<string> {
