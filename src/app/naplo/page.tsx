@@ -6,6 +6,7 @@ import { pickValid } from "@/lib/master";
 import { searchLog } from "@/lib/queries";
 import { requireModuleRead } from "@/lib/session";
 import { addDays, businessDayOf, formatDay, isValidDay } from "@/lib/time";
+import { poolInUse } from "@/lib/pool-periods";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export default async function LogPage({
   const to = sp.ig && isValidDay(sp.ig) ? sp.ig : today;
   const from = sp.tol && isValidDay(sp.tol) ? sp.tol : addDays(to, -14);
   const status = sp.allapot === "VALID" || sp.allapot === "INVALIDATED" || sp.allapot === "PENDING" ? sp.allapot : "ALL";
-  const pools = await prisma.pool.findMany({ where: { active: true }, include: { names: true }, orderBy: { code: "asc" } });
+  const pools = await prisma.pool.findMany({ where: poolInUse(today), include: { names: true }, orderBy: { code: "asc" } });
   const now = new Date();
   const poolId = pools.some((p) => p.id === sp.medence) ? sp.medence : undefined;
   const page = Math.max(1, Number(sp.oldal) || 1);

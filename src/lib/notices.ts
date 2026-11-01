@@ -3,6 +3,7 @@
 // out soon, from its average usage. Both are computed when the page is shown, nothing is stored.
 // Temporary settings (documented): the deadline is 14:00 local time; "soon" is 3 days (D-18: 2-3 days).
 
+import { poolInUse } from "./pool-periods";
 import { prisma } from "./db";
 import { stockLevels } from "./dosing";
 import { pickValid, validAt } from "./master";
@@ -17,7 +18,8 @@ export async function missedMeasurements(now = new Date()) {
   if (localTimeOf(now) < MEASUREMENT_DEADLINE) return { day, due: false, pools: [] as string[] };
   const memberships = await prisma.groupMembership.findMany({
     // an inactive pool (a renovation) takes no measurement: a notice about it could never go (barracuda on #101)
-    where: { group: { active: true, frequency: "DAILY" }, pool: { active: true }, ...validAt(now) },
+    // point 16: in use today, by its period
+    where: { group: { active: true, frequency: "DAILY" }, pool: poolInUse(day), ...validAt(now) },
     include: { pool: { include: { names: true } } },
   });
   const measured = new Set(
@@ -54,7 +56,8 @@ export async function dailyProgress(day: string) {
   const now = new Date();
   const memberships = await prisma.groupMembership.findMany({
     // an inactive pool (a renovation) takes no measurement, so it is not waited for (barracuda on #101)
-    where: { group: { active: true, frequency: "DAILY" }, pool: { active: true }, ...validAt(now) },
+    // point 16: in use on the day, by its period
+    where: { group: { active: true, frequency: "DAILY" }, pool: poolInUse(day), ...validAt(now) },
     select: { poolId: true },
   });
   const pools = new Set(memberships.map((m) => m.poolId));

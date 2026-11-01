@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { ConversionRow, MonthlyZimsRecipient, NewPoolForm, NewUserForm, PoolList, PoolSystemForm, PoolVolumeForm, ReferenceRow, SaveReminderSwitch, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
+import { ConversionRow, MonthlyZimsRecipient, NewMeasurementForm, NewPoolForm, NewUserForm, PoolList, PoolSystemForm, PoolVolumeForm, ReferenceRow, SaveReminderSwitch, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
 import { SettingsCard } from "@/components/SettingsCard";
 import { Shell } from "@/components/Shell";
@@ -9,6 +9,7 @@ import { canonicalDecimal } from "@/lib/decimal";
 import { getSetting, moduleLevel, pickValid, validAt } from "@/lib/master";
 import { reasonsRequired } from "@/lib/reasons";
 import { saveReminderOn } from "@/lib/save-reminder-setting";
+import { poolCovers, poolInUse, poolPeriodView } from "@/lib/pool-periods";
 import { requireUser } from "@/lib/session";
 import { businessDayOf } from "@/lib/time";
 
@@ -23,8 +24,10 @@ export default async function SettingsPage() {
   // the pools card lists the inactive ones too (a renovation), to bring them back; the other cards the active ones
   const allPools = await prisma.pool.findMany({
     orderBy: [{ active: "desc" }, { code: "asc" }],
-    include: { names: true, memberships: { where: validAt(now), include: { group: true } } },
+    include: { names: true, memberships: { where: validAt(now), include: { group: true } }, periods: { orderBy: { firstDay: "asc" } } },
   });
+  // Lili 2026-11-01 (point 16): "active" is in use today, by the pool's periods
+  const today = businessDayOf(now);
   const [params, pools, users, feedTypes, groups, animals, animalGroups] = await Promise.all([
     prisma.parameter.findMany({
       where: { active: true },
@@ -32,7 +35,7 @@ export default async function SettingsPage() {
       include: { names: true, unit: true, referenceRanges: { where: validAt(now) }, conversions: { where: validAt(now), take: 1 } },
     }),
     prisma.pool.findMany({
-      where: { active: true },
+      where: poolInUse(today),
       orderBy: { code: "asc" },
       include: {
         names: true,
@@ -53,6 +56,15 @@ export default async function SettingsPage() {
     listAnimals(now),
     listGroupsWithNames(now),
   ]);
+  // point 9: the units a water value is measured in, and each group with its pools today
+  const [measureUnits, groupPools] = await Promise.all([
+    prisma.unit.findMany({ where: { active: true, dimension: { notIn: ["MASS", "COUNT", "VOLUME"] } }, orderBy: { symbol: "asc" } }),
+    prisma.measurementGroup.findMany({
+      where: { active: true },
+      orderBy: { sortOrder: "asc" },
+      include: { memberships: { where: validAt(now), orderBy: { sortOrder: "asc" }, include: { pool: { include: { names: true } } } } },
+    }),
+  ]);
   return (
     <Shell title="Beállítások" active="settings" user={user}>
       <SettingsCard id="referenciak" title="Vízparaméterek és referenciaértékek medencénként" testId="pool-references">
@@ -65,7 +77,8 @@ export default async function SettingsPage() {
           .filter((pool) => pool.memberships.length > 0)
           .map((pool) => {
             const poolName = pickValid(pool.names, now)?.displayName ?? pool.code;
-            const measured = new Set(pool.memberships.flatMap((m) => m.group.parameters.map((gp) => gp.parameterId)));
+            // point 9: a parameter measured in some pools only belongs to those
+            const measured = new Set(pool.memberships.flatMap((m) => m.group.parameters.filter((gp) => gp.poolIds.length === 0 || gp.poolIds.includes(pool.id)).map((gp) => gp.parameterId)));
             return (
               <details key={pool.id} data-testid={`pool-ref-${poolName}`}>
                 <summary>{poolName}</summary>
@@ -130,6 +143,24 @@ export default async function SettingsPage() {
         <p className="banner banner-warn" style={{ marginTop: 16 }}>A tesztkörnyezet referenciaértékei bemutató adatok.</p>
       </SettingsCard>
 
+      {/* Lili 2026-11-01 (point 9): a new measurement, in some pools of a daily or weekly table */}
+      <SettingsCard id="uj-meres" title="Új mérésfajta" testId="new-measurement-card">
+        <p className="hint">
+          Új vízérték mérésének kezdete (például nitrit vagy oldott oxigén): a kiválasztott napi vagy heti táblába új oszlop kerül, amely
+          csak a bejelölt medencékben tölthető ki, a megadott naptól; a többi medencében kötőjel áll. A hihető tartományon kívüli
+          értéknél a tábla rákérdez, a referencián kívülit pirossal jelzi. A ZIMS-név és -mértékegység betűre úgy kell, ahogy a ZIMS várja.
+        </p>
+        <NewMeasurementForm
+          today={businessDayOf(now)}
+          units={measureUnits.map((u) => ({ id: u.id, symbol: u.symbol }))}
+          groups={groupPools.map((g) => ({
+            id: g.id,
+            name: `${g.name} (${g.frequency === "DAILY" ? "napi" : "heti"})`,
+            pools: g.memberships.map((m) => ({ id: m.pool.id, name: pickValid(m.pool.names, now)?.displayName ?? m.pool.code })),
+          }))}
+        />
+      </SettingsCard>
+
       <SettingsCard id="atvaltas" title="Mérőeszköz-átváltás" testId="conversions">
         <p className="hint">
           Ha egy mérőeszköz nem a mérés értékét mutatja, hanem egy leolvasást (például Hanna HI755 a KH-hoz: × 0,056, 1 tizedes;
@@ -168,7 +199,8 @@ export default async function SettingsPage() {
             poolId: p.id,
             name: pickValid(p.names, now)?.displayName ?? p.code,
             groups: p.memberships.map((m) => m.group.name).join(", "),
-            active: p.active,
+            active: p.periods.some((x) => poolCovers(poolPeriodView(x), today)),
+            periods: p.periods.map(poolPeriodView),
           }))}
         />
         {user.role === "ADMIN" && (

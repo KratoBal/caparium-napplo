@@ -1,4 +1,4 @@
-import { FeedActive, FeedEdit, NewFeed } from "@/components/AnimalForms";
+import { FeedActive, FeedEdit, FeedPeriods, NewFeed } from "@/components/AnimalForms";
 import { FeedCopies } from "@/components/FeedCopies";
 import { InactiveListFilter, InactiveRowShell } from "@/components/InactiveListFilter";
 import { OrderList } from "@/components/AnimalOrder";
@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 
 const DIM = { MASS: "tömeg", COUNT: "darab", VOLUME: "térfogat" } as Record<string, string>;
 
-// DAT-02, TAK-07: the feed list by type; a feed is never deleted, only made inactive.
+// DAT-02, TAK-07: the feed list by type; a feed is never deleted. Lili 2026-11-01 (point 14): "inactive" is a feed whose periods do
+// not cover today; the admin sets the periods per feed (Inaktiválás and Aktiválás close and open one at today).
 export default async function FeedsPage() {
   const { user, level } = await requireModuleRead("FEEDING");
   const [types, units] = await Promise.all([listFeeds(), prisma.unit.findMany({ where: { active: true }, orderBy: { symbol: "asc" } })]);
@@ -51,6 +52,8 @@ export default async function FeedsPage() {
                           <FeedActive id={f.id} active={f.active} />
                         </span>
                       )}
+                      {/* Lili 2026-11-01 (point 14): the days the feed is fed; the admin's for now */}
+                      {isAdmin && <FeedPeriods id={f.id} name={f.name} periods={f.periods} />}
                     </td>
                   </InactiveRowShell>
                 ))}

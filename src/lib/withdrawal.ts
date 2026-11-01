@@ -8,6 +8,7 @@ import { byFeedOrder, type FeedPlace } from "./feed-order";
 import type { Dimension, WithdrawalItem } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
+import { feedIsOn } from "./feed-periods";
 import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
@@ -97,7 +98,8 @@ export async function saveWithdrawalItem(actor: Actor, raw: WithdrawalInput, ser
       // the feed's row FOR SHARE: a change of its unit (feeds.ts) waits for this save, and this one for it
       await tx.$queryRaw`SELECT "id" FROM "feed" WHERE "id" = ${input.feedId}::uuid FOR SHARE`;
       const feed = await tx.feed.findUnique({ where: { id: input.feedId }, include: { type: true } });
-      if (!feed || !feed.active) throw new AppError(422, "FEED_NOT_FOUND", "A takarmány nem található vagy nem aktív.");
+      // point 14: the feed is offered on the day by its period, as the list of that day
+      if (!feed || !(await feedIsOn(tx, feed.id, input.day))) throw new AppError(422, "FEED_NOT_FOUND", "A takarmány nem található, vagy ezen a napon nincs etetési időszaka.");
       const isOther = feed.type.code === "EGYEB";
       if (isOther && !input.otherName) throw new AppError(422, "OTHER_NAME", "Az „Egyéb” takarmányhoz a nevét is meg kell adni (KIV-04).");
       const otherName = isOther ? input.otherName! : null;

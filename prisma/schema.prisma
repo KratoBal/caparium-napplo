@@ -141,8 +141,27 @@ model Pool {
   dosings      Dosing[]
   references   ReferenceRange[]
   ticks        PoolTick[]
+  periods      PoolPeriod[]
 
   @@map("pool")
+}
+
+// Lili 2026-11-01 (point 16): the days a pool is in use, one or more periods (from a day, to a day or open, both inclusive, business
+// days), as the feeds' (point 14). A renovation is a gap between two periods; the pool, its measurements and its animals stay the
+// same. Every list of a day (the grid, a measurement, a dosing, an animal's placement) takes the pools in use that day; a closed
+// period takes the place of "inactive" (Pool.active follows today's state). The migration gave the active pools an open period from
+// 2018-12-07 and the inactive ones a period ending the day before they were switched off.
+model PoolPeriod {
+  id          String    @id @default(uuid()) @db.Uuid
+  poolId      String    @db.Uuid
+  firstDay    DateTime  @db.Date
+  lastDay     DateTime? @db.Date
+  createdById String    @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  pool        Pool      @relation(fields: [poolId], references: [id])
+
+  @@index([poolId, firstDay])
+  @@map("pool_period")
 }
 
 model PoolName {
@@ -202,6 +221,9 @@ model GroupParameter {
   groupId     String           @db.Uuid
   parameterId String           @db.Uuid
   sortOrder   Int
+  // Lili 2026-11-01 (point 9, msg 1566532615530352863): a measurement started in some pools only. Empty: every pool of the group
+  // (every parameter before point 9); else only these pools fill the column, the others show a dash.
+  poolIds     String[]         @default([]) @db.Uuid
   validFrom   DateTime         @db.Timestamptz(3)
   validTo     DateTime?        @db.Timestamptz(3)
   group       MeasurementGroup @relation(fields: [groupId], references: [id])
@@ -608,6 +630,8 @@ enum ExportKind {
   EXCEL_WITHDRAWAL
   EXCEL_INTAKE
   PDF_INTAKE
+  PDF_DOSING
+  PDF_REPORT
 }
 
 enum ExportPurpose {
@@ -893,8 +917,27 @@ model Feed {
   items       FeedingItem[]
   withdrawals WithdrawalItem[]
   intakes     FeedIntakeItem[]
+  periods     FeedPeriod[]
 
   @@map("feed")
+}
+
+// Lili 2026-11-01 (point 14): the days a feed is fed, one or more periods (from a day, to a day or open), set and corrected by an admin
+// at any time. Every list of a day (the feeding sheet, the withdrawal, the intake) offers the feeds whose period covers that day; a
+// closed period takes the place of "inactive" (Feed.active is no longer read). Both days are inclusive, business days (Budapest).
+// The migration gave every feed a period from 2018-12-07: open for the active ones, ending the day before the migration for the
+// inactive ones, so today every list shows what it showed before.
+model FeedPeriod {
+  id          String    @id @default(uuid()) @db.Uuid
+  feedId      String    @db.Uuid
+  firstDay    DateTime  @db.Date
+  lastDay     DateTime? @db.Date
+  createdById String    @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  feed        Feed      @relation(fields: [feedId], references: [id])
+
+  @@index([feedId, firstDay])
+  @@map("feed_period")
 }
 
 // What the basic data step (scripts/start.sh, src/lib/base-data.ts) has created once, by the list's key: it never

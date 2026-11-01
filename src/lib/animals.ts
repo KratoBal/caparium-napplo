@@ -12,6 +12,7 @@ import type { LifecycleEvent, LifecycleType, Sex } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
 import { manualRowsOutsideLife, recomputeClosedDaysFrom } from "./feeding";
+import { poolIsOn } from "./pool-periods";
 import { prisma, type Tx } from "./db";
 import { AppError, isUniqueViolation } from "./errors";
 import { FIRST_NAME_FROM, moduleLevel, nameAt, pickValid, validAt } from "./master";
@@ -202,6 +203,11 @@ async function createInTx(tx: Tx, actor: Actor, input: LifecycleInput, at: { occ
     animalId = a.id;
   } else if (!animalId || !(await lockAnimal(tx, animalId))) {
     throw new AppError(404, "ANIMAL_NOT_FOUND", "Az állat nem található.");
+  }
+  // Lili 2026-11-01 (point 16, Sunny's case): an animal goes into a pool in use on the event's day, by its period; an old event into
+  // the pool as it was then, even if it is renovated today
+  if (input.toPoolId && !(await poolIsOn(tx, input.toPoolId, day))) {
+    throw new AppError(422, "POOL_NOT_IN_USE", "Ezen a napon a medence nincs használatban (nincs használati időszaka): állat nem kerülhet bele.");
   }
   // an inactive group takes no new member (Lili 2026-10-30, task caparium-csoport-inaktiv): switched back on first
   if (input.toGroupId) {

@@ -5,6 +5,7 @@
 import type { PoolTickKind } from "@prisma/client";
 import { z } from "zod";
 import { writeAudit } from "./audit";
+import { poolIsOn } from "./pool-periods";
 import { prisma } from "./db";
 import { AppError } from "./errors";
 import { closedAt, type Actor } from "./measurements";
@@ -49,8 +50,8 @@ export async function setPoolTick(actor: Actor, raw: z.input<typeof poolTickSche
     if (!tickKindsOf(group.code).includes(input.kind)) throw new AppError(422, "TICK_NOT_FOR_GROUP", "Ez a jelölő nem tartozik ehhez a csoporthoz.");
     const member = await tx.groupMembership.findFirst({ where: { groupId: group.id, poolId: input.poolId } });
     if (!member) throw new AppError(422, "POOL_NOT_IN_GROUP", "A medence nem ennek a csoportnak a tagja.");
-    const pool = await tx.pool.findUniqueOrThrow({ where: { id: input.poolId } });
-    if (!pool.active) throw new AppError(422, "POOL_INACTIVE", "Inaktív medencéhez nem rögzíthető jelölő.");
+    // point 16: in use on the tick's day, by its period
+    if (!(await poolIsOn(tx, input.poolId, input.day))) throw new AppError(422, "POOL_INACTIVE", "Ezen a napon a medence nincs használatban, jelölő nem rögzíthető rá.");
     const journal = await ensureJournalDay(tx, "WATER", group.id, input.day);
     const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
     const decision = canCreate(level, { day: input.day, today: businessDayOf(serverNow), closed: closedAt(journal, serverNow) });

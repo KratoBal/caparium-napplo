@@ -27,7 +27,7 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
   const [view, lock, types, units, exportLevel, otherNames, stock] = await Promise.all([
     withdrawalDayView(day),
     dayStatus(null, day, "WITHDRAWAL"),
-    listFeeds(),
+    listFeeds(new Date(), day), // point 14: the feeds of the day being entered
     prisma.unit.findMany({ where: { active: true }, orderBy: { symbol: "asc" } }),
     moduleLevel(prisma, user.id, user.role, "EXPORT"),
     knownOtherNames(),
