@@ -109,6 +109,36 @@ test.describe("phone, 390 px", () => {
   });
 });
 
+// Lili 2026-11-01 22:01 UTC (iPhone, stage 9abcefc5): the drop-downs did not open. A touch phone: a tap opens the list; the list stands
+// outside the sideways-scrolling menu row (iOS clips a fixed element inside such a box); the resize and the scroll iOS fires as its bars
+// move keep it open, under the menu row.
+test.describe("touch phone, 390 px", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test("a tap opens the drop-down outside the scrolling menu row; a resize or a scroll does not close it", async ({ page }) => {
+    await login(page, "teszt.akvarista1");
+    const nav = page.getByRole("navigation", { name: "Fő navigáció" });
+    // the row scrolled sideways first, as on Lili's screen
+    await nav.evaluate((el) => (el.scrollLeft = el.scrollWidth));
+    const feed = nav.getByRole("button", { name: /Takarmányozás/ });
+    await feed.tap();
+    const menu = page.getByRole("menu", { name: "Takarmányozás" });
+    await expect(menu).toBeVisible();
+    expect(await menu.evaluate((el) => el.closest(".nav") === null && el.parentElement === document.body)).toBe(true);
+    await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+    await page.evaluate(() => window.scrollTo(0, 300));
+    await page.evaluate(() => window.dispatchEvent(new Event("scroll")));
+    await expect(menu, "still open after the bars moved").toBeVisible();
+    const box = (await menu.boundingBox())!;
+    const row = (await nav.boundingBox())!;
+    expect(Math.abs(box.y - (row.y + row.height))).toBeLessThan(2);
+    await expect(menu.getByRole("menuitem")).toHaveCount(7);
+    await menu.getByRole("menuitem", { name: /Fagyasztó/ }).tap();
+    await expect(page).toHaveURL(/\/takarmanyhuto$/);
+    await expect(page.getByRole("menu")).toHaveCount(0);
+  });
+});
+
 test.describe("tablet, 1024 px", () => {
   test.use({ viewport: { width: 1024, height: 768 } });
 
