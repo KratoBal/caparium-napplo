@@ -1,6 +1,7 @@
 // The first working flow (feladat-4, 4. pont): login -> pool group -> record -> saved in the DB -> log.
 import { expect, test, type Page } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
+import { readFileSync } from "node:fs";
 import { greetingFigure } from "../../src/lib/helper-notice";
 import { businessDayOf } from "../../src/lib/time";
 import { openAllSettings } from "../support/settings-folds";
@@ -1317,7 +1318,7 @@ test("body weight log: hidden, not deleted; a setting row brings it back on the 
   await expect(page.getByTestId("body-weight-form")).toHaveCount(0);
 });
 
-test("dosing: a dose in g, the log, the stock kept in kg, printable", async ({ page }) => {
+test("dosing: a dose in g, the log, the stock kept in kg, the log as a PDF made on the server", async ({ page }) => {
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Vegyszeradagolás" }).click();
   const form = page.getByTestId("dosing-form");
@@ -1330,7 +1331,12 @@ test("dosing: a dose in g, the log, the stock kept in kg, printable", async ({ p
   await expect(page.getByTestId("dosing-log")).toContainText("Teszt só");
   await expect(page.getByTestId("dosing-log")).toContainText("500 g");
   await expect(page.getByTestId("stock").getByRole("row").filter({ hasText: "Teszt só" })).toContainText("kg");
-  await expect(page.getByTestId("print")).toBeVisible();
+  // Lili 2026-11-01 (point 5): the PDF from the server, not the browser's print
+  await expect(page.getByTestId("print")).toHaveCount(0);
+  const [pdf] = await Promise.all([page.waitForEvent("download"), page.getByTestId("pdf-adagolas").click()]);
+  expect(pdf.suggestedFilename()).toMatch(/^capasuli_vegyszeradagolas_\d{4}-\d{2}-\d{2}(_\d{4}-\d{2}-\d{2})?\.pdf$/);
+  // a real PDF (its content is read back in tests/integration/server-pdfs.test.ts)
+  expect(readFileSync((await pdf.path())!).subarray(0, 5).toString()).toBe("%PDF-");
 });
 
 test("dosing: an admin changes and inactivates a chemical; it is not offered while inactive, its stock row stays", async ({ page }, info) => {
@@ -1488,6 +1494,11 @@ test("reports: the tables and the Excel; no daily report menu any more", async (
   }
   const [file] = await Promise.all([page.waitForEvent("download"), page.getByTestId("excel-kimutatas").click()]);
   expect(file.suggestedFilename()).toMatch(/^Kimutatas_\d{4}-\d{2}-\d{2}/);
+  // Lili 2026-11-01 (point 8): the PDF from the server, landscape
+  await expect(page.getByTestId("print")).toHaveCount(0);
+  const [reportPdf] = await Promise.all([page.waitForEvent("download"), page.getByTestId("pdf-kimutatas").click()]);
+  expect(reportPdf.suggestedFilename()).toMatch(/^Kimutatas_\d{4}-\d{2}-\d{2}.*\.pdf$/);
+  expect(readFileSync((await reportPdf.path())!).subarray(0, 5).toString()).toBe("%PDF-");
   // caparium-hibak-4: the daily report menu is gone (its Excel is the export page's, for one day)
   await expect(page.getByRole("link", { name: "Napi jelentő" })).toHaveCount(0);
   // VIZ-20: the monthly package's card on the export page; the overview's feeding tile

@@ -24,7 +24,7 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
   const [items, stock, types, units, otherNames, stockStart, exportLevel] = await Promise.all([
     intakeDayView(day),
     feedStock(now),
-    listFeeds(),
+    listFeeds(new Date(), day), // point 14: the feeds of the day being entered
     prisma.unit.findMany({ where: { active: true }, orderBy: { symbol: "asc" } }),
     knownOtherNames(),
     getStockStart(),

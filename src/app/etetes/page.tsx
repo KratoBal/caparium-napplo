@@ -31,7 +31,8 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
   const [view, lock, types, units, references, otherNames, lists] = await Promise.all([
     feedingDayView(day),
     dayStatus(null, day, "FEEDING"),
-    listFeeds(),
+    // point 14: the feeds of the day being entered
+    listFeeds(new Date(), day),
     prisma.unit.findMany({ where: { active: true }, orderBy: { symbol: "asc" } }),
     referencesOn(day),
     knownOtherNames(),

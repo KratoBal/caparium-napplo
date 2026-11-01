@@ -8,6 +8,7 @@ import { PrismaClient } from "@prisma/client";
 import { rebuildAnimal } from "../src/lib/animals";
 import { hashPassword } from "../src/lib/auth";
 import { BASE_FEEDS, loadBaseData, PARAMETERS, SINCE } from "../src/lib/base-data";
+import { FEED_HISTORY_START } from "../src/lib/feed-history";
 import { syntheticWanted } from "../src/lib/seed-switch";
 
 const prisma = new PrismaClient();
@@ -89,6 +90,8 @@ async function main() {
           defaultUnitId: unitId.get(f.unit)!,
           sortOrder: (sortOrder += 1),
           names: { create: { name: f.name, validFrom: SINCE } },
+            // Lili 2026-11-01 (point 14): fed from the start of the history, as the migration gave every feed
+          periods: { create: { firstDay: new Date(`${FEED_HISTORY_START}T00:00:00.000Z`), lastDay: null, createdById: SYSTEM_USER_ID } },
         },
       });
     }

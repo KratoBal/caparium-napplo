@@ -12,7 +12,9 @@ import { orderAssignments } from "./animal-order";
 import { canonicalDecimal } from "./decimal";
 import { doseAt, setDose } from "./feed-dose";
 import { moduleLevel, pickValid, validAt } from "./master";
+import { covers, FEED_HISTORY_START, feedIsOn, periodView, switchFeed } from "./feed-periods";
 import { requireReason } from "./reasons";
+import { businessDayOf, dayToDate } from "./time";
 import type { Actor } from "./measurements";
 
 const name = z
@@ -95,6 +97,8 @@ export async function createFeed(actor: Actor, input: z.infer<typeof createFeedS
         defaultUnitId: unit.id,
         sortOrder: (last?.sortOrder ?? 0) + 1,
         names: { create: { name: input.name, validFrom: now } },
+        // point 14: a new feed is fed from the start of the history, so the old data can be entered with it; the admin narrows it
+        periods: { create: { firstDay: dayToDate(FEED_HISTORY_START), lastDay: null, createdById: actor.id } },
       },
     });
     await writeAudit(tx, {
@@ -171,7 +175,13 @@ export async function updateFeed(actor: Actor, id: string, input: z.infer<typeof
         throw new AppError(422, "DOSE_UNIT", `Az alapmennyiség (${open!.value} ${open!.symbol}) egysége nem marad a takarmány dimenziói között: módosítsd vagy töröld vele együtt.`);
       }
     }
-    if (input.active !== undefined && input.active !== f.active) {
+    // fed today by its periods (the stored flag may be behind: a period ends by the calendar, not by a write)
+    const onToday = await feedIsOn(tx, id, businessDayOf(now));
+    before.active = onToday;
+    after.active = onToday;
+    if (input.active !== undefined && input.active !== onToday) {
+      // point 14: the switch closes or opens the feed's period (feed-periods.ts); the flag follows for what still reads it
+      await switchFeed(tx, id, input.active, actor.id, now);
       await tx.feed.update({ where: { id }, data: { active: input.active } });
       after.active = input.active;
     }
@@ -190,7 +200,11 @@ export async function updateFeed(actor: Actor, id: string, input: z.infer<typeof
   });
 }
 
-export async function listFeeds(at = new Date()) {
+/**
+ * The feed list by type. `active`: the feed is fed on `day` (Lili 2026-11-01, point 14: a period of it covers the day; the list
+ * of a day offers the feeds of that day), today by default; `periods`: its periods, for the admin's editor.
+ */
+export async function listFeeds(at = new Date(), day = businessDayOf(at)) {
   const doses = new Map(
     (await prisma.coralFeedDose.findMany({ where: validAt(at), include: { unit: true } })).map((d) => [d.feedId, { value: canonicalDecimal(d.dose), unitId: d.unitId, symbol: d.unit.symbol }]),
   );
@@ -199,7 +213,7 @@ export async function listFeeds(at = new Date()) {
     include: {
       feeds: {
         orderBy: { sortOrder: "asc" },
-        include: { names: true, defaultUnit: true, _count: { select: { items: true, withdrawals: true, intakes: true } } },
+        include: { names: true, defaultUnit: true, periods: { orderBy: { firstDay: "asc" } }, _count: { select: { items: true, withdrawals: true, intakes: true } } },
       },
     },
   });
@@ -216,7 +230,8 @@ export async function listFeeds(at = new Date()) {
       defaultUnitId: f.defaultUnitId,
       /** recorded items, withdrawals and intake: the unit stays while this is not 0 */
       uses: f._count.items + f._count.withdrawals + f._count.intakes,
-      active: f.active,
+      active: f.periods.some((p) => covers(periodView(p), day)),
+      periods: f.periods.map(periodView),
       temporary: f.temporary,
       sheetTick: f.sheetTick,
       /** the base amount the tick records (package item 3), or null */
