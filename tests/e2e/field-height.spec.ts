@@ -8,6 +8,7 @@
 //   hangs on, which any engine reports;
 // - every control must be the shared height, which catches a field sized apart in the stylesheet.
 import { expect, test, type Page } from "@playwright/test";
+import { openAllSettings } from "../support/settings-folds";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
 
@@ -29,6 +30,7 @@ const PAGES = [
   "/kimutatasok",
   "/fuggo",
   "/beallitasok",
+  "/profil",
 ];
 
 // Deliberately other sizes, each for a reason of its own; everything else is the shared field height.
@@ -104,6 +106,8 @@ test("every field and button has the same height on every page", async ({ page }
   for (const path of PAGES) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
+    // the settings modules start closed (point 15): opened, so their fields are measured too
+    if (path === "/beallitasok") await openAllSettings(page);
     const found = await controls(page, "main.main");
     off.push(...offHeight(path, found, height));
     native.push(...nativeSelects(path, found));

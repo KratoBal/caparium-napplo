@@ -4,7 +4,8 @@ import ExcelJS from "exceljs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { buildWithdrawalWorkbook } from "@/lib/exports/feeding-excel";
+import JSZip from "jszip";
+import { buildWithdrawalWorkbook, DAY_BAND, TOTAL_FILL, WITHDRAWAL_SUMMARY_SHEET } from "@/lib/exports/feeding-excel";
 import { saveFeedingItem, setSelection } from "@/lib/feeding";
 import { recloseDay, reopenDay, runJournalJob } from "@/lib/journal";
 import { closeWithdrawalDay, invalidateWithdrawalItem, saveWithdrawalItem, takenVersusGiven, withdrawalDayView } from "@/lib/withdrawal";
@@ -139,5 +140,75 @@ describe("the withdrawal Excel (KIV-05)", () => {
     const names: unknown[] = [];
     wb2.worksheets[0].eachRow((r, n) => n > 1 && names.push(r.getCell(3).value));
     expect(names).toContain("tintahal-fej");
+  });
+});
+
+// Lili 2026-11-01 (point 4): the rows change colour day by day; a second sheet sums each week per feed (g, kg, pieces apart) with the
+// week's pie of the grams. Days in December 2028: no other file writes withdrawals there.
+describe("the withdrawal Excel's days and weeks (point 4)", () => {
+  it("bands every other day; sums each week per feed with its total; one pie per week reading the week's cells", async () => {
+    await take("2028-12-04", { feedId: feed["Teszt hal"], quantities: [{ value: "200", unitId: unit.g }] });
+    await take("2028-12-04", { feedId: feed["Egyéb"], otherName: "kagylóhéj", quantities: [{ value: "0,1", unitId: unit.kg }] });
+    await take("2028-12-05", { feedId: feed["Teszt hal"], quantities: [{ value: "0,3", unitId: unit.kg }] }, f?.aq1, "09:00");
+    await take("2028-12-05", { feedId: feed["Litopenaeus vannamei"], quantities: [{ value: "5", unitId: unit.db }] });
+    await take("2028-12-11", { feedId: feed["Teszt hal"], quantities: [{ value: "50", unitId: unit.g }] });
+    const { buffer } = await buildWithdrawalWorkbook({ from: "2028-12-04", to: "2028-12-11" });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+    const fillOf = (c: ExcelJS.Cell) => (c.fill && c.fill.type === "pattern" ? (c.fill.fgColor?.argb ?? null) : null);
+    const val = (c: ExcelJS.Cell) => (c.value && typeof c.value === "object" && "result" in c.value ? c.value.result : c.value);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(["Munka1", WITHDRAWAL_SUMMARY_SHEET]);
+
+    const log = wb.worksheets[0];
+    const band: Record<string, Set<string | null>> = {};
+    log.eachRow((r, n) => {
+      if (n === 1) return;
+      const d = (r.getCell(1).value as Date).toISOString().slice(0, 10);
+      (band[d] ??= new Set()).add(fillOf(r.getCell(3)));
+    });
+    expect(band).toEqual({ "2028-12-04": new Set([null]), "2028-12-05": new Set([DAY_BAND]), "2028-12-11": new Set([null]) });
+
+    const sum = wb.worksheets[1];
+    const row = (n: number) => [1, 2, 3, 4].map((c) => val(sum.getRow(n).getCell(c)));
+    expect(sum.getRow(1).getCell(1).value).toBe("Hét: 2028.12.04.–2028.12.10.");
+    expect(row(2)).toEqual(["Takarmány", "Mennyiség (g)", "Mennyiség (kg)", "Darab (db)"]);
+    expect([row(3), row(4), row(5), row(6)]).toEqual([
+      ["kagylóhéj", 100, 0.1, null],
+      ["Litopenaeus vannamei", 0, 0, 5],
+      ["Teszt hal", 500, 0.5, null],
+      ["Összesen", 600, 0.6, 5],
+    ]);
+    expect((sum.getRow(6).getCell(2).value as { formula: string }).formula).toBe("SUM(B3:B5)");
+    expect(fillOf(sum.getRow(6).getCell(1))).toBe(TOTAL_FILL);
+    // the next week, its block under the first one's pie
+    let second = 0;
+    sum.eachRow((r, n) => {
+      if (String(r.getCell(1).value).startsWith("Hét: 2028.12.11.")) second = n;
+    });
+    expect(second).toBeGreaterThanOrEqual(18);
+    expect(sum.getRow(second).getCell(1).value).toBe("Hét: 2028.12.11.–2028.12.11.");
+    expect([row(second + 2), row(second + 3)]).toEqual([
+      ["Teszt hal", 50, 0.05, null],
+      ["Összesen", 50, 0.05, 0],
+    ]);
+
+    // the pies: one chart part a week, on the summary sheet's drawing, reading that week's name and gram cells
+    const zip = await JSZip.loadAsync(buffer);
+    const charts = Object.keys(zip.files).filter((n) => /^xl\/charts\/chart\d+\.xml$/.test(n)).sort();
+    expect(charts).toEqual(["xl/charts/chart1.xml", "xl/charts/chart2.xml"]);
+    const c1 = await zip.file(charts[0])!.async("string");
+    expect(c1).toContain("<c:pieChart>");
+    expect(c1).toContain("<c:f>'Heti összesítő'!$A$3:$A$5</c:f>");
+    expect(c1).toContain("<c:f>'Heti összesítő'!$B$3:$B$5</c:f>");
+    expect(c1).toContain("<a:t>Hét: 2028.12.04.–2028.12.10.</a:t>");
+    const c2 = await zip.file(charts[1])!.async("string");
+    expect(c2).toContain(`$A$${second + 2}:$A$${second + 2}</c:f>`);
+    expect(await zip.file("xl/worksheets/sheet2.xml")!.async("string")).toMatch(/<drawing r:id="rIdPieDrawing"\/><\/worksheet>|<drawing r:id="rIdPieDrawing"\/></);
+    expect(await zip.file("xl/worksheets/_rels/sheet2.xml.rels")!.async("string")).toContain('Target="../drawings/drawing1.xml"');
+    const types = await zip.file("[Content_Types].xml")!.async("string");
+    expect(types).toContain('PartName="/xl/charts/chart2.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"');
+    expect(types).toContain('PartName="/xl/drawings/drawing1.xml"');
+    // the log sheet has no drawing
+    expect(await zip.file("xl/worksheets/sheet1.xml")!.async("string")).not.toContain("<drawing");
   });
 });

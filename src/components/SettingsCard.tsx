@@ -1,37 +1,30 @@
 "use client";
 
 // Lili 2026-10-29 (caparium-finomitas-1): the settings page's modules fold, so the one being worked on is not lost
-// among the others. Each opens by default; what a viewer folds stays folded in that browser (a viewer's own
-// convenience, so the browser's storage, wrapped: without it every module is simply open).
+// among the others. Lili 2026-11-01 (point 15): every module starts closed and opens only on a click; nothing is
+// remembered between visits. The one exception is a link to a module's anchor (`/beallitasok#felhasznalok`, from the
+// ZIMS warnings): that module opens, or the link would land on a closed heading.
 import { useEffect, useState, type ReactNode } from "react";
 
-const KEY = (id: string) => `caparium-beallitasok-csukva:${id}`;
-
 export function SettingsCard({ id, title, testId, htmlId, children }: { id: string; title: string; testId?: string; htmlId?: string; children: ReactNode }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   useEffect(() => {
-    try {
-      if (window.localStorage.getItem(KEY(id)) === "1") setOpen(false);
-    } catch {
-      /* no storage: open */
-    }
-  }, [id]);
+    if (!htmlId) return;
+    const fromHash = () => {
+      if (window.location.hash === `#${htmlId}`) setOpen(true);
+    };
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
+    return () => window.removeEventListener("hashchange", fromHash);
+  }, [htmlId]);
   return (
     <details
       className="card settings-fold"
       data-testid={testId}
+      data-fold={id}
       id={htmlId}
       open={open}
-      onToggle={(e) => {
-        const now = (e.currentTarget as HTMLDetailsElement).open;
-        setOpen(now);
-        try {
-          if (now) window.localStorage.removeItem(KEY(id));
-          else window.localStorage.setItem(KEY(id), "1");
-        } catch {
-          /* no storage: not remembered */
-        }
-      }}
+      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
     >
       <summary>
         <h2>{title}</h2>

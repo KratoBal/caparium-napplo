@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import type { SessionUser } from "@/lib/auth";
 import type { HelperData } from "@/lib/helpers";
 import { greetingName } from "@/lib/helper-notice";
-import { navFor, type NavKey } from "@/lib/nav";
+import { navFor, phoneGroups, type NavKey } from "@/lib/nav";
 import { Helper } from "./Helper";
 import { HelperToggle } from "./HelperToggle";
+import { NavGroup } from "./NavGroup";
 import { ReasonProvider } from "./ReasonSwitch";
 import { TopbarUser } from "./TopbarUser";
 
@@ -54,21 +56,7 @@ export function ShellView({
         </header>
       </div>
       <nav className="nav" aria-label="Fő navigáció">
-        {user &&
-          navFor(user.role).map((n) => (
-            <Link
-              key={n.label}
-              href={n.href}
-              className={[n.tone ? `nav-${n.tone}` : "", n.key === active ? "active" : ""].filter(Boolean).join(" ") || undefined}
-            >
-              {n.icon && (
-                <span className="nav-icon" aria-hidden="true">
-                  {n.icon}
-                </span>
-              )}
-              {n.label}
-            </Link>
-          ))}
+        {user && <NavLinks items={navFor(user.role)} active={active} />}
         <div className="nav-foot">CÁPASULI • TESZTKÖRNYEZET</div>
       </nav>
       <main className="main">
@@ -77,4 +65,32 @@ export function ShellView({
       {helper && <Helper data={helper} userName={user ? greetingName(user) : undefined} loginAt={user?.sessionStartedAt} userKey={user?.id} />}
     </div>
   );
+}
+
+/**
+ * The menu entries. A colored entry is also part of its group's phone drop-down, which stands before the group's first entry: on a
+ * phone the drop-downs show and the colored entries hide, on a tablet and a desktop the other way round (globals.css), so the server
+ * renders one markup for both and nothing jumps at hydration.
+ */
+function NavLinks({ items, active }: { items: ReturnType<typeof navFor>; active?: NavKey }) {
+  const groups = phoneGroups(items);
+  return items.map((n) => {
+    const group = groups.get(n.key);
+    return (
+      <Fragment key={n.label}>
+        {group && <NavGroup label={group.label} tone={group.tone} items={group.items} active={active} />}
+        <Link
+          href={n.href}
+          className={[n.tone ? `nav-${n.tone} nav-in-group` : "", n.key === active ? "active" : ""].filter(Boolean).join(" ") || undefined}
+        >
+          {n.icon && (
+            <span className="nav-icon" aria-hidden="true">
+              {n.icon}
+            </span>
+          )}
+          {n.label}
+        </Link>
+      </Fragment>
+    );
+  });
 }

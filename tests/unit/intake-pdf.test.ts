@@ -12,8 +12,11 @@ const sample: IntakeReport = {
     { day: "2026-10-12", type: "Rákok", feed: "Pecten jacobaeus", quantity: "5", unit: "kg", note: "nyitó készlet", returned: false },
     { day: "2026-10-14", type: "Rákok", feed: "Loligo sp.", quantity: "10", unit: "kg", note: "nem megfelelő", returned: true },
   ],
-  taken: [{ feed: "Pecten jacobaeus", unit: "kg", quantity: "1,10" }],
-  closing: [{ feed: "Pecten jacobaeus", unit: "kg", level: "3,90", negative: false, low: false }],
+  // Lili 2026-11-01 (point 7): one table a feed; the Loligo's withdrawal came before its stock started
+  balance: [
+    { feed: "Pecten jacobaeus", lines: [{ unit: "kg", opening: "0,00", received: "5,00", taken: "1,10", beforeStock: null, closing: "3,90", negative: false, low: false }] },
+    { feed: "Scomber scombrus", lines: [{ unit: "g", opening: "0", received: "0", taken: "0", beforeStock: "250", closing: "0", negative: false, low: false }] },
+  ],
 };
 
 describe("the Cápasuli takarmányegyenleg PDF", () => {
@@ -25,11 +28,16 @@ describe("the Cápasuli takarmányegyenleg PDF", () => {
     expect(lines.some((l) => /\.\./.test(l))).toBe(false);
     // no hyphenated date anywhere in the document
     expect(lines.some((l) => /\d{4}-\d{2}-\d{2}/.test(l))).toBe(false);
-    for (const s of ["Bevételek", "Kivételek takarmányonként", "Záró készlet (2026.10.30. végén)"]) expect(lines.some((l) => l.includes(s)), s).toBe(true);
+    for (const s of ["Bevételek", "Egyenleg takarmányonként (2026.10.01. – 2026.10.30.)"]) expect(lines.some((l) => l.includes(s)), s).toBe(true);
     expect(lines.some((l) => l.includes("2026.10.12.") && l.includes("Pecten jacobaeus") && l.includes("5 kg") && l.includes("nyitó készlet"))).toBe(true);
     expect(lines.some((l) => l.includes("2026.10.14.") && l.includes("Loligo sp.") && l.includes("10 kg") && l.includes("igen"))).toBe(true);
-    expect(lines.some((l) => l.includes("Pecten jacobaeus") && l.includes("1,10 kg"))).toBe(true);
-    expect(lines.some((l) => l.includes("Pecten jacobaeus") && l.includes("3,90 kg"))).toBe(true);
+    // a table a feed: its name, the header, its line; the column of the withdrawals before the stock only where there are some
+    const pecten = lines.lastIndexOf("Pecten jacobaeus");
+    expect(lines[pecten + 1]).toBe("Nyitó Bevétel Kivétel Záró Jelzés");
+    expect(lines[pecten + 2]).toBe("0,00 kg 5,00 kg 1,10 kg 3,90 kg");
+    const scomber = lines.indexOf("Scomber scombrus");
+    expect(lines[scomber + 1]).toBe("Nyitó Bevétel Kivétel Készlet előtti kivétel Záró Jelzés");
+    expect(lines[scomber + 2]).toBe("0 g 0 g 0 g 250 g 0 g");
   });
 
   it("the header labels stay whole and the rows do not run into each other: a long type or note makes the row taller", async () => {
@@ -53,7 +61,7 @@ describe("the Cápasuli takarmányegyenleg PDF", () => {
     expect(iSecond - iFirst).toBeGreaterThanOrEqual(2);
     expect(lines.slice(iFirst, iSecond).join(" ")).toContain("biztosan");
     // and the band of the next section is below the last row
-    expect(lines.findIndex((l) => l.includes("Kivételek takarmányonként"))).toBeGreaterThan(iSecond);
+    expect(lines.findIndex((l) => l.includes("Egyenleg takarmányonként"))).toBeGreaterThan(iSecond);
   });
 
   it("only the returned delivery's texts are red", async () => {
@@ -66,9 +74,9 @@ describe("the Cápasuli takarmányegyenleg PDF", () => {
   });
 
   it("with nothing in the period it says so in each section instead of printing an empty table", async () => {
-    const lines = await readPdfLines(new Uint8Array(await intakePdfFrom({ from: "2026-10-01", to: "2026-10-01", intake: [], taken: [], closing: [] })));
+    const lines = await readPdfLines(new Uint8Array(await intakePdfFrom({ from: "2026-10-01", to: "2026-10-01", intake: [], balance: [] })));
     expect(lines[0]).toBe("Cápasuli takarmányegyenleg: 2026.10.01.");
-    for (const s of ["Az időszakban nem érkezett takarmány.", "Az időszakban nem volt kivétel.", "Nincs követett készlet."]) expect(lines.some((l) => l.includes(s)), s).toBe(true);
+    for (const s of ["Az időszakban nem érkezett takarmány.", "Az időszakban nem volt készletmozgás."]) expect(lines.some((l) => l.includes(s)), s).toBe(true);
     expect(intakeTitle({ from: "2026-10-01", to: "2026-10-02" })).toBe("Cápasuli takarmányegyenleg: 2026.10.01. – 2026.10.02.");
   });
 });

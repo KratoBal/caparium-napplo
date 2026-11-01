@@ -57,7 +57,7 @@ function Card({
   const plan = result?.kind === "dose" && system ? dailyPlan(code, system, toNumber(current), toNumber(target), result.grams) : null;
   const raiseFmt = new Intl.NumberFormat("hu-HU", { maximumFractionDigits: 2 });
   return (
-    <div className="card" data-testid={`chem-${code}`} style={{ margin: 0 }}>
+    <div className="card chem-card" data-testid={`chem-${code}`} style={{ margin: 0 }}>
       <h3>{title}</h3>
       {children}
       <div className="toolbar">

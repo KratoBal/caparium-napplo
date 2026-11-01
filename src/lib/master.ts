@@ -2,8 +2,10 @@
 
 import type { AppModule, JournalKind, Prisma } from "@prisma/client";
 import { prisma, type Tx } from "./db";
+import { canonicalDecimal } from "./decimal";
 import { takesDilution } from "./dilution";
 import { effectiveLevel, type Level, type Role } from "./permissions";
+import type { ReadingConversion } from "./reading";
 import { businessDayOf, dateToDay, dayToDate } from "./time";
 
 export function validAt(at: Date) {
@@ -90,6 +92,8 @@ export type LayoutParameter = {
   unit: { id: string; symbol: string; dimension: string; factorToBase: string | null };
   plausibleMin: string | null;
   plausibleMax: string | null;
+  /** point 13: in force, what is typed is a tester's reading, converted to the value (src/lib/reading.ts) */
+  conversion: ReadingConversion | null;
 };
 
 /** The rows (pools) and columns (parameters) of a measurement group at an instant. */
@@ -107,7 +111,7 @@ export async function groupLayout(
     tx.groupParameter.findMany({
       where: { groupId, ...validAt(at) },
       orderBy: { sortOrder: "asc" },
-      include: { parameter: { include: { names: true, unit: true } } },
+      include: { parameter: { include: { names: true, unit: true, conversions: { where: validAt(at), orderBy: { validFrom: "desc" }, take: 1 } } } },
     }),
   ]);
   return {
@@ -133,6 +137,9 @@ export async function groupLayout(
       },
       plausibleMin: gp.parameter.plausibleMin?.toString() ?? null,
       plausibleMax: gp.parameter.plausibleMax?.toString() ?? null,
+      conversion: gp.parameter.conversions[0]
+        ? (({ id, label, factor, decimals }) => ({ id, label, factor: canonicalDecimal(factor), decimals }))(gp.parameter.conversions[0])
+        : null,
     })),
   };
 }
@@ -178,7 +185,8 @@ export async function monogramResolver(userIds: string[]) {
   const names = new Map(users.map((u) => [u.id, u.fullName]));
   return {
     monogram(userId: string, at: Date): string {
-      return pickValid(byUser.get(userId) ?? [], at)?.monogram ?? names.get(userId) ?? "?";
+      // before the worker's first monogram began (a measurement recorded back in time): that first one (Lili 2026-11-01, point 1)
+      return nameAt(byUser.get(userId) ?? [], at)?.monogram ?? names.get(userId) ?? "?";
     },
     name(userId: string): string {
       return names.get(userId) ?? "?";

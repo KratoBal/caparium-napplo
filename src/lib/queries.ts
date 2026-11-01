@@ -23,6 +23,9 @@ export type CellView = {
   range: RangeView | null;
   dilution: number | null;
   diluentWater: "RO" | "SW" | null;
+  /** point 13: the tester's reading and the conversion's name, when the value was converted (the grid shows a dot) */
+  rawReading: string | null;
+  conversionLabel: string | null;
 };
 
 function rangeView(r: { min: Prisma.Decimal | null; max: Prisma.Decimal | null; unit: { symbol: string } } | null): RangeView | null {
@@ -75,11 +78,11 @@ export async function getGrid(groupId: string, day: string, roundSeq?: number) {
 
   const all = await prisma.measurement.findMany({
     where: { round: { groupId, businessDay }, status: "VALID" },
-    include: { unit: true, referenceRange: { include: { unit: true } } },
+    include: { unit: true, referenceRange: { include: { unit: true } }, conversion: { select: { label: true } } },
     orderBy: [{ measuredAt: "asc" }, { createdAt: "asc" }],
   });
   const mono = await monogramResolver(all.map((m) => m.responsibleUserId));
-  const toCell = (m: MeasurementWithRefs): CellView => ({
+  const toCell = (m: MeasurementWithRefs & { conversion: { label: string } | null }): CellView => ({
     id: m.id,
     value: canonicalDecimal(m.value),
     version: m.version,
@@ -91,6 +94,8 @@ export async function getGrid(groupId: string, day: string, roundSeq?: number) {
     range: rangeView(m.referenceRange),
     dilution: m.dilution,
     diluentWater: m.diluentWater,
+    rawReading: m.rawReading === null ? null : canonicalDecimal(m.rawReading),
+    conversionLabel: m.conversion?.label ?? null,
   });
 
   // an inactive pool (a renovation) stays on the earlier days it has a measurement, read only; on the others, and today
