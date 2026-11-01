@@ -94,6 +94,8 @@ export type LayoutParameter = {
   plausibleMax: string | null;
   /** point 13: in force, what is typed is a tester's reading, converted to the value (src/lib/reading.ts) */
   conversion: ReadingConversion | null;
+  /** point 9: the pools this column is filled in; null = every pool of the group */
+  pools: string[] | null;
 };
 
 /** The rows (pools) and columns (parameters) of a measurement group at an instant. */
@@ -140,6 +142,7 @@ export async function groupLayout(
       conversion: gp.parameter.conversions[0]
         ? (({ id, label, factor, decimals }) => ({ id, label, factor: canonicalDecimal(factor), decimals }))(gp.parameter.conversions[0])
         : null,
+      pools: gp.poolIds.length ? gp.poolIds : null,
     })),
   };
 }

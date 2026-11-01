@@ -204,6 +204,8 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .cell-input { width: 100%; min-width: 96px; max-width: 160px; min-height: 56px; font-size: 20px; border-radius: var(--radius-sm); background: var(--c-field); border: 2px solid transparent; padding: 0 14px; }
 .cell-input:focus { outline: none; border-color: var(--c-primary); background: var(--c-white); }
 .cell-input.out { background: var(--c-error-soft); color: var(--c-error); }
+/* point 9: a column not measured in this pool */
+.cell-na .cell-value { background: transparent; color: var(--c-muted); }
 .cell-value { display: flex; align-items: center; min-height: 56px; font-size: 20px; padding: 0 14px; border-radius: var(--radius-sm); background: var(--c-field); max-width: 160px; }
 .cell-value.empty { color: var(--c-muted); }
 .cell-value.out { background: var(--c-error-soft); color: var(--c-error); }

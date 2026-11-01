@@ -335,6 +335,8 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
       // a pool off for a while (a renovation) takes no new measurement; a recorded one can still be corrected
       // point 16: not in use on the measurement's day (a renovation, or before it was taken into use), by its periods
       if (!pool.active) throw new AppError(422, "POOL_INACTIVE", "Ezen a napon a medence nincs használatban (például felújítás), új mérés nem rögzíthető rá.");
+      // point 9: a measurement started in some pools only; the others have no field for it
+      if (param.pools && !param.pools.includes(pool.id)) throw new AppError(422, "NOT_MEASURED_HERE", `A(z) ${param.name} mérést ebben a medencében nem végzik.`);
       const converted = input.rawReading ? await valueFromReading(tx, param.id, measuredAt, input.rawReading) : null;
       if (converted) value = converted.value;
       else refuseDirectValue(param);
