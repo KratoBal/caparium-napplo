@@ -175,7 +175,8 @@ export async function monogramResolver(userIds: string[]) {
   const names = new Map(users.map((u) => [u.id, u.fullName]));
   return {
     monogram(userId: string, at: Date): string {
-      return pickValid(byUser.get(userId) ?? [], at)?.monogram ?? names.get(userId) ?? "?";
+      // before the worker's first monogram began (a measurement recorded back in time): that first one (Lili 2026-11-01, point 1)
+      return nameAt(byUser.get(userId) ?? [], at)?.monogram ?? names.get(userId) ?? "?";
     },
     name(userId: string): string {
       return names.get(userId) ?? "?";
