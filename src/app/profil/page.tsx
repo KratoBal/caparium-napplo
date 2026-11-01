@@ -18,7 +18,7 @@ export default async function OwnProfilePage() {
     <Shell title="Saját beállítások" user={user}>
       <div className="card">
         <h2>Név</h2>
-        <p className="hint">Felhasználónév: {u.loginId}. Ez a név látszik a fejlécben és a köszöntésben.</p>
+        <p className="hint">Felhasználónév: {u.loginId}. Ez a név látszik a fejlécben és a naplókban; a köszöntés a becenevet használja.</p>
         <OwnNameForm fullName={u.fullName} />
       </div>
       {/* Lili 2026-11-01 (point 17): the helper's greeting only; the header and the logs keep the official name */}
