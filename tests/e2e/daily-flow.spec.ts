@@ -1,6 +1,8 @@
 // The first working flow (feladat-4, 4. pont): login -> pool group -> record -> saved in the DB -> log.
 import { expect, test, type Page } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
+import { greetingFigure } from "../../src/lib/helper-notice";
+import { businessDayOf } from "../../src/lib/time";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
 
@@ -2315,6 +2317,7 @@ test("daily measurement: the pool ticks save on their own and survive a reload; 
 // name, and the greeting goes with the FIRST click anywhere, which still reaches its target; once per login. The pictures
 // turn towards the page, there is no name under the figure.
 test("the helper greets after the login, goes with the first click that still works, and does not greet again in the same login", async ({ page }) => {
+  const dayBefore = businessDayOf(new Date());
   await login(page, "teszt.akvarista1");
   const helper = page.getByTestId("helper");
   await expect(helper).toHaveAttribute("data-ready", "1");
@@ -2323,6 +2326,12 @@ test("the helper greets after the login, goes with the first click that still wo
   await expect(hello).toHaveText("Üdv a fedélzeten Teszt.akvarista1!");
   const picture = helper.getByTestId("helper-button").locator("img");
   await expect(picture).toHaveAttribute("src", /^\/segito\/(antennarius|zebracapa)-udv-[123]\.webp$/);
+  // the day's greeter (Lili 2026-11-01: not the page's figure every day), its bubble colour with it; a login across midnight may
+  // see either day's
+  const shown = await picture.getAttribute("src");
+  const expected = [dayBefore, businessDayOf(new Date())].map(greetingFigure);
+  expect(expected.map((g) => `/segito/${g.slug}-udv-${g.picture}.webp`)).toContain(shown);
+  expect(expected.map((g) => g.slug)).toContain(await helper.getAttribute("data-figure"));
   expect(await picture.evaluate((img: HTMLImageElement) => getComputedStyle(img).transform)).toBe("matrix(-1, 0, 0, 1, 0, 0)"); // towards the page
   await expect(helper.locator(".helper-name")).toHaveCount(0);
   // the first click is a click on a link: it goes through to the page, and the greeting goes
