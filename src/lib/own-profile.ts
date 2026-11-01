@@ -17,6 +17,8 @@ export const ownProfileSchema = z
       .max(100)
       .refine((v) => !/^[=+\-@\t\r]/.test(v), "A név nem kezdődhet =, +, -, @ jellel (táblázatkezelőben képletként futna).")
       .optional(),
+    /** point 17: the greeting's name; "" clears it (the given name then) */
+    nickname: z.string().trim().max(40).optional(),
     currentPassword: z.string().max(200).optional(),
     newPassword: z.string().min(10, "Az új jelszó legalább 10 karakter legyen.").max(200).optional(),
   })
@@ -34,6 +36,8 @@ export async function updateOwnProfile(actor: SessionUser, input: OwnProfileInpu
   if (!u || !u.active) throw new AppError(404, "NOT_FOUND", "A felhasználó nem található.");
   const changes: Record<string, { before: unknown; after: unknown }> = {};
   if (input.fullName !== undefined && input.fullName !== u.fullName) changes.fullName = { before: u.fullName, after: input.fullName };
+  const nickname = input.nickname === undefined ? undefined : input.nickname || null;
+  if (nickname !== undefined && nickname !== u.nickname) changes.nickname = { before: u.nickname, after: nickname };
   let passwordHash: string | undefined;
   if (input.newPassword !== undefined) {
     const check = await checkOwnPassword(u.id, input.currentPassword ?? "", session.client);
@@ -49,7 +53,7 @@ export async function updateOwnProfile(actor: SessionUser, input: OwnProfileInpu
   await prisma.$transaction(async (tx) => {
     await tx.user.update({
       where: { id: u.id },
-      data: { ...(changes.fullName ? { fullName: input.fullName } : {}), ...(passwordHash ? { passwordHash } : {}) },
+      data: { ...(changes.fullName ? { fullName: input.fullName } : {}), ...(changes.nickname ? { nickname } : {}), ...(passwordHash ? { passwordHash } : {}) },
     });
     // the other devices log in again with the new password; this one stays
     if (passwordHash) await tx.session.deleteMany({ where: { userId: u.id, ...(keep ? { id: { not: keep } } : {}) } });

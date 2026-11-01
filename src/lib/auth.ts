@@ -38,7 +38,7 @@ function tokenHash(token: string): string {
 }
 
 /** `sessionStartedAt`: when this login began (ms), not a secret: the helper greets once per login with it (Lili 2026-10-29). */
-export type SessionUser = { id: string; fullName: string; loginId: string; role: Role; sessionStartedAt?: number };
+export type SessionUser = { id: string; fullName: string; loginId: string; role: Role; sessionStartedAt?: number; nickname?: string | null };
 
 const MAX_FAILURES = 10;
 const FAILURE_WINDOW_MIN = 15;
@@ -119,7 +119,7 @@ export async function login(loginId: string, password: string, client: string | 
     ok: true,
     token,
     expiresAt,
-    user: { id: user.id, fullName: user.fullName, loginId: user.loginId, role: user.role },
+    user: { id: user.id, fullName: user.fullName, loginId: user.loginId, role: user.role, nickname: user.nickname },
   };
 }
 
@@ -160,7 +160,7 @@ export async function userForToken(token: string | undefined | null): Promise<Se
   if (!token) return null;
   const session = await prisma.session.findUnique({ where: { id: tokenHash(token) }, include: { user: true } });
   if (!session || session.expiresAt <= new Date() || !session.user.active || session.user.role === "SYSTEM") return null;
-  return { id: session.user.id, fullName: session.user.fullName, loginId: session.user.loginId, role: session.user.role, sessionStartedAt: session.createdAt.getTime() };
+  return { id: session.user.id, fullName: session.user.fullName, loginId: session.user.loginId, role: session.user.role, sessionStartedAt: session.createdAt.getTime(), nickname: session.user.nickname };
 }
 
 export function readCookie(header: string | null, name: string): string | undefined {

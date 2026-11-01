@@ -1,6 +1,7 @@
-import { OwnNameForm, OwnPasswordForm } from "@/components/OwnProfileForms";
+import { OwnNameForm, OwnNicknameForm, OwnPasswordForm } from "@/components/OwnProfileForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
+import { greetingName } from "@/lib/helper-notice";
 import { pickValid } from "@/lib/master";
 import { requireUser } from "@/lib/session";
 
@@ -17,8 +18,14 @@ export default async function OwnProfilePage() {
     <Shell title="Saját beállítások" user={user}>
       <div className="card">
         <h2>Név</h2>
-        <p className="hint">Felhasználónév: {u.loginId}. Ez a név látszik a fejlécben és a köszöntésben.</p>
+        <p className="hint">Felhasználónév: {u.loginId}. Ez a név látszik a fejlécben és a naplókban; a köszöntés a becenevet használja.</p>
         <OwnNameForm fullName={u.fullName} />
+      </div>
+      {/* Lili 2026-11-01 (point 17): the helper's greeting only; the header and the logs keep the official name */}
+      <div className="card">
+        <h2>Becenév</h2>
+        <p className="hint">Ezen a néven köszön a segítő. Üresen a hivatalos név keresztneve: {greetingName({ fullName: u.fullName })}.</p>
+        <OwnNicknameForm nickname={u.nickname ?? ""} />
       </div>
       <div className="card">
         <h2>Jelszó</h2>
