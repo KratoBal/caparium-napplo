@@ -71,12 +71,13 @@ describe("the closing stock's mark is read at the period's end, not today (barra
     const id = (await createFeed(f.admin, { requestId: rid(), typeId: type.id, name: "Hűtő-export fogyóban", dimensions: ["MASS"], defaultUnitId: unit.g }, new Date("2026-09-01T08:00:00Z"))).id;
     await saveIntakeItem(f.aq1, { requestId: rid(), day: "2026-09-05", feedId: id, quantities: [{ value: "1", unitId: unit.kg }] }, at("2026-09-05", "08:00"));
     await saveWithdrawalItem(f.aq1, { requestId: rid(), day: "2026-09-10", feedId: id, quantities: [{ value: "950", unitId: unit.g }] }, at("2026-09-10", "09:00"));
-    // 950 g taken in the 30 days before the 20th, 50 g left: about 1,6 days. "Today" is 40 days after the period's end.
+    // 950 g taken in the 30 days before the 20th, 50 g left: about 1,6 days. "Today" is 40 days after the period's end. The line
+    // reads in kg as a whole, because one of its values (the 1000 g in) reaches 1000 g (the pages' rule, mass-display.ts)
     const r = await intakeReport({ from: "2026-09-01", to: "2026-09-20" }, at("2026-10-30", "12:00"));
-    expect(r.balance.find((t) => t.feed === "Hűtő-export fogyóban")?.lines).toEqual([{ unit: "g", opening: "0", received: "1000", taken: "950", beforeStock: null, closing: "50", negative: false, low: true }]);
+    expect(r.balance.find((t) => t.feed === "Hűtő-export fogyóban")?.lines).toEqual([{ unit: "kg", opening: "0,00", received: "1,00", taken: "0,95", beforeStock: null, closing: "0,05", negative: false, low: true }]);
     // a period that ends in the future is read as of now: the mark is today's
     const later = await intakeReport({ from: "2026-09-01", to: "2026-12-31" }, at("2026-10-30", "12:00"));
-    expect(later.balance.find((t) => t.feed === "Hűtő-export fogyóban")?.lines[0].closing).toBe("50");
+    expect(later.balance.find((t) => t.feed === "Hűtő-export fogyóban")?.lines[0].closing).toBe("0,05");
   });
 });
 
