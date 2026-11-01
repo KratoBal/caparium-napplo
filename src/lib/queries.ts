@@ -137,8 +137,10 @@ export async function getGrid(groupId: string, day: string, roundSeq?: number) {
   return {
     group: { id: group.id, name: group.name, frequency: group.frequency },
     day,
-    // the pool ticks of the day (item 8 of Lili's package): the kinds this group offers, and which are on
-    tickKinds: tickKindsOf(group.code),
+    // the pool ticks of the day (item 8 of Lili's package): the kinds this group offers each pool, and which are on
+    tickKinds: Object.fromEntries(
+      (await prisma.pool.findMany({ where: { id: { in: layout.pools.map((p) => p.id) } }, select: { id: true, code: true } })).map((p) => [p.id, tickKindsOf(group.code, p.code)]),
+    ),
     ticks: await ticksOfDay(day),
     layout,
     rounds: rounds.map((r) => ({ id: r.id, seq: r.seq })),
