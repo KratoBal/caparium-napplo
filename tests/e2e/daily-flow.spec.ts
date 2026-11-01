@@ -1087,6 +1087,7 @@ test("settings: a pool goes off for a renovation and comes back", async ({ page 
   await expect(row.getByRole("status")).toHaveText("Inaktiválva.");
   await expect(row).toHaveClass(/invalid/);
   await page.reload();
+  await openAllSettings(page);
   await expect(row, "an inactive pool is hidden by default").toHaveCount(0);
   await expect(showInactive).not.toBeChecked();
   // off the weekly grid of today
