@@ -36,6 +36,7 @@ const PAGES = [
   "/takarmany-naplo",
   "/takarmanyhuto",
   "/beallitasok",
+  "/profil",
 ];
 
 test("no page shows a hyphenated ISO date as text; the day pages show the dotted one", async ({ page }) => {
