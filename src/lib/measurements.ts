@@ -6,7 +6,7 @@ import type { DiluentWater, Measurement, RecordStatus } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
 import { prisma, type Tx } from "./db";
-import { compareDecimal, parseDecimalInput, canonicalDecimal } from "./decimal";
+import { compareDecimal, parseDecimalInput, canonicalDecimal, multiplyDecimal } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
 import { valueFromReading } from "./conversion";
 import { ensureJournalDay, getSetting, groupLayout, moduleLevel, referenceAt } from "./master";
@@ -87,6 +87,8 @@ export type MeasurementView = {
   diluentWater: DiluentWater | null;
   /** the tester's reading the value was converted from (point 13), or null */
   rawReading: string | null;
+  /** the value before the weekly dilution, or null (no dilution) */
+  baseValue: string | null;
 };
 
 export type WriteResult = {
@@ -114,6 +116,7 @@ export function toView(m: Measurement): MeasurementView {
     dilution: m.dilution,
     diluentWater: m.diluentWater,
     rawReading: m.rawReading === null ? null : canonicalDecimal(m.rawReading),
+    baseValue: m.baseValue === null ? null : canonicalDecimal(m.baseValue),
   };
 }
 
@@ -134,6 +137,7 @@ function snapshot(m: Measurement): Record<string, unknown> {
     referenceRangeId: m.referenceRangeId,
     rawReading: m.rawReading === null ? null : canonicalDecimal(m.rawReading),
     conversionId: m.conversionId,
+    baseValue: m.baseValue === null ? null : canonicalDecimal(m.baseValue),
     status: m.status,
     invalidationReason: m.invalidationReason,
     version: m.version,
@@ -163,6 +167,16 @@ function checkDilution(d: number | null | undefined): void {
   if (!Number.isInteger(d) || d < 1 || d > 100) {
     throw new AppError(422, "INVALID_DILUTION", "A hígítás 1 és 100 közötti egész szám legyen.");
   }
+}
+
+/**
+ * Lili 2026-11-01 22:35 UTC (msg 1566581352915149004): the weekly dilution is a factor, not a note. What is typed (or converted from a
+ * tester's reading) is the value before it; the stored value is that times the dilution, and the value before it is kept beside it.
+ * No dilution or 1x: the value itself, nothing beside it.
+ */
+function applyDilution(base: string, dilution: number | null | undefined): { value: string; baseValue: string | null } {
+  if (!dilution || dilution <= 1) return { value: base, baseValue: null };
+  return { value: canonicalDecimal(multiplyDecimal(base, String(dilution))), baseValue: base };
 }
 
 /** A dilution or a diluent water only on the nitrate and the phosphate (src/lib/dilution.ts); clearing is allowed. */
@@ -340,8 +354,10 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
       const converted = input.rawReading ? await valueFromReading(tx, param.id, measuredAt, input.rawReading) : null;
       if (converted) value = converted.value;
       else refuseDirectValue(param);
-      checkPlausible(value, param, input.confirmPlausibility);
       checkDilutionAllowed(param, input);
+      const diluted = applyDilution(value, param.dilution ? input.dilution : null);
+      value = diluted.value;
+      checkPlausible(value, param, input.confirmPlausibility);
 
       const journal = await ensureJournalDay(tx, "WATER", group.id, day);
       const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
@@ -374,6 +390,7 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
           referenceRangeId: ref?.id ?? null,
           rawReading: converted?.rawReading ?? null,
           conversionId: converted?.conversionId ?? null,
+          baseValue: diluted.baseValue,
           requestId: input.requestId,
           status: pending ? "PENDING" : "VALID",
           createdById: actor.id,
@@ -482,8 +499,16 @@ export async function updateMeasurement(
           : input.rawReading === null || newValue !== undefined
             ? { rawReading: null, conversionId: null }
             : {};
-      if (newValue !== undefined) checkPlausible(newValue, param, input.confirmPlausibility);
       checkDilutionAllowed(param, input);
+      // the dilution's factor again when the value or the dilution changes (an old row too: its value is the value before it)
+      let diluted: { value?: string; baseValue?: string | null } = {};
+      if (param.dilution && (newValue !== undefined || input.dilution !== undefined)) {
+        const base = newValue ?? (cur.baseValue !== null ? canonicalDecimal(cur.baseValue) : canonicalDecimal(cur.value));
+        const d = applyDilution(base, input.dilution !== undefined ? input.dilution : cur.dilution);
+        diluted = d;
+        newValue = d.value;
+      }
+      if (newValue !== undefined) checkPlausible(newValue, param, input.confirmPlausibility);
 
       let roundId = cur.roundId;
       if (newDay !== oldDay || input.newRound) {
@@ -501,6 +526,7 @@ export async function updateMeasurement(
           roundId,
           value: newValue ?? undefined,
           ...reading,
+          ...("baseValue" in diluted ? { baseValue: diluted.baseValue } : {}),
           measuredAt,
           businessDay: dayToDate(newDay),
           responsibleUserId: responsibleId,

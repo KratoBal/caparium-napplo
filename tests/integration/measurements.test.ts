@@ -1,7 +1,9 @@
 // Measurement rules against a real PostgreSQL (adatmodell 4. és 14. terület, K5, K6, K9).
 // Every test uses its own business day, so the tests do not depend on each other.
 import { beforeAll, describe, expect, it } from "vitest";
+import ExcelJS from "exceljs";
 import { prisma } from "@/lib/db";
+import { buildWaterWorkbook } from "@/lib/exports/excel";
 import { AppError } from "@/lib/errors";
 import {
   createMeasurement,
@@ -276,7 +278,9 @@ describe("stale client time without a measurement time (review of #1, note)", ()
 });
 
 describe("weekly measurement (VIZ-05, VIZ-06, DN-07)", () => {
-  it("stores dilution and RO/SW as supplementary data, the entered value stays as entered", async () => {
+  // Lili 2026-11-01 22:35 UTC (msg 1566581352915149004): the dilution is a factor now, not a note. The typed value is the value before
+  // it; the stored value is that times the dilution, the value before it beside it. RO/SW stays a note.
+  it("multiplies the typed value by the dilution, keeps the value before it; a dilution change computes again from that", async () => {
     const r = await create(f.aq1, "2026-06-26", "09:00", {
       groupId: f.group("HETI"),
       poolId: f.pool("KORALLOS"),
@@ -285,14 +289,40 @@ describe("weekly measurement (VIZ-05, VIZ-06, DN-07)", () => {
       dilution: 10,
       diluentWater: "RO",
     });
-    expect(r.measurement).toMatchObject({ value: "8.4", dilution: 10, diluentWater: "RO" });
-    // a dilution change alone is an audited edit; the value is not recalculated
+    expect(r.measurement).toMatchObject({ value: "84", baseValue: "8.4", dilution: 10, diluentWater: "RO" });
+    // the Excel: the result in "Mérés", the dilution and the value before it in their columns (Lili: the ZIMS takes the result only)
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load((await buildWaterWorkbook({ from: "2026-06-26", to: "2026-06-26", poolIds: [f.pool("KORALLOS")] })).buffer as unknown as ArrayBuffer);
+    const sheet = wb.worksheets[0];
+    const head = (sheet.getRow(1).values as unknown[]).slice(1);
+    const row = (sheet.getSheetValues().slice(2) as unknown[][]).find((v) => v[4] === "NO3")!;
+    expect([row[5], row[1 + head.indexOf("Hígítás")], row[1 + head.indexOf("Hígítás előtti érték")]]).toEqual([84, 10, 8.4]);
+    // the dilution changed, the value before it kept: 8.4 x 20
     const now = cest("2026-06-26T09:30");
     const u = await updateMeasurement(f.aq1, r.measurement.id, { requestId: rid(), expectedVersion: 1, value: "8.4", dilution: 20, diluentWater: "SW" }, now);
-    expect(u.measurement).toMatchObject({ value: "8.4", dilution: 20, diluentWater: "SW", version: 2 });
+    expect(u.measurement).toMatchObject({ value: "168", baseValue: "8.4", dilution: 20, diluentWater: "SW", version: 2 });
     const audit = await prisma.auditEntry.findFirstOrThrow({ where: { entityId: r.measurement.id, action: "UPDATE" } });
-    expect(audit.changes).toMatchObject({ dilution: { before: 10, after: 20 }, diluentWater: { before: "RO", after: "SW" } });
-    expect((audit.changes as Record<string, unknown>).value).toBeUndefined();
+    expect(audit.changes).toMatchObject({ value: { before: "84", after: "168" }, dilution: { before: 10, after: 20 }, diluentWater: { before: "RO", after: "SW" } });
+    // the dilution alone (no value in the request): computed again from the value before it
+    const v = await updateMeasurement(f.aq1, r.measurement.id, { requestId: rid(), expectedVersion: 2, dilution: 5 }, cest("2026-06-26T09:40"));
+    expect(v.measurement).toMatchObject({ value: "42", baseValue: "8.4", dilution: 5 });
+    // no dilution (or 1x): the value itself, nothing beside it
+    const w = await updateMeasurement(f.aq1, r.measurement.id, { requestId: rid(), expectedVersion: 3, dilution: null }, cest("2026-06-26T09:50"));
+    expect(w.measurement).toMatchObject({ value: "8.4", baseValue: null, dilution: null });
+  });
+
+  it("the plausible range and the reference look at the result; a row saved before keeps its value until its value or dilution changes", async () => {
+    // PO4's plausible top is 20: 3 x 10 = 30 asks first, as a typed 30 would
+    const e = await create(f.aq1, "2026-06-27", "09:00", { groupId: f.group("HETI"), poolId: f.pool("KORALLOS"), parameterId: f.param("PO4"), value: "3", dilution: 10 }).then(
+      () => null,
+      (err: unknown) => err as AppError,
+    );
+    expect(e?.code).toBe("IMPLAUSIBLE_VALUE");
+    // an old row (the dilution a note, the value as typed): a change of its time alone does not multiply it
+    const old = await create(f.aq1, "2026-06-28", "09:00", { groupId: f.group("HETI"), poolId: f.pool("KORALLOS"), parameterId: f.param("NO3"), value: "8,4" });
+    await ownerPrisma.measurement.update({ where: { id: old.measurement.id }, data: { dilution: 10 } });
+    const t = await updateMeasurement(f.aq1, old.measurement.id, { requestId: rid(), expectedVersion: 1, measuredAtLocal: "2026-06-28T09:10" }, cest("2026-06-28T09:20"));
+    expect(t.measurement).toMatchObject({ value: "8.4", baseValue: null, dilution: 10 });
   });
 
   it("rejects a dilution outside 1–100", async () => {
