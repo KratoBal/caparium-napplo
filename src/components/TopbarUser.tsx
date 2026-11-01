@@ -4,6 +4,7 @@
 // role, the Kilépés button). On a phone (Lili 2026-10-30 20:43 UTC, msg 1565813299197517825, task caparium-fejlec-telefon: "szerinted nem nagy ez
 // a holtter a fejlecben?") it is one small button with the user's monogram, and what the box held opens under it: the name and the role, the
 // helper's switch, the Kilépés. The server and the first client render say "not a phone", so nothing changes for the larger screens.
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { HelperToggle } from "./HelperToggle";
 import { useIsPhone } from "./useIsPhone";
@@ -35,6 +36,10 @@ export function TopbarUser({ name, roleLabel, monogram, helper }: { name: string
           <span data-testid="current-user">
             {name} · {roleLabel}
           </span>
+          {/* Lili 2026-11-01 (point 11): the own name and password */}
+          <Link className="btn btn-soft" href="/profil">
+            Saját beállítások
+          </Link>
           <form method="post" action="/api/auth/logout">
             <button className="btn btn-soft" type="submit">
               Kilépés
@@ -63,6 +68,9 @@ export function TopbarUser({ name, roleLabel, monogram, helper }: { name: string
             {name} · {roleLabel}
           </span>
           {helper && <HelperToggle />}
+          <Link href="/profil" onClick={() => setOpen(false)}>
+            Saját beállítások
+          </Link>
           <form method="post" action="/api/auth/logout">
             <button className="btn btn-soft" type="submit">
               Kilépés

@@ -29,6 +29,7 @@ const PAGES = [
   "/kimutatasok",
   "/fuggo",
   "/beallitasok",
+  "/profil",
 ];
 
 // Deliberately other sizes, each for a reason of its own; everything else is the shared field height.
