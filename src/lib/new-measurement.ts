@@ -8,7 +8,7 @@ import { compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
 import { FIRST_NAME_FROM, moduleLevel, validAt } from "./master";
 import type { Role } from "./permissions";
-import { resolveLocalDateTime } from "./time";
+import { addDays, resolveLocalDateTime } from "./time";
 
 const exportSafe = (s: z.ZodString) => s.refine((v) => !/^[=+\-@\t\r]/.test(v), "A név nem kezdődhet =, +, -, @ jellel (táblázatkezelőben képletként futna).");
 const decimalText = z.string().trim().max(32).nullable().optional();
@@ -31,6 +31,9 @@ export const newMeasurementSchema = z.object({
     .min(1, "Válassz legalább egy napi vagy heti táblát.")
     .max(10),
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A dátum alakja ÉÉÉÉ-HH-NN."),
+  // Lili 2026-11-01 22:54 UTC (msg 1566586323119120515): the density was measured in SG for years, then in ppt. An optional
+  // last day: after it the column is not in the tables, the values of the period stay and show on their own days
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A dátum alakja ÉÉÉÉ-HH-NN.").nullable().optional(),
 });
 
 type Actor = { id: string; role: Role };
@@ -56,6 +59,10 @@ export async function createMeasurementType(actor: Actor, input: z.infer<typeof 
   if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true };
   const at = resolveLocalDateTime(`${input.from}T00:00`)?.instant;
   if (!at) throw new AppError(422, "INVALID_DAY", "A dátum érvénytelen.");
+  // the column stands through the last day; it ends at the next day's start
+  const until = input.to ? resolveLocalDateTime(`${addDays(input.to, 1)}T00:00`)?.instant : null;
+  if (until === undefined) throw new AppError(422, "INVALID_DAY", "A Meddig dátum érvénytelen.");
+  if (input.to && input.to < input.from) throw new AppError(422, "BAD_PERIOD", "A Meddig nem lehet korábbi a Mettőlnél.");
   const pMin = decimal(input.plausibleMin, "A hihető tartomány alja");
   const pMax = decimal(input.plausibleMax, "A hihető tartomány teteje");
   const rMin = decimal(input.referenceMin, "A referencia alja");
@@ -102,7 +109,7 @@ export async function createMeasurementType(actor: Actor, input: z.infer<typeof 
       }
       for (const g of groups) {
         const lastInGroup = await tx.groupParameter.aggregate({ where: { groupId: g.id }, _max: { sortOrder: true } });
-        await tx.groupParameter.create({ data: { groupId: g.id, parameterId: parameter.id, sortOrder: (lastInGroup._max.sortOrder ?? 0) + 1, validFrom: at, poolIds: g.poolIds } });
+        await tx.groupParameter.create({ data: { groupId: g.id, parameterId: parameter.id, sortOrder: (lastInGroup._max.sortOrder ?? 0) + 1, validFrom: at, poolIds: g.poolIds, validTo: until } });
       }
       await writeAudit(tx, {
         userId: actor.id,
@@ -112,7 +119,7 @@ export async function createMeasurementType(actor: Actor, input: z.infer<typeof 
         changes: {
           created: {
             before: null,
-            after: { code, name: input.name, unit: unit.symbol, decimals: input.decimals, plausible: [pMin, pMax], reference: [rMin, rMax], zimsName: input.zimsName, zimsUnit: input.zimsUnit, tables: groups.map((g) => ({ table: g.name, pools: g.poolIds.length })), from: input.from },
+            after: { code, name: input.name, unit: unit.symbol, decimals: input.decimals, plausible: [pMin, pMax], reference: [rMin, rMax], zimsName: input.zimsName, zimsUnit: input.zimsUnit, tables: groups.map((g) => ({ table: g.name, pools: g.poolIds.length })), from: input.from, to: input.to ?? null },
           },
         },
         requestId: input.requestId,

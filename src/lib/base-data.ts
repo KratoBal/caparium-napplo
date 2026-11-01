@@ -36,6 +36,8 @@ export const UNITS: { symbol: string; dimension: Dimension; factor: string | nul
   // a value is compared with a range in its own unit
   { symbol: "mg/l", dimension: "CONCENTRATION", factor: null, base: false },
   { symbol: "%", dimension: "DIMENSIONLESS", factor: null, base: false },
+  // Lili 2026-11-01 22:52 UTC: specific gravity, for the years the density was measured in SG; no factor to ppt
+  { symbol: "SG", dimension: "DIMENSIONLESS", factor: null, base: false },
 ];
 
 export const PARAMETERS = [

@@ -96,4 +96,23 @@ describe("a new measurement type (point 9)", () => {
     expect(await cols(groupId)).toEqual([[f.pool("NAGY")]]);
     expect(await cols(otherGroupId)).toEqual([[f.pool("KORALLOS")]]);
   });
+
+  // Lili 2026-11-01 22:52 and 22:54 UTC: the density was measured in SG for years, then in ppt
+  it("a closed period: the column stands through its last day and is gone after it; the SG unit is there", async () => {
+    const sg = (await prisma.unit.findUniqueOrThrow({ where: { symbol: "SG" } })).id;
+    const period = { unitId: sg, decimals: 3, plausibleMin: "1", plausibleMax: "1,1", referenceMax: null, zimsName: "Specific Gravity", zimsUnit: "SG", from: "2026-05-10", to: "2026-05-15" };
+    // the built-in density keeps its name: the SG one needs its own
+    expect(await code(createMeasurementType(f.admin, input({ ...period, name: "Sűrűség" })))).toBe("NAME_TAKEN");
+    expect(await code(createMeasurementType(f.admin, input({ ...period, name: "Sűrűség (SG) próba", to: "2026-05-09" })))).toBe("BAD_PERIOD");
+    const r = (await createMeasurementType(f.admin, input({ ...period, name: "Sűrűség (SG) próba" }))) as { id: string };
+    const has = async (day: string) => (await getGrid(groupId, day))!.layout.parameters.some((x) => x.id === r.id);
+    expect([await has("2026-05-09"), await has("2026-05-10"), await has("2026-05-15"), await has("2026-05-16")]).toEqual([false, true, true, false]);
+    const measure = (day: string) =>
+      createMeasurement(f.aq1, { requestId: rid(), groupId, poolId: f.pool("NAGY"), parameterId: r.id, value: "1,025", measuredAtLocal: `${day}T23:30`, newRound: true } as Parameters<typeof createMeasurement>[1], cest(`${day}T23:30`));
+    // the last day to its last hour, and not the next day
+    await measure("2026-05-15");
+    expect(await code(measure("2026-05-16"))).toBe("NOT_IN_GROUP");
+    const cell = (await getGrid(groupId, "2026-05-15"))!.cells[`${f.pool("NAGY")}:${r.id}`];
+    expect(cell.value).toBe("1.025");
+  });
 });
