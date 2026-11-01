@@ -430,6 +430,75 @@ export function MonthlyZimsRecipient({ email }: { email: string }) {
 }
 
 /**
+ * Lili 2026-11-01 (point 13): a tester whose reading is converted to the value (Hanna HI755 for KH: x 0,056, 1 decimal;
+ * HI736 for PO4: x 0,003066, 3 decimals), per parameter, from a day on. In force, the grid takes the reading, shows the
+ * value, and keeps the reading. "Lezárás" ends it from the day given: typed values are the values again.
+ */
+export function ConversionRow(p: {
+  parameterId: string;
+  name: string;
+  unit: string;
+  current: { label: string; factor: string; decimals: number; from: string } | null;
+  today: string;
+}) {
+  const { msg, busy, save } = useSave();
+  const [label, setLabel] = useState(p.current?.label ?? "");
+  const [factor, setFactor] = useState(p.current ? p.current.factor.replace(".", ",") : "");
+  const [decimals, setDecimals] = useState(p.current ? String(p.current.decimals) : "");
+  const [from, setFrom] = useState(p.today);
+  const ready = label.trim().length >= 2 && factor.trim() !== "" && decimals !== "" && from !== "";
+  return (
+    <tr data-testid={`conversion-${p.name}`}>
+      <td className="keep">
+        <b>{p.name}</b>
+        <div className="hint">{p.unit}</div>
+      </td>
+      <td className="keep">
+        {p.current ? (
+          <span>
+            {p.current.label}: leolvasás × {p.current.factor.replace(".", ",")}, {p.current.decimals} tizedes, {p.current.from.replaceAll("-", ".")}.-tól
+          </span>
+        ) : (
+          <span className="hint">nincs (a beírt érték maga a mérés)</span>
+        )}
+      </td>
+      <td className="keep"><input className="input" aria-label={`${p.name} mérőeszköz`} placeholder="pl. Hanna HI755" value={label} onChange={(e) => setLabel(e.target.value)} /></td>
+      <td className="keep"><input className="input small" inputMode="decimal" aria-label={`${p.name} szorzó`} value={factor} onChange={(e) => setFactor(e.target.value)} /></td>
+      <td className="keep">
+        <select className="input small" aria-label={`${p.name} tizedesjegy`} value={decimals} onChange={(e) => setDecimals(e.target.value)}>
+          <option value="">–</option>
+          {[0, 1, 2, 3, 4].map((d) => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
+      </td>
+      <td className="keep"><input className="input" type="date" aria-label={`${p.name} mettől`} value={from} onChange={(e) => setFrom(e.target.value)} /></td>
+      <td className="keep">
+        <button
+          className="btn"
+          type="button"
+          disabled={busy || !ready}
+          onClick={() => void save("/api/admin/conversions", "POST", { parameterId: p.parameterId, label: label.trim(), factor: factor.trim(), decimals: Number(decimals), from })}
+        >
+          Mentés
+        </button>{" "}
+        {p.current && (
+          <button
+            className="btn btn-soft"
+            type="button"
+            disabled={busy || from === ""}
+            onClick={() => void save("/api/admin/conversions", "POST", { parameterId: p.parameterId, label: null, factor: null, decimals: null, from }, "Lezárva.")}
+          >
+            Lezárás
+          </button>
+        )}{" "}
+        <Msg msg={msg} />
+      </td>
+    </tr>
+  );
+}
+
+/**
  * Lili 2026-11-01 (point 9, msg 1566532615530352863): a new measurement type, as a new animal: name, unit, decimals, the plausible
  * range (outside it the grid asks "biztos?"), the reference, the ZIMS name and unit, the daily or weekly table it goes into, the
  * pools it is measured in, from a day. The table gets a new column, filled in the chosen pools only.

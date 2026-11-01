@@ -2,8 +2,10 @@
 
 import type { AppModule, JournalKind, Prisma } from "@prisma/client";
 import { prisma, type Tx } from "./db";
+import { canonicalDecimal } from "./decimal";
 import { takesDilution } from "./dilution";
 import { effectiveLevel, type Level, type Role } from "./permissions";
+import type { ReadingConversion } from "./reading";
 import { dayToDate } from "./time";
 
 export function validAt(at: Date) {
@@ -87,6 +89,8 @@ export type LayoutParameter = {
   unit: { id: string; symbol: string; dimension: string; factorToBase: string | null };
   plausibleMin: string | null;
   plausibleMax: string | null;
+  /** point 13: in force, what is typed is a tester's reading, converted to the value (src/lib/reading.ts) */
+  conversion: ReadingConversion | null;
   /** point 9: the pools this column is filled in; null = every pool of the group */
   pools: string[] | null;
 };
@@ -106,7 +110,7 @@ export async function groupLayout(
     tx.groupParameter.findMany({
       where: { groupId, ...validAt(at) },
       orderBy: { sortOrder: "asc" },
-      include: { parameter: { include: { names: true, unit: true } } },
+      include: { parameter: { include: { names: true, unit: true, conversions: { where: validAt(at), orderBy: { validFrom: "desc" }, take: 1 } } } },
     }),
   ]);
   return {
@@ -125,6 +129,9 @@ export async function groupLayout(
       },
       plausibleMin: gp.parameter.plausibleMin?.toString() ?? null,
       plausibleMax: gp.parameter.plausibleMax?.toString() ?? null,
+      conversion: gp.parameter.conversions[0]
+        ? (({ id, label, factor, decimals }) => ({ id, label, factor: canonicalDecimal(factor), decimals }))(gp.parameter.conversions[0])
+        : null,
       pools: gp.poolIds.length ? gp.poolIds : null,
     })),
   };

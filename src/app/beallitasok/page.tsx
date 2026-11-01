@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { MonthlyZimsRecipient, NewMeasurementForm, NewPoolForm, NewUserForm, PoolList, PoolSystemForm, PoolVolumeForm, ReferenceRow, SaveReminderSwitch, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
+import { ConversionRow, MonthlyZimsRecipient, NewMeasurementForm, NewPoolForm, NewUserForm, PoolList, PoolSystemForm, PoolVolumeForm, ReferenceRow, SaveReminderSwitch, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
 import { SettingsCard } from "@/components/SettingsCard";
 import { Shell } from "@/components/Shell";
@@ -29,7 +29,7 @@ export default async function SettingsPage() {
     prisma.parameter.findMany({
       where: { active: true },
       orderBy: { sortOrder: "asc" },
-      include: { names: true, unit: true, referenceRanges: { where: validAt(now) } },
+      include: { names: true, unit: true, referenceRanges: { where: validAt(now) }, conversions: { where: validAt(now), take: 1 } },
     }),
     prisma.pool.findMany({
       where: { active: true },
@@ -156,6 +156,36 @@ export default async function SettingsPage() {
             pools: g.memberships.map((m) => ({ id: m.pool.id, name: pickValid(m.pool.names, now)?.displayName ?? m.pool.code })),
           }))}
         />
+      </SettingsCard>
+
+      <SettingsCard id="atvaltas" title="Mérőeszköz-átváltás" testId="conversions">
+        <p className="hint">
+          Ha egy mérőeszköz nem a mérés értékét mutatja, hanem egy leolvasást (például Hanna HI755 a KH-hoz: × 0,056, 1 tizedes;
+          HI736 a PO4-hez: × 0,003066, 3 tizedes), itt állítható be, a megadott naptól. A napi és heti táblában a leolvasást kell
+          beírni: a mező elhagyáskor átváltja, az átváltott értéket egy kis pötty jelzi, és a leolvasás is megmarad.
+        </p>
+        <div className="table-scroll">
+          <table className="log-table">
+            <thead>
+              <tr><th>Paraméter</th><th>Most érvényes</th><th>Mérőeszköz</th><th>Szorzó</th><th>Tizedes</th><th>Mettől</th><th></th></tr>
+            </thead>
+            <tbody>
+              {params.map((p) => {
+                const c = p.conversions[0];
+                return (
+                  <ConversionRow
+                    key={p.id}
+                    parameterId={p.id}
+                    name={pickValid(p.names, now)?.displayName ?? p.code}
+                    unit={p.unit.symbol}
+                    current={c ? { label: c.label, factor: canonicalDecimal(c.factor), decimals: c.decimals, from: businessDayOf(c.validFrom) } : null}
+                    today={businessDayOf(now)}
+                  />
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </SettingsCard>
 
       <SettingsCard id="medencek" title="Medencék">
