@@ -24,8 +24,12 @@ export const newMeasurementSchema = z.object({
   referenceMax: decimalText,
   zimsName: exportSafe(z.string().trim().min(1, "Add meg a ZIMS-nevet.").max(100)),
   zimsUnit: exportSafe(z.string().trim().min(1, "Add meg a ZIMS-mértékegységet.").max(40)),
-  groupId: z.uuid({ error: "Válassz napi vagy heti mérést." }),
-  poolIds: z.array(z.uuid()).min(1, "Jelölj ki legalább egy medencét.").max(50),
+  // Lili 2026-11-01 22:21 UTC (msg 1566577932816748707): one measurement in several tables (the daily Korallos AND the daily
+  // Nagymedence table are two tables), each with its own pools
+  tables: z
+    .array(z.object({ groupId: z.uuid(), poolIds: z.array(z.uuid()).min(1, "Jelölj ki legalább egy medencét minden kiválasztott táblában.").max(50) }))
+    .min(1, "Válassz legalább egy napi vagy heti táblát.")
+    .max(10),
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A dátum alakja ÉÉÉÉ-HH-NN."),
 });
 
@@ -58,18 +62,23 @@ export async function createMeasurementType(actor: Actor, input: z.infer<typeof 
   const rMax = decimal(input.referenceMax, "A referencia teteje");
   if (pMin !== null && pMax !== null && compareDecimal(pMin, pMax) > 0) throw new AppError(422, "BAD_RANGE", "A hihető tartomány alja nagyobb a tetejénél.");
   if (rMin !== null && rMax !== null && compareDecimal(rMin, rMax) > 0) throw new AppError(422, "BAD_RANGE", "A referencia alja nagyobb a tetejénél.");
-  const poolIds = [...new Set(input.poolIds)];
+  const tables = input.tables.map((t) => ({ groupId: t.groupId, poolIds: [...new Set(t.poolIds)] }));
+  if (new Set(tables.map((t) => t.groupId)).size !== tables.length) throw new AppError(422, "TABLE_TWICE", "Egy tábla csak egyszer választható.");
   // the code inside the transaction, and two at once with the same name end in a 409, not a 500 (barracuda on #173)
   try {
     return await prisma.$transaction(async (tx) => {
       const code = await freeCode(tx, input.name);
       const unit = await tx.unit.findUnique({ where: { id: input.unitId } });
       if (!unit || !unit.active) throw new AppError(422, "UNIT_NOT_FOUND", "A mértékegység nem található.");
-      const group = await tx.measurementGroup.findUnique({ where: { id: input.groupId } });
-      if (!group || !group.active) throw new AppError(404, "GROUP_NOT_FOUND", "A mérési csoport nem található.");
-      // the chosen pools are the group's on the first day
-      const members = await tx.groupMembership.findMany({ where: { groupId: group.id, poolId: { in: poolIds }, ...validAt(at) }, select: { poolId: true } });
-      if (members.length !== poolIds.length) throw new AppError(422, "POOL_NOT_IN_GROUP", "Egy kijelölt medence ezen a napon nem tartozik a csoporthoz.");
+      const groups: { id: string; name: string; poolIds: string[] }[] = [];
+      for (const t of tables) {
+        const group = await tx.measurementGroup.findUnique({ where: { id: t.groupId } });
+        if (!group || !group.active) throw new AppError(404, "GROUP_NOT_FOUND", "A mérési csoport nem található.");
+        // the chosen pools are the table's on the first day
+        const members = await tx.groupMembership.findMany({ where: { groupId: group.id, poolId: { in: t.poolIds }, ...validAt(at) }, select: { poolId: true } });
+        if (members.length !== t.poolIds.length) throw new AppError(422, "POOL_NOT_IN_GROUP", `Egy kijelölt medence ezen a napon nem tartozik a(z) ${group.name} táblához.`);
+        groups.push({ id: group.id, name: group.name, poolIds: t.poolIds });
+      }
       // the name is one of a kind among the parameters' current names
       const clash = await tx.parameterName.findFirst({ where: { displayName: { equals: input.name, mode: "insensitive" }, validTo: null } });
       if (clash) throw new AppError(409, "NAME_TAKEN", "Ilyen nevű mérés már van.");
@@ -91,8 +100,10 @@ export async function createMeasurementType(actor: Actor, input: z.infer<typeof 
       if (rMin !== null || rMax !== null) {
         await tx.referenceRange.create({ data: { parameterId: parameter.id, poolId: null, min: rMin, max: rMax, unitId: unit.id, validFrom: at, createdById: actor.id } });
       }
-      const lastInGroup = await tx.groupParameter.aggregate({ where: { groupId: group.id }, _max: { sortOrder: true } });
-      await tx.groupParameter.create({ data: { groupId: group.id, parameterId: parameter.id, sortOrder: (lastInGroup._max.sortOrder ?? 0) + 1, validFrom: at, poolIds } });
+      for (const g of groups) {
+        const lastInGroup = await tx.groupParameter.aggregate({ where: { groupId: g.id }, _max: { sortOrder: true } });
+        await tx.groupParameter.create({ data: { groupId: g.id, parameterId: parameter.id, sortOrder: (lastInGroup._max.sortOrder ?? 0) + 1, validFrom: at, poolIds: g.poolIds } });
+      }
       await writeAudit(tx, {
         userId: actor.id,
         action: "MASTER_CHANGE",
@@ -101,7 +112,7 @@ export async function createMeasurementType(actor: Actor, input: z.infer<typeof 
         changes: {
           created: {
             before: null,
-            after: { code, name: input.name, unit: unit.symbol, decimals: input.decimals, plausible: [pMin, pMax], reference: [rMin, rMax], zimsName: input.zimsName, zimsUnit: input.zimsUnit, group: group.name, pools: poolIds.length, from: input.from },
+            after: { code, name: input.name, unit: unit.symbol, decimals: input.decimals, plausible: [pMin, pMax], reference: [rMin, rMax], zimsName: input.zimsName, zimsUnit: input.zimsUnit, tables: groups.map((g) => ({ table: g.name, pools: g.poolIds.length })), from: input.from },
           },
         },
         requestId: input.requestId,

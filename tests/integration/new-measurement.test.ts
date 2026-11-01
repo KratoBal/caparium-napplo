@@ -10,6 +10,7 @@ import { cest, fixtures, rid } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
 let groupId = "";
+let otherGroupId = "";
 let ppm = "";
 beforeAll(async () => {
   f = await fixtures();
@@ -19,14 +20,18 @@ beforeAll(async () => {
   for (const [i, code] of ["NAGY", "KIS"].entries()) {
     await prisma.groupMembership.create({ data: { groupId, poolId: f.pool(code), sortOrder: i + 1, validFrom: new Date("2025-12-31T23:00:00Z") } });
   }
+  // a second table of its own (Lili 2026-11-01 22:21 UTC: one measurement in several tables)
+  const g2 = await prisma.measurementGroup.create({ data: { code: `P9B_${rid().slice(-6).replace(/[^A-Za-z0-9]/g, "X")}`, name: "Pont 9 második", frequency: "DAILY", sortOrder: 100 } });
+  otherGroupId = g2.id;
+  await prisma.groupMembership.create({ data: { groupId: otherGroupId, poolId: f.pool("KORALLOS"), sortOrder: 1, validFrom: new Date("2025-12-31T23:00:00Z") } });
   // the group's existing column, every pool
   await prisma.groupParameter.create({ data: { groupId, parameterId: f.param("TEMP"), sortOrder: 1, validFrom: new Date("2025-12-31T23:00:00Z") } });
 });
 
 // the group off at the end: an active daily group counts in the water helper's and the home page's "still to measure" (helpers.test)
 afterAll(async () => {
-  await prisma.measurementGroup.update({ where: { id: groupId }, data: { active: false } });
-  await prisma.groupMembership.updateMany({ where: { groupId, validTo: null }, data: { validTo: new Date("2025-12-31T23:00:00Z") } });
+  await prisma.measurementGroup.updateMany({ where: { id: { in: [groupId, otherGroupId] } }, data: { active: false } });
+  await prisma.groupMembership.updateMany({ where: { groupId: { in: [groupId, otherGroupId] }, validTo: null }, data: { validTo: new Date("2025-12-31T23:00:00Z") } });
 });
 
 async function code(p: Promise<unknown>): Promise<string> {
@@ -47,8 +52,7 @@ const input = (over: Record<string, unknown> = {}) =>
     referenceMax: "0,1",
     zimsName: "Nitrite",
     zimsUnit: "ppm",
-    groupId,
-    poolIds: [f.pool("NAGY")],
+    tables: [{ groupId, poolIds: [f.pool("NAGY")] }],
     from: "2026-05-25",
     ...over,
   }) as Parameters<typeof createMeasurementType>[1];
@@ -56,7 +60,7 @@ const input = (over: Record<string, unknown> = {}) =>
 describe("a new measurement type (point 9)", () => {
   it("admin only; the chosen pools must be the group's", async () => {
     expect(await code(createMeasurementType(f.aq1, input()))).toBe("ADMIN_ONLY");
-    expect(await code(createMeasurementType(f.admin, input({ poolIds: [f.pool("KORALLOS")] })))).toBe("POOL_NOT_IN_GROUP");
+    expect(await code(createMeasurementType(f.admin, input({ tables: [{ groupId, poolIds: [f.pool("KORALLOS")] }] })))).toBe("POOL_NOT_IN_GROUP");
     expect(await code(createMeasurementType(f.admin, input({ plausibleMin: "5", plausibleMax: "1" })))).toBe("BAD_RANGE");
   });
 
@@ -79,5 +83,17 @@ describe("a new measurement type (point 9)", () => {
     expect(await code(measure("KIS", "0,05"))).toBe("NOT_MEASURED_HERE");
     // its name is taken now
     expect(await code(createMeasurementType(f.admin, input({ name: "nitrit PRÓBA" })))).toBe("NAME_TAKEN");
+  });
+
+  it("one measurement in several tables, each with its own pools; a table twice is refused; the new units are there", async () => {
+    expect(await code(createMeasurementType(f.admin, input({ name: "Kétszer tábla", tables: [{ groupId, poolIds: [f.pool("NAGY")] }, { groupId, poolIds: [f.pool("KIS")] }] })))).toBe("TABLE_TWICE");
+    const mgl = (await prisma.unit.findUniqueOrThrow({ where: { symbol: "mg/l" } })).id;
+    expect(await prisma.unit.findUnique({ where: { symbol: "%" } })).not.toBeNull();
+    const r = (await createMeasurementType(f.admin, input({ name: "Oldott oxigén próba", unitId: mgl, tables: [{ groupId, poolIds: [f.pool("NAGY")] }, { groupId: otherGroupId, poolIds: [f.pool("KORALLOS")] }] }))) as { id: string };
+    const rows = await prisma.groupParameter.findMany({ where: { parameterId: r.id } });
+    expect(rows.map((x) => [x.groupId, x.poolIds]).sort()).toEqual([[groupId, [f.pool("NAGY")]], [otherGroupId, [f.pool("KORALLOS")]]].sort());
+    const cols = async (g: string) => (await getGrid(g, "2026-05-27"))!.layout.parameters.filter((x) => x.id === r.id).map((x) => x.pools);
+    expect(await cols(groupId)).toEqual([[f.pool("NAGY")]]);
+    expect(await cols(otherGroupId)).toEqual([[f.pool("KORALLOS")]]);
   });
 });

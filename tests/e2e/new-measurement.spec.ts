@@ -25,6 +25,8 @@ test("a new measurement in one pool of the weekly table: a column, a field there
   if (!(await card.evaluate((d) => (d as HTMLDetailsElement).open))) await card.locator(":scope > summary").click();
   const form = card.getByTestId("new-measurement");
   await form.getByLabel("Név (például Nitrit)").fill(name);
+  // the units Lili asked for are offered
+  expect(await form.getByLabel("Mértékegység", { exact: true }).locator("option").allTextContents()).toEqual(expect.arrayContaining(["mg/l", "%"]));
   await form.getByLabel("Mértékegység", { exact: true }).selectOption({ label: "ppm" });
   await form.getByLabel("Tizedesjegyek").selectOption("2");
   await form.getByLabel("Hihető tartomány teteje").fill("5");
@@ -32,9 +34,11 @@ test("a new measurement in one pool of the weekly table: a column, a field there
   await form.getByLabel("ZIMS-név").fill("Nitrite");
   await form.getByLabel("ZIMS-mértékegység").fill("ppm");
   const add = form.getByRole("button", { name: "Mérésfajta felvétele" });
-  await expect(add, "the group and a pool are needed").toBeDisabled();
-  await form.getByLabel("Napi vagy heti mérés").selectOption({ label: "Heti mérés (heti)" });
-  await form.getByLabel("Karantén").check();
+  await expect(add, "a table and a pool are needed").toBeDisabled();
+  // Lili 2026-11-01 22:21 UTC: the tables are a multiple choice, each with its own pools
+  await form.getByLabel("Tábla: Heti mérés (heti)").check();
+  await expect(add, "a pool of the chosen table is needed").toBeDisabled();
+  await form.getByLabel("Heti mérés (heti): Karantén").check();
   await add.click();
   await expect(form.getByRole("status")).toHaveText("Mérésfajta felvéve.");
 

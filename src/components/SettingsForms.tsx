@@ -551,12 +551,22 @@ export function ConversionRow(p: {
  * pools it is measured in, from a day. The table gets a new column, filled in the chosen pools only.
  */
 export function NewMeasurementForm({ units, groups, today }: { units: { id: string; symbol: string }[]; groups: { id: string; name: string; pools: { id: string; name: string }[] }[]; today: string }) {
-  const empty = { name: "", unitId: "", decimals: "1", pMin: "", pMax: "", rMin: "", rMax: "", zimsName: "", zimsUnit: "", groupId: "", poolIds: [] as string[], from: today };
+  // Lili 2026-11-01 22:21 UTC: several tables at once (the daily Korallos and the daily Nagymedence table), each with its own pools
+  const empty = { name: "", unitId: "", decimals: "1", pMin: "", pMax: "", rMin: "", rMax: "", zimsName: "", zimsUnit: "", tables: {} as Record<string, string[]>, from: today };
   const [f, setF] = useState(empty);
   const { msg, busy, save } = useSave();
   const set = (k: keyof typeof empty, v: string) => setF((x) => ({ ...x, [k]: v }));
-  const group = groups.find((g) => g.id === f.groupId);
-  const ready = f.name.trim().length >= 2 && f.unitId && f.zimsName.trim() && f.zimsUnit.trim() && f.groupId && f.poolIds.length > 0 && f.from;
+  const chosen = Object.entries(f.tables);
+  const ready = f.name.trim().length >= 2 && f.unitId && f.zimsName.trim() && f.zimsUnit.trim() && chosen.length > 0 && chosen.every(([, p]) => p.length > 0) && f.from;
+  const setTable = (id: string, on: boolean) =>
+    setF((x) => {
+      const tables = { ...x.tables };
+      if (on) tables[id] = tables[id] ?? [];
+      else delete tables[id];
+      return { ...x, tables };
+    });
+  const setPool = (table: string, pool: string, on: boolean) =>
+    setF((x) => ({ ...x, tables: { ...x.tables, [table]: on ? [...(x.tables[table] ?? []), pool] : (x.tables[table] ?? []).filter((p) => p !== pool) } }));
   const text = (k: keyof typeof empty, label: string, opts: { small?: boolean; decimal?: boolean } = {}) => (
     <label className="field">
       {label}
@@ -591,36 +601,31 @@ export function NewMeasurementForm({ units, groups, today }: { units: { id: stri
         {text("zimsName", "ZIMS-név")}
         {text("zimsUnit", "ZIMS-mértékegység")}
         <label className="field">
-          Napi vagy heti mérés
-          <select className="input" aria-label="Napi vagy heti mérés" value={f.groupId} onChange={(e) => setF((x) => ({ ...x, groupId: e.target.value, poolIds: [] }))}>
-            <option value="">Válassz</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>{g.name}</option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
           Mettől
           <input className="input" type="date" aria-label="Mettől" value={f.from} onChange={(e) => set("from", e.target.value)} />
         </label>
       </div>
-      {group && (
-        <fieldset className="field" style={{ border: 0, padding: 0, marginTop: 12 }}>
-          Melyik medencékben
-          <span style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {group.pools.map((p) => (
-              <label key={p.id} className="check">
-                <input
-                  type="checkbox"
-                  checked={f.poolIds.includes(p.id)}
-                  onChange={(e) => setF((x) => ({ ...x, poolIds: e.target.checked ? [...x.poolIds, p.id] : x.poolIds.filter((id) => id !== p.id) }))}
-                />
-                {p.name}
-              </label>
-            ))}
-          </span>
-        </fieldset>
-      )}
+      <fieldset className="field" style={{ border: 0, padding: 0, marginTop: 12 }} data-testid="new-measurement-tables">
+        Melyik napi vagy heti táblákba, és ott melyik medencékben
+        {groups.map((g) => (
+          <div key={g.id} style={{ marginTop: 6 }}>
+            <label className="check">
+              <input type="checkbox" aria-label={`Tábla: ${g.name}`} checked={g.id in f.tables} onChange={(e) => setTable(g.id, e.target.checked)} />
+              {g.name}
+            </label>
+            {g.id in f.tables && (
+              <span style={{ display: "flex", gap: 12, flexWrap: "wrap", marginLeft: 28 }}>
+                {g.pools.map((p) => (
+                  <label key={p.id} className="check">
+                    <input type="checkbox" aria-label={`${g.name}: ${p.name}`} checked={(f.tables[g.id] ?? []).includes(p.id)} onChange={(e) => setPool(g.id, p.id, e.target.checked)} />
+                    {p.name}
+                  </label>
+                ))}
+              </span>
+            )}
+          </div>
+        ))}
+      </fieldset>
       <div className="toolbar" style={{ marginTop: 12 }}>
         <button
           className="btn"
@@ -640,8 +645,7 @@ export function NewMeasurementForm({ units, groups, today }: { units: { id: stri
                 referenceMax: f.rMax || null,
                 zimsName: f.zimsName.trim(),
                 zimsUnit: f.zimsUnit.trim(),
-                groupId: f.groupId,
-                poolIds: f.poolIds,
+                tables: Object.entries(f.tables).map(([groupId, poolIds]) => ({ groupId, poolIds })),
                 from: f.from,
               },
               "Mérésfajta felvéve.",
