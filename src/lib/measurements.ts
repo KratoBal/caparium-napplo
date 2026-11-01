@@ -8,6 +8,7 @@ import { diffFields, writeAudit } from "./audit";
 import { prisma, type Tx } from "./db";
 import { compareDecimal, parseDecimalInput, canonicalDecimal } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
+import { valueFromReading } from "./conversion";
 import { ensureJournalDay, getSetting, groupLayout, moduleLevel, referenceAt } from "./master";
 import { requireReason } from "./reasons";
 import { canCreate, canModify, effectiveNow, type Decision, type Role } from "./permissions";
@@ -26,6 +27,8 @@ const optionalFields = {
   reason: reasonSchema.optional(),
   confirmPlausibility: z.boolean().optional(),
   newRound: z.boolean().optional(),
+  /** point 13: what was typed is a tester's reading; the server converts it with the conversion in force (null: typed directly) */
+  rawReading: z.string().min(1).max(32).nullable().optional(),
 };
 
 export const createSchema = z.object({
@@ -82,6 +85,8 @@ export type MeasurementView = {
   traineePerformed: boolean;
   dilution: number | null;
   diluentWater: DiluentWater | null;
+  /** the tester's reading the value was converted from (point 13), or null */
+  rawReading: string | null;
 };
 
 export type WriteResult = {
@@ -108,6 +113,7 @@ export function toView(m: Measurement): MeasurementView {
     traineePerformed: m.traineePerformed,
     dilution: m.dilution,
     diluentWater: m.diluentWater,
+    rawReading: m.rawReading === null ? null : canonicalDecimal(m.rawReading),
   };
 }
 
@@ -126,6 +132,8 @@ function snapshot(m: Measurement): Record<string, unknown> {
     dilution: m.dilution,
     diluentWater: m.diluentWater,
     referenceRangeId: m.referenceRangeId,
+    rawReading: m.rawReading === null ? null : canonicalDecimal(m.rawReading),
+    conversionId: m.conversionId,
     status: m.status,
     invalidationReason: m.invalidationReason,
     version: m.version,
@@ -285,7 +293,7 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
     if (prior.createdById !== actor.id) throw new AppError(409, "REQUEST_ID_REUSED", "Ismételt kérésazonosító.");
     return { measurement: toView(prior), replayed: true };
   }
-  const value = parseValue(input.value);
+  let value = input.rawReading ? input.value : parseValue(input.value);
   checkDilution(input.dilution);
   const clientTs = parseClientTs(input.clientTimestamp);
   let cell: { roundId: string } | null = null;
@@ -316,6 +324,8 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
       }
       // a pool off for a while (a renovation) takes no new measurement; a recorded one can still be corrected
       if (!pool.active) throw new AppError(422, "POOL_INACTIVE", "Ez a medence most inaktív (például felújítás), új mérés nem rögzíthető rá.");
+      const converted = input.rawReading ? await valueFromReading(tx, param.id, measuredAt, input.rawReading) : null;
+      if (converted) value = converted.value;
       checkPlausible(value, param, input.confirmPlausibility);
       checkDilutionAllowed(param, input);
 
@@ -348,6 +358,8 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
           responsibleUserId: responsibleId,
           traineePerformed: input.traineePerformed ?? false,
           referenceRangeId: ref?.id ?? null,
+          rawReading: converted?.rawReading ?? null,
+          conversionId: converted?.conversionId ?? null,
           requestId: input.requestId,
           status: pending ? "PENDING" : "VALID",
           createdById: actor.id,
@@ -400,7 +412,7 @@ export async function updateMeasurement(
     return { measurement: toView(cur), replayed: true };
   }
   const clientTs = parseClientTs(input.clientTimestamp);
-  const newValue = input.value !== undefined ? parseValue(input.value) : undefined;
+  let newValue = input.value !== undefined && !input.rawReading ? parseValue(input.value) : undefined;
   checkDilution(input.dilution);
   let target: { roundId: string; poolId: string; parameterId: string } | null = null;
 
@@ -446,6 +458,15 @@ export async function updateMeasurement(
       if (!layout.pools.some((p) => p.id === cur.poolId) || !param) {
         throw new AppError(422, "NOT_IN_GROUP", "Ezen a napon ez a medence vagy paraméter nem tartozik a csoporthoz.");
       }
+      // a reading is converted again; a value typed directly drops the reading the old value came from
+      const converted = input.rawReading ? await valueFromReading(tx, param.id, measuredAt, input.rawReading) : null;
+      if (converted) newValue = converted.value;
+      const reading =
+        converted !== null
+          ? { rawReading: converted.rawReading, conversionId: converted.conversionId }
+          : input.rawReading === null || newValue !== undefined
+            ? { rawReading: null, conversionId: null }
+            : {};
       if (newValue !== undefined) checkPlausible(newValue, param, input.confirmPlausibility);
       checkDilutionAllowed(param, input);
 
@@ -464,6 +485,7 @@ export async function updateMeasurement(
         data: {
           roundId,
           value: newValue ?? undefined,
+          ...reading,
           measuredAt,
           businessDay: dayToDate(newDay),
           responsibleUserId: responsibleId,
