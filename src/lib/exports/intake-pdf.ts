@@ -1,5 +1,5 @@
 // The Takarmányhűtő report as a printable PDF (Lili 2026-10-30, acrobot 38557/38558): the period, the intake (a delivery sent
-// back in red), the withdrawals per feed, the closing stock. DejaVuSans embedded (pdf-font.ts), the bands and the A4 page
+// back in red), and one balance table a feed (point 7). DejaVuSans embedded (pdf-font.ts), the bands and the A4 page
 // of the water report's PDF. The data is intakeReport's, as the Excel's is.
 import PDFDocument from "pdfkit";
 import { pdfFont } from "../pdf-font";
@@ -72,17 +72,29 @@ export async function intakePdfFrom(report: IntakeReport): Promise<Buffer> {
       report.intake.map((i) => ({ cells: [huDay(i.day), i.type, i.feed, `${i.quantity} ${i.unit}`, i.note, i.returned ? "igen" : ""], red: i.returned })),
     );
   }
-  band("Kivételek takarmányonként");
-  if (report.taken.length === 0) doc.fontSize(9).text("Az időszakban nem volt kivétel.");
-  else table([282, 217], ["Takarmány", "Összesen"], report.taken.map((t) => ({ cells: [t.feed, `${t.quantity} ${t.unit}`] })));
-  band(`Záró készlet (${huDay(report.to)} végén)`);
-  if (report.closing.length === 0) doc.fontSize(9).text("Nincs követett készlet.");
-  else
+  // Lili 2026-11-01 (point 7): one table a feed; the "before the stock" column only where the feed has such a withdrawal
+  band(`Egyenleg takarmányonként (${huPeriod(report)})`);
+  if (report.balance.length === 0) doc.fontSize(9).text("Az időszakban nem volt készletmozgás.");
+  for (const t of report.balance) {
+    const before = t.lines.some((l) => l.beforeStock !== null);
+    if (doc.y + 16 + 18 * (t.lines.length + 1) > bottom()) doc.addPage();
+    doc.fontSize(10).fillColor("#000").text(t.feed, LEFT, doc.y, { width: WIDTH });
+    doc.moveDown(0.2);
     table(
-      [282, 100, 117],
-      ["Takarmány", "Készlet", "Jelzés"],
-      report.closing.map((k) => ({ cells: [k.feed, `${k.level} ${k.unit}`, k.negative ? "negatív készlet" : k.low ? "fogyóban" : ""] })),
+      before ? [66, 66, 66, 120, 66, 115] : [90, 90, 90, 90, 139],
+      ["Nyitó", "Bevétel", "Kivétel", ...(before ? ["Készlet előtti kivétel"] : []), "Záró", "Jelzés"],
+      t.lines.map((l) => ({
+        cells: [
+          `${l.opening} ${l.unit}`,
+          `${l.received} ${l.unit}`,
+          `${l.taken} ${l.unit}`,
+          ...(before ? [l.beforeStock === null ? "" : `${l.beforeStock} ${l.unit}`] : []),
+          `${l.closing} ${l.unit}`,
+          l.negative ? "negatív készlet" : l.low ? "fogyóban" : "",
+        ],
+      })),
     );
+  }
 
   doc.end();
   return done;
@@ -90,5 +102,5 @@ export async function intakePdfFrom(report: IntakeReport): Promise<Buffer> {
 
 export async function buildIntakePdf(f: { from: string; to: string }): Promise<{ buffer: Buffer; rows: number }> {
   const report = await intakeReport(f);
-  return { buffer: await intakePdfFrom(report), rows: report.intake.length + report.taken.length + report.closing.length };
+  return { buffer: await intakePdfFrom(report), rows: report.intake.length + report.balance.reduce((n, t) => n + t.lines.length, 0) };
 }
