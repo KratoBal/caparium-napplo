@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 import { greetingFigure } from "../../src/lib/helper-notice";
 import { businessDayOf } from "../../src/lib/time";
+import { openAllSettings } from "../support/settings-folds";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
 
@@ -312,6 +313,7 @@ test("settings: an admin changes a reference range and creates a user who can lo
   await expect(page.getByTestId(`cell-${pool}-NO3`)).toHaveClass(/out/);
 
   await page.goto("/beallitasok");
+  await openAllSettings(page);
   const nu = page.getByTestId("new-user");
   await nu.getByLabel("Új felhasználónév").fill(login1);
   await nu.getByLabel("Teljes név").fill("Új Akvarista");
@@ -2050,6 +2052,7 @@ test("settings: the admin adds a new pool; the existing pools stay as they were"
   try {
     await login(page, "teszt.admin");
     await page.goto("/beallitasok");
+    await openAllSettings(page);
     const before = await page.locator('input[aria-label$="új neve"]').count();
     const box = page.getByTestId("new-pool");
     const add = box.getByRole("button", { name: "Medence felvétele" });
