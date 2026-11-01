@@ -21,12 +21,16 @@ export function followAnswer(answer: string | null, previousAlert: string | unde
 }
 
 /**
- * The name the figure greets with (Lili 2026-10-29, acrobot 38178): the login name (Lili, Vivi, Niki), its first letter
- * capital as people write a name (login names are stored in lower case); the full name where there is none.
+ * The name the figure greets with. Lili 2026-10-29 (acrobot 38178) it was the login name; since 2026-11-01 (point 17) it is the
+ * user's own nickname, or the given name.
  */
-export function greetingName(user: { loginId?: string | null; fullName: string }): string {
-  const login = (user.loginId ?? "").trim();
-  return login ? login.charAt(0).toLocaleUpperCase("hu") + login.slice(1) : user.fullName.trim();
+export function greetingName(user: { nickname?: string | null; fullName: string }): string {
+  // Lili 2026-11-01 (point 17): the nickname the user set in Saját beállítások; without one the given name of the official name,
+  // its last word in the Hungarian order ("Csehó Lilian": Lilian). The login id is no longer used.
+  const nick = (user.nickname ?? "").trim();
+  if (nick) return nick;
+  const words = user.fullName.trim().split(/\s+/);
+  return words[words.length - 1] ?? "";
 }
 
 /**

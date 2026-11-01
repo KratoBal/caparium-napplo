@@ -114,3 +114,35 @@ export function OwnPasswordForm() {
     </div>
   );
 }
+
+/** Lili 2026-11-01 (point 17): the nickname the helper greets with; empty goes back to the given name. */
+export function OwnNicknameForm({ nickname }: { nickname: string }) {
+  const router = useRouter();
+  const [nick, setNick] = useState(nickname);
+  const [msg, setMsg] = useState<Msg>(null);
+  const [busy, setBusy] = useState(false);
+  const changed = nick.trim() !== nickname;
+  return (
+    <div className="toolbar" data-testid="own-nickname">
+      <label className="field">
+        <span>Becenév</span>
+        <input className="input" value={nick} maxLength={40} onChange={(e) => setNick(e.target.value)} />
+      </label>
+      <button
+        className="btn"
+        type="button"
+        disabled={busy || !changed}
+        onClick={async () => {
+          setBusy(true);
+          const err = await patch({ nickname: nick.trim() });
+          setBusy(false);
+          setMsg(err ? { ok: false, text: err } : { ok: true, text: "Becenév mentve." });
+          if (!err) router.refresh();
+        }}
+      >
+        Becenév mentése
+      </button>
+      <Status msg={msg} />
+    </div>
+  );
+}
