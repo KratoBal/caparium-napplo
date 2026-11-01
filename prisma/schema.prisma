@@ -424,6 +424,9 @@ model Measurement {
   referenceRangeId   String?       @db.Uuid
   // point 13: the tester's reading the value was converted from, and the conversion used (both null: typed directly)
   rawReading         Decimal?      @db.Decimal(14, 4)
+  // Lili 2026-11-01 22:35 UTC: the value before the weekly dilution (the reading, or the tester's converted value); value = baseValue x
+  // dilution. Null: no dilution, or a row saved before the dilution was a factor (its dilution was a note then)
+  baseValue          Decimal?      @db.Decimal(14, 4)
   conversionId       String?       @db.Uuid
   // K5
   version            Int           @default(1)

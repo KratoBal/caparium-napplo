@@ -156,7 +156,7 @@ test("a second editor of the same cell gets a conflict, not a silent overwrite",
   await b.close();
 });
 
-test("weekly measurement: value with dilution and RO/SW, kept after a reload, shown in the log", async ({ page }, info) => {
+test("weekly measurement: value with dilution and RO/SW, the result x dilution, kept after a reload, shown in the log", async ({ page }, info) => {
   const pool = info.project.name === "tablet" ? "Korallos" : "Nagymedence";
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Heti vízmérés" }).first().click();
@@ -180,18 +180,23 @@ test("weekly measurement: value with dilution and RO/SW, kept after a reload, sh
   await no3.fill("8,4");
   await page.getByTestId(`dilution-${pool}-NO3`).selectOption("10");
   await page.getByTestId(`diluent-${pool}-NO3`).selectOption("RO");
+  // Lili 2026-11-01 22:35 UTC: the dilution is a factor; the result shows under the field before the save
+  await expect(page.getByTestId(`dil-${pool}-NO3`)).toContainText("×10 = 84");
   await page.getByTestId("save-all").click();
   await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
 
   await page.reload();
   await page.getByRole("button", { name: pool, exact: true }).click();
+  // the field keeps what was typed (the value before the dilution), the result under it
   await expect(page.getByTestId(`cell-${pool}-NO3`)).toHaveValue("8,4");
+  await expect(page.getByTestId(`dil-${pool}-NO3`)).toContainText("×10 = 84");
   await expect(page.getByTestId(`dilution-${pool}-NO3`)).toHaveValue("10");
   await expect(page.getByTestId(`diluent-${pool}-NO3`)).toHaveValue("RO");
 
   await page.getByRole("link", { name: "Vízmérési napló" }).first().click();
   const row = page.getByTestId("log-table").getByRole("row").filter({ hasText: pool }).filter({ hasText: "NO3" }).first();
-  await expect(row).toContainText("8,4");
+  // the log shows the result
+  await expect(row).toContainText("84");
   await expect(row).toContainText("1:10, RO");
 });
 
