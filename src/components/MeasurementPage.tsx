@@ -59,43 +59,49 @@ export async function MeasurementPage({
     select: { id: true, fullName: true },
   });
 
+  // Lili 2026-11-01 22:59 UTC (msg 1566587603879469096): less dead space in the head. The date and the day's state on one row;
+  // the table picker, the day picker and the save button on the next (MeasurementGrid draws that row, the button is its)
+  const tables = (
+    <div className="tabs" role="tablist" aria-label="Mérési csoport">
+      {groups.map((g) => {
+        const look = frequency === "DAILY" ? TAB_LOOK[g.code] : undefined;
+        return (
+          <Link
+            key={g.id}
+            role="tab"
+            aria-selected={g.id === group.id}
+            className={`tab${look ? " tab-picture" : ""}${g.id === group.id ? " active" : ""}`}
+            href={`${basePath}?csoport=${g.code}&nap=${day}`}
+          >
+            {look && (
+              <span className="tab-picture-box" style={{ aspectRatio: `${look.width} / ${look.height}` }}>
+                <img src={look.image} alt="" width={look.width} height={look.height} />
+              </span>
+            )}
+            <span className="tab-label">{look?.label ?? g.name}</span>
+          </Link>
+        );
+      })}
+    </div>
+  );
+  const dayPicker = (
+    <form method="get" action={basePath} style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+      <input type="hidden" name="csoport" value={group.code} />
+      <label className="field">
+        Nap
+        <input className="input" type="date" name="nap" defaultValue={day} max={today} />
+      </label>
+      <button className="btn btn-soft" type="submit">Ugrás</button>
+    </form>
+  );
+
   return (
     <Shell title={title} active={active} user={user} helper={await waterHelper(await helperStockAccess(user))}>
-      <p className="hint" style={{ fontSize: 20, marginTop: 0 }}>
-        {formatDay(day)} · {weekdayName(day)}
-      </p>
-      <DayControls groupId={group.id} day={day} status={status} isAdmin={level === "ADMIN"} />
-      <div className="toolbar">
-        <div className="tabs" role="tablist" aria-label="Mérési csoport">
-          {groups.map((g) => {
-            const look = frequency === "DAILY" ? TAB_LOOK[g.code] : undefined;
-            return (
-              <Link
-                key={g.id}
-                role="tab"
-                aria-selected={g.id === group.id}
-                className={`tab${look ? " tab-picture" : ""}${g.id === group.id ? " active" : ""}`}
-                href={`${basePath}?csoport=${g.code}&nap=${day}`}
-              >
-                {look && (
-                  <span className="tab-picture-box" style={{ aspectRatio: `${look.width} / ${look.height}` }}>
-                    <img src={look.image} alt="" width={look.width} height={look.height} />
-                  </span>
-                )}
-                <span className="tab-label">{look?.label ?? g.name}</span>
-              </Link>
-            );
-          })}
-        </div>
-        <span className="spacer" />
-        <form method="get" action={basePath} style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-          <input type="hidden" name="csoport" value={group.code} />
-          <label className="field">
-            Nap
-            <input className="input" type="date" name="nap" defaultValue={day} max={today} />
-          </label>
-          <button className="btn btn-soft" type="submit">Ugrás</button>
-        </form>
+      <div className="water-head" data-testid="water-head">
+        <p className="hint" style={{ fontSize: 20, margin: 0 }}>
+          {formatDay(day)} · {weekdayName(day)}
+        </p>
+        <DayControls groupId={group.id} day={day} status={status} isAdmin={level === "ADMIN"} />
       </div>
       {grid && (
         <MeasurementGrid
@@ -110,7 +116,16 @@ export async function MeasurementPage({
           weekly={frequency === "WEEKLY"}
           basePath={basePath}
           saveReminder={await saveReminderOn(prisma)}
+          tables={tables}
+          dayPicker={dayPicker}
         />
+      )}
+      {!grid && (
+        <div className="toolbar toolbar-end">
+          {tables}
+          <span className="spacer" />
+          {dayPicker}
+        </div>
       )}
     </Shell>
   );
