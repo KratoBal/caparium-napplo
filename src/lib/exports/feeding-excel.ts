@@ -87,7 +87,7 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.feedType.findMany({ orderBy: { sortOrder: "asc" }, include: { feeds: { orderBy: { sortOrder: "asc" }, include: { names: true } } } }),
+    prisma.feedType.findMany({ orderBy: { sortOrder: "asc" }, include: { feeds: { orderBy: { sortOrder: "asc" }, include: { names: true, periods: true } } } }),
     prisma.unit.findMany({ where: { isBase: true } }),
   ]);
   const baseOf = new Map(baseUnits.map((u) => [u.dimension, u.symbol]));
@@ -121,7 +121,9 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       }
       continue;
     }
-    for (const feed of t.feeds.filter((x) => x.active || used.has(usedKey(x.id, null)))) {
+    // point 14: a feed fed on some day of the period (its period overlaps it), or given in it
+    const fedIn = (x: (typeof t.feeds)[number]) => x.periods.some((p) => dateToDay(p.firstDay) <= f.to && (p.lastDay === null || dateToDay(p.lastDay) >= f.from));
+    for (const feed of t.feeds.filter((x) => fedIn(x) || used.has(usedKey(x.id, null)))) {
       push(feed.id, null, pickValid(feed.names, endOfPeriod)?.name ?? feed.names.at(-1)?.name ?? "?", new Set([...feed.allowedDimensions, ...(used.get(usedKey(feed.id, null)) ?? [])]));
     }
   }

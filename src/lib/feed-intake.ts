@@ -7,6 +7,7 @@
 import type { Dimension, FeedIntakeItem } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
+import { feedIsOn, feedsOn } from "./feed-periods";
 import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError } from "./errors";
@@ -70,7 +71,8 @@ export async function saveIntakeItem(actor: Actor, raw: IntakeInput, serverNow =
     // the feed's row FOR SHARE: a change of its unit (feeds.ts) waits for this save, and this one for it
     await tx.$queryRaw`SELECT "id" FROM "feed" WHERE "id" = ${input.feedId}::uuid FOR SHARE`;
     const feed = await tx.feed.findUnique({ where: { id: input.feedId }, include: { type: true } });
-    if (!feed || !feed.active) throw new AppError(422, "FEED_NOT_FOUND", "A takarmány nem található vagy nem aktív.");
+    // point 14: the feed is offered on the day by its period, as the list of that day
+    if (!feed || !(await feedIsOn(tx, feed.id, input.day))) throw new AppError(422, "FEED_NOT_FOUND", "A takarmány nem található, vagy ezen a napon nincs etetési időszaka.");
     const isOther = feed.type.code === "EGYEB";
     if (isOther && !input.otherName) throw new AppError(422, "OTHER_NAME", "Az „Egyéb” takarmányhoz a nevét is meg kell adni.");
     const otherName = isOther ? input.otherName! : null;
@@ -244,6 +246,8 @@ export async function feedStock(now = new Date(), until?: string): Promise<Stock
     }),
     baseUnits(),
   ]);
+  // "in use" (no alert, not on the stock card when off): fed today by its period (point 14), not the old flag
+  const onToday = await feedsOn(prisma, today);
   const weekFrom = dayToDate(addDays(today, -7));
   const monthFrom = dayToDate(addDays(today, -30));
   const todayDate = dayToDate(today);
@@ -253,14 +257,14 @@ export async function feedStock(now = new Date(), until?: string): Promise<Stock
   // `until`: the stock as it stood at the end of that day (the export's closing stock); later items are not yet in it
   const untilDate = until ? dayToDate(until) : null;
   const rows = new Map<string, StockRow>();
-  const row = (it: { feedId: string; otherName: string | null; feed: { active: boolean; names: { name: string; validFrom: Date; validTo: Date | null }[] } }, dimension: Dimension, unit: string) => {
+  const row = (it: { feedId: string; otherName: string | null; feed: { names: { name: string; validFrom: Date; validTo: Date | null }[] } }, dimension: Dimension, unit: string) => {
     // the other name as the reports and the Excel read it (other-name.ts): case and spaces do not make a second row
     const other = it.otherName ? otherKey(it.otherName) : null;
     const key = `${it.feedId}|${other ?? ""}|${dimension}`;
     let r = rows.get(key);
     if (!r) {
       const name = pickValid(it.feed.names, now)?.name ?? it.feed.names.at(-1)?.name ?? "?";
-      r = { key, feedId: it.feedId, feed: other ? `${name}: ${otherLabel(other)}` : name, otherName: other, dimension, unit, received: 0, returned: 0, taken: 0, level: 0, negative: false, week: 0, month: 0, tracked: false, active: it.feed.active };
+      r = { key, feedId: it.feedId, feed: other ? `${name}: ${otherLabel(other)}` : name, otherName: other, dimension, unit, received: 0, returned: 0, taken: 0, level: 0, negative: false, week: 0, month: 0, tracked: false, active: onToday.has(it.feedId) };
       rows.set(key, r);
     }
     return r;

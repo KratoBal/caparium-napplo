@@ -9,6 +9,7 @@ import { sortAnimals } from "./animal-order";
 import type { Dimension, FeedingItem, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
+import { feedIsOn, feedsOn } from "./feed-periods";
 import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
@@ -116,8 +117,9 @@ export async function setDayFeeds(actor: Actor, input: z.infer<typeof dayFeedsSc
   return prisma.$transaction(async (tx) => {
     const { f, fd } = await facts(tx, actor, input.day, serverNow, clientTs);
     await enforce(tx, canCreate(f.level, { day: f.d, today: f.today, closed: f.closed }), input.reason);
-    const known = await tx.feed.findMany({ where: { id: { in: wanted }, active: true }, select: { id: true } });
-    if (known.length !== wanted.length) throw new AppError(422, "FEED_NOT_FOUND", "Ismeretlen vagy inaktív takarmány.");
+    // point 14: the feeds of that day, by their periods
+    const on = await feedsOn(tx, input.day);
+    if (wanted.some((id) => !on.has(id))) throw new AppError(422, "FEED_NOT_FOUND", "Ismeretlen takarmány, vagy ezen a napon nincs etetési időszaka.");
     const before = [...fd.feedIds].sort();
     const after = [...wanted].sort();
     if (before.join() === after.join()) return { changed: false };
@@ -456,7 +458,8 @@ export async function saveFeedingItem(actor: Actor, input: z.infer<typeof itemSc
       // the feed's row FOR SHARE: a change of its unit (feeds.ts) waits for this save, and this one for it
       await tx.$queryRaw`SELECT "id" FROM "feed" WHERE "id" = ${input.feedId}::uuid FOR SHARE`;
       const feed = await tx.feed.findUnique({ where: { id: input.feedId }, include: { type: true } });
-      if (!feed || !feed.active) throw new AppError(422, "FEED_NOT_FOUND", "A takarmány nem található vagy nem aktív.");
+      // point 14: the feed is offered on the day by its period, as the list of that day
+      if (!feed || !(await feedIsOn(tx, feed.id, input.day))) throw new AppError(422, "FEED_NOT_FOUND", "A takarmány nem található, vagy ezen a napon nincs etetési időszaka.");
       if (feed.type.code === "EGYEB" && !input.otherName) throw new AppError(422, "OTHER_NAME", "Az „Egyéb” takarmányhoz a nevét is meg kell adni (EGY-12).");
 
       // Lili 2026-10-29 (package item 3): an item without a quantity (the sheet's tick) takes the feed's base amount
