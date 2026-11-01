@@ -68,6 +68,18 @@ describe("own profile", () => {
     expect(audit?.changes).toMatchObject({ fullName: { before: "Saját Próba", after: "Új Megjelenő Név" } });
   });
 
+  // Lili 2026-11-01 (point 17): the helper's greeting name, the user's own; empty clears it
+  it("sets and clears the own nickname, audited; the session carries it", async () => {
+    const cookie = (await login(loginId, OLD))!;
+    expect((await patch(cookie, { nickname: " Sajti " })).status).toBe(200);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).nickname).toBe("Sajti");
+    expect((await userForToken(token(cookie)))?.nickname).toBe("Sajti");
+    expect((await patch(cookie, { nickname: "" })).status).toBe(200);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).nickname).toBeNull();
+    const audits = await prisma.auditEntry.findMany({ where: { entityId: userId, action: "MASTER_CHANGE" }, orderBy: { at: "asc" } });
+    expect(audits.slice(-2).map((a) => a.changes)).toEqual([{ nickname: { before: null, after: "Sajti" } }, { nickname: { before: "Sajti", after: null } }]);
+  });
+
   it("refuses a formula-like name and an unchanged one", async () => {
     const cookie = (await login(loginId, OLD))!;
     expect((await patch(cookie, { fullName: "=SUM(A1)" })).status).toBe(400);

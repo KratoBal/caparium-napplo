@@ -2322,7 +2322,8 @@ test("the helper greets after the login, goes with the first click that still wo
   await expect(helper).toHaveAttribute("data-ready", "1");
   const hello = helper.getByTestId("helper-notice");
   await expect(hello).toHaveAttribute("data-kind", "greeting");
-  await expect(hello).toHaveText("Üdv a fedélzeten Teszt.akvarista1!");
+  // point 17: the nickname, else the given name ("Teszt Akvarista Egy": Egy)
+  await expect(hello).toHaveText("Üdv a fedélzeten Egy!");
   const picture = helper.getByTestId("helper-button").locator("img");
   await expect(picture).toHaveAttribute("src", /^\/segito\/(antennarius|zebracapa)-udv-[123]\.webp$/);
   // the day's greeter (Lili 2026-11-01: not the page's figure every day), its bubble colour with it; a login across midnight may
