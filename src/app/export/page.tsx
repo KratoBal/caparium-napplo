@@ -164,7 +164,7 @@ async function MonthlyPackage() {
     <div className="card" data-testid="monthly-package">
       <h2 className="title-small">Havi ZIMS-csomag ({formatPeriod(from, to)})</h2>
       <p className="hint">
-        A rendszer havonta egyszer előkészíti az előző hónap ZIMS-fájljait letöltésre (e-mailt nem küld). Ez előnézet, nem leadás: a ZIMS-be
+        A rendszer havonta egyszer előkészíti az előző hónap ZIMS-fájljait letöltésre, és ha az automatikus levél be van kapcsolva, a Beállítások „Havi ZIMS-csomag levélben” részében megadott címzettnek e-mailben is elküldi. Ez előnézet, nem leadás: a ZIMS-be
         feltöltött futást továbbra is egy adminisztrátor jelöli leadottnak.
       </p>
       {run ? (
