@@ -411,6 +411,9 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
    the day picker and the save button on one row (the save button at the right end, it wraps below on a narrow screen) */
 .water-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 0 0 4px; }
 .toolbar.water-head-row { margin: 8px 0 12px; }
+/* the day picker and the save button beside the tables, at the right end; where the row is too narrow for both (the
+   tablet's 768px beside the daily table pictures) the save button goes under the day picker, still beside the tables */
+.water-head-actions { flex: 1 1 280px; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: flex-end; gap: 10px; }
 .toolbar.water-rounds-row { margin: 0 0 12px; }
 .day-controls .badge { font-size: 13px; padding: 6px 12px; }
 .err { color: var(--c-error); font-weight: 600; }

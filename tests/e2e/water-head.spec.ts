@@ -33,12 +33,14 @@ for (const path of ["/vizmeres", "/heti"]) {
     const tabs = await box(row.getByRole("tablist", { name: "Mérési csoport" }));
     const jump = await box(row.getByRole("button", { name: "Ugrás" }));
     const save = await box(row.getByTestId("save-all"));
-    // one row: the save button and the jump button on the same bottom line, inside the tables' height
-    expect(Math.abs(save.y + save.height - (jump.y + jump.height)), "save and jump on one line").toBeLessThan(4);
-    expect(save.y, "the save button in the tables' row").toBeGreaterThanOrEqual(tabs.y - 2);
-    expect(save.y + save.height).toBeLessThanOrEqual(tabs.y + tabs.height + 2);
-    // the save button at the right end, after the day picker
-    expect(save.x).toBeGreaterThan(jump.x + jump.width);
+    // beside the tables, not on a row of their own: the day picker and the save button inside the tables' height
+    for (const [what, b] of [["the jump button", jump], ["the save button", save]] as const) {
+      expect(b.y, what).toBeGreaterThanOrEqual(tabs.y - 2);
+      expect(b.y + b.height, what).toBeLessThanOrEqual(tabs.y + tabs.height + 2);
+      expect(b.x, what).toBeGreaterThan(tabs.x + tabs.width);
+    }
+    // at the right end: beside the jump button where the row is wide enough, under it where it is not (the tablet)
+    expect(save.x + save.width).toBeGreaterThanOrEqual(jump.x + jump.width - 2);
     // the rows close together
     const headBox = await box(head);
     expect((await box(row)).y - (headBox.y + headBox.height), "the gap under the date row").toBeLessThan(20);

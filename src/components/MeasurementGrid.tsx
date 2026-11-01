@@ -607,13 +607,14 @@ export function MeasurementGrid({
     <>
       <div className="toolbar toolbar-end water-head-row" data-testid="water-head-row">
         {tables}
-        <span className="spacer" />
-        {dayPicker}
-        {!readOnly && (
-          <button className="btn" type="button" onClick={saveAll} data-testid="save-all">
-            Mentés
-          </button>
-        )}
+        <div className="water-head-actions">
+          {dayPicker}
+          {!readOnly && (
+            <button className="btn" type="button" onClick={saveAll} data-testid="save-all">
+              Mentés
+            </button>
+          )}
+        </div>
       </div>
       {grid.rounds.length > 0 && (
         <div className="toolbar water-rounds-row">
