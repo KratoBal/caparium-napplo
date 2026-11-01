@@ -25,7 +25,7 @@ test("a new measurement in one pool of the weekly table: a column, a field there
   if (!(await card.evaluate((d) => (d as HTMLDetailsElement).open))) await card.locator(":scope > summary").click();
   const form = card.getByTestId("new-measurement");
   await form.getByLabel("Név (például Nitrit)").fill(name);
-  await form.getByLabel("Mértékegység").selectOption({ label: "ppm" });
+  await form.getByLabel("Mértékegység", { exact: true }).selectOption({ label: "ppm" });
   await form.getByLabel("Tizedesjegyek").selectOption("2");
   await form.getByLabel("Hihető tartomány teteje").fill("5");
   await form.getByLabel("Referencia teteje").fill("0,1");
