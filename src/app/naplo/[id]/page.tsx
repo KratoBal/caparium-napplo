@@ -81,6 +81,11 @@ export default async function MeasurementHistoryPage({ params }: { params: Promi
         <p style={{ fontSize: 28, margin: "16px 0 0" }} className={out ? "value-out" : undefined} data-testid="history-value">
           {formatDecimalHu(m.value, m.decimals)} {m.unitSymbol !== m.parameterName ? m.unitSymbol : ""}
         </p>
+        {m.baseValue !== null && m.dilution !== null && (
+          <p className="hint" data-testid="history-base-value">
+            Hígítás előtt: {m.baseValue.replace(".", ",")} × {m.dilution}
+          </p>
+        )}
         {out && m.range && (
           <p className="hint">
             Eltérés a referenciától ({m.range.min ?? "–"}–{m.range.max ?? "–"} {m.range.unitSymbol})
@@ -96,7 +101,8 @@ export default async function MeasurementHistoryPage({ params }: { params: Promi
           measurement={{
             id: m.id,
             version: m.version,
-            value: m.value,
+            // the field takes the reading; the server multiplies it by the dilution again
+            value: m.baseValue ?? m.value,
             measuredAtLocal: m.measuredAtLocal,
             responsibleUserId: m.responsibleUserId,
             traineePerformed: m.traineePerformed,

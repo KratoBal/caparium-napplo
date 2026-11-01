@@ -69,8 +69,8 @@ describe("the pool ticks", () => {
     await wb.xlsx.load(buffer as unknown as ArrayBuffer);
     for (const name of ["Vízmérés teljes", "Nagymedence"]) {
       const ws = wb.getWorksheet(name)!;
-      expect((ws.getRow(1).values as unknown[]).slice(11), name).toEqual(["Visszamosás", "Rátöltés", "Vízcsere"]);
-      const ticksOf = (r: number) => [11, 12, 13].map((c) => ws.getRow(r).getCell(c).value ?? "");
+      expect((ws.getRow(1).values as unknown[]).slice(12), name).toEqual(["Visszamosás", "Rátöltés", "Vízcsere"]);
+      const ticksOf = (r: number) => [12, 13, 14].map((c) => ws.getRow(r).getCell(c).value ?? "");
       expect(ticksOf(2), name).toEqual(["volt", "volt", ""]); // the first row of the pool and the day
       expect(ticksOf(3), name).toEqual(["", "", ""]); // the second row of the same day: not repeated
     }

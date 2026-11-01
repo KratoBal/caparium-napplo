@@ -26,6 +26,8 @@ export type CellView = {
   /** point 13: the tester's reading and the conversion's name, when the value was converted (the grid shows a dot) */
   rawReading: string | null;
   conversionLabel: string | null;
+  /** the value before the weekly dilution, or null; value = baseValue x dilution (Lili 2026-11-01 22:35 UTC) */
+  baseValue: string | null;
 };
 
 function rangeView(r: { min: Prisma.Decimal | null; max: Prisma.Decimal | null; unit: { symbol: string } } | null): RangeView | null {
@@ -96,6 +98,7 @@ export async function getGrid(groupId: string, day: string, roundSeq?: number) {
     diluentWater: m.diluentWater,
     rawReading: m.rawReading === null ? null : canonicalDecimal(m.rawReading),
     conversionLabel: m.conversion?.label ?? null,
+    baseValue: m.baseValue === null ? null : canonicalDecimal(m.baseValue),
   });
 
   // an inactive pool (a renovation) stays on the earlier days it has a measurement, read only; on the others, and today
@@ -252,6 +255,8 @@ export async function measurementHistory(id: string) {
       groupName: m.round.group.name,
       roundSeq: m.round.seq,
       value: canonicalDecimal(m.value),
+      // Lili 2026-11-01 22:35 UTC: the reading before the dilution; the value above is the result
+      baseValue: m.baseValue === null ? null : canonicalDecimal(m.baseValue),
       decimals: m.parameter.decimals,
       unitSymbol: m.unit.symbol,
       reference: referenceOf(m),

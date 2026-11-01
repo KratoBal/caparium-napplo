@@ -109,6 +109,9 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
         <span className="tag-soft">{reasonRequired ? "Adminisztrátori művelet" : "Saját mai bejegyzés"}</span>
         <h2 style={{ marginTop: 12 }}>Mérési adat javítása</h2>
         <p className="hint">A javítás nem törli a korábbi értéket; a változás visszakereshető.</p>
+        {m.dilutable && (
+          <p className="hint">Az érték a hígítás előtti leolvasás; a mentett érték ennek és a hígításnak a szorzata.</p>
+        )}
         <div className="form-grid">
           <span className="form-label">Eredeti érték</span>
           <span className="pill">{original}</span>
