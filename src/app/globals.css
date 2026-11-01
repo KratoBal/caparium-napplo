@@ -411,6 +411,9 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .clearable-block { display: block; max-width: 160px; }
 .clear-x { position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--c-muted); font-size: 14px; line-height: 16px; cursor: pointer; }
 .clear-x:hover, .clear-x:focus-visible { background: var(--c-line); color: var(--c-ink); }
+/* Lili 2026-11-01 (point 13): a value converted from a tester's reading carries only a small dot; the reading is in its title */
+.conv-dot { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--c-primary); vertical-align: middle; }
+.clearable .conv-dot { position: absolute; left: 5px; top: 5px; margin: 0; }
 
 /* TAK-05: the page as PDF through the print dialog; navigation and forms stay out */
 @media print {

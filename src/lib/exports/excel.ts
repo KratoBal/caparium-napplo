@@ -8,7 +8,7 @@
 import ExcelJS from "exceljs";
 import { prisma } from "../db";
 import { canonicalDecimal } from "../decimal";
-import { pickValid } from "../master";
+import { nameAt, pickValid } from "../master";
 import { TICK_LABEL, TICK_ORDER } from "../pool-ticks";
 import { evaluateReference } from "../reference";
 import { BUSINESS_TZ, dateToDay, dayToDate, formatDay, resolveLocalDateTime, wallClock } from "../time";
@@ -22,6 +22,15 @@ export const TICK_HEADER = TICK_ORDER.map((k) => TICK_LABEL[k]);
 export const SUMMARY_SHEET = "Vízmérés teljes";
 
 const RED = "FFDF5B5B";
+// Lili 2026-11-01 (point 1): a coloured header on every sheet, and the rows' colour changing week by week (Monday starts a week)
+export const WATER_HEAD_FILL = "FFA6CAEC";
+export const WATER_WEEK_FILLS = [null, "FFE3EEF8"] as const;
+
+/** The week band of a measurement day: the period's first week has none, the next one the pale blue, and so on. */
+export function waterWeekFill(first: string, day: string): string | null {
+  const monday = (d: string) => Math.floor((dayToDate(d).getTime() / 86_400_000 + 3) / 7); // weeks since 1970-01-05, a Monday
+  return WATER_WEEK_FILLS[(((monday(day) - monday(first)) % 2) + 2) % 2];
+}
 
 /** Excel sheet names: at most 31 characters, none of : \ / ? * [ ], unique (case-insensitive). */
 export function sheetName(name: string, taken: Set<string>): string {
@@ -60,7 +69,10 @@ export async function buildWaterWorkbook(f: ExcelFilter): Promise<{ buffer: Buff
     orderBy: [{ measuredAt: "asc" }, { createdAt: "asc" }],
   });
   const people = await prisma.userMonogram.findMany({ where: { userId: { in: [...new Set(rows.map((r) => r.responsibleUserId))] } } });
-  const monoOf = (userId: string, at: Date) => pickValid(people.filter((p) => p.userId === userId), at)?.monogram ?? "?";
+  // a measurement recorded back in time, before the worker's first monogram began (point 1: the "?" rows were the old
+  // measurements Lili loaded, dated before her account; prisma/zims-name-lili-fix.mjs measured the same gap for the ZIMS
+  // name): the first monogram is the one the worker is known by; a later change still leaves the older ones their own
+  const monoOf = (userId: string, at: Date) => nameAt(people.filter((p) => p.userId === userId), at)?.monogram ?? "?";
   const endOfPeriod = resolveLocalDateTime(`${f.to}T23:59`)!.instant;
 
   const wb = new ExcelJS.Workbook();
@@ -77,7 +89,9 @@ export async function buildWaterWorkbook(f: ExcelFilter): Promise<{ buffer: Buff
   }
   const header = [...TEMPLATE_HEADER, ...EXTRA_HEADER, ...TICK_HEADER];
   for (const ws of [summary, ...perPool.values()]) {
-    ws.addRow(header).font = { bold: true };
+    const head = ws.addRow(header);
+    head.font = { bold: true };
+    head.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: WATER_HEAD_FILL } }));
     ws.columns = [12, 8, 16, 16, 10, 13, 15, 11, 9, 8, 12, 10, 10].map((width) => ({ width }));
     ws.views = [{ state: "frozen", ySplit: 1 }];
   }
@@ -119,8 +133,10 @@ export async function buildWaterWorkbook(f: ExcelFilter): Promise<{ buffer: Buff
         return "volt";
       }),
     ];
+    const band = waterWeekFill(f.from, dateToDay(m.businessDay));
     for (const ws of [summary, perPool.get(m.poolId)!]) {
       const row = ws.addRow(cells);
+      if (band) for (let c = 1; c <= header.length; c++) row.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: band } };
       row.getCell(5).numFmt = m.parameter.decimals > 0 ? `0.${"0".repeat(m.parameter.decimals)}` : "0";
       if (status === "LOW" || status === "HIGH") row.getCell(5).font = { color: { argb: RED }, bold: true };
     }
