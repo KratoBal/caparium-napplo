@@ -33,6 +33,22 @@ const sentThisRun = new Set<string>();
 /** The automatic mail is off unless this instance is switched on. */
 export const monthlyMailEnabled = (env: Record<string, string | undefined> = process.env) => env.CAPARIUM_MONTHLY_ZIMS_MAIL === "on";
 
+/**
+ * The line the hourly job leaves when the mail is skipped for the INSTANCE or the SETTINGS. Without it a skip is silent, and a silent
+ * skip cannot be told from a fault (acrobot and Lili, 2026-11-01: the October package did not come, and nothing said why). One line per
+ * hourly try; it names the cause and what turns it. The other skips are not logged: ALREADY_SENT is the normal state for the rest of the
+ * month, and a failed sending logs its own error.
+ */
+export const SKIP_NOTE = {
+  DISABLED: 'monthly ZIMS mail: not sent, this instance is not switched on (CAPARIUM_MONTHLY_ZIMS_MAIL is not "on")',
+  NO_RECIPIENT: "monthly ZIMS mail: not sent, no recipient is set (Beállítások, Havi ZIMS-csomag levélben)",
+} as const;
+
+function skipped(why: keyof typeof SKIP_NOTE): { sent: false; why: string } {
+  console.log(SKIP_NOTE[why]);
+  return { sent: false, why };
+}
+
 const alreadySent = (tx: Tx, key: string) => tx.auditEntry.findFirst({ where: { requestId: key, entityType: "MonthlyZimsMail" } });
 
 export async function mailMonthlyPackage(
@@ -40,7 +56,7 @@ export async function mailMonthlyPackage(
   now = new Date(),
   sender?: MailSender,
 ): Promise<{ sent: boolean; why?: string }> {
-  if (!monthlyMailEnabled()) return { sent: false, why: "DISABLED" };
+  if (!monthlyMailEnabled()) return skipped("DISABLED");
   const { from, to } = previousMonth(now);
   const kind = result.runId ? "package" : result.reason ? `warning-${result.reason}` : null;
   if (!kind) return { sent: false, why: "NOTHING_TO_SAY" };
@@ -50,7 +66,7 @@ export async function mailMonthlyPackage(
 
   const raw = await getSetting(prisma, "monthly_zims_recipient", now);
   const recipients = raw ? parseRecipients(raw) : null;
-  if (!recipients || !recipients.ok || recipients.list.length === 0) return { sent: false, why: "NO_RECIPIENT" };
+  if (!recipients || !recipients.ok || recipients.list.length === 0) return skipped("NO_RECIPIENT");
 
   let subject: string;
   let text: string;

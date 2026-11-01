@@ -1,14 +1,14 @@
 // The monthly ZIMS package by e-mail (Lili's package 2026-10-29, item 1), through a fake sender: nothing leaves the
 // machine. March and May 2029: months no other spec uses (the database is shared across files); the "now" of each
 // call is in the month after, so the job's own clock is not touched.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { monthlyPackage } from "@/lib/exports/zims";
 import type { MailSender, OutgoingMail } from "@/lib/mail";
 import { createMeasurement } from "@/lib/measurements";
 import { setRecipientSetting } from "@/lib/water-mail";
-import { mailMonthlyPackage } from "@/lib/zims-mail";
+import { mailMonthlyPackage, SKIP_NOTE } from "@/lib/zims-mail";
 import { fixtures, rid } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -47,9 +47,12 @@ describe("the monthly ZIMS package mail", () => {
 
   it("an instance that is not switched on sends nothing, even with a recipient and SMTP (a stage on a copy of the data)", async () => {
     process.env.CAPARIUM_MONTHLY_ZIMS_MAIL = "";
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
       expect(await mailMonthlyPackage({ created: false, runId: "00000000-0000-0000-0000-000000000000" }, now, fake)).toEqual({ sent: false, why: "DISABLED" });
+      expect(log.mock.calls).toEqual([[SKIP_NOTE.DISABLED]]); // the skip is not silent (2026-11-01)
     } finally {
+      log.mockRestore();
       process.env.CAPARIUM_MONTHLY_ZIMS_MAIL = "on";
     }
     expect(sent).toHaveLength(0);
@@ -59,7 +62,13 @@ describe("the monthly ZIMS package mail", () => {
     await createMeasurement(f.aq1, { requestId: rid(), groupId: f.group("NAPI_NAGY"), poolId: f.pool("NAGY"), parameterId: f.param("PH"), value: "8,1", measuredAtLocal: "2029-03-15T09:00" }, new Date("2029-03-15T09:00:00+01:00"));
     const pkg = await monthlyPackage(now);
     expect(pkg.created).toBe(true);
-    expect(await mailMonthlyPackage(pkg, now, fake)).toEqual({ sent: false, why: "NO_RECIPIENT" });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(await mailMonthlyPackage(pkg, now, fake)).toEqual({ sent: false, why: "NO_RECIPIENT" });
+      expect(log.mock.calls).toEqual([[SKIP_NOTE.NO_RECIPIENT]]);
+    } finally {
+      log.mockRestore();
+    }
     expect(sent).toHaveLength(0);
     expect(await code(setRecipientSetting(f.aq1, { requestId: rid(), email: "havi-zims@example.test" }, "monthly_zims_recipient", now))).toBe("ADMIN_ONLY");
     await setRecipientSetting(f.admin, { requestId: rid(), email: "havi-zims@example.test, masik@example.test" }, "monthly_zims_recipient", now);
