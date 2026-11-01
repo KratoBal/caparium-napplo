@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { announceReminder, formComplete, reminderTimer, reminderWanted } from "@/lib/save-reminder";
 import type { CellView, RangeView } from "@/lib/queries";
+import { convertReading, type ReadingConversion } from "@/lib/reading";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 import { useLeaveWarning } from "./useLeaveWarning";
 
@@ -29,7 +30,7 @@ type Grid = {
   day: string;
   layout: {
     pools: { id: string; name: string; active: boolean }[];
-    parameters: { id: string; name: string; decimals: number; unit: { symbol: string }; dilution: boolean }[];
+    parameters: { id: string; name: string; decimals: number; unit: { symbol: string }; dilution: boolean; conversion?: ReadingConversion | null }[];
   };
   /** the pool ticks this group offers (Lili 2026-10-29, item 8): empty for the weekly groups */
   tickKinds: TickKind[];
@@ -166,6 +167,11 @@ export function MeasurementGrid({
   draftsRef.current = drafts;
   const metaRef = useRef(metaDrafts);
   metaRef.current = metaDrafts;
+  // point 13 (Lili 2026-11-01): the tester's reading behind a converted draft; the field shows the converted value
+  const [rawDrafts, setRawDrafts] = useState<Record<string, string>>({});
+  const rawRef = useRef(rawDrafts);
+  rawRef.current = rawDrafts;
+  const conversionOf = useCallback((parameterId: string) => gridRef.current.layout.parameters.find((p) => p.id === parameterId)?.conversion ?? null, []);
   // the drafts not yet saved: leaving the page with them asks first (the reverse of the old autosave mix-up
   // would be a silently lost measurement)
   // the save reminder's timer (card 0d617f0c, src/lib/save-reminder.ts); leaving with drafts makes it speak at once
@@ -351,7 +357,7 @@ export function MeasurementGrid({
   }, [flushQueue, readQueue]);
 
   const buildItem = useCallback(
-    (poolId: string, parameterId: string, value: string, overwrite?: { version: number }, meta?: Meta): QueueItem => {
+    (poolId: string, parameterId: string, value: string, overwrite?: { version: number }, meta?: Meta, raw?: string): QueueItem => {
       const key = `${poolId}:${parameterId}`;
       const existing = gridRef.current.cells[key];
       const common = {
@@ -361,6 +367,8 @@ export function MeasurementGrid({
         responsibleUserId: responsibleId,
         traineePerformed: trainee,
         ...(dilutable(parameterId) && meta ? { dilution: meta.dilution, diluentWater: meta.diluentWater } : {}),
+        // the reading goes with the value: the server converts it again and keeps it
+        ...(raw !== undefined ? { rawReading: raw } : {}),
       };
       if (existing) {
         // an edit keeps the original measurement time unless the user changed the time field
@@ -411,8 +419,17 @@ export function MeasurementGrid({
       const text = draftText ?? (existing ? existing.value : undefined);
       const meta = metaOverride ??
         metaRef.current[key] ?? { dilution: existing?.dilution ?? null, diluentWater: existing?.diluentWater ?? null };
+      // a reading typed for a converted parameter, the field not yet left: it is the reading all the same
+      const conv = conversionOf(parameterId);
+      const raw = rawRef.current[key] ?? (conv && draftText !== undefined && draftText.trim() !== "" ? draftText.trim() : undefined);
       // only what was sent is cleared: a newer edit made while saving stays a draft
       const clear = () => {
+        setRawDrafts((d) => {
+          if (!(key in d) || d[key] !== raw) return d;
+          const next = { ...d };
+          delete next[key];
+          return next;
+        });
         setDrafts((d) => {
           if (d[key] !== draftText) return d;
           const next = { ...d };
@@ -449,14 +466,14 @@ export function MeasurementGrid({
         clear();
         return "none";
       }
-      const outcome = await send(buildItem(poolId, parameterId, text.trim(), undefined, meta), false);
+      const outcome = await send(buildItem(poolId, parameterId, text.trim(), undefined, meta, raw), false);
       if (outcome === "ok") {
         await refresh();
         clear();
       }
       return outcome;
     },
-    [send, buildItem, refresh, dilutable],
+    [send, buildItem, refresh, dilutable, conversionOf],
   );
 
   const saveCell = useCallback(
@@ -525,7 +542,7 @@ export function MeasurementGrid({
     const item =
       conflict.draft.trim() === ""
         ? invalidateItem(conflict.key, fresh.id, fresh.version, {})
-        : buildItem(poolId, parameterId, conflict.draft, { version: fresh.version }, metaOf(conflict.key));
+        : buildItem(poolId, parameterId, conflict.draft, { version: fresh.version }, metaOf(conflict.key), rawRef.current[conflict.key]);
     const outcome = await send(item, false);
     if (outcome === "ok") await refresh();
   }, [conflict, grid.cells, send, buildItem, refresh, metaOf]);
@@ -533,6 +550,11 @@ export function MeasurementGrid({
   const loadFresh = useCallback(async () => {
     if (!conflict) return;
     setDrafts((d) => {
+      const next = { ...d };
+      delete next[conflict.key];
+      return next;
+    });
+    setRawDrafts((d) => {
       const next = { ...d };
       delete next[conflict.key];
       return next;
@@ -710,6 +732,18 @@ export function MeasurementGrid({
                           ? draftOutOfRange(draft, grid.currentRanges[key])
                           : cell?.reference === "LOW" || cell?.reference === "HIGH";
                       const range = cell?.range ?? grid.currentRanges[key];
+                      // point 13: a converted value carries a small dot; its title names the reading
+                      const rawShown = draft !== undefined ? rawDrafts[key] : (cell?.rawReading ?? undefined);
+                      const convLabel = draft !== undefined ? param.conversion?.label : (cell?.conversionLabel ?? undefined);
+                      const dot =
+                        rawShown !== undefined ? (
+                          <span
+                            className="conv-dot"
+                            data-testid={`conv-${pool.name}-${param.name}`}
+                            title={`Átváltott érték${convLabel ? ` (${convLabel})` : ""}, leolvasva: ${huNumber(rawShown)}`}
+                            aria-label={`átváltott érték, leolvasva ${huNumber(rawShown)}`}
+                          />
+                        ) : null;
                       return (
                         <td key={param.id} data-label={`${param.name}${param.unit.symbol !== param.name ? ` · ${param.unit.symbol}` : ""}`}>
                           {active ? (
@@ -722,12 +756,39 @@ export function MeasurementGrid({
                                 aria-label={`${pool.name} ${param.name}`}
                                 data-testid={`cell-${pool.name}-${param.name}`}
                                 value={shown}
-                                onChange={(e) => setDrafts((d) => ({ ...d, [key]: e.target.value }))}
+                                onChange={(e) => {
+                                  setDrafts((d) => ({ ...d, [key]: e.target.value }));
+                                  // typing again: a new reading, converted when the field is left
+                                  setRawDrafts((d) => {
+                                    if (!(key in d)) return d;
+                                    const next = { ...d };
+                                    delete next[key];
+                                    return next;
+                                  });
+                                }}
+                                onBlur={() => {
+                                  // point 13: the reading becomes the value at once, and stays in the field as if typed
+                                  const typed = draftsRef.current[key];
+                                  if (!param.conversion || typed === undefined || typed.trim() === "" || rawRef.current[key] !== undefined) return;
+                                  const v = convertReading(typed, param.conversion);
+                                  if (v === null) return;
+                                  setRawDrafts((d) => ({ ...d, [key]: typed.trim() }));
+                                  setDrafts((d) => ({ ...d, [key]: huNumber(v) }));
+                                }}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                                 }}
                               />
-                              <ClearX shown={shown !== ""} label={`Kiürítés, ${pool.name}, ${param.name}`} onClear={() => setDrafts((d) => ({ ...d, [key]: "" }))} />
+                              {dot}
+                              <ClearX shown={shown !== ""} label={`Kiürítés, ${pool.name}, ${param.name}`} onClear={() => {
+                                  setDrafts((d) => ({ ...d, [key]: "" }));
+                                  setRawDrafts((d) => {
+                                    if (!(key in d)) return d;
+                                    const next = { ...d };
+                                    delete next[key];
+                                    return next;
+                                  });
+                                }} />
                             </span>
                           ) : (
                             <div
@@ -736,6 +797,7 @@ export function MeasurementGrid({
                               onClick={() => !readOnly && setActivePool(pool.id)}
                             >
                               {shown || "–"}
+                              {dot}
                             </div>
                           )}
                           {weekly && param.dilution && (

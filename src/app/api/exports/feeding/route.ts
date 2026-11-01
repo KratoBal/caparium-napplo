@@ -2,6 +2,7 @@ import { writeAudit } from "@/lib/audit";
 import { sameOrigin, userFromRequest } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { FILE_BASE, periodFileName } from "@/lib/exports/file-names";
 import { REPORT_FILE_BASE } from "@/lib/exports/intake-report-text";
 import { buildIntakePdf } from "@/lib/exports/intake-pdf";
 import { buildIntakeWorkbook } from "@/lib/exports/intake-excel";
@@ -66,8 +67,10 @@ export async function POST(req: Request) {
       changes: { export: { before: null, after: { kind: exportKind, from, to, rows: built.rows } } },
     });
   });
-  const base = kind === "huto" ? REPORT_FILE_BASE : kind === "etetes" ? "Egyedi_takarmanynaplo" : kind === "evesi" ? "Evesi_minta" : kind === "kivetel" ? "Takarmanykivetel" : "Kimutatas";
-  const name = `${base}_${from}${from === to ? "" : `_${to}`}.${pdf ? "pdf" : "xlsx"}`;
+  // Lili 2026-11-01 (points 2-4): "capasuli_" names for the feeding log, the eating pattern and the withdrawals
+  const base =
+    kind === "huto" ? REPORT_FILE_BASE : kind === "etetes" ? FILE_BASE.feeding : kind === "evesi" ? FILE_BASE.eating : kind === "kivetel" ? FILE_BASE.withdrawal : "Kimutatas";
+  const name = periodFileName(base, from, to, pdf ? "pdf" : "xlsx");
   return new Response(new Uint8Array(built.buffer), {
     headers: {
       "Content-Type": pdf ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
