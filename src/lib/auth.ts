@@ -123,6 +123,29 @@ export async function login(loginId: string, password: string, client: string | 
   };
 }
 
+/**
+ * The user's own password, checked before they change it (Lili 2026-11-01, point 11). The same guard as the login: the
+ * failures count toward the login lockout (a stolen session cannot try passwords faster than the login page), the check
+ * takes a password slot, and a wrong one is audited as a failed login.
+ */
+export async function checkOwnPassword(userId: string, password: string, client: string | null): Promise<"OK" | "INVALID" | "LOCKED" | "BUSY"> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user?.passwordHash) return "INVALID";
+  const since = new Date(Date.now() - FAILURE_WINDOW_MIN * 60_000);
+  const failures = await prisma.auditEntry.count({ where: { action: "LOGIN_FAILED", entityType: "User", entityId: user.id, at: { gte: since } } });
+  if (failures >= MAX_FAILURES) return "LOCKED";
+  const checked = await passwordSlots.run(() => verifyPassword(password, user.passwordHash!));
+  if (!checked.ran) return "BUSY";
+  if (checked.value) return "OK";
+  await prisma.$transaction((tx) => writeAudit(tx, { userId: user.id, action: "LOGIN_FAILED", entityType: "User", entityId: user.id, client }));
+  return "INVALID";
+}
+
+/** The database id of a session token: a self-service password change keeps this one session and ends the others. */
+export function sessionIdOf(token: string): string {
+  return tokenHash(token);
+}
+
 export async function logout(token: string | undefined): Promise<void> {
   if (!token) return;
   const session = await prisma.session.findUnique({ where: { id: tokenHash(token) } });
