@@ -63,7 +63,7 @@ describe("the water report", () => {
     expect(no3).toEqual({ min: null, max: "7", unit: "ppm" });
     const nagy = r.pools.find((p) => p.pool === "Nagymedence")!;
     expect(nagy.daily.map((v) => [v.parameter, v.value, v.time])).toEqual([["Hőmérséklet", "24.6", "15:00"]]);
-    expect(nagy.weekly.map((v) => [v.parameter, v.value, v.day, v.dilution, v.diluentWater])).toEqual([["NO3", "8.4", "2027-09-07", 10, "RO"]]);
+    expect(nagy.weekly.map((v) => [v.parameter, v.value, v.day, v.dilution, v.diluentWater])).toEqual([["NO3", "84", "2027-09-07", 10, "RO"]]);
     expect(r.pools.some((p) => p.pool === "Kismedence")).toBe(false);
   });
 });

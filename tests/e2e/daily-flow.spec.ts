@@ -198,6 +198,17 @@ test("weekly measurement: value with dilution and RO/SW, the result x dilution, 
   // the log shows the result
   await expect(row).toContainText("84");
   await expect(row).toContainText("1:10, RO");
+
+  // the measurement's page: the result, the reading under it; the correction field takes the reading, multiplied again
+  await row.getByRole("link").click();
+  await page.waitForURL(/\/naplo\/[0-9a-f-]{36}$/);
+  await expect(page.getByTestId("history-value")).toContainText("84");
+  await expect(page.getByTestId("history-base-value")).toHaveText("Hígítás előtt: 8,4 × 10");
+  await expect(page.getByLabel("Új érték")).toHaveValue("8,4");
+  await page.getByLabel("Új érték").fill("9");
+  await page.getByRole("button", { name: "Változtatás naplózása" }).click();
+  await expect(page.getByTestId("history-value")).toContainText("90");
+  await expect(page.getByTestId("history-base-value")).toHaveText("Hígítás előtt: 9 × 10");
 });
 
 // Budapest's today moved by calendar days, not by 24-hour steps: across the DST change (2026-10-25) a 24-hour step lands

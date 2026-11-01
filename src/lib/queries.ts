@@ -255,6 +255,8 @@ export async function measurementHistory(id: string) {
       groupName: m.round.group.name,
       roundSeq: m.round.seq,
       value: canonicalDecimal(m.value),
+      // Lili 2026-11-01 22:35 UTC: the reading before the dilution; the value above is the result
+      baseValue: m.baseValue === null ? null : canonicalDecimal(m.baseValue),
       decimals: m.parameter.decimals,
       unitSymbol: m.unit.symbol,
       reference: referenceOf(m),
