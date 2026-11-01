@@ -513,7 +513,7 @@ export function NewMeasurementForm({ units, groups, today }: { units: { id: stri
   const text = (k: keyof typeof empty, label: string, opts: { small?: boolean; decimal?: boolean } = {}) => (
     <label className="field">
       {label}
-      <input className={`input${opts.small ? " small" : ""}`} inputMode={opts.decimal ? "decimal" : undefined} value={f[k] as string} onChange={(e) => set(k, e.target.value)} />
+      <input className={`input${opts.small ? " small" : ""}`} aria-label={label} inputMode={opts.decimal ? "decimal" : undefined} value={f[k] as string} onChange={(e) => set(k, e.target.value)} />
     </label>
   );
   return (
@@ -522,7 +522,7 @@ export function NewMeasurementForm({ units, groups, today }: { units: { id: stri
         {text("name", "Név (például Nitrit)")}
         <label className="field">
           Mértékegység
-          <select className="input" value={f.unitId} onChange={(e) => set("unitId", e.target.value)}>
+          <select className="input" aria-label="Mértékegység" value={f.unitId} onChange={(e) => set("unitId", e.target.value)}>
             <option value="">Válassz</option>
             {units.map((u) => (
               <option key={u.id} value={u.id}>{u.symbol}</option>
@@ -531,7 +531,7 @@ export function NewMeasurementForm({ units, groups, today }: { units: { id: stri
         </label>
         <label className="field">
           Tizedesjegyek
-          <select className="input small" value={f.decimals} onChange={(e) => set("decimals", e.target.value)}>
+          <select className="input small" aria-label="Tizedesjegyek" value={f.decimals} onChange={(e) => set("decimals", e.target.value)}>
             {[0, 1, 2, 3, 4].map((d) => (
               <option key={d} value={d}>{d}</option>
             ))}
@@ -545,7 +545,7 @@ export function NewMeasurementForm({ units, groups, today }: { units: { id: stri
         {text("zimsUnit", "ZIMS-mértékegység")}
         <label className="field">
           Napi vagy heti mérés
-          <select className="input" value={f.groupId} onChange={(e) => setF((x) => ({ ...x, groupId: e.target.value, poolIds: [] }))}>
+          <select className="input" aria-label="Napi vagy heti mérés" value={f.groupId} onChange={(e) => setF((x) => ({ ...x, groupId: e.target.value, poolIds: [] }))}>
             <option value="">Válassz</option>
             {groups.map((g) => (
               <option key={g.id} value={g.id}>{g.name}</option>
@@ -554,7 +554,7 @@ export function NewMeasurementForm({ units, groups, today }: { units: { id: stri
         </label>
         <label className="field">
           Mettől
-          <input className="input" type="date" value={f.from} onChange={(e) => set("from", e.target.value)} />
+          <input className="input" type="date" aria-label="Mettől" value={f.from} onChange={(e) => set("from", e.target.value)} />
         </label>
       </div>
       {group && (
