@@ -9,6 +9,7 @@ import { feedBalance, saveIntakeItem } from "@/lib/feed-intake";
 import { createFeed } from "@/lib/feeds";
 import { poolInUse } from "@/lib/pool-periods";
 import { businessDayOf } from "@/lib/time";
+import { saveWithdrawalItem } from "@/lib/withdrawal";
 import { fixtures, rid } from "./fixtures";
 import { TEST_PASSWORD } from "./global-setup";
 
@@ -38,6 +39,8 @@ describe("after the merges (barracuda's notes)", () => {
     const type = await prisma.feedType.findUniqueOrThrow({ where: { code: "RAK" } });
     const id = (await createFeed(f.admin, { requestId: rid(), typeId: type.id, name: "Lejárt időszak", dimensions: ["MASS"], defaultUnitId: unit.g }, new Date("2026-09-01T08:00:00Z"))).id;
     await saveIntakeItem(f.admin, { requestId: rid(), day: "2026-09-02", feedId: id, quantities: [{ value: "100", unitId: unit.g }] }, new Date("2026-09-02T08:00:00+02:00"));
+    // all of it taken before the period: the balance's line is all zeros, so "in use" alone decides whether it is listed
+    await saveWithdrawalItem(f.admin, { requestId: rid(), day: "2026-09-03", feedId: id, quantities: [{ value: "100", unitId: unit.g }], reason: "teszt" }, new Date("2026-09-03T09:00:00+02:00"));
     const listed = async () => (await feedBalance("2026-10-01", "2026-10-02")).some((r) => r.feedId === id);
     // the control: tracked and fed today, no movement in the period, it is listed
     expect(await listed()).toBe(true);
