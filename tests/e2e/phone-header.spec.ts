@@ -73,6 +73,40 @@ test.describe("phone, 390 px", () => {
     await page.getByTestId("profile-panel").getByRole("button", { name: "Kilépés" }).click();
     await expect(page).toHaveURL(/\/belepes(\?|$)/);
   });
+
+  // Lili 2026-11-01 (point 12): the water and the feeding entries are two drop-downs on a phone
+  test("the menu row holds two drop-downs, Vízmérés and Takarmányozás, that open their entries", async ({ page }) => {
+    await login(page, "teszt.akvarista1");
+    const nav = page.getByRole("navigation", { name: "Fő navigáció" });
+    const row = await nav.locator(":scope > a:visible, :scope > .nav-group:visible > button").allInnerTexts();
+    expect(row.map((t) => t.replace(/[\u25B4\u25BE]/g, "").trim())).toEqual(["START", "Vízmérés", "Export", "Takarmányozás", "Kimutatások"]);
+    // the colored entries are not in the row itself
+    await expect(nav.getByRole("link", { name: "Evési napló" })).toHaveCount(0);
+    const feed = nav.getByRole("button", { name: /Takarmányozás/ });
+    await feed.click();
+    await expect(feed).toHaveAttribute("aria-expanded", "true");
+    const menu = page.getByRole("menu", { name: "Takarmányozás" });
+    await expect(menu.getByRole("menuitem")).toHaveText([
+      /Takarmánynapló/, /Evési napló/, /Takarmánykivétel/, /Takarmánykalkulátor/, /Takarmányozási napló/, /Fagyasztó/, /Takarmánylista/,
+    ]);
+    // the list opens under the menu row, inside the screen
+    const box = (await menu.boundingBox())!;
+    const navBottom = (await nav.boundingBox())!;
+    expect(Math.abs(box.y - (navBottom.y + navBottom.height))).toBeLessThan(2);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+    await menu.getByRole("menuitem", { name: /Evési napló/ }).click();
+    await expect(page).toHaveURL(/\/evesi-naplo$/);
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    // the group of the open page is marked, and Escape closes an open list
+    await expect(nav.getByRole("button", { name: /Takarmányozás/ })).toHaveClass(/active/);
+    const water = nav.getByRole("button", { name: /Vízmérés/ });
+    await water.click();
+    await expect(page.getByRole("menu", { name: "Vízmérés" }).getByRole("menuitem")).toHaveText([
+      /Napi vízmérés/, /Heti vízmérés/, /Vegyszeradagolás/, /Vízmérési napló/,
+    ]);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+  });
 });
 
 test.describe("tablet, 1024 px", () => {
@@ -84,5 +118,10 @@ test.describe("tablet, 1024 px", () => {
     await expect(page.locator(".userbox").getByRole("button", { name: "Kilépés" })).toBeVisible();
     await expect(page.getByTestId("profile-button")).toHaveCount(0);
     expect(await page.locator(".head").evaluate((el) => getComputedStyle(el).display)).toBe("contents");
+
+    // the menu keeps every entry in its plain list, no drop-down (point 12 is for the phone)
+    const nav = page.getByRole("navigation", { name: "Fő navigáció" });
+    await expect(nav.getByRole("link", { name: "Evési napló" })).toBeVisible();
+    await expect(nav.getByRole("button", { name: /Takarmányozás/ })).toHaveCount(0);
   });
 });

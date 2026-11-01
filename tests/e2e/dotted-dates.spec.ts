@@ -2,6 +2,7 @@
 // (the date input fields keep the browser's own shape and are not text, so `innerText` leaves them out; the ZIMS CSV is
 // not a page, and a download link's text is a file name). A hyphenated ISO date in the visible text of any page is the miss this test names.
 import { expect, test, type Page } from "@playwright/test";
+import { openAllSettings } from "../support/settings-folds";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
 
@@ -35,6 +36,7 @@ const PAGES = [
   "/takarmany-naplo",
   "/takarmanyhuto",
   "/beallitasok",
+  "/profil",
 ];
 
 test("no page shows a hyphenated ISO date as text; the day pages show the dotted one", async ({ page }) => {
@@ -46,6 +48,8 @@ test("no page shows a hyphenated ISO date as text; the day pages show the dotted
     const res = await page.goto(path);
     expect(res?.status(), path).toBeLessThan(500);
     await page.waitForLoadState("networkidle");
+    // the settings modules start closed (point 15): opened, so their text is read too
+    if (path === "/beallitasok") await openAllSettings(page);
     let text = await page.locator("body").innerText();
     // a file name keeps its ISO day (the ZIMS files' names are fixed): the download links are not date text
     for (const name of await page.locator("a[download]").allInnerTexts()) text = text.split(name).join("");

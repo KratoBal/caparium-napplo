@@ -55,3 +55,22 @@ export function navFor(role: "ADMIN" | "AQUARIST" | "SYSTEM"): NavItem[] {
   const admin = role === "ADMIN";
   return [...NAV, ...(admin ? ADMIN_EXTRA : [])];
 }
+
+/** The phone menu's two drop-downs (Lili 2026-11-01, point 12): every entry of a color group under one name. */
+export const PHONE_GROUP_LABEL: Record<NavTone, string> = { water: "Vízmérés", feed: "Takarmányozás" };
+
+export type PhoneGroup = { tone: NavTone; label: string; items: NavItem[] };
+
+/**
+ * Where the phone menu puts each drop-down: before the first entry of its color group, so the row reads START, Vízmérés, Export,
+ * Takarmányozás, Kimutatások and the admin entries. The tablet and the desktop keep the plain list; the drop-downs only replace the
+ * colored entries on a phone (globals.css hides the one or the other).
+ */
+export function phoneGroups(items: NavItem[]): Map<NavKey, PhoneGroup> {
+  const out = new Map<NavKey, PhoneGroup>();
+  for (const tone of ["water", "feed"] as const) {
+    const members = items.filter((n) => n.tone === tone);
+    if (members.length) out.set(members[0].key, { tone, label: PHONE_GROUP_LABEL[tone], items: members });
+  }
+  return out;
+}

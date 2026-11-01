@@ -58,6 +58,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .nav a .nav-icon { display: inline; min-height: 0; padding: 0; margin-right: 8px; font-size: 16px; line-height: 1; }
 .nav span.disabled { color: #99b8bf; }
 .nav small { font-size: 11px; margin-left: 6px; }
+/* the phone menu's drop-downs (point 12, NavGroup): only on a phone, where they stand in for the colored entries */
+.nav-group { display: none; }
+.nav-group-btn { display: flex; align-items: center; gap: 6px; min-height: var(--touch); padding: 0 16px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--c-white); font: inherit; font-size: 15px; white-space: nowrap; cursor: pointer; }
+.nav-group-btn.nav-water { color: #a8dde0; }
+.nav-group-btn.nav-feed { color: #ffcfc2; }
+.nav-group-btn.active { background: var(--c-primary); color: var(--c-white); font-weight: 600; }
+.nav .nav-group-caret { display: inline; min-height: 0; padding: 0; font-size: 12px; }
+.nav-group-panel { position: fixed; left: 8px; right: 8px; z-index: 40; display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--c-nav); border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgba(17, 47, 62, 0.35); }
 .nav-foot { margin-top: auto; padding: 16px; font-size: 11px; letter-spacing: 0.06em; color: #99b8bf; font-weight: 600; }
 .main { grid-row: 2; grid-column: 2; padding: 28px; min-width: 0; }
 .userbox { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--c-muted); }
@@ -90,6 +98,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   /* before the page is hydrated the old box is still in the markup: hidden at once, so the row does not jump from two lines to one when the button comes */
   .topbar > .userbox, .topbar > .helper-toggle { display: none; }
   .nav { grid-row: 2; position: sticky; top: 0; z-index: 30; }
+  .nav-group { display: flex; flex: none; }
+  .nav > a.nav-in-group { display: none; }
   .main { grid-row: 3; }
   .profile { position: relative; flex: none; }
   .profile-btn { min-width: 44px; height: 44px; padding: 0 8px; border-radius: 22px; border: 0; background: var(--c-primary); color: var(--c-white); font-size: 14px; font-weight: 700; cursor: pointer; }
@@ -108,6 +118,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
    inked darker there: the muted gray is 3.4:1 on this pink, the ink 9.9:1. */
 .card.card-mail { background: #f1d1d8; margin-bottom: 32px; }
 .card-mail .hint { color: var(--c-ink); }
+/* Lili 2026-11-01 (point 10): the chemical calculators on a pale green card, so they stand apart from the dosing forms */
+.card.chem-card { background: #ecf7e6; border-color: #cfe6c4; }
 .hint { color: var(--c-muted); font-size: 14px; margin: 6px 0 0; }
 .btn { display: inline-flex; align-items: center; justify-content: center; min-height: var(--touch); padding: 0 22px; border-radius: var(--radius-sm); border: 0; background: var(--c-primary); color: var(--c-white); font-weight: 600; font-size: 16px; cursor: pointer; text-decoration: none; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -399,6 +411,9 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .clearable-block { display: block; max-width: 160px; }
 .clear-x { position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--c-muted); font-size: 14px; line-height: 16px; cursor: pointer; }
 .clear-x:hover, .clear-x:focus-visible { background: var(--c-line); color: var(--c-ink); }
+/* Lili 2026-11-01 (point 13): a value converted from a tester's reading carries only a small dot; the reading is in its title */
+.conv-dot { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--c-primary); vertical-align: middle; }
+.clearable .conv-dot { position: absolute; left: 5px; top: 5px; margin: 0; }
 
 /* TAK-05: the page as PDF through the print dialog; navigation and forms stay out */
 @media print {
