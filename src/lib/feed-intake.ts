@@ -7,6 +7,7 @@
 import type { Dimension, FeedIntakeItem } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
+import { feedIsOn, feedsOn } from "./feed-periods";
 import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError } from "./errors";
@@ -70,7 +71,8 @@ export async function saveIntakeItem(actor: Actor, raw: IntakeInput, serverNow =
     // the feed's row FOR SHARE: a change of its unit (feeds.ts) waits for this save, and this one for it
     await tx.$queryRaw`SELECT "id" FROM "feed" WHERE "id" = ${input.feedId}::uuid FOR SHARE`;
     const feed = await tx.feed.findUnique({ where: { id: input.feedId }, include: { type: true } });
-    if (!feed || !feed.active) throw new AppError(422, "FEED_NOT_FOUND", "A takarmány nem található vagy nem aktív.");
+    // point 14: the feed is offered on the day by its period, as the list of that day
+    if (!feed || !(await feedIsOn(tx, feed.id, input.day))) throw new AppError(422, "FEED_NOT_FOUND", "A takarmány nem található, vagy ezen a napon nincs etetési időszaka.");
     const isOther = feed.type.code === "EGYEB";
     if (isOther && !input.otherName) throw new AppError(422, "OTHER_NAME", "Az „Egyéb” takarmányhoz a nevét is meg kell adni.");
     const otherName = isOther ? input.otherName! : null;
@@ -244,6 +246,8 @@ export async function feedStock(now = new Date(), until?: string): Promise<Stock
     }),
     baseUnits(),
   ]);
+  // "in use" (no alert, not on the stock card when off): fed today by its period (point 14), not the old flag
+  const onToday = await feedsOn(prisma, today);
   const weekFrom = dayToDate(addDays(today, -7));
   const monthFrom = dayToDate(addDays(today, -30));
   const todayDate = dayToDate(today);
@@ -253,14 +257,14 @@ export async function feedStock(now = new Date(), until?: string): Promise<Stock
   // `until`: the stock as it stood at the end of that day (the export's closing stock); later items are not yet in it
   const untilDate = until ? dayToDate(until) : null;
   const rows = new Map<string, StockRow>();
-  const row = (it: { feedId: string; otherName: string | null; feed: { active: boolean; names: { name: string; validFrom: Date; validTo: Date | null }[] } }, dimension: Dimension, unit: string) => {
+  const row = (it: { feedId: string; otherName: string | null; feed: { names: { name: string; validFrom: Date; validTo: Date | null }[] } }, dimension: Dimension, unit: string) => {
     // the other name as the reports and the Excel read it (other-name.ts): case and spaces do not make a second row
     const other = it.otherName ? otherKey(it.otherName) : null;
     const key = `${it.feedId}|${other ?? ""}|${dimension}`;
     let r = rows.get(key);
     if (!r) {
       const name = pickValid(it.feed.names, now)?.name ?? it.feed.names.at(-1)?.name ?? "?";
-      r = { key, feedId: it.feedId, feed: other ? `${name}: ${otherLabel(other)}` : name, otherName: other, dimension, unit, received: 0, returned: 0, taken: 0, level: 0, negative: false, week: 0, month: 0, tracked: false, active: it.feed.active };
+      r = { key, feedId: it.feedId, feed: other ? `${name}: ${otherLabel(other)}` : name, otherName: other, dimension, unit, received: 0, returned: 0, taken: 0, level: 0, negative: false, week: 0, month: 0, tracked: false, active: onToday.has(it.feedId) };
       rows.set(key, r);
     }
     return r;
@@ -303,6 +307,93 @@ export async function feedStock(now = new Date(), until?: string): Promise<Stock
       const level = round(r.received - r.taken);
       return { ...r, received: round(r.received), returned: round(r.returned), taken: round(r.taken), week: round(r.week), month: round(r.month), level, negative: level < 0 };
     })
+    .sort((a, b) => a.feed.localeCompare(b.feed, "hu") || a.unit.localeCompare(b.unit));
+}
+
+export type BalanceRow = {
+  key: string;
+  feedId: string;
+  feed: string;
+  dimension: Dimension;
+  unit: string;
+  /** the stock at the start of the period's first day */
+  opening: number;
+  /** received in the period (a delivery sent back does not count) */
+  received: number;
+  /** taken from the stock in the period */
+  taken: number;
+  /** taken in the period before this feed's stock started (before its first intake): not from the stock */
+  beforeStock: number;
+  /** opening + received - taken: the stock at the end of the period's last day, feedStock's level */
+  closing: number;
+  tracked: boolean;
+  active: boolean;
+};
+
+/**
+ * Lili 2026-11-01 (point 7): the period's balance per feed and dimension, by feedStock's rules: what is dated before the set start
+ * of the stock is archive; the stock counts from the feed's first intake that was not sent back, so a withdrawal before it is not
+ * taken from the stock. Such a withdrawal inside the period stands in its own column ("before the stock started"), and does not
+ * make the opening negative: a feed without a stock yet opens at 0, not at minus its withdrawals (feedStock's tracked = false
+ * level). The closing is feedStock(until = to)'s level.
+ */
+export async function feedBalance(from: string, to: string, now = new Date()): Promise<BalanceRow[]> {
+  const [intake, taken, baseOf, set] = await Promise.all([
+    prisma.feedIntakeItem.findMany({
+      where: { status: "VALID", returned: false, intakeDay: { lte: dayToDate(to) } },
+      include: { quantities: { include: { unit: true } }, feed: { include: { names: true } } },
+    }),
+    prisma.withdrawalItem.findMany({
+      where: { status: "VALID", withdrawalDay: { businessDay: { lte: dayToDate(to) } } },
+      include: { quantities: { include: { unit: true } }, feed: { include: { names: true } }, withdrawalDay: true },
+    }),
+    baseUnits(),
+    getStockStart(),
+  ]);
+  const archiveBefore = set ? dayToDate(set) : null;
+  const fromDate = dayToDate(from);
+  const rows = new Map<string, BalanceRow>();
+  const row = (it: { feedId: string; otherName: string | null; feed: { active: boolean; names: { name: string; validFrom: Date; validTo: Date | null }[] } }, dimension: Dimension, unit: string) => {
+    const other = it.otherName ? otherKey(it.otherName) : null;
+    const key = `${it.feedId}|${other ?? ""}|${dimension}`;
+    let r = rows.get(key);
+    if (!r) {
+      const name = pickValid(it.feed.names, now)?.name ?? it.feed.names.at(-1)?.name ?? "?";
+      r = { key, feedId: it.feedId, feed: other ? `${name}: ${otherLabel(other)}` : name, dimension, unit, opening: 0, received: 0, taken: 0, beforeStock: 0, closing: 0, tracked: false, active: it.feed.active };
+      rows.set(key, r);
+    }
+    return r;
+  };
+  const first = new Map<string, Date>();
+  for (const it of intake) {
+    if (archiveBefore && it.intakeDay < archiveBefore) continue;
+    for (const q of it.quantities) {
+      const r = row(it, q.unit.dimension, baseOf.get(q.unit.dimension) ?? q.unit.symbol);
+      const v = Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
+      if (it.intakeDay < fromDate) r.opening += v;
+      else r.received += v;
+      r.tracked = true;
+      const f = first.get(r.key);
+      if (!f || it.intakeDay < f) first.set(r.key, it.intakeDay);
+    }
+  }
+  for (const it of taken) {
+    const d = it.withdrawalDay.businessDay;
+    if (archiveBefore && d < archiveBefore) continue;
+    for (const q of it.quantities) {
+      const r = row(it, q.unit.dimension, baseOf.get(q.unit.dimension) ?? q.unit.symbol);
+      const v = Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
+      const start = first.get(r.key);
+      if (!start || d < start) {
+        // not from the stock; before the period it is not this period's business either
+        if (d >= fromDate) r.beforeStock += v;
+      } else if (d < fromDate) r.opening -= v;
+      else r.taken += v;
+    }
+  }
+  return [...rows.values()]
+    .map((r) => ({ ...r, opening: round(r.opening), received: round(r.received), taken: round(r.taken), beforeStock: round(r.beforeStock), closing: round(r.opening + r.received - r.taken) }))
+    .filter((r) => r.opening !== 0 || r.received !== 0 || r.taken !== 0 || r.beforeStock !== 0 || (r.tracked && r.active))
     .sort((a, b) => a.feed.localeCompare(b.feed, "hu") || a.unit.localeCompare(b.unit));
 }
 

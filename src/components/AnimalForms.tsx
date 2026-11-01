@@ -339,6 +339,55 @@ export function FeedActive({ id, active }: { id: string; active: boolean }) {
   );
 }
 
+/**
+ * Lili 2026-11-01 (point 14): a feed's feeding periods, the admin's: from a day, to a day or open (empty "Meddig"), as many as
+ * needed, corrected at any time. Saved together; overlapping periods are refused by the server with the reason.
+ */
+export function FeedPeriods({ id, name, periods }: { id: string; name: string; periods: { firstDay: string; lastDay: string | null }[] }) {
+  const { msg, busy, call } = useApi();
+  const keep = useKeepRow();
+  const [rows, setRows] = useState(periods.map((p) => ({ from: p.firstDay, to: p.lastDay ?? "" })));
+  const set = (i: number, k: "from" | "to", v: string) => setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+  const shown = periods.length ? periods.map((p) => `${p.firstDay.replaceAll("-", ".")}. – ${p.lastDay ? `${p.lastDay.replaceAll("-", ".")}.` : ""}`).join(", ") : "nincs";
+  return (
+    <details className="feed-periods" data-testid={`feed-periods-${id}`}>
+      <summary>Időszakok: {shown}</summary>
+      {rows.map((r, i) => (
+        <div className="toolbar" key={i}>
+          <label className="field">
+            Mettől
+            <input className="input" type="date" aria-label={`${name} időszak ${i + 1} kezdete`} value={r.from} onChange={(e) => set(i, "from", e.target.value)} />
+          </label>
+          <label className="field">
+            Meddig (üresen: nyitott)
+            <input className="input" type="date" aria-label={`${name} időszak ${i + 1} vége`} value={r.to} onChange={(e) => set(i, "to", e.target.value)} />
+          </label>
+          <button className="btn btn-row" type="button" onClick={() => setRows((x) => x.filter((_, j) => j !== i))}>
+            Törlés
+          </button>
+        </div>
+      ))}
+      <div className="toolbar">
+        <button className="btn btn-soft" type="button" onClick={() => setRows((x) => [...x, { from: "", to: "" }])}>
+          + Időszak
+        </button>
+        <button
+          className="btn"
+          type="button"
+          disabled={busy || rows.some((r) => !r.from)}
+          onClick={() => {
+            keep(id);
+            void call(`/api/admin/feeds/${id}/periods`, "PUT", { periods: rows.map((r) => ({ firstDay: r.from, lastDay: r.to || null })) }, "Időszakok mentve.");
+          }}
+        >
+          Időszakok mentése
+        </button>
+        <Msg msg={msg} />
+      </div>
+    </details>
+  );
+}
+
 /** The switch of a group on the Állatok page (Lili 2026-10-30, task caparium-csoport-inaktiv): the feeds' button, with the server's answer when the group still has members. */
 export function GroupActive({ id, active }: { id: string; active: boolean }) {
   const { msg, busy, call } = useApi();

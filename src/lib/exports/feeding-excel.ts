@@ -18,7 +18,8 @@ import { isDerivedFasting, listFacts } from "../eating-pattern";
 import { pickValid } from "../master";
 import { feedingLog } from "../feeding-log";
 import { breakdown, type ReportLine } from "../reports";
-import { addDays, businessDayOf, dateToDay, dayToDate, EXCEL_DATE_FORMAT, resolveLocalDateTime, weekdayLetter } from "../time";
+import { addDays, businessDayOf, dateToDay, dayToDate, EXCEL_DATE_FORMAT, formatDay, resolveLocalDateTime, weekdayLetter, weekdayName } from "../time";
+import { addPies, type Pie } from "./xlsx-pie";
 
 // the template's theme fills, resolved (theme_note of the extracts): Excel tints in HSL lightness
 const FILL = {
@@ -33,16 +34,35 @@ const STATE_FILL: Record<string, string> = { EATEN: "FF00B050", PARTIAL: "FFFFFF
 const NOT_YET = "FFD9D9D9";
 const EMPTY = "FFF2F2F2"; // EGY-05: a feed the animal did not get that day
 const GONE = FILL.dark;
+// Lili 2026-11-01 (point 2): the feeding log's rows change colour day by day, and its totals (the SUM row and the SUM/Állat
+// columns) stand out
+export const DAY_BAND = "FFE9F2FB";
+export const TOTAL_FILL = "FFFFE699";
 
-/** EVE-08: the fill of a day's header cell, alternating by calendar week (Monday to Sunday). */
-export const WEEK_FILLS = ["FFDCEAF7", "FFEDEDED"] as const;
-export function weekShade(first: string, day: string): string {
+/**
+ * EVE-08: the fill of a day's header cell, alternating by calendar week (Monday to Sunday). Lili 2026-11-01 (point 3): the two
+ * weeks were too alike (pale blue, pale grey); now a clear blue and a clear peach, and the day-letter row under them the same
+ * two, paler.
+ */
+export const WEEK_FILLS = ["FF9DC3E6", "FFF4B183"] as const;
+export const DAY_ROW_FILLS = ["FFDDEBF7", "FFFCE4D6"] as const;
+function weekIndex(first: string, day: string): 0 | 1 {
   const monday = (d: string) => {
     const t = dayToDate(d);
     return Math.floor((t.getTime() / 86_400_000 + 3) / 7); // weeks since 1970-01-05, a Monday
   };
-  return WEEK_FILLS[(monday(day) - monday(first)) % 2];
+  return ((monday(day) - monday(first)) % 2) as 0 | 1;
 }
+export function weekShade(first: string, day: string): string {
+  return WEEK_FILLS[weekIndex(first, day)];
+}
+export function dayRowShade(first: string, day: string): string {
+  return DAY_ROW_FILLS[weekIndex(first, day)];
+}
+
+// point 3: a thin border around every animal's row, and a dashed line between the day columns
+const THIN = { style: "thin" as const, color: { argb: "FF7F7F7F" } };
+const DASHED = { style: "dashed" as const, color: { argb: "FFA6A6A6" } };
 
 const DIM_ORDER: Dimension[] = ["COUNT", "MASS", "VOLUME"]; // the template: Litopenaeus db, then g
 
@@ -87,7 +107,7 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.feedType.findMany({ orderBy: { sortOrder: "asc" }, include: { feeds: { orderBy: { sortOrder: "asc" }, include: { names: true } } } }),
+    prisma.feedType.findMany({ orderBy: { sortOrder: "asc" }, include: { feeds: { orderBy: { sortOrder: "asc" }, include: { names: true, periods: true } } } }),
     prisma.unit.findMany({ where: { isBase: true } }),
   ]);
   const baseOf = new Map(baseUnits.map((u) => [u.dimension, u.symbol]));
@@ -121,7 +141,9 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       }
       continue;
     }
-    for (const feed of t.feeds.filter((x) => x.active || used.has(usedKey(x.id, null)))) {
+    // point 14: a feed fed on some day of the period (its period overlaps it), or given in it
+    const fedIn = (x: (typeof t.feeds)[number]) => x.periods.some((p) => dateToDay(p.firstDay) <= f.to && (p.lastDay === null || dateToDay(p.lastDay) >= f.from));
+    for (const feed of t.feeds.filter((x) => fedIn(x) || used.has(usedKey(x.id, null)))) {
       push(feed.id, null, pickValid(feed.names, endOfPeriod)?.name ?? feed.names.at(-1)?.name ?? "?", new Set([...feed.allowedDimensions, ...(used.get(usedKey(feed.id, null)) ?? [])]));
     }
   }
@@ -183,8 +205,9 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
   // never-placed animals, follows by name
   const sorted = [...rows.values()].sort((a, b) => a.day.localeCompare(b.day) || compareAnimals(a, b));
 
-  // column layout: A date, B species, C name, D label column, feeds (the other names among them), SUM/Állat per unit
-  const FIRST = 5;
+  // column layout: A date, B the day's name (point 2), C species, D name, E label column, feeds (the other names among them),
+  // SUM/Állat per unit
+  const FIRST = 6;
   const sumCol = (k: number) => FIRST + cols.length + k;
   const last = sumCol(sumUnits.length - 1);
 
@@ -195,8 +218,8 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
   const r1 = ws.getRow(1);
   const r2 = ws.getRow(2);
   const r3 = ws.getRow(3);
-  r1.getCell(4).value = "Takarmány";
-  r2.getCell(4).value = "Mértékegység";
+  r1.getCell(5).value = "Takarmány";
+  r2.getCell(5).value = "Mértékegység";
   cols.forEach((c, i) => {
     r1.getCell(FIRST + i).value = c.name;
     r2.getCell(FIRST + i).value = c.unit;
@@ -214,23 +237,28 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
     r2.getCell(sumCol(k)).value = u;
   });
   r3.getCell(1).value = "Dátum";
-  r3.getCell(2).value = "Állatfaj";
-  r3.getCell(3).value = "Név";
+  r3.getCell(2).value = "Nap";
+  r3.getCell(3).value = "Állatfaj";
+  r3.getCell(4).value = "Név";
   for (let c = 1; c <= last; c++) {
-    fill(r1.getCell(c), c <= 3 ? FILL.grey : FILL.head);
-    fill(r2.getCell(c), c <= 3 ? FILL.grey : FILL.unit);
-    fill(r3.getCell(c), c <= 3 ? FILL.head : FILL.dark);
+    fill(r1.getCell(c), c <= 4 ? FILL.grey : FILL.head);
+    fill(r2.getCell(c), c <= 4 ? FILL.grey : FILL.unit);
+    fill(r3.getCell(c), c <= 4 ? FILL.head : FILL.dark);
   }
+  // the totals' heads stand out like their cells
+  sumUnits.forEach((_, k) => [r1, r2].forEach((r) => fill(r.getCell(sumCol(k)), TOTAL_FILL)));
   r1.font = { bold: true };
   r3.font = { bold: true };
 
   const firstData = 4;
+  const dayIndex = new Map(days.map((d, i) => [d, i]));
   sorted.forEach((row, n) => {
     const r = ws.getRow(firstData + n);
     r.getCell(1).value = dayToDate(row.day);
     r.getCell(1).numFmt = EXCEL_DATE_FORMAT;
-    r.getCell(2).value = row.species;
-    r.getCell(3).value = row.name;
+    r.getCell(2).value = weekdayName(row.day);
+    r.getCell(3).value = row.species;
+    r.getCell(4).value = row.name;
     for (const [i, v] of row.values) r.getCell(FIRST + i).value = v;
     for (const i of row.ticks) if (!row.values.has(i)) r.getCell(FIRST + i).value = GIVEN;
     // EGY-05: what the animal did not get that day stays empty and coloured
@@ -242,14 +270,20 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
       const members = cols.map((c, i) => (c.unit === u ? FIRST + i : 0)).filter(Boolean);
       const result = members.reduce((s, c) => s + (typeof r.getCell(c).value === "number" ? (r.getCell(c).value as number) : 0), 0);
       r.getCell(sumCol(k)).value = { formula: `SUM(${members.map((c) => `${colLetter(c)}${r.number}`).join(",")})`, result };
+      fill(r.getCell(sumCol(k)), TOTAL_FILL);
+      r.getCell(sumCol(k)).font = { bold: true };
     });
+    // point 2: every other day's rows in a pale band (an empty feed cell keeps its own grey, EGY-05)
+    if ((dayIndex.get(row.day) ?? 0) % 2 === 1) {
+      for (let c = 1; c < FIRST + cols.length; c++) if (!r.getCell(c).fill || c < FIRST) fill(r.getCell(c), DAY_BAND);
+    }
   });
 
   // EGY-11: the SUM row is always the last, under every recipient
   const sumRow = ws.getRow(firstData + sorted.length);
   sumRow.getCell(1).value = "SUM/Takarmány";
-  ws.mergeCells(sumRow.number, 1, sumRow.number, 3);
-  for (let c = 1; c <= 3; c++) fill(sumRow.getCell(c), FILL.head);
+  ws.mergeCells(sumRow.number, 1, sumRow.number, 4);
+  for (let c = 1; c <= last; c++) fill(sumRow.getCell(c), TOTAL_FILL);
   sumRow.font = { bold: true };
   for (let c = FIRST; c <= last; c++) {
     let result = 0;
@@ -259,8 +293,8 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
     }
     sumRow.getCell(c).value = sorted.length ? { formula: `SUM(${colLetter(c)}${firstData}:${colLetter(c)}${sumRow.number - 1})`, result } : 0;
   }
-  ws.columns.forEach((c, i) => (c.width = i < 3 ? [12, 22, 22][i] : 14));
-  ws.views = [{ state: "frozen", xSplit: 3, ySplit: 3 }];
+  ws.columns.forEach((c, i) => (c.width = i < 4 ? [12, 11, 22, 22][i] : 14));
+  ws.views = [{ state: "frozen", xSplit: 4, ySplit: 3 }];
   return { buffer: Buffer.from(await wb.xlsx.writeBuffer()), rows: sorted.length };
 }
 
@@ -328,12 +362,13 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
     r2.getCell(FIRST + i).value = weekdayLetter(d);
     r2.getCell(FIRST + i).alignment = { horizontal: "center" };
   });
+  const dayRow = (i: number) => dayRowShade(f.from, days[i]);
   r2.getCell(1).value = "Állatfaj";
   r2.getCell(2).value = "Név";
   r2.getCell(3).value = "Csoport";
   for (let c = 1; c <= Math.max(4, last); c++) {
     if (c <= 4) fill(r1.getCell(c), c <= 3 ? FILL.grey : FILL.head);
-    fill(r2.getCell(c), c <= 3 ? FILL.head : FILL.grey);
+    fill(r2.getCell(c), c <= 3 ? FILL.head : c === 4 ? FILL.grey : dayRow(c - FIRST));
   }
   r1.font = { bold: true };
   r2.font = { bold: true };
@@ -346,8 +381,10 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
     r.getCell(3).value = a.group;
     // EVE-10: died or released inside the period: struck through
     if (a.ended && a.ended < end) r.getCell(2).font = { strike: true };
+    for (let c = 1; c <= 4; c++) r.getCell(c).border = { top: THIN, bottom: THIN, left: c === 1 ? THIN : undefined, right: c === 4 ? THIN : undefined };
     days.forEach((d, i) => {
       const cell = r.getCell(FIRST + i);
+      cell.border = { top: THIN, bottom: THIN, left: i === 0 ? THIN : DASHED, right: i === days.length - 1 ? THIN : DASHED };
       const b = dayBounds(d);
       if (a.arrived >= b.end) return fill(cell, NOT_YET);
       if (a.ended && a.ended < b.start) return fill(cell, GONE);
@@ -383,7 +420,12 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
  * szerkezet.json: one header row A1:E1, Dátum, Takarmány típusa, Takarmány, Mennyiség, Mértékegység).
  * One row per item and dimension; the use day as a sixth column, because the two days are separate
  * (T-10). An "Egyéb" item shows its own name in the feed column (KIV-04).
+ * Lili 2026-11-01 (point 4): the rows change colour day by day, and a second sheet sums each calendar week per feed (g and kg,
+ * pieces apart), with the week's pie of the grams beside it.
  */
+export const WITHDRAWAL_SUMMARY_SHEET = "Heti összesítő";
+const PIE_ROWS = 16;
+
 export async function buildWithdrawalWorkbook(f: FeedingExcelFilter): Promise<{ buffer: Buffer; rows: number }> {
   daysOf(f.from, f.to);
   const items = await prisma.withdrawalItem.findMany({
@@ -402,19 +444,103 @@ export async function buildWithdrawalWorkbook(f: FeedingExcelFilter): Promise<{ 
   });
   header.font = { bold: true };
   let rows = 0;
+  // the week's sums per feed: grams (any mass, in its base unit) and pieces
+  type Sum = { g: number; db: number };
+  const weeks = new Map<string, Map<string, Sum>>();
+  let anyPieces = false;
+  const days: string[] = [];
   for (const it of items) {
     const day = dateToDay(it.withdrawalDay.businessDay);
+    if (days.at(-1) !== day) days.push(day);
     const name = it.otherName ?? pickValid(it.feed.names, dayBounds(day).start)?.name ?? it.feed.names.at(-1)?.name ?? "?";
+    const week = mondayOf(day);
+    if (!weeks.has(week)) weeks.set(week, new Map());
+    const sums = weeks.get(week)!;
+    const sum = sums.get(name) ?? { g: 0, db: 0 };
     for (const q of it.quantities) {
       const r = ws.addRow([dayToDate(day), it.feed.type.name, name, Number(q.quantity), q.unit.symbol, dayToDate(dateToDay(it.useDay))]);
       r.getCell(1).numFmt = EXCEL_DATE_FORMAT;
       r.getCell(6).numFmt = EXCEL_DATE_FORMAT;
+      if ((days.length - 1) % 2 === 1) for (let c = 1; c <= 6; c++) fill(r.getCell(c), DAY_BAND);
       rows += 1;
+      if (q.unit.dimension === "MASS") sum.g += Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
+      else if (q.unit.dimension === "COUNT") {
+        sum.db += Number(q.quantity);
+        anyPieces = true;
+      }
     }
+    sums.set(name, sum);
   }
   ws.columns.forEach((c, i) => (c.width = [11.6, 22, 16.7, 15, 17.3, 16][i] ?? 10.8));
   ws.views = [{ state: "frozen", ySplit: 1 }];
-  return { buffer: Buffer.from(await wb.xlsx.writeBuffer()), rows };
+
+  // the weekly summary: a block per week, the pie beside it
+  const sw = wb.addWorksheet(WITHDRAWAL_SUMMARY_SHEET);
+  const heads = ["Takarmány", "Mennyiség (g)", "Mennyiség (kg)", ...(anyPieces ? ["Darab (db)"] : [])];
+  const pies: Pie[] = [];
+  let at = 1;
+  for (const [week, sums] of [...weeks].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const sunday = addDays(week, 6);
+    const title = `Hét: ${formatDay(week < f.from ? f.from : week)}–${formatDay(sunday > f.to ? f.to : sunday)}`;
+    const t = sw.getRow(at);
+    t.getCell(1).value = title;
+    t.font = { bold: true };
+    sw.mergeCells(at, 1, at, heads.length);
+    fill(t.getCell(1), FILL.head);
+    const h = sw.getRow(at + 1);
+    heads.forEach((x, i) => {
+      h.getCell(i + 1).value = x;
+      fill(h.getCell(i + 1), FILL.unit);
+    });
+    h.font = { bold: true };
+    const feeds = [...sums].sort((a, b) => a[0].localeCompare(b[0], "hu"));
+    feeds.forEach(([name, s], i) => {
+      const r = sw.getRow(at + 2 + i);
+      r.getCell(1).value = name;
+      r.getCell(2).value = round3(s.g);
+      // ExcelJS drops a formula's 0 result from the file, and a viewer that does not recalculate shows an empty cell: a plain 0 then
+      r.getCell(3).value = s.g ? { formula: `B${r.number}/1000`, result: round3(s.g / 1000) } : 0;
+      r.getCell(3).numFmt = "0.000";
+      if (anyPieces) r.getCell(4).value = s.db || null;
+    });
+    const first = at + 2;
+    const lastFeed = first + feeds.length - 1;
+    const total = sw.getRow(lastFeed + 1);
+    const g = feeds.reduce((a, [, s]) => a + s.g, 0);
+    total.getCell(1).value = "Összesen";
+    total.getCell(2).value = g ? { formula: `SUM(B${first}:B${lastFeed})`, result: round3(g) } : 0;
+    total.getCell(3).value = g ? { formula: `SUM(C${first}:C${lastFeed})`, result: round3(g / 1000) } : 0;
+    total.getCell(3).numFmt = "0.000";
+    const pieces = feeds.reduce((a, [, s]) => a + s.db, 0);
+    if (anyPieces) total.getCell(4).value = pieces ? { formula: `SUM(D${first}:D${lastFeed})`, result: pieces } : 0;
+    for (let c = 1; c <= heads.length; c++) fill(total.getCell(c), TOTAL_FILL);
+    total.font = { bold: true };
+    if (g > 0) {
+      pies.push({
+        title,
+        labelCol: 1,
+        valueCol: 2,
+        firstRow: first,
+        lastRow: lastFeed,
+        labels: feeds.map(([name]) => name),
+        values: feeds.map(([, s]) => round3(s.g)),
+        at: { col: heads.length + 2, row: at, cols: 7, rows: PIE_ROWS },
+      });
+    }
+    at = Math.max(total.number + 3, at + PIE_ROWS + 2);
+  }
+  if (weeks.size === 0) sw.getCell("A1").value = "Ebben az időszakban nem volt takarmánykivétel.";
+  sw.columns.forEach((c, i) => (c.width = [26, 15, 15, 12][i] ?? 10.8));
+  const buffer = await addPies(Buffer.from(await wb.xlsx.writeBuffer()), 2, WITHDRAWAL_SUMMARY_SHEET, pies);
+  return { buffer, rows };
+}
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/** The Monday of a day's calendar week. */
+function mondayOf(day: string): string {
+  const dow = (dayToDate(day).getUTCDay() + 6) % 7; // Monday 0
+  return addDays(day, -dow);
 }
 
 /** EGY-13: the report as Excel: one sheet by day, one by recipient, per feed and base unit. */

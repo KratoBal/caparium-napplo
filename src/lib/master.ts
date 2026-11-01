@@ -6,7 +6,7 @@ import { canonicalDecimal } from "./decimal";
 import { takesDilution } from "./dilution";
 import { effectiveLevel, type Level, type Role } from "./permissions";
 import type { ReadingConversion } from "./reading";
-import { dayToDate } from "./time";
+import { businessDayOf, dateToDay, dayToDate } from "./time";
 
 export function validAt(at: Date) {
   return {
@@ -77,7 +77,10 @@ export async function moduleLevel(tx: Tx, userId: string, role: Role, module: Ap
   return effectiveLevel(role, override?.level ?? null);
 }
 
-/** `active`: an inactive pool (a renovation) takes no new measurement; its earlier ones stay */
+/**
+ * `active`: the pool is in use on the day of `at` (Lili 2026-11-01, point 16: a period of it covers that day); one not in use (a
+ * renovation, or before it was taken into use) takes no new measurement that day; its other measurements stay
+ */
 export type LayoutPool = { id: string; name: string; active: boolean };
 export type LayoutParameter = {
   id: string;
@@ -105,7 +108,7 @@ export async function groupLayout(
     tx.groupMembership.findMany({
       where: { groupId, ...validAt(at) },
       orderBy: { sortOrder: "asc" },
-      include: { pool: { include: { names: true } } },
+      include: { pool: { include: { names: true, periods: true } } },
     }),
     tx.groupParameter.findMany({
       where: { groupId, ...validAt(at) },
@@ -114,7 +117,14 @@ export async function groupLayout(
     }),
   ]);
   return {
-    pools: memberships.map((m) => ({ id: m.pool.id, name: pickValid(m.pool.names, at)?.displayName ?? m.pool.code, active: m.pool.active })),
+    pools: memberships.map((m) => ({
+      id: m.pool.id,
+      name: pickValid(m.pool.names, at)?.displayName ?? m.pool.code,
+      active: m.pool.periods.some((p) => {
+        const day = businessDayOf(at);
+        return dateToDay(p.firstDay) <= day && (p.lastDay === null || day <= dateToDay(p.lastDay));
+      }),
+    })),
     parameters: params.map((gp) => ({
       id: gp.parameter.id,
       code: gp.parameter.code,
@@ -178,7 +188,8 @@ export async function monogramResolver(userIds: string[]) {
   const names = new Map(users.map((u) => [u.id, u.fullName]));
   return {
     monogram(userId: string, at: Date): string {
-      return pickValid(byUser.get(userId) ?? [], at)?.monogram ?? names.get(userId) ?? "?";
+      // before the worker's first monogram began (a measurement recorded back in time): that first one (Lili 2026-11-01, point 1)
+      return nameAt(byUser.get(userId) ?? [], at)?.monogram ?? names.get(userId) ?? "?";
     },
     name(userId: string): string {
       return names.get(userId) ?? "?";

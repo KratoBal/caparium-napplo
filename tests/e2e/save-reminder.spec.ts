@@ -2,6 +2,7 @@
 // to be left: the helper speaks. Switched off in Beállítások, it does not. The quiet-minute path is the unit test's
 // (tests/unit/save-reminder.test.ts, a fake clock): a real minute does not belong in the e2e run.
 import { expect, test, type Page } from "@playwright/test";
+import { openAllSettings } from "../support/settings-folds";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
 const REMINDER = "Ne felejtsd el menteni!";
@@ -52,6 +53,7 @@ test("a filled, unsaved water form: leaving it makes the helper say to save", as
 test("switched off in Beállítások, the helper does not say it; switched on again", async ({ page }, info) => {
   await login(page, "teszt.admin");
   await page.goto("/beallitasok");
+  await openAllSettings(page);
   const sw = page.getByTestId("save-reminder").getByRole("switch");
   await expect(sw).toBeChecked();
   await sw.uncheck();
@@ -65,6 +67,7 @@ test("switched off in Beállítások, the helper does not say it; switched on ag
     // back on, for the other project and the next run: the drafts are left unsaved, so the page asks once more
     page.once("dialog", (d) => void d.accept());
     await page.goto("/beallitasok");
+    await openAllSettings(page);
     const back = page.getByTestId("save-reminder").getByRole("switch");
     if (!(await back.isChecked())) {
       await back.check();

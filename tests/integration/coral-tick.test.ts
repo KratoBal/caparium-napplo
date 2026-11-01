@@ -60,7 +60,7 @@ describe("the coral feed tick (6fe63c9b item 7)", () => {
     expect(col).toBeGreaterThan(0);
     let cell: unknown = null;
     ws.eachRow((r) => {
-      if (r.getCell(3).value === "Teszt Egy") cell = r.getCell(col).value;
+      if (r.getCell(4).value === "Teszt Egy") cell = r.getCell(col).value; // the name column after "Nap" (Lili 2026-11-01, point 2)
     });
     expect(cell).toBe("adva");
   });

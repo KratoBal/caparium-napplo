@@ -30,7 +30,7 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
     listAnimals(now),
     listGroupsWithNames(now),
     listGroupsAdmin(now),
-    prisma.pool.findMany({ where: { active: true }, include: { names: true }, orderBy: { code: "asc" } }),
+    prisma.pool.findMany({ where: { periods: { some: {} } }, include: { names: true }, orderBy: { code: "asc" } }),
     prisma.species.findMany({ where: { active: true }, orderBy: { scientificName: "asc" } }),
   ]);
   const poolOpts = pools.map((p) => ({ id: p.id, name: pickValid(p.names, now)?.displayName ?? p.code }));

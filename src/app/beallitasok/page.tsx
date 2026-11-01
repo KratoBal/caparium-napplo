@@ -9,6 +9,7 @@ import { canonicalDecimal } from "@/lib/decimal";
 import { getSetting, moduleLevel, pickValid, validAt } from "@/lib/master";
 import { reasonsRequired } from "@/lib/reasons";
 import { saveReminderOn } from "@/lib/save-reminder-setting";
+import { poolCovers, poolInUse, poolPeriodView } from "@/lib/pool-periods";
 import { requireUser } from "@/lib/session";
 import { businessDayOf } from "@/lib/time";
 
@@ -23,8 +24,10 @@ export default async function SettingsPage() {
   // the pools card lists the inactive ones too (a renovation), to bring them back; the other cards the active ones
   const allPools = await prisma.pool.findMany({
     orderBy: [{ active: "desc" }, { code: "asc" }],
-    include: { names: true, memberships: { where: validAt(now), include: { group: true } } },
+    include: { names: true, memberships: { where: validAt(now), include: { group: true } }, periods: { orderBy: { firstDay: "asc" } } },
   });
+  // Lili 2026-11-01 (point 16): "active" is in use today, by the pool's periods
+  const today = businessDayOf(now);
   const [params, pools, users, feedTypes, groups, animals, animalGroups] = await Promise.all([
     prisma.parameter.findMany({
       where: { active: true },
@@ -32,7 +35,7 @@ export default async function SettingsPage() {
       include: { names: true, unit: true, referenceRanges: { where: validAt(now) }, conversions: { where: validAt(now), take: 1 } },
     }),
     prisma.pool.findMany({
-      where: { active: true },
+      where: poolInUse(today),
       orderBy: { code: "asc" },
       include: {
         names: true,
@@ -196,7 +199,8 @@ export default async function SettingsPage() {
             poolId: p.id,
             name: pickValid(p.names, now)?.displayName ?? p.code,
             groups: p.memberships.map((m) => m.group.name).join(", "),
-            active: p.active,
+            active: p.periods.some((x) => poolCovers(poolPeriodView(x), today)),
+            periods: p.periods.map(poolPeriodView),
           }))}
         />
         {user.role === "ADMIN" && (

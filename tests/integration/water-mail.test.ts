@@ -9,6 +9,7 @@ import { setReference } from "@/lib/admin";
 import { createMeasurement } from "@/lib/measurements";
 import { sendWaterReport, setWaterReportRecipient } from "@/lib/water-mail";
 import { waterReport, weekStart } from "@/lib/water-report";
+import { addDays, businessDayOf, dayToDate } from "@/lib/time";
 import { readPdfLines } from "../support/pdf-readback";
 import { cest, fixtures, rid } from "./fixtures";
 
@@ -93,10 +94,15 @@ describe("pools without a number in the report", () => {
   const made: string[] = [];
   afterAll(async () => {
     await prisma.pool.updateMany({ where: { id: { in: made } }, data: { active: false } });
+    // off from today, as the switch does (point 16): the period ends yesterday
+    await prisma.poolPeriod.updateMany({ where: { poolId: { in: made }, lastDay: null }, data: { lastDay: dayToDate(addDays(businessDayOf(new Date()), -1)) } });
     await prisma.groupMembership.updateMany({ where: { poolId: { in: made }, validTo: null }, data: { validTo: new Date() } });
   });
   const unnumbered = async (code: string, name: string) => {
-    const p = await prisma.pool.create({ data: { code, names: { create: { displayName: name, validFrom: new Date("1970-01-01T00:00:00Z") } } } });
+    // in use from 2018-12-07, as every pool (Lili 2026-11-01, point 16): a pool without a period is in use on no day
+    const p = await prisma.pool.create({
+      data: { code, names: { create: { displayName: name, validFrom: new Date("1970-01-01T00:00:00Z") } }, periods: { create: { firstDay: new Date("2018-12-07T00:00:00Z"), createdById: f.admin.id } } },
+    });
     await prisma.groupMembership.create({ data: { groupId: f.group("NAPI_KIS"), poolId: p.id, sortOrder: 90 + made.length, validFrom: new Date("1970-01-01T00:00:00Z") } });
     made.push(p.id);
     await new Promise((r) => setTimeout(r, 20)); // distinct creation times

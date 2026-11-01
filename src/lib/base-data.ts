@@ -14,6 +14,8 @@
 import { ensureListFeed } from "./base-feed-marks";
 import type { Dimension, PrismaClient } from "@prisma/client";
 import { hasTestSystemData, loadInitialAnimals, loadInitialFeeds } from "./initial-data";
+import { SYSTEM_USER_ID } from "./db";
+import { FEED_HISTORY_START } from "./feed-history";
 import { initialAnimalsWanted } from "./seed-switch";
 
 export const SINCE = new Date("2025-12-31T23:00:00.000Z"); // 2026-01-01 00:00 Europe/Budapest
@@ -166,7 +168,15 @@ export async function loadBaseData(prisma: PrismaClient): Promise<BaseDataIds> {
     const existing = await prisma.pool.findUnique({ where: { code: p.code } });
     const row =
       existing ??
-      (await prisma.pool.create({ data: { code: p.code, sortOrder: p.order, names: { create: { displayName: p.name, validFrom: SINCE } } } }));
+      (await prisma.pool.create({
+        data: {
+          code: p.code,
+          sortOrder: p.order,
+          names: { create: { displayName: p.name, validFrom: SINCE } },
+          // Lili 2026-11-01 (point 16): in use from the start of the history, as the migration gave every pool
+          periods: { create: { firstDay: new Date("2018-12-07T00:00:00.000Z"), lastDay: null, createdById: "00000000-0000-0000-0000-000000000001" } },
+        },
+      }));
     poolId.set(p.code, row.id);
   }
 
@@ -233,6 +243,8 @@ export async function loadBaseData(prisma: PrismaClient): Promise<BaseDataIds> {
           defaultUnitId: unitId.get(f.unit)!,
           sortOrder: i + 1,
           names: { create: { name: f.name, validFrom: SINCE } },
+          // Lili 2026-11-01 (point 14): fed from the start of the history, as the migration gave every feed
+          periods: { create: { firstDay: new Date(`${FEED_HISTORY_START}T00:00:00.000Z`), lastDay: null, createdById: SYSTEM_USER_ID } },
         },
       });
       return created.id;
