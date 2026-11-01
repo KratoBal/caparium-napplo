@@ -11,6 +11,7 @@ import { AppError } from "@/lib/errors";
 import { moduleLevel, pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
 import { addDays, businessDayOf, formatDay, formatPeriod, isValidDay, localDateTimeOf, localTimeOf } from "@/lib/time";
+import { poolInUse } from "@/lib/pool-periods";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
   const chemicalId = sp.szer && uuid.test(sp.szer) ? sp.szer : null;
   const now = new Date();
   const [pools, stock, units, calcPools, exportLevel] = await Promise.all([
-    prisma.pool.findMany({ where: { active: true }, include: { names: true }, orderBy: { code: "asc" } }),
+    prisma.pool.findMany({ where: poolInUse(today), include: { names: true }, orderBy: { code: "asc" } }),
     stockLevels(now),
     prisma.unit.findMany({ where: { active: true, dimension: { in: ["MASS", "VOLUME", "COUNT"] } }, orderBy: { symbol: "asc" } }),
     chemistryCalcPools(now),

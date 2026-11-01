@@ -14,7 +14,8 @@ import { emojiField } from "./icons";
 import { FIRST_NAME_FROM, moduleLevel, validAt } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
-import { businessDayOf } from "./time";
+import { poolIsOn, switchPool } from "./pool-periods";
+import { businessDayOf, dayToDate } from "./time";
 
 const reason = z.string().trim().min(3, "Az indoklás legalább 3 karakter legyen.").max(500);
 
@@ -200,14 +201,18 @@ export async function setPoolActive(actor: Actor, input: z.infer<typeof poolActi
   return prisma.$transaction(async (tx) => {
     const pool = await tx.pool.findUnique({ where: { id: input.poolId } });
     if (!pool) throw new AppError(404, "POOL_NOT_FOUND", "A medence nem található.");
-    if (pool.active === input.active) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
+    // in use today by its periods (the stored flag may be behind: a period ends by the calendar, not by a write)
+    const onToday = await poolIsOn(tx, pool.id, businessDayOf(new Date()));
+    if (onToday === input.active) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
+    // point 16: the switch closes or opens the pool's period (pool-periods.ts); the flag follows for what still reads it
+    await switchPool(tx, pool.id, input.active, actor.id);
     await tx.pool.update({ where: { id: pool.id }, data: { active: input.active } });
     await writeAudit(tx, {
       userId: actor.id,
       action: "MASTER_CHANGE",
       entityType: "Pool",
       entityId: pool.id,
-      changes: { active: { before: pool.active, after: input.active } },
+      changes: { active: { before: onToday, after: input.active } },
       requestId: input.requestId,
     });
     return { replayed: false };
@@ -322,7 +327,15 @@ export async function createPool(actor: Actor, raw: z.input<typeof createPoolSch
       // at the end of the water report's order: the next number after the highest one
       const last = await tx.pool.aggregate({ _max: { sortOrder: true } });
       const pool = await tx.pool.create({
-        data: { code: input.code, emoji, volumeLiters: volume, sortOrder: (last._max.sortOrder ?? -1) + 1, names: { create: { displayName: input.name, validFrom: FIRST_NAME_FROM } } },
+        data: {
+          code: input.code,
+          emoji,
+          volumeLiters: volume,
+          sortOrder: (last._max.sortOrder ?? -1) + 1,
+          names: { create: { displayName: input.name, validFrom: FIRST_NAME_FROM } },
+          // point 16: in use from today, as its group memberships
+          periods: { create: { firstDay: dayToDate(businessDayOf(now)), lastDay: null, createdById: actor.id } },
+        },
       });
       const from = dayBounds(businessDayOf(now)).start;
       for (const g of groups) {
