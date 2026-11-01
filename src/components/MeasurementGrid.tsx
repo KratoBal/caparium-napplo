@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { announceReminder, formComplete, reminderTimer, reminderWanted } from "@/lib/save-reminder";
 import type { CellView, RangeView } from "@/lib/queries";
 import { convertReading, type ReadingConversion } from "@/lib/reading";
+import { canonicalDecimal, multiplyDecimal, parseDecimalInput } from "@/lib/decimal";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 import { useLeaveWarning } from "./useLeaveWarning";
 
@@ -464,7 +465,8 @@ export function MeasurementGrid({
         if (draftText !== undefined) clear();
         return "none"; // a dilution without a value waits for the value
       }
-      const valueChanged = !existing || text.trim().replace(",", ".") !== existing.value;
+      // the field holds the value before the dilution (Lili 2026-11-01 22:35 UTC): compared with that
+      const valueChanged = !existing || text.trim().replace(",", ".") !== (existing.baseValue ?? existing.value);
       const metaChanged =
         dilutable(parameterId) && (!existing || meta.dilution !== existing.dilution || meta.diluentWater !== existing.diluentWater);
       if (!valueChanged && !metaChanged) {
@@ -738,10 +740,17 @@ export function MeasurementGrid({
                       const cell = grid.cells[key];
                       const draft = drafts[key];
                       const st = cellState[key];
+                      // Lili 2026-11-01 22:35 UTC: the weekly dilution is a factor. The field holds the value before it (as typed), the
+                      // result (x dilution) shows under the field; a row that is not open shows the result
+                      const dilution = weekly && param.dilution ? metaOf(key).dilution : null;
+                      const inputShown = draft ?? (cell ? huNumber(cell.baseValue ?? cell.value) : "");
                       const shown = draft ?? (cell ? huNumber(cell.value) : "");
+                      const typed = draft !== undefined ? parseDecimalInput(draft) : null;
+                      const draftResult = typed !== null && dilution && dilution > 1 ? canonicalDecimal(multiplyDecimal(typed, String(dilution))) : null;
+                      const result = draft !== undefined ? draftResult : dilution && dilution > 1 && cell?.baseValue ? cell.value : null;
                       const out =
                         draft !== undefined
-                          ? draftOutOfRange(draft, grid.currentRanges[key])
+                          ? draftOutOfRange(draftResult ?? draft, grid.currentRanges[key])
                           : cell?.reference === "LOW" || cell?.reference === "HIGH";
                       const range = cell?.range ?? grid.currentRanges[key];
                       // point 9 (Lili 2026-11-01): a measurement started in some pools only; in the others its column is a dash
@@ -777,7 +786,7 @@ export function MeasurementGrid({
                                 autoComplete="off"
                                 aria-label={`${pool.name} ${param.name}`}
                                 data-testid={`cell-${pool.name}-${param.name}`}
-                                value={shown}
+                                value={inputShown}
                                 onChange={(e) => {
                                   setDrafts((d) => ({ ...d, [key]: e.target.value }));
                                   // typing again: a new reading, converted when the field is left
@@ -802,7 +811,7 @@ export function MeasurementGrid({
                                 }}
                               />
                               {dot}
-                              <ClearX shown={shown !== ""} label={`Kiürítés, ${pool.name}, ${param.name}`} onClear={() => {
+                              <ClearX shown={inputShown !== ""} label={`Kiürítés, ${pool.name}, ${param.name}`} onClear={() => {
                                   setDrafts((d) => ({ ...d, [key]: "" }));
                                   setRawDrafts((d) => {
                                     if (!(key in d)) return d;
@@ -844,6 +853,12 @@ export function MeasurementGrid({
                             {(!st || st.state === "saved") && cell && (
                               <span>
                                 {cell.localTime} · {cell.responsibleMonogram}
+                              </span>
+                            )}
+                            {result !== null && dilution && (
+                              <span className="dil-result" data-testid={`dil-${pool.name}-${param.name}`}>
+                                {" "}
+                                ×{dilution} = {huNumber(result)}
                               </span>
                             )}
                             {out && <span className="ref"> {rangeText(range)}</span>}
