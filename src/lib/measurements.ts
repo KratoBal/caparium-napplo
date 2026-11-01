@@ -148,6 +148,16 @@ function parseValue(raw: string): string {
   return v;
 }
 
+/**
+ * While a tester conversion is in force at the measurement time, a value comes only as a reading (barracuda on #167): a page loaded
+ * before the conversion was set sends what was typed as the value, and the reading would be stored as dKH. Refused, with what to do.
+ */
+function refuseDirectValue(param: { conversion: unknown }): void {
+  if (param.conversion) {
+    throw new AppError(422, "CONVERSION_IN_FORCE", "Erre a paraméterre mérőeszköz-átváltás van beállítva: töltsd újra a lapot, és a leolvasást írd be.");
+  }
+}
+
 function checkDilution(d: number | null | undefined): void {
   if (d === undefined || d === null) return;
   if (!Number.isInteger(d) || d < 1 || d > 100) {
@@ -326,6 +336,7 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
       if (!pool.active) throw new AppError(422, "POOL_INACTIVE", "Ez a medence most inaktív (például felújítás), új mérés nem rögzíthető rá.");
       const converted = input.rawReading ? await valueFromReading(tx, param.id, measuredAt, input.rawReading) : null;
       if (converted) value = converted.value;
+      else refuseDirectValue(param);
       checkPlausible(value, param, input.confirmPlausibility);
       checkDilutionAllowed(param, input);
 
@@ -461,6 +472,7 @@ export async function updateMeasurement(
       // a reading is converted again; a value typed directly drops the reading the old value came from
       const converted = input.rawReading ? await valueFromReading(tx, param.id, measuredAt, input.rawReading) : null;
       if (converted) newValue = converted.value;
+      else if (newValue !== undefined || input.rawReading === null) refuseDirectValue(param);
       const reading =
         converted !== null
           ? { rawReading: converted.rawReading, conversionId: converted.conversionId }

@@ -53,19 +53,23 @@ describe("tester conversion", () => {
     const cell = grid!.cells[`${f.pool("NAGY")}:${f.param("PO4")}`];
     expect(cell).toMatchObject({ value: "0.092", rawReading: "30", conversionLabel: "Hanna HI736" });
     expect(grid!.layout.parameters.find((p) => p.id === f.param("PO4"))!.conversion).toMatchObject({ factor: "0.003066", decimals: 3 });
-    // a value typed directly (no reading) is still accepted, and has no reading
-    const direct = await measure("2026-03-13", { value: "0,05" });
-    expect(direct.measurement).toMatchObject({ value: "0.05", rawReading: null });
+    // barracuda on #167: while the conversion is in force a value comes only as a reading (a page loaded before it was set sends
+    // the reading as the value); refused, nothing written
+    const before = await prisma.measurement.count({ where: { parameterId: f.param("PO4"), businessDay: new Date("2026-03-13") } });
+    expect(await code(measure("2026-03-13", { value: "12" }))).toBe("CONVERSION_IN_FORCE");
+    expect(await prisma.measurement.count({ where: { parameterId: f.param("PO4"), businessDay: new Date("2026-03-13") } })).toBe(before);
   });
 
-  it("an edit with a new reading converts again; a value typed over it drops the reading", async () => {
+  it("an edit with a new reading converts again; a value typed over it is refused; a change without a value goes through", async () => {
     const m = await measure("2026-03-14", { rawReading: "17" });
     expect(m.measurement.value).toBe("0.052");
     const again = await updateMeasurement(f.aq1, m.measurement.id, { requestId: rid(), expectedVersion: 1, value: "x", rawReading: "40" }, cest("2026-03-14T09:30"));
     expect(again.measurement).toMatchObject({ value: "0.123", rawReading: "40" }); // 0.12264
-    const typed = await updateMeasurement(f.aq1, m.measurement.id, { requestId: rid(), expectedVersion: 2, value: "0,2" }, cest("2026-03-14T09:40"));
-    expect(typed.measurement).toMatchObject({ value: "0.2", rawReading: null });
-    expect((await prisma.measurement.findUniqueOrThrow({ where: { id: m.measurement.id } })).conversionId).toBeNull();
+    expect(await code(updateMeasurement(f.aq1, m.measurement.id, { requestId: rid(), expectedVersion: 2, value: "0,2" }, cest("2026-03-14T09:40")))).toBe("CONVERSION_IN_FORCE");
+    expect(await code(updateMeasurement(f.aq1, m.measurement.id, { requestId: rid(), expectedVersion: 2, rawReading: null }, cest("2026-03-14T09:41")))).toBe("CONVERSION_IN_FORCE");
+    // the trainee flag only, no value: the reading and the value stay
+    const meta = await updateMeasurement(f.aq1, m.measurement.id, { requestId: rid(), expectedVersion: 2, traineePerformed: true }, cest("2026-03-14T09:45"));
+    expect(meta.measurement).toMatchObject({ value: "0.123", rawReading: "40", traineePerformed: true });
   });
 
   it("a same-day change corrects the row only while no measurement used it; a later day starts a new one", async () => {

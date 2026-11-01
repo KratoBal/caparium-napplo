@@ -417,7 +417,7 @@ model Measurement {
   parameter      Parameter            @relation(fields: [parameterId], references: [id])
   unit           Unit                 @relation(fields: [unitId], references: [id])
   referenceRange ReferenceRange?      @relation(fields: [referenceRangeId], references: [id])
-  conversion     ParameterConversion? @relation(fields: [conversionId], references: [id])
+  conversion     ParameterConversion? @relation(fields: [conversionId], references: [id], onDelete: Restrict)
   exportItems    ExportItem[]
 
   // the "one valid value per cell" partial unique index is in the migration SQL

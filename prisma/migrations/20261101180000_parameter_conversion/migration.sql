@@ -23,7 +23,7 @@ CREATE TABLE "parameter_conversion" (
 CREATE INDEX "parameter_conversion_parameterId_validFrom_idx" ON "parameter_conversion"("parameterId", "validFrom");
 
 -- AddForeignKey
-ALTER TABLE "measurement" ADD CONSTRAINT "measurement_conversionId_fkey" FOREIGN KEY ("conversionId") REFERENCES "parameter_conversion"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "measurement" ADD CONSTRAINT "measurement_conversionId_fkey" FOREIGN KEY ("conversionId") REFERENCES "parameter_conversion"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "parameter_conversion" ADD CONSTRAINT "parameter_conversion_parameterId_fkey" FOREIGN KEY ("parameterId") REFERENCES "parameter"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

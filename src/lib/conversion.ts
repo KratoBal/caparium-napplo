@@ -68,6 +68,8 @@ export async function setConversion(actor: Actor, input: ConversionInput) {
   const at = resolveLocalDateTime(`${input.from}T00:00`)?.instant;
   if (!at) throw new AppError(422, "INVALID_DAY", "A dátum érvénytelen.");
   return prisma.$transaction(async (tx) => {
+    // the parameter's row first: two admins setting it at once go one after the other, so no two open rows (barracuda on #167)
+    await tx.$queryRaw`SELECT "id" FROM "parameter" WHERE "id" = ${input.parameterId}::uuid FOR UPDATE`;
     const param = await tx.parameter.findUnique({ where: { id: input.parameterId } });
     if (!param) throw new AppError(404, "NOT_FOUND", "A paraméter nem található.");
     const later = await tx.parameterConversion.findFirst({ where: { parameterId: param.id, validFrom: { gt: at } } });
