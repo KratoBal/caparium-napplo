@@ -40,7 +40,7 @@ describe("the dosing log PDF (point 5)", () => {
     expect(rows).toBe(2);
     const lines = await readPdfLines(new Uint8Array(buffer));
     expect(lines[0]).toBe("Cápasuli vegyszeradagolás: 2029.01.08. – 2029.01.09.");
-    expect(lines.some((l) => l.startsWith("Időszak: 2029.01.08. – 2029.01.09.") && l.includes("1 érvénytelenített tétel nem szerepel"))).toBe(true);
+    expect(lines.some((l) => l === "Időszak: 2029.01.08. – 2029.01.09.; 1 érvénytelenített tétel nem szerepel.")).toBe(true);
     const i500 = lines.findIndex((l) => l.startsWith("2029.01.08. 09:00") && l.includes("Sózó") && l.includes("Teszt só") && l.includes("500 g"));
     const i250 = lines.findIndex((l) => l.startsWith("2029.01.09. 10:15") && l.includes("250 g"));
     expect(i500).toBeGreaterThan(0);
@@ -65,6 +65,9 @@ describe("the Kimutatások PDF (point 8)", () => {
     const lines = await readPdfLines(new Uint8Array(buffer));
     expect(lines[0]).toBe("Cápasuli kimutatás: 2029.01.10.");
     for (const s of ["Napokra bontva", "Kinek", "Összesítés"]) expect(lines, s).toContain(s);
+    // one dot after the period's date, never two; no box for a feed type's icon
+    expect(lines.some((l) => l.includes(".."))).toBe(false);
+    expect(lines.some((l) => l.includes("\u0000"))).toBe(false);
     const types = await prisma.feed.findMany({ where: { id: { in: [feed["Litopenaeus vannamei"], feed["Teszt hal"]] } }, include: { type: true } });
     const typeOf = (id: string) => types.find((t) => t.id === id)!.type.name;
     // a table per feed group: the two feeds' types are two groups, each its own heading and header row, twice (by day, by recipient)

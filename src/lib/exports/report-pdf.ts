@@ -9,6 +9,8 @@ import { pdfPage, type PdfPage } from "./pdf-layout";
 
 export const REPORT_PDF_TITLE = "Cápasuli kimutatás";
 const LABEL_WIDTH = 120;
+/** A feed type's label without its icon: the embedded typeface has no emoji, an icon would print as an empty box. */
+const plain = (s: string) => s.replace(/\p{Extended_Pictographic}\uFE0F?/gu, "").replace(/\s+/g, " ").trim();
 const MIN_COL = 58;
 
 type Filter = { from: string; to: string; poolId: string | null; animalId: string | null };
@@ -35,7 +37,7 @@ function section(page: PdfPage, name: string, first: string, lines: ReportLine[]
     const units = [...new Set(t.columns.map((c) => c.unit))];
     const widths = [LABEL_WIDTH, ...t.columns.map(() => 0), ...units.map(() => 0)];
     const each = Math.floor((page.width - LABEL_WIDTH) / (widths.length - 1));
-    for (let i = 1; i < widths.length; i++) widths[i] = Math.min(each, 110);
+    for (let i = 1; i < widths.length; i++) widths[i] = Math.min(each, 150);
     const row = (l: ReportLine, isTotal: boolean) => {
       const sums = units.map((u) => t.columns.filter((c) => c.unit === u).reduce((s, c) => s + (l.cells[c.key] ?? 0), 0));
       const any = t.columns.some((c) => l.cells[c.key] !== undefined);
@@ -49,7 +51,7 @@ function section(page: PdfPage, name: string, first: string, lines: ReportLine[]
         align: ["left" as const, ...t.columns.map(() => "right" as const), ...units.map(() => "right" as const)],
       };
     };
-    page.doc.fontSize(10).fillColor("#000").text(t.label || "Takarmányok", page.left, page.doc.y, { width: page.width });
+    page.doc.fontSize(10).fillColor("#000").text(plain(t.label) || "Takarmányok", page.left, page.doc.y, { width: page.width });
     page.doc.moveDown(0.2);
     page.table(
       widths,
@@ -65,7 +67,7 @@ export async function buildReportPdf(f: Filter): Promise<{ buffer: Buffer; rows:
   const filters = [f.poolId ? "egy medencére szűrve" : null, f.animalId ? "egy állatra szűrve" : null].filter(Boolean);
   const page = pdfPage({
     title: `${REPORT_PDF_TITLE}: ${formatPeriod(f.from, f.to)}`,
-    subtitle: `Időszak: ${formatPeriod(f.from, f.to)}${filters.length ? `, ${filters.join(", ")}` : ""}. Takarmányonként és alapegységben; a darab és a tömeg külön oszlop, a csoportos tétel a csoporté, felosztás nélkül.`,
+    subtitle: `Időszak: ${formatPeriod(f.from, f.to)}${filters.length ? ` (${filters.join(", ")})` : ""}; takarmányonként és alapegységben, a darab és a tömeg külön oszlop, a csoportos tétel a csoporté, felosztás nélkül.`,
     landscape: true,
   });
   if (r.columns.length === 0) page.note("Az időszakban nem volt etetés.");

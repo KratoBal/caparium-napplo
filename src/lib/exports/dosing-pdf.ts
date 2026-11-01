@@ -27,7 +27,8 @@ export async function buildDosingPdf(f: DosingFilter): Promise<{ buffer: Buffer;
   const title = `${DOSING_PDF_TITLE}: ${formatPeriod(f.from, f.to)}`;
   const page = pdfPage({
     title,
-    subtitle: `Időszak: ${formatPeriod(f.from, f.to)}${filters.length ? `; ${filters.join(", ")}` : ""}.${skipped ? ` ${skipped} érvénytelenített tétel nem szerepel.` : ""}`,
+    // the period ends in its own dot (2029.01.09.): nothing more after it unless a filter or a note follows
+    subtitle: `Időszak: ${formatPeriod(f.from, f.to)}${filters.length ? ` (${filters.join(", ")})` : ""}${skipped ? `; ${skipped} érvénytelenített tétel nem szerepel.` : ""}`,
   });
   page.band("Napló");
   if (valid.length === 0) page.note("Az időszakban nem volt vegyszeradagolás.");
