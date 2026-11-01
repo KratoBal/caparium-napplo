@@ -1494,6 +1494,9 @@ test("reports: the tables and the Excel; no daily report menu any more", async (
   // VIZ-20: the monthly package's card on the export page; the overview's feeding tile
   await page.getByRole("link", { name: "Export" }).click();
   await expect(page.getByTestId("monthly-package")).toContainText("Havi ZIMS-csomag");
+  // the card says the package is mailed to the recipient of the settings (it said "e-mailt nem küld" before #110)
+  await expect(page.getByTestId("monthly-package")).toContainText("Havi ZIMS-csomag levélben");
+  await expect(page.getByTestId("monthly-package")).not.toContainText("e-mailt nem küld");
   await page.getByRole("link", { name: "START", exact: true }).click();
   await expect(page.getByTestId("home-evesi")).toBeVisible();
 });
