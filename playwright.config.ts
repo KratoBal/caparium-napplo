@@ -31,10 +31,19 @@ export default defineConfig({
         viewport: { width: 1024, height: 768 },
         hasTouch: true,
       },
+      testIgnore: /android\.spec\.ts$/,
     },
     {
       name: "desktop",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
+      testIgnore: /android\.spec\.ts$/,
+    },
+    // Lili 2026-11-01 (acrobot 39851): she tries the site on an Android phone too. Chrome on a Pixel 7 (412x915, touch, mobile
+    // user agent), on the main views only (the menu's drop-downs, the daily and weekly tables, Beállítások): tests/e2e/android.spec.ts
+    {
+      name: "android",
+      use: { ...devices["Pixel 7"] },
+      testMatch: /android\.spec\.ts$/,
     },
   ],
   webServer: {
