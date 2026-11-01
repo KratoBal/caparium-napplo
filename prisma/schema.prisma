@@ -139,8 +139,27 @@ model Pool {
   dosings      Dosing[]
   references   ReferenceRange[]
   ticks        PoolTick[]
+  periods      PoolPeriod[]
 
   @@map("pool")
+}
+
+// Lili 2026-11-01 (point 16): the days a pool is in use, one or more periods (from a day, to a day or open, both inclusive, business
+// days), as the feeds' (point 14). A renovation is a gap between two periods; the pool, its measurements and its animals stay the
+// same. Every list of a day (the grid, a measurement, a dosing, an animal's placement) takes the pools in use that day; a closed
+// period takes the place of "inactive" (Pool.active follows today's state). The migration gave the active pools an open period from
+// 2018-12-07 and the inactive ones a period ending the day before they were switched off.
+model PoolPeriod {
+  id          String    @id @default(uuid()) @db.Uuid
+  poolId      String    @db.Uuid
+  firstDay    DateTime  @db.Date
+  lastDay     DateTime? @db.Date
+  createdById String    @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  pool        Pool      @relation(fields: [poolId], references: [id])
+
+  @@index([poolId, firstDay])
+  @@map("pool_period")
 }
 
 model PoolName {

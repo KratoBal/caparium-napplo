@@ -9,6 +9,7 @@ import { moduleLevel, pickValid } from "@/lib/master";
 import { breakdown } from "@/lib/reports";
 import { requireModuleRead } from "@/lib/session";
 import { addDays, businessDayOf, formatPeriod, isValidDay } from "@/lib/time";
+import { poolInUse } from "@/lib/pool-periods";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const animalId = sp.allat && uuid.test(sp.allat) ? sp.allat : null;
   const now = new Date();
   const [pools, animals, exportLevel] = await Promise.all([
-    prisma.pool.findMany({ where: { active: true }, include: { names: true }, orderBy: { code: "asc" } }),
+    prisma.pool.findMany({ where: poolInUse(today), include: { names: true }, orderBy: { code: "asc" } }),
     listAnimals(now),
     moduleLevel(prisma, user.id, user.role, "EXPORT"),
   ]);

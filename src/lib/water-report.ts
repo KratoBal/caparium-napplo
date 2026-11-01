@@ -8,6 +8,7 @@
 // - this week's WEEKLY values: the latest valid measurement per parameter in a weekly group from Monday to today
 //   (the weekly measurement may be done on any day of the week), with its day, dilution and RO/SW.
 import { prisma } from "./db";
+import { poolsOn } from "./pool-periods";
 import { canonicalDecimal } from "./decimal";
 import { dayBounds } from "./feeding";
 import { monogramResolver, pickValid } from "./master";
@@ -89,10 +90,12 @@ export async function waterReport(day: string): Promise<WaterReport> {
   // by hand) comes after the numbered ones, in the order it was created (acrobot 2026-10-27 01:41), not by its code
   // an inactive pool (a renovation) is in the report of the days it was measured on, and only those
   const measured = new Set(rows.map((m) => m.poolId));
+  // point 16: in use on the report's day, by its period
+  const inUse = await poolsOn(prisma, day);
   const pools = (await prisma.pool.findMany({
     include: { names: true },
     orderBy: [{ sortOrder: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }, { code: "asc" }],
-  })).filter((p) => p.active || measured.has(p.id));
+  })).filter((p) => inUse.has(p.id) || measured.has(p.id));
   const sortOf = new Map(rows.map((m) => [m.parameterId, m.parameter.sortOrder]));
   const ordered = (list: (typeof rows)[number][]) => list.sort((a, b) => (sortOf.get(a.parameterId) ?? 0) - (sortOf.get(b.parameterId) ?? 0)).map(view);
   return {

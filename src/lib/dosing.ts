@@ -8,6 +8,7 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
+import { poolIsOn } from "./pool-periods";
 import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError } from "./errors";
@@ -88,7 +89,8 @@ export async function saveDosing(actor: Actor, raw: z.input<typeof dosingSchema>
       await requireReason(tx, d.reasonRequired, input.reason, "Korábbi vagy lezárt nap módosításához indoklás kell.");
     }
     const pool = await tx.pool.findUnique({ where: { id: input.poolId } });
-    if (!pool || !pool.active) throw new AppError(422, "POOL_NOT_FOUND", "A medence nem található.");
+    // point 16: in use on the dosing's day, by its period
+    if (!pool || !(await poolIsOn(tx, pool.id, day))) throw new AppError(422, "POOL_NOT_FOUND", "A medence nem található, vagy ezen a napon nincs használatban.");
     const { chem, unit, value, inStock } = await toStockUnit(tx, input.chemicalId, input.quantity, input.unitId);
     if (!chem.active) throw new AppError(422, "CHEMICAL_INACTIVE", "Ez a vegyszer nem aktív.");
     const data = { performedAt, businessDay: dayToDate(day), poolId: pool.id, chemicalId: chem.id, quantity: value, unitId: unit.id, updatedById: actor.id, updatedAt: serverNow };

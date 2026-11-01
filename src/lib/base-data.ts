@@ -166,7 +166,15 @@ export async function loadBaseData(prisma: PrismaClient): Promise<BaseDataIds> {
     const existing = await prisma.pool.findUnique({ where: { code: p.code } });
     const row =
       existing ??
-      (await prisma.pool.create({ data: { code: p.code, sortOrder: p.order, names: { create: { displayName: p.name, validFrom: SINCE } } } }));
+      (await prisma.pool.create({
+        data: {
+          code: p.code,
+          sortOrder: p.order,
+          names: { create: { displayName: p.name, validFrom: SINCE } },
+          // Lili 2026-11-01 (point 16): in use from the start of the history, as the migration gave every pool
+          periods: { create: { firstDay: new Date("2018-12-07T00:00:00.000Z"), lastDay: null, createdById: "00000000-0000-0000-0000-000000000001" } },
+        },
+      }));
     poolId.set(p.code, row.id);
   }
 

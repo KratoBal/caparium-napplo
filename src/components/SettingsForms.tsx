@@ -158,7 +158,7 @@ export function SheetColorForm(p: { target: "animal" | "group"; id: string; name
   );
 }
 
-type PoolItem = { poolId: string; name: string; groups: string; active: boolean };
+type PoolItem = { poolId: string; name: string; groups: string; active: boolean; periods: { firstDay: string; lastDay: string | null }[] };
 
 /**
  * The settings' pool list (Lili 2026-10-29, acrobot 37943): an inactive pool (a renovation) is shown only here, and only with
@@ -224,8 +224,55 @@ export function PoolRow(p: PoolItem & { onSwitch?: () => void }) {
           {p.active ? "Inaktiválás (felújítás)" : "Aktiválás"}
         </button>{" "}
         <Msg msg={msg} />
+        <PoolPeriods poolId={p.poolId} name={p.name} periods={p.periods} />
       </td>
     </tr>
+  );
+}
+
+/**
+ * Lili 2026-11-01 (point 16): the pool's periods of use, the admin's: from a day, to a day or open, a renovation is the gap between
+ * two. Saved together; overlaps are refused by the server with the reason. The pool and its measurements and animals stay one.
+ */
+function PoolPeriods({ poolId, name, periods }: { poolId: string; name: string; periods: { firstDay: string; lastDay: string | null }[] }) {
+  const { msg, busy, save } = useSave();
+  const [rows, setRows] = useState(periods.map((p) => ({ from: p.firstDay, to: p.lastDay ?? "" })));
+  const set = (i: number, k: "from" | "to", v: string) => setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+  const dotted = (d: string) => `${d.replaceAll("-", ".")}.`;
+  const shown = periods.length ? periods.map((p) => `${dotted(p.firstDay)} – ${p.lastDay ? dotted(p.lastDay) : ""}`).join(", ") : "nincs";
+  return (
+    <details className="pool-periods" data-testid={`pool-periods-${name}`}>
+      <summary>Használati időszakok: {shown}</summary>
+      {rows.map((r, i) => (
+        <div className="toolbar" key={i}>
+          <label className="field">
+            Mettől
+            <input className="input" type="date" aria-label={`${name} időszak ${i + 1} kezdete`} value={r.from} onChange={(e) => set(i, "from", e.target.value)} />
+          </label>
+          <label className="field">
+            Meddig (üresen: nyitott)
+            <input className="input" type="date" aria-label={`${name} időszak ${i + 1} vége`} value={r.to} onChange={(e) => set(i, "to", e.target.value)} />
+          </label>
+          <button className="btn btn-row" type="button" onClick={() => setRows((x) => x.filter((_, j) => j !== i))}>
+            Törlés
+          </button>
+        </div>
+      ))}
+      <div className="toolbar">
+        <button className="btn btn-soft" type="button" onClick={() => setRows((x) => [...x, { from: "", to: "" }])}>
+          + Időszak
+        </button>
+        <button
+          className="btn"
+          type="button"
+          disabled={busy || rows.some((r) => !r.from)}
+          onClick={() => void save(`/api/admin/pools/${poolId}/periods`, "PUT", { periods: rows.map((r) => ({ firstDay: r.from, lastDay: r.to || null })) }, "Időszakok mentve.")}
+        >
+          Időszakok mentése
+        </button>
+        <Msg msg={msg} />
+      </div>
+    </details>
   );
 }
 

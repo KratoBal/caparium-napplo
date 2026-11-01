@@ -5,13 +5,14 @@ import type { CalcPool } from "@/components/ChemistryCalculator";
 import { prisma } from "./db";
 import { canonicalDecimal } from "./decimal";
 import { pickValid, validAt } from "./master";
-import { dateToDay } from "./time";
+import { businessDayOf, dateToDay } from "./time";
+import { poolInUse } from "./pool-periods";
 
 const CODES = ["CA", "MG", "KH"] as const;
 
 export async function chemistryCalcPools(now = new Date()): Promise<CalcPool[]> {
   const [pools, params] = await Promise.all([
-    prisma.pool.findMany({ where: { active: true }, include: { names: true }, orderBy: { code: "asc" } }),
+    prisma.pool.findMany({ where: poolInUse(businessDayOf(now)), include: { names: true }, orderBy: { code: "asc" } }),
     prisma.parameter.findMany({ where: { code: { in: [...CODES] } } }),
   ]);
   const codeOf = new Map(params.map((p) => [p.id, p.code as (typeof CODES)[number]]));
