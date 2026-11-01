@@ -15,7 +15,7 @@
 
 import { ClearX } from "./ClearX";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { announceReminder, formComplete, reminderTimer, reminderWanted } from "@/lib/save-reminder";
 import type { CellView, RangeView } from "@/lib/queries";
 import { convertReading, type ReadingConversion } from "@/lib/reading";
@@ -105,6 +105,8 @@ export function MeasurementGrid({
   weekly = false,
   basePath = "/vizmeres",
   saveReminder = false,
+  tables,
+  dayPicker,
 }: {
   initial: Grid;
   groupCode: string;
@@ -114,6 +116,9 @@ export function MeasurementGrid({
   basePath?: string;
   /** the helper's "Ne felejtsd el menteni!" is on (setting save_reminder, card 0d617f0c) */
   saveReminder?: boolean;
+  /** Lili 2026-11-01 22:59 UTC: the page's table picker and day picker, on one row with the save button */
+  tables?: ReactNode;
+  dayPicker?: ReactNode;
   today: string;
   user: { id: string; role: string };
   /** the effective module level (R-17) allows recording */
@@ -600,30 +605,36 @@ export function MeasurementGrid({
 
   return (
     <>
-      <div className="toolbar">
-        <div className="tabs" aria-label="Mérési körök">
-          {grid.rounds.map((r) => (
-            <a
-              key={r.id}
-              className={`tab${grid.selectedRound?.id === r.id ? " active" : ""}`}
-              href={`${basePath}?csoport=${groupCode}&nap=${grid.day}&kor=${r.seq}`}
-            >
-              {r.seq}. mérés
-            </a>
-          ))}
-          {!readOnly && grid.rounds.length > 0 && (
-            <button className="btn btn-soft" type="button" onClick={openNewRound} data-testid="new-round">
-              Új mérés ma
-            </button>
-          )}
-        </div>
+      <div className="toolbar toolbar-end water-head-row" data-testid="water-head-row">
+        {tables}
         <span className="spacer" />
+        {dayPicker}
         {!readOnly && (
           <button className="btn" type="button" onClick={saveAll} data-testid="save-all">
             Mentés
           </button>
         )}
       </div>
+      {grid.rounds.length > 0 && (
+        <div className="toolbar water-rounds-row">
+          <div className="tabs" aria-label="Mérési körök">
+            {grid.rounds.map((r) => (
+              <a
+                key={r.id}
+                className={`tab${grid.selectedRound?.id === r.id ? " active" : ""}`}
+                href={`${basePath}?csoport=${groupCode}&nap=${grid.day}&kor=${r.seq}`}
+              >
+                {r.seq}. mérés
+              </a>
+            ))}
+            {!readOnly && (
+              <button className="btn btn-soft" type="button" onClick={openNewRound} data-testid="new-round">
+                Új mérés ma
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {!canWrite && (
         <div className="banner banner-warn" style={{ marginBottom: 16 }}>
