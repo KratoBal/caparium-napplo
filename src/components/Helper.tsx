@@ -16,16 +16,16 @@
 // figure, and starts with the alert.
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { HelperData } from "@/lib/helpers";
-import { followAnswer, followNotice, type Notice } from "@/lib/helper-notice";
+import { followAnswer, followNotice, greetingFigure, type Greeter, type Notice } from "@/lib/helper-notice";
 import { anchorOf, isDoubleTap, isDrag, KEY_STEP, placeKey, placeToPx, pxToPlace, readPlace, writePlace, type Place } from "@/lib/helper-place";
 import { readOff, SWITCH_EVENT } from "@/lib/helper-switch";
 import { REMINDER_EVENT, REMINDER_TEXT } from "@/lib/save-reminder";
+import { businessDayOf } from "@/lib/time";
 
 const SEEN_KEY = "caparium-segito-latta";
 const GREETED_KEY = "caparium-segito-koszont";
 const FIGURE = { water: { slug: "antennarius", name: "Antennarius" }, feeding: { slug: "zebracapa", name: "Zebracápa" } } as const;
 const ALERT_PICTURE = { measurement: "feladatok", stock: "vegyszer", feed: "takarmany" } as const;
-const GREETING_PICTURES = 3;
 // the alert waits a beat after the greeting went: a click that LEAVES the page (a menu link) must not mark it heard
 const ALERT_AFTER_GREETING_MS = 600;
 
@@ -35,8 +35,8 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
   const [notice, setNotice] = useState<Notice | null>(null);
   const [answer, setAnswer] = useState<string | null>(null);
   const [animal, setAnimal] = useState(data.perAnimal?.[0]?.name ?? "");
-  // which of the greeting pictures the figure wears while it greets; at rest it is the first
-  const [greetingPicture, setGreetingPicture] = useState(1);
+  // the day's greeter (helper-notice.ts greetingFigure): who wears which greeting picture while it greets
+  const [greeter, setGreeter] = useState<Greeter | null>(null);
   // set once the stored state is read: before that a click could race the auto-open below
   const [ready, setReady] = useState(false);
   // Lili 2026-10-30 (msg 1565719910833721357): the figure can be dragged (a mouse, a finger), stays inside the screen, keeps its place
@@ -49,10 +49,11 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
   const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
   const suppressClick = useRef(false);
   const storeKey = placeKey(userKey);
-  const figure = FIGURE[data.who];
-  // while it greets the figure wears a greeting picture, even with an alert waiting; then the alert's, else at rest the first
-  const picture =
-    notice?.kind === "greeting" ? `udv-${greetingPicture}` : data.alert ? ALERT_PICTURE[data.alertKind ?? "measurement"] : "udv-1";
+  const greeting = notice?.kind === "greeting" && greeter ? greeter : null;
+  // while it greets the day's greeter stands there (its picture and its bubble colour), even with an alert waiting; then the
+  // page's own figure with the alert's picture, else at rest its first
+  const figure = greeting ?? FIGURE[data.who];
+  const picture = greeting ? `udv-${greeting.picture}` : data.alert ? ALERT_PICTURE[data.alertKind ?? "measurement"] : "udv-1";
   // the alert the shown texts were taken from: a refresh (a save) may change or end it
   const shownAlert = useRef(data.alert);
 
@@ -82,7 +83,7 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
     } catch {
       return false; // without storage it would greet on every page: it does not greet
     }
-    setGreetingPicture(1 + Math.floor(Math.random() * GREETING_PICTURES));
+    setGreeter(greetingFigure(businessDayOf(new Date())));
     setNotice({ kind: "greeting", text: userName ? `Üdv a fedélzeten ${userName}!` : "Üdv a fedélzeten!" });
     return true;
   }
