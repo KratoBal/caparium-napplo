@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { REPORT_FILE_BASE } from "@/lib/exports/intake-report-text";
 import { buildIntakePdf } from "@/lib/exports/intake-pdf";
+import { buildReportPdf } from "@/lib/exports/report-pdf";
 import { buildIntakeWorkbook } from "@/lib/exports/intake-excel";
 import { buildEatingWorkbook, buildFeedingWorkbook, buildReportWorkbook, buildWithdrawalWorkbook } from "@/lib/exports/feeding-excel";
 import { moduleLevel } from "@/lib/master";
@@ -32,7 +33,9 @@ export async function POST(req: Request) {
   const animalId = String(form?.get("animal") ?? "");
   if (!isValidDay(from) || !isValidDay(to) || from > to) return new Response("Az időszak érvénytelen.", { status: 422 });
 
-  const pdf = kind === "huto" && String(form?.get("format") ?? "") === "pdf";
+  // the Takarmányhűtő report and (Lili 2026-11-01, point 8) the Kimutatások come as PDF too
+  const pdf = (kind === "huto" || kind === "kimutatas") && String(form?.get("format") ?? "") === "pdf";
+  const reportFilter = { from, to, poolId: uuid.test(poolId) ? poolId : null, animalId: uuid.test(animalId) ? animalId : null };
   let built: { buffer: Buffer; rows: number };
   try {
     built =
@@ -46,13 +49,25 @@ export async function POST(req: Request) {
           ? await buildEatingWorkbook({ from, to })
           : kind === "kivetel"
             ? await buildWithdrawalWorkbook({ from, to })
-            : await buildReportWorkbook({ from, to, poolId: uuid.test(poolId) ? poolId : null, animalId: uuid.test(animalId) ? animalId : null });
+            : pdf
+              ? await buildReportPdf(reportFilter)
+              : await buildReportWorkbook(reportFilter);
   } catch (e) {
     if (e instanceof AppError) return new Response(e.message, { status: e.status });
     throw e;
   }
   const exportKind =
-    kind === "huto" ? (pdf ? "PDF_INTAKE" : "EXCEL_INTAKE") : kind === "etetes" || kind === "kimutatas" ? "EXCEL_FEEDING" : kind === "evesi" ? "EXCEL_EATING" : "EXCEL_WITHDRAWAL";
+    kind === "huto"
+      ? pdf
+        ? "PDF_INTAKE"
+        : "EXCEL_INTAKE"
+      : kind === "kimutatas" && pdf
+        ? "PDF_REPORT"
+        : kind === "etetes" || kind === "kimutatas"
+          ? "EXCEL_FEEDING"
+          : kind === "evesi"
+            ? "EXCEL_EATING"
+            : "EXCEL_WITHDRAWAL";
   await prisma.$transaction(async (tx) => {
     const run = await tx.exportRun.create({
       // the page's own kind too: a report and the feeding log share EXCEL_FEEDING (review note on #17)

@@ -2,7 +2,6 @@ import { ChemistryCalculator } from "@/components/ChemistryCalculator";
 import { InactiveListFilter, InactiveRowShell } from "@/components/InactiveListFilter";
 import { ChemicalActive, ChemicalEdit, DosingEdit, DosingForm, MovementForm, NewChemical, type ChemicalOpt } from "@/components/DosingForms";
 import { InvalidateButton } from "@/components/FeedingForms";
-import { PrintButton } from "@/components/PrintButton";
 import { Shell } from "@/components/Shell";
 import { waterHelper } from "@/lib/helpers";
 import { chemistryCalcPools } from "@/lib/chemistry-calc";
@@ -11,7 +10,7 @@ import { dosingLog, stockLevels } from "@/lib/dosing";
 import { AppError } from "@/lib/errors";
 import { moduleLevel, pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
-import { addDays, businessDayOf, formatDay, isValidDay, localDateTimeOf, localTimeOf } from "@/lib/time";
+import { addDays, businessDayOf, formatDay, formatPeriod, isValidDay, localDateTimeOf, localTimeOf } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +27,12 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
   const poolId = sp.medence && uuid.test(sp.medence) ? sp.medence : null;
   const chemicalId = sp.szer && uuid.test(sp.szer) ? sp.szer : null;
   const now = new Date();
-  const [pools, stock, units, calcPools] = await Promise.all([
+  const [pools, stock, units, calcPools, exportLevel] = await Promise.all([
     prisma.pool.findMany({ where: { active: true }, include: { names: true }, orderBy: { code: "asc" } }),
     stockLevels(now),
     prisma.unit.findMany({ where: { active: true, dimension: { in: ["MASS", "VOLUME", "COUNT"] } }, orderBy: { symbol: "asc" } }),
     chemistryCalcPools(now),
+    moduleLevel(prisma, user.id, user.role, "EXPORT"),
   ]);
   let log: Awaited<ReturnType<typeof dosingLog>> = [];
   let error: string | null = null;
@@ -100,9 +100,19 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
             </select>
           </label>
           <button className="btn btn-soft" type="submit">Lekérés</button>
-          <span className="spacer" />
-          <PrintButton />
         </form>
+        {/* Lili 2026-11-01 (point 5): the log as a PDF made on the server, in the other PDFs' style (the browser's print is gone) */}
+        {exportLevel !== "NONE" && (
+          <form method="post" action="/api/exports/dosing" className="toolbar no-print">
+            <input type="hidden" name="from" value={from} />
+            <input type="hidden" name="to" value={to} />
+            {poolId && <input type="hidden" name="pool" value={poolId} />}
+            {chemicalId && <input type="hidden" name="chemical" value={chemicalId} />}
+            <button className="btn btn-soft" type="submit" data-testid="pdf-adagolas">
+              Napló PDF-ben ({formatPeriod(from, to)})
+            </button>
+          </form>
+        )}
         {error && <div className="banner banner-error">{error}</div>}
         <div className="table-scroll">
           <table className="log-table" data-testid="dosing-log">
