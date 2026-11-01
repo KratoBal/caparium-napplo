@@ -32,6 +32,10 @@ export const UNITS: { symbol: string; dimension: Dimension; factor: string | nul
   { symbol: "db", dimension: "COUNT", factor: "1", base: true },
   { symbol: "ml", dimension: "VOLUME", factor: "1", base: true },
   { symbol: "l", dimension: "VOLUME", factor: "1000", base: false },
+  // Lili 2026-11-01 (point 9 follow-up): for a new measurement type. No factor: mg/l is not quite ppm in sea water, and % stands alone;
+  // a value is compared with a range in its own unit
+  { symbol: "mg/l", dimension: "CONCENTRATION", factor: null, base: false },
+  { symbol: "%", dimension: "DIMENSIONLESS", factor: null, base: false },
 ];
 
 export const PARAMETERS = [
