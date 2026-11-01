@@ -15,9 +15,10 @@ import { prisma } from "./db";
 import { AppError, isUniqueViolation } from "./errors";
 import { dayFeedsSchema, ensureFeedingDay, selectedOn, selectionSchema, setDayFeeds, setSelection } from "./feeding";
 import { addAnimalsToDay, animalNames } from "./feeding-plan";
+import { feedsOn } from "./feed-periods";
 import { moduleLevel } from "./master";
 import type { Actor } from "./measurements";
-import { dayToDate } from "./time";
+import { businessDayOf, dayToDate } from "./time";
 
 const requestId = z.string().min(8).max(100);
 const members = {
@@ -61,11 +62,12 @@ export async function activeFeedingLists(): Promise<FeedingListView[]> {
     .sort((a, b) => a.name.localeCompare(b.name, "hu"));
 }
 
-async function checkMembers(tx: Pick<typeof prisma, "animal" | "feed">, animalIds: string[], feedIds: string[]) {
+async function checkMembers(tx: Pick<typeof prisma, "animal" | "feed" | "feedPeriod">, animalIds: string[], feedIds: string[]) {
   const animals = await tx.animal.count({ where: { id: { in: animalIds } } });
   if (animals !== animalIds.length) throw new AppError(422, "ANIMAL_NOT_FOUND", "Ismeretlen állat a listában.");
-  const feeds = await tx.feed.count({ where: { id: { in: feedIds }, active: true } });
-  if (feeds !== feedIds.length) throw new AppError(422, "FEED_NOT_FOUND", "Ismeretlen vagy inaktív takarmány a listában.");
+  // point 14: a list is made today, of today's feeds
+  const on = await feedsOn(tx as typeof prisma, businessDayOf(new Date()));
+  if (feedIds.some((id) => !on.has(id))) throw new AppError(422, "FEED_NOT_FOUND", "Ismeretlen takarmány a listában, vagy ma nincs etetési időszaka.");
 }
 
 const nameTaken = (e: unknown) => isUniqueViolation(e) && new AppError(409, "NAME_TAKEN", "Ilyen nevű lista már van.");
@@ -168,7 +170,9 @@ export async function applyFeedingList(actor: Actor, raw: z.input<typeof applyLi
     : null;
   if (input.listId && !list) throw new AppError(404, "LIST_NOT_FOUND", "A lista nem található.");
   const animalIds = list ? list.animals.map((a) => a.animalId) : [];
-  const feedIds = list ? list.feeds.filter((f) => f.feed.active).map((f) => f.feedId) : [];
+  // point 14: the list's feeds fed on the day it is applied to
+  const on = list ? await feedsOn(prisma, input.day) : new Set<string>();
+  const feedIds = list ? list.feeds.filter((f) => on.has(f.feedId)).map((f) => f.feedId) : [];
   const base = { clientTimestamp: input.clientTimestamp, day: input.day, reason: input.reason };
 
   const { fd } = await prisma.$transaction((tx) => ensureFeedingDay(tx, input.day));

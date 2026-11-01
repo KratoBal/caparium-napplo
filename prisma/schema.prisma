@@ -893,8 +893,27 @@ model Feed {
   items       FeedingItem[]
   withdrawals WithdrawalItem[]
   intakes     FeedIntakeItem[]
+  periods     FeedPeriod[]
 
   @@map("feed")
+}
+
+// Lili 2026-11-01 (point 14): the days a feed is fed, one or more periods (from a day, to a day or open), set and corrected by an admin
+// at any time. Every list of a day (the feeding sheet, the withdrawal, the intake) offers the feeds whose period covers that day; a
+// closed period takes the place of "inactive" (Feed.active is no longer read). Both days are inclusive, business days (Budapest).
+// The migration gave every feed a period from 2018-12-07: open for the active ones, ending the day before the migration for the
+// inactive ones, so today every list shows what it showed before.
+model FeedPeriod {
+  id          String    @id @default(uuid()) @db.Uuid
+  feedId      String    @db.Uuid
+  firstDay    DateTime  @db.Date
+  lastDay     DateTime? @db.Date
+  createdById String    @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  feed        Feed      @relation(fields: [feedId], references: [id])
+
+  @@index([feedId, firstDay])
+  @@map("feed_period")
 }
 
 // What the basic data step (scripts/start.sh, src/lib/base-data.ts) has created once, by the list's key: it never

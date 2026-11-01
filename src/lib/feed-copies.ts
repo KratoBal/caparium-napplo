@@ -12,6 +12,7 @@ import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { BASE_FEEDS } from "./base-data";
 import { correctedFrom } from "./base-feed-marks";
+import { switchFeed } from "./feed-periods";
 import { prisma, SYSTEM_USER_ID } from "./db";
 import { AppError } from "./errors";
 import { INITIAL_FEEDS } from "./initial-data";
@@ -85,6 +86,8 @@ export async function feedCopies(actor: Actor, raw: z.input<typeof feedCopiesSch
     try {
       await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         await tx.feed.update({ where: { id: c.id }, data: { active: false } });
+        // point 14: off is a closed period
+        await switchFeed(tx, c.id, false, actor.id, now);
         await tx.auditEntry.create({
           data: { userId: actor.id, action: "MASTER_CHANGE", entityType: "Feed", entityId: c.id, changes: { active: { before: true, after: false } }, reason: why(c.name), requestId: `${input.requestId}:${n}` },
         });

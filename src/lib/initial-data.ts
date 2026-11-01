@@ -20,6 +20,7 @@ import type { Dimension, PrismaClient, Sex } from "@prisma/client";
 import { rebuildAnimal } from "./animals";
 import { ensureListFeed } from "./base-feed-marks";
 import { SYSTEM_USER_ID } from "./db";
+import { FEED_HISTORY_START } from "./feed-history";
 import { businessDayOf, dayToDate } from "./time";
 
 type InitialAnimal = { pool: string; species: string; name: string; sex: Sex; group?: string };
@@ -106,6 +107,8 @@ export async function loadInitialFeeds(prisma: PrismaClient, unitId: Map<string,
           defaultUnitId: unitId.get(f.unit)!,
           sortOrder,
           names: { create: { name: f.name, validFrom: since } },
+          // Lili 2026-11-01 (point 14): fed from the start of the history, as the migration gave every feed
+          periods: { create: { firstDay: new Date(`${FEED_HISTORY_START}T00:00:00.000Z`), lastDay: null, createdById: SYSTEM_USER_ID } },
         },
       });
       return created.id;
