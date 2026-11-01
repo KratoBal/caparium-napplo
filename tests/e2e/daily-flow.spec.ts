@@ -358,7 +358,7 @@ test("export: a real .xlsx download and a ZIMS CSV run whose file can be downloa
 
   await page.getByRole("link", { name: "Export" }).first().click();
   const [xlsx] = await Promise.all([page.waitForEvent("download"), page.getByTestId("excel-download").click()]);
-  expect(xlsx.suggestedFilename()).toMatch(/^Vizmeres_.*\.xlsx$/);
+  expect(xlsx.suggestedFilename()).toMatch(/^capasuli_teljes_vizmeres_\d{4}-\d{2}-\d{2}(_\d{4}-\d{2}-\d{2})?\.xlsx$/);
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(await xlsx.path());
@@ -575,7 +575,7 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
 
   // EGY-10, EVE-07: both Excel files are real downloads from the export page
   await page.getByRole("link", { name: "Export" }).click();
-  for (const [id, prefix] of [["excel-etetes", "Egyedi_takarmanynaplo_"], ["excel-evesi", "Evesi_minta_"]] as const) {
+  for (const [id, prefix] of [["excel-etetes", "capasuli_takarmanynaplo_"], ["excel-evesi", "capasuli_evesimintazat_"]] as const) {
     const [file] = await Promise.all([page.waitForEvent("download"), page.getByTestId(id).click()]);
     expect(file.suggestedFilename()).toMatch(new RegExp(`^${prefix}\\d{4}-\\d{2}-\\d{2}`));
   }
@@ -1237,7 +1237,7 @@ test("withdrawal: an item for tomorrow, the day's total, taken against given, th
   await expect(page.getByTestId("withdrawal-total")).toContainText("g");
   await expect(page.getByTestId("taken-given")).toBeVisible();
   const [file] = await Promise.all([page.waitForEvent("download"), page.getByTestId("excel-kivetel").click()]);
-  expect(file.suggestedFilename()).toMatch(/^Takarmanykivetel_\d{4}-\d{2}-\d{2}/);
+  expect(file.suggestedFilename()).toMatch(/^capasuli_takarmanykivetel_\d{4}-\d{2}-\d{2}/);
 });
 
 // Lili 2026-10-27 20:49 UTC (acrobot 37044): a gram row with a value of 1000 g or more is shown in kg as a whole.
