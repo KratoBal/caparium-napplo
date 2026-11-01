@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createLifecycleEvent } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { setEatingStatus } from "@/lib/eating";
-import { buildEatingWorkbook, buildFeedingWorkbook } from "@/lib/exports/feeding-excel";
+import { buildEatingWorkbook, buildFeedingWorkbook, DAY_BAND, DAY_ROW_FILLS, TOTAL_FILL } from "@/lib/exports/feeding-excel";
 import { finalizeList, saveFeedingItem, setSelection } from "@/lib/feeding";
 import { feedingLog } from "@/lib/feeding-log";
 import { otherLabel } from "@/lib/other-name";
@@ -69,23 +69,26 @@ describe("the feeding Excel (EGY-10, D-30)", () => {
     const { buffer, rows } = await buildFeedingWorkbook({ from: d, to: d });
     expect(rows).toBeGreaterThan(3); // the three recipients plus every other animal alive that day (EGY-05)
     const ws = await sheet(buffer);
-    expect([ws.getCell("D1").value, ws.getCell("D2").value, ws.getCell("A3").value, ws.getCell("B3").value, ws.getCell("C3").value]).toEqual([
+    // Lili 2026-11-01 (point 2): the day's name ("Nap") after the date
+    expect([ws.getCell("E1").value, ws.getCell("E2").value, ws.getCell("A3").value, ws.getCell("B3").value, ws.getCell("C3").value, ws.getCell("D3").value]).toEqual([
       "Takarmány",
       "Mértékegység",
       "Dátum",
+      "Nap",
       "Állatfaj",
       "Név",
     ]);
-    expect([fillOf(ws.getCell("A1")), fillOf(ws.getCell("D1")), fillOf(ws.getCell("D2")), fillOf(ws.getCell("D3"))]).toEqual(["FF595959", "FFA6CAEC", "FFDCEAF7", "FF262626"]);
+    expect([fillOf(ws.getCell("A1")), fillOf(ws.getCell("E1")), fillOf(ws.getCell("E2")), fillOf(ws.getCell("E3"))]).toEqual(["FF595959", "FFA6CAEC", "FFDCEAF7", "FF262626"]);
     // the Litopenaeus: one name over two columns, db then g (the template's J1:K1)
     const lit = colOf(ws, 1, "Litopenaeus vannamei");
     expect([ws.getRow(2).getCell(lit).value, ws.getRow(2).getCell(lit + 1).value]).toEqual(["db", "g"]);
     expect(ws.getRow(1).getCell(lit + 1).isMerged).toBe(true);
 
-    const egy = rowOf(ws, 3, "Teszt Egy");
+    const egy = rowOf(ws, 4, "Teszt Egy");
     expect([val(egy.getCell(lit)), val(egy.getCell(lit + 1))]).toEqual([6, 42.5]);
     // the date column is a real date cell shown as 2026.10.30. (Lili 2026-10-30), not ISO text
     expect([egy.getCell(1).numFmt, egy.getCell(1).value instanceof Date]).toEqual([EXCEL_DATE_FORMAT, true]);
+    expect(egy.getCell(2).value).toBe("hétfő"); // 2026-04-06
     // Lili 2026-10-29 (package item 13): no "Egyéb 1..5" and no note columns; the other name has a column of its own
     const other1 = colOf(ws, 1, "Tintahal-fej"); // the fixed shown form: a capital first letter
     expect(val(egy.getCell(other1))).toBe(20);
@@ -102,18 +105,41 @@ describe("the feeding Excel (EGY-10, D-30)", () => {
     expect(gCells).not.toContain(`${ws.getColumn(lit).letter}${egy.number}`);
     expect(gCells).toContain(`${ws.getColumn(lit + 1).letter}${egy.number}`);
 
-    expect(val(rowOf(ws, 3, "Teszt Három").getCell(colOf(ws, 1, "Teszt hal")))).toBe(1000); // 1 kg in grams
+    expect(val(rowOf(ws, 4, "Teszt Három").getCell(colOf(ws, 1, "Teszt hal")))).toBe(1000); // 1 kg in grams
     // EGY-05: an animal not fed that day has its row, its cells empty and coloured; a fed row's gaps too
-    const negy = rowOf(ws, 3, "Teszt Négy");
+    const negy = rowOf(ws, 4, "Teszt Négy");
     expect([negy.getCell(lit).value, fillOf(negy.getCell(lit)), fillOf(negy.getCell(other1))]).toEqual([null, "FFF2F2F2", "FFF2F2F2"]);
     expect([fillOf(egy.getCell(colOf(ws, 1, "Teszt hal"))), fillOf(egy.getCell(lit))]).toEqual(["FFF2F2F2", null]);
-    const group = rowOf(ws, 3, "Teszt csoport (csoport)");
+    const group = rowOf(ws, 4, "Teszt csoport (csoport)");
     expect(val(group.getCell(colOf(ws, 1, "Teszt kagyló")))).toBe(300);
     // EGY-11: the SUM row is the last one
     const last = ws.getRow(ws.rowCount);
     expect(last.getCell(1).value).toBe("SUM/Takarmány");
     expect(val(last.getCell(lit))).toBe(6);
     expect(val(last.getCell(gSum))).toBe(62.5 + 1000 + 300);
+    // point 2: the totals stand out, the SUM row across and the SUM/Állat columns down (their heads too)
+    expect([fillOf(last.getCell(1)), fillOf(last.getCell(lit)), fillOf(last.getCell(gSum))]).toEqual([TOTAL_FILL, TOTAL_FILL, TOTAL_FILL]);
+    expect([fillOf(egy.getCell(gSum)), fillOf(ws.getRow(1).getCell(gSum)), egy.getCell(gSum).font?.bold]).toEqual([TOTAL_FILL, TOTAL_FILL, true]);
+    // one day: no band
+    expect(fillOf(egy.getCell(4))).toBeNull();
+  });
+
+  it("the rows change colour day by day (point 2): every other day's rows in the pale band, an empty feed cell keeps its grey", async () => {
+    const ws = await sheet((await buildFeedingWorkbook({ from: "2028-04-06", to: "2028-04-08" })).buffer);
+    const byDay = new Map<string, ExcelJS.Row[]>();
+    ws.eachRow((r, n) => {
+      if (n < 4 || !(r.getCell(1).value instanceof Date)) return;
+      const d = (r.getCell(1).value as Date).toISOString().slice(0, 10);
+      byDay.set(d, [...(byDay.get(d) ?? []), r]);
+    });
+    // the control: every day has its rows (the animals alive, EGY-05)
+    expect([...byDay.keys()]).toEqual(["2028-04-06", "2028-04-07", "2028-04-08"]);
+    const names = (d: string) => byDay.get(d)!.map((r) => fillOf(r.getCell(4)));
+    expect(new Set(names("2028-04-06"))).toEqual(new Set([null]));
+    expect(new Set(names("2028-04-07"))).toEqual(new Set([DAY_BAND]));
+    expect(new Set(names("2028-04-08"))).toEqual(new Set([null]));
+    expect(fillOf(byDay.get("2028-04-07")![0].getCell(6))).toBe("FFF2F2F2"); // an empty feed cell (EGY-05)
+    expect(byDay.get("2028-04-07")![0].getCell(2).value).toBe("péntek");
   });
 });
 
@@ -135,7 +161,7 @@ describe("the feeding Excel's other feeds (Lili 2026-10-29, package item 13)", (
     expect(sortedNames.map((n) => colOf(ws, 1, n))).toEqual([...cols].sort((x, y) => x - y));
     expect(Math.max(...cols) - Math.min(...cols)).toBe(names.length - 1);
     expect(Math.min(...cols)).toBeGreaterThan(colOf(ws, 1, "Teszt hal"));
-    const egy = rowOf(ws, 3, "Teszt Egy");
+    const egy = rowOf(ws, 4, "Teszt Egy");
     expect(cols.map((c) => val(egy.getCell(c)))).toEqual(names.map(() => 2));
     const gSum = [0, 1].map((k) => colOf(ws, 1, "SUM/Állat", k)).find((c) => ws.getRow(2).getCell(c).value === "g")!;
     expect(val(egy.getCell(gSum))).toBe(10 + 2 * names.length);
@@ -160,8 +186,8 @@ describe("the other feeds' names, normalized", () => {
     expect(heads.filter((h) => h.toLowerCase() === "spirulina")).toEqual(["Spirulina"]); // one column, the fixed form
     expect(heads).toContain("Alga"); // not as typed ("ALGA"): the form does not depend on what was met first
     const col = colOf(ws, 1, "Spirulina");
-    expect(val(rowOf(ws, 3, "Teszt Egy").getCell(col))).toBe(2);
-    expect(val(rowOf(ws, 3, "Teszt Három").getCell(col))).toBe(3);
+    expect(val(rowOf(ws, 4, "Teszt Egy").getCell(col))).toBe(2);
+    expect(val(rowOf(ws, 4, "Teszt Három").getCell(col))).toBe(3);
     // the report's feed: one, with the first form, summed
     const log = await feedingLog({ from: d, to: d, poolId: null, animalId: null });
     const feeds = [...new Set(log.entries.map((e) => e.feed))].filter((x) => x.toLowerCase().includes("spirulina"));
@@ -222,6 +248,12 @@ describe("the eating Excel (EVE-07)", () => {
     expect([fillOf(dead.getCell("F")), fillOf(dead.getCell("G"))]).toEqual(["FFBDD7EE", "FF262626"]);
     expect([fillOf(rowOf(ws, 2, "Április Egy").getCell("E")), fillOf(rowOf(ws, 2, "Április Egy").getCell("F"))]).toEqual(["FFD9D9D9", "FFBDD7EE"]);
     expect([fillOf(egy.getCell("F")), fillOf(ketto.getCell("F"))]).toEqual([null, "FFBDD7EE"]);
+    // Lili 2026-11-01 (point 3): the day-letter row under the dates in the week's paler colour; every animal row bordered,
+    // a dashed line between the day columns
+    expect([fillOf(ws.getCell("E2")), fillOf(ws.getCell("G2"))]).toEqual([DAY_ROW_FILLS[0], DAY_ROW_FILLS[0]]);
+    expect(egy.getCell("E").border).toMatchObject({ top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "dashed" } });
+    expect(egy.getCell("F").border).toMatchObject({ left: { style: "dashed" }, right: { style: "dashed" } });
+    expect([egy.getCell("G").border?.right?.style, egy.getCell(1).border?.left?.style, egy.getCell(4).border?.right?.style]).toEqual(["thin", "thin", "thin"]);
     expect(() => rowOf(ws, 2, "Április Régi")).toThrow();
     expect(comes).toBeTruthy();
     // EVE-05, EVE-09: the note row is the last, the medicine note under its day

@@ -4,7 +4,7 @@ import ExcelJS from "exceljs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { buildWaterWorkbook, EXTRA_HEADER, TEMPLATE_HEADER, TICK_HEADER } from "@/lib/exports/excel";
+import { buildWaterWorkbook, EXTRA_HEADER, TEMPLATE_HEADER, TICK_HEADER, WATER_HEAD_FILL, WATER_WEEK_FILLS } from "@/lib/exports/excel";
 import { createZimsExport, divergence, setSubmissionState } from "@/lib/exports/zims";
 import { createMeasurement, invalidateMeasurement, updateMeasurement } from "@/lib/measurements";
 import { fixtures, rid } from "./fixtures";
@@ -157,5 +157,38 @@ describe("Excel (VIZ-11)", () => {
     expect(r.getCell(5).value).toBe(7.88);
     expect(r.getCell(5).font?.color?.argb).toBe("FFDF5B5B");
     expect(r.getCell(7).value).toBe("AE");
+  });
+
+  // Lili 2026-11-01 (point 1): a coloured header on every sheet, the rows' colour changing week by week; and the "?" in
+  // "Mérést végezte": a measurement recorded back in time, before the worker's first monogram began
+  it("colours the header and the weeks on every sheet; a measurement before the first monogram gets that first one, not ?", async () => {
+    const u = await prisma.user.create({
+      data: {
+        loginId: `kesobbi-mono-${Date.now()}`,
+        fullName: "Később Monogram",
+        role: "AQUARIST",
+        monograms: { create: { monogram: "KM", validFrom: new Date("2027-03-20T00:00:00+01:00") } },
+      },
+    });
+    for (const day of ["2027-03-15", "2027-03-22"])
+      await createMeasurement(
+        { id: u.id, role: "AQUARIST" },
+        { requestId: rid(), groupId: f.group("NAPI_NAGY"), poolId: f.pool("KARANTEN"), parameterId: f.param("PH"), value: "8.1", measuredAtLocal: `${day}T08:00` },
+        new Date(`${day}T08:00:00+01:00`),
+      );
+    const { buffer } = await buildWaterWorkbook({ from: "2027-03-15", to: "2027-03-22", poolIds: [f.pool("KARANTEN")] });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+    const fillOf = (c: ExcelJS.Cell) => (c.fill && c.fill.type === "pattern" ? (c.fill.fgColor?.argb ?? null) : null);
+    expect(wb.worksheets.length).toBe(2);
+    for (const ws of wb.worksheets) {
+      expect([fillOf(ws.getRow(1).getCell(1)), fillOf(ws.getRow(1).getCell(TEMPLATE_HEADER.length))], ws.name).toEqual([WATER_HEAD_FILL, WATER_HEAD_FILL]);
+      const rows = (ws.getSheetValues().slice(2) as unknown[][]).length;
+      expect(rows, ws.name).toBe(2);
+      // the first week plain, the next one banded, across the row
+      expect([fillOf(ws.getRow(2).getCell(1)), fillOf(ws.getRow(3).getCell(1)), fillOf(ws.getRow(3).getCell(7))], ws.name).toEqual([null, WATER_WEEK_FILLS[1], WATER_WEEK_FILLS[1]]);
+      // the monogram: the first one for the earlier day too (it was "?")
+      expect([ws.getRow(2).getCell(7).value, ws.getRow(3).getCell(7).value], ws.name).toEqual(["KM", "KM"]);
+    }
   });
 });

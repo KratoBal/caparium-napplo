@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { navFor } from "@/lib/nav";
+import { navFor, phoneGroups } from "@/lib/nav";
 
 // Lili 2026-10-26 (card f67b1a06, items 6 and 7): "Takarmánylista" directly above "Kimutatások" for everyone,
 // the "Állatok" entry for admins only.
@@ -68,5 +68,20 @@ describe("the main navigation", () => {
     });
     // the label is the name alone: no emoji, nothing outside letters, spaces and the hyphen
     for (const n of navFor("ADMIN")) expect(n.label, n.label).toMatch(/^[\p{L} -]+$/u);
+  });
+
+  // Lili 2026-11-01 (point 12): on a phone the colored entries go into two drop-downs, each before its group's first entry
+  it("gives the phone two drop-downs holding exactly the colored entries, for an admin and an aquarist alike", () => {
+    for (const role of ["ADMIN", "AQUARIST"] as const) {
+      const items = navFor(role);
+      const groups = phoneGroups(items);
+      expect([...groups.keys()], role).toEqual(["daily", "feeding"]);
+      expect(groups.get("daily")!.label).toBe("Vízmérés");
+      expect(groups.get("feeding")!.label).toBe("Takarmányozás");
+      for (const g of groups.values()) expect(g.items.map((n) => n.label), g.label).toEqual(items.filter((n) => n.tone === g.tone).map((n) => n.label));
+      // what the phone row shows: the plain entries and the two drop-downs, in place
+      const row = items.flatMap((n) => [...(groups.has(n.key) ? [groups.get(n.key)!.label] : []), ...(n.tone ? [] : [n.label])]);
+      expect(row.slice(0, 5), role).toEqual(["START", "Vízmérés", "Export", "Takarmányozás", "Kimutatások"]);
+    }
   });
 });

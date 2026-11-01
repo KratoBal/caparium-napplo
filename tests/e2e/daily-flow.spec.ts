@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { readFileSync } from "node:fs";
 import { greetingFigure } from "../../src/lib/helper-notice";
 import { businessDayOf } from "../../src/lib/time";
+import { openAllSettings } from "../support/settings-folds";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
 
@@ -292,7 +293,8 @@ test("settings: an admin changes a reference range and creates a user who can lo
   const tablet = info.project.name === "tablet";
   const login1 = tablet ? "uj.akvarista.t" : "uj.akvarista.d";
   await login(page, "teszt.admin");
-  await page.getByRole("link", { name: "Beállítások" }).click();
+  await page.getByRole("link", { name: "Beállítások", exact: true }).click();
+  await openAllSettings(page);
   await expect(page.getByRole("heading", { name: "Vízparaméterek és referenciaértékek" })).toBeVisible();
 
   const row = page.getByTestId("ref-NO3");
@@ -313,6 +315,7 @@ test("settings: an admin changes a reference range and creates a user who can lo
   await expect(page.getByTestId(`cell-${pool}-NO3`)).toHaveClass(/out/);
 
   await page.goto("/beallitasok");
+  await openAllSettings(page);
   const nu = page.getByTestId("new-user");
   await nu.getByLabel("Új felhasználónév").fill(login1);
   await nu.getByLabel("Teljes név").fill("Új Akvarista");
@@ -338,7 +341,7 @@ test("settings: an admin changes a reference range and creates a user who can lo
   await page.getByLabel("Jelszó").fill("uj-akvarista-jelszo");
   await page.getByRole("button", { name: "Bejelentkezés" }).click();
   await expect(page.getByTestId("current-user")).toContainText("Új Akvarista");
-  await expect(page.getByRole("link", { name: "Beállítások" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Beállítások", exact: true })).toHaveCount(0);
 });
 
 test("export: a real .xlsx download and a ZIMS CSV run whose file can be downloaded", async ({ page }, info) => {
@@ -359,7 +362,7 @@ test("export: a real .xlsx download and a ZIMS CSV run whose file can be downloa
 
   await page.getByRole("link", { name: "Export" }).first().click();
   const [xlsx] = await Promise.all([page.waitForEvent("download"), page.getByTestId("excel-download").click()]);
-  expect(xlsx.suggestedFilename()).toMatch(/^Vizmeres_.*\.xlsx$/);
+  expect(xlsx.suggestedFilename()).toMatch(/^capasuli_teljes_vizmeres_\d{4}-\d{2}-\d{2}(_\d{4}-\d{2}-\d{2})?\.xlsx$/);
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(await xlsx.path());
@@ -576,7 +579,7 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
 
   // EGY-10, EVE-07: both Excel files are real downloads from the export page
   await page.getByRole("link", { name: "Export" }).click();
-  for (const [id, prefix] of [["excel-etetes", "Egyedi_takarmanynaplo_"], ["excel-evesi", "Evesi_minta_"]] as const) {
+  for (const [id, prefix] of [["excel-etetes", "capasuli_takarmanynaplo_"], ["excel-evesi", "capasuli_evesimintazat_"]] as const) {
     const [file] = await Promise.all([page.waitForEvent("download"), page.getByTestId(id).click()]);
     expect(file.suggestedFilename()).toMatch(new RegExp(`^${prefix}\\d{4}-\\d{2}-\\d{2}`));
   }
@@ -844,7 +847,8 @@ test("feeding sheet: a row colour set in the settings colours that animal's or g
   // (caparium-csoport-sor) a group member has a row of its own on today's sheet only with an individual item, so the rows here are Teszt Egy's
   // (ensureOwnRow) and the group's.
   await login(page, "teszt.admin");
-  await page.getByRole("link", { name: "Beállítások" }).click();
+  await page.getByRole("link", { name: "Beállítások", exact: true }).click();
+  await openAllSettings(page);
   const colours = page.getByTestId("sheet-colors");
   const setColour = async (label: string, colour: string) => {
     const form = colours.getByRole("row").filter({ has: page.getByLabel(`${label} sorszíne`, { exact: true }) });
@@ -858,6 +862,7 @@ test("feeding sheet: a row colour set in the settings colours that animal's or g
   await setColour("Teszt Egy", "Zöld");
   await setColour("Teszt csoport (csoport)", "Lila");
   await page.reload();
+  await openAllSettings(page);
   await expect(colours.getByLabel("Teszt Egy sorszíne", { exact: true })).toHaveValue("GREEN");
   const GREEN = "rgb(217, 236, 217)";
   const PURPLE = "rgb(228, 219, 242)";
@@ -883,7 +888,8 @@ test("feeding sheet: a row colour set in the settings colours that animal's or g
   expect(await page.locator('table:not([data-testid="feeding-sheet-table"]) td').evaluateAll((tds) => tds.some((td) => ["rgb(217, 236, 217)", "rgb(228, 219, 242)"].includes(getComputedStyle(td).backgroundColor)))).toBe(false);
 
   // back to none: the later runs start from no colour
-  await page.getByRole("link", { name: "Beállítások" }).click();
+  await page.getByRole("link", { name: "Beállítások", exact: true }).click();
+  await openAllSettings(page);
   for (const label of ["Teszt Egy", "Teszt Kettő", "Teszt csoport (csoport)"]) await setColour(label, "Nincs szín");
 });
 
@@ -1064,23 +1070,8 @@ for (const [name, link, tab, param] of [["daily", "Napi vízmérés", "Nagy mede
   });
 }
 
-test("settings: a module folds by its heading, and stays folded after a reload in that browser", async ({ page }) => {
-  // Lili 2026-10-29 (caparium-finomitas-1)
-  await login(page, "teszt.admin");
-  await page.getByRole("link", { name: "Beállítások" }).click();
-  const icons = page.getByTestId("icons");
-  const save = icons.getByRole("button", { name: "Mentés" }).first();
-  await expect(save, "open by default").toBeVisible();
-  await icons.getByRole("heading", { name: "Ikonok" }).click();
-  await expect(save).toBeHidden();
-  await page.reload();
-  await expect(page.getByTestId("icons").getByRole("button", { name: "Mentés" }).first(), "still folded").toBeHidden();
-  // the other modules are untouched
-  await expect(page.getByTestId("sheet-colors").getByRole("button", { name: "Mentés" }).first()).toBeVisible();
-  await page.getByTestId("icons").getByRole("heading", { name: "Ikonok" }).click();
-  await page.reload();
-  await expect(page.getByTestId("icons").getByRole("button", { name: "Mentés" }).first(), "open again").toBeVisible();
-});
+// The settings modules' folding (Lili 2026-11-01, point 15: all closed, open on a click, nothing remembered) is in
+// tests/e2e/settings-folds.spec.ts; the 2026-10-29 rule (open by default, a fold remembered) is gone with it.
 
 test("settings: a pool goes off for a renovation and comes back", async ({ page }) => {
   // Lili 2026-10-29 (caparium-finomitas-1, item 2); the rules themselves are in tests/integration/pool-inactive.test.ts.
@@ -1088,7 +1079,8 @@ test("settings: a pool goes off for a renovation and comes back", async ({ page 
   // the "Inaktívak mutatása" switch, from where it is activated
   page.on("dialog", (d) => void d.accept());
   await login(page, "teszt.admin");
-  await page.getByRole("link", { name: "Beállítások" }).click();
+  await page.getByRole("link", { name: "Beállítások", exact: true }).click();
+  await openAllSettings(page);
   const row = page.getByTestId("pool-Ragadozós");
   const showInactive = page.getByRole("switch", { name: /^Inaktívak mutatása/ });
   await row.getByRole("button", { name: "Ragadozós: inaktiválás" }).click();
@@ -1096,6 +1088,7 @@ test("settings: a pool goes off for a renovation and comes back", async ({ page 
   await expect(row.getByRole("status")).toHaveText("Inaktiválva.");
   await expect(row).toHaveClass(/invalid/);
   await page.reload();
+  await openAllSettings(page);
   await expect(row, "an inactive pool is hidden by default").toHaveCount(0);
   await expect(showInactive).not.toBeChecked();
   // off the weekly grid of today
@@ -1103,13 +1096,15 @@ test("settings: a pool goes off for a renovation and comes back", async ({ page 
   await expect(page.getByTestId("row-Nagymedence")).toBeVisible();
   await expect(page.getByTestId("row-Ragadozós")).toHaveCount(0);
   // back, within the test: the other tests measure in it
-  await page.getByRole("link", { name: "Beállítások" }).click();
+  await page.getByRole("link", { name: "Beállítások", exact: true }).click();
+  await openAllSettings(page);
   await showInactive.check();
   await expect(row).toHaveClass(/invalid/);
   await row.getByRole("button", { name: "Ragadozós: aktiválás" }).click();
   await expect(row).not.toHaveClass(/invalid/);
   await expect(row.getByRole("button", { name: "Ragadozós: inaktiválás" })).toBeVisible();
   await page.reload();
+  await openAllSettings(page);
   // another test may leave a pool of its own inactive, so the switch itself may stay; this row needs it no more
   await expect(row, "active: listed without the switch").toBeVisible();
 });
@@ -1238,7 +1233,7 @@ test("withdrawal: an item for tomorrow, the day's total, taken against given, th
   await expect(page.getByTestId("withdrawal-total")).toContainText("g");
   await expect(page.getByTestId("taken-given")).toBeVisible();
   const [file] = await Promise.all([page.waitForEvent("download"), page.getByTestId("excel-kivetel").click()]);
-  expect(file.suggestedFilename()).toMatch(/^Takarmanykivetel_\d{4}-\d{2}-\d{2}/);
+  expect(file.suggestedFilename()).toMatch(/^capasuli_takarmanykivetel_\d{4}-\d{2}-\d{2}/);
 });
 
 // Lili 2026-10-27 20:49 UTC (acrobot 37044): a gram row with a value of 1000 g or more is shown in kg as a whole.
@@ -1391,7 +1386,8 @@ test("a pool's own band and volume in the settings; the chemical calculator unde
   // caparium-hibak-3; each project its own pool, so the second run does not meet the first one's values
   const pool = info.project.name === "tablet" ? "Ragadozós" : "Inkubátor";
   await login(page, "teszt.admin");
-  await page.getByRole("link", { name: "Beállítások" }).click();
+  await page.getByRole("link", { name: "Beállítások", exact: true }).click();
+  await openAllSettings(page);
   const volumes = page.getByTestId("pool-volumes");
   await volumes.getByLabel(`${pool} űrtartalma (liter)`).fill("1000");
   // the row has two forms since package item 5b: the volume's Mentés first, the system's last
@@ -1418,6 +1414,7 @@ test("a pool's own band and volume in the settings; the chemical calculator unde
   await expect(ca.getByRole("status")).toHaveText("Mentve.");
   await page.waitForLoadState("networkidle");
   await page.reload();
+  await openAllSettings(page);
   await page.getByTestId(`pool-ref-${pool}`).locator("summary").click();
   await expect(page.getByTestId(`ref-${pool}-Ca`)).not.toContainText("a közös érték");
 
@@ -1870,7 +1867,8 @@ test("water measurements by e-mail: the recipient in the settings, the button fi
   // nothing. The address is a test address of our own domain, never typed into the export page.
   const to = info.project.name === "tablet" ? "vizmeres-teszt-t@acropora.hu" : "vizmeres-teszt-d@acropora.hu";
   await login(page, "teszt.admin");
-  await page.getByRole("link", { name: "Beállítások" }).click();
+  await page.getByRole("link", { name: "Beállítások", exact: true }).click();
+  await openAllSettings(page);
   const rec = page.getByTestId("water-report-recipient");
   // several recipients (card c2e15128): a bad address in the list is named and nothing is saved; the same address
   // twice is kept once; the list is stored as "a, b"
@@ -2061,6 +2059,7 @@ test("settings: the admin adds a new pool; the existing pools stay as they were"
   try {
     await login(page, "teszt.admin");
     await page.goto("/beallitasok");
+    await openAllSettings(page);
     const before = await page.locator('input[aria-label$="új neve"]').count();
     const box = page.getByTestId("new-pool");
     const add = box.getByRole("button", { name: "Medence felvétele" });
