@@ -324,7 +324,7 @@ export type BalanceRow = {
   taken: number;
   /** taken in the period before this feed's stock started (before its first intake): not from the stock */
   beforeStock: number;
-  /** opening + received - taken: the stock at the end of the period's last day, feedStock's level */
+  /** opening + received - taken: the stock at the end of the period's last day (for a tracked feed feedStock's level; 0 otherwise) */
   closing: number;
   tracked: boolean;
   active: boolean;
@@ -335,7 +335,8 @@ export type BalanceRow = {
  * of the stock is archive; the stock counts from the feed's first intake that was not sent back, so a withdrawal before it is not
  * taken from the stock. Such a withdrawal inside the period stands in its own column ("before the stock started"), and does not
  * make the opening negative: a feed without a stock yet opens at 0, not at minus its withdrawals (feedStock's tracked = false
- * level). The closing is feedStock(until = to)'s level.
+ * level). For a tracked feed the closing is feedStock(until = to)'s level; a feed without a stock closes at 0 (feedStock counts it
+ * down by its withdrawals, which here stand in "before the stock started"; barracuda on #169).
  */
 export async function feedBalance(from: string, to: string, now = new Date()): Promise<BalanceRow[]> {
   const [intake, taken, baseOf, set] = await Promise.all([
@@ -350,16 +351,18 @@ export async function feedBalance(from: string, to: string, now = new Date()): P
     baseUnits(),
     getStockStart(),
   ]);
+  // "in use": fed today by its periods (point 14), not the old flag, which a period's end by the calendar leaves behind (barracuda)
+  const onToday = await feedsOn(prisma, businessDayOf(now));
   const archiveBefore = set ? dayToDate(set) : null;
   const fromDate = dayToDate(from);
   const rows = new Map<string, BalanceRow>();
-  const row = (it: { feedId: string; otherName: string | null; feed: { active: boolean; names: { name: string; validFrom: Date; validTo: Date | null }[] } }, dimension: Dimension, unit: string) => {
+  const row = (it: { feedId: string; otherName: string | null; feed: { names: { name: string; validFrom: Date; validTo: Date | null }[] } }, dimension: Dimension, unit: string) => {
     const other = it.otherName ? otherKey(it.otherName) : null;
     const key = `${it.feedId}|${other ?? ""}|${dimension}`;
     let r = rows.get(key);
     if (!r) {
       const name = pickValid(it.feed.names, now)?.name ?? it.feed.names.at(-1)?.name ?? "?";
-      r = { key, feedId: it.feedId, feed: other ? `${name}: ${otherLabel(other)}` : name, dimension, unit, opening: 0, received: 0, taken: 0, beforeStock: 0, closing: 0, tracked: false, active: it.feed.active };
+      r = { key, feedId: it.feedId, feed: other ? `${name}: ${otherLabel(other)}` : name, dimension, unit, opening: 0, received: 0, taken: 0, beforeStock: 0, closing: 0, tracked: false, active: onToday.has(it.feedId) };
       rows.set(key, r);
     }
     return r;

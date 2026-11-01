@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { previousMonth } from "@/lib/exports/zims";
 import { SYSTEM_USER_ID } from "@/lib/db";
 import { getSetting, moduleLevel, pickValid } from "@/lib/master";
+import { poolInUse } from "@/lib/pool-periods";
 import { requireUser } from "@/lib/session";
 import { addDays, businessDayOf, dateToDay, dayToDate, formatDay, formatPeriod, isValidDay, localTimeOf } from "@/lib/time";
 
@@ -25,7 +26,8 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
   const from = sp.tol && isValidDay(sp.tol) ? sp.tol : addDays(to, -6);
   const now = new Date();
   const pools = await prisma.pool.findMany({
-    where: { active: true, memberships: { some: {} } },
+    // in use today by its periods (point 16), not the old flag
+    where: { ...poolInUse(today), memberships: { some: {} } },
     include: { names: true },
     orderBy: { code: "asc" },
   });
