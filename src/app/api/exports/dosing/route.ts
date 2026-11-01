@@ -18,6 +18,8 @@ export async function POST(req: Request) {
   const from = String(form?.get("from") ?? "");
   const to = String(form?.get("to") ?? "");
   if (!isValidDay(from) || !isValidDay(to) || from > to) return new Response("Az időszak érvénytelen.", { status: 422 });
+  // at most a year, as the other exports (barracuda on #170): a longer one would build a very large PDF
+  if ((dayToDate(to).getTime() - dayToDate(from).getTime()) / 86_400_000 >= 366) return new Response("Legfeljebb egy év kérhető le egyszerre.", { status: 422 });
   const uuid = /^[0-9a-f-]{36}$/;
   const poolId = String(form?.get("pool") ?? "");
   const chemicalId = String(form?.get("chemical") ?? "");
