@@ -1,10 +1,11 @@
 // Reads of time-versioned master data (adatmodell K3): everything is "valid at an instant".
 
 import type { AppModule, JournalKind, Prisma } from "@prisma/client";
+import { writeAudit } from "./audit";
 import { prisma, type Tx } from "./db";
 import { canonicalDecimal } from "./decimal";
 import { takesDilution } from "./dilution";
-import { effectiveLevel, type Level, type Role } from "./permissions";
+import { effectiveLevel, effectiveNow, type Level, type Role } from "./permissions";
 import type { ReadingConversion } from "./reading";
 import { businessDayOf, dateToDay, dayToDate } from "./time";
 
@@ -175,6 +176,43 @@ export async function ensureJournalDay(tx: Tx, kind: JournalKind, groupId: strin
     ON CONFLICT DO NOTHING`;
   const row = await tx.journalDay.findFirst({ where: { kind, groupId, businessDay } });
   if (!row) throw new Error("journal day could not be created");
+  return row;
+}
+
+/**
+ * "Today" for ensureJournalDayForEntry: the business day of the client's clock when it is at most 48 hours behind the server
+ * (a save made yesterday evening that arrives after midnight is yesterday's own entry, not a backfill: the K9 late rule decides
+ * it), else the server's.
+ */
+export function entryToday(serverNow: Date, clientTs: Date | null): string {
+  const e = effectiveNow(serverNow, clientTs, 0, 48);
+  return businessDayOf(e.clientNow ?? e.now);
+}
+
+/** The reason of the open reopening a past day's lock is born with when an entry keys the day in afterwards. */
+export const BACKFILL_REASON = "Visszamenőleges bevitel";
+
+/**
+ * The lock of a day an entry is recorded on. A day before `today` whose lock this entry creates (an old day keyed in afterwards,
+ * back to 2018) is born with an open reopening: the scheduled close passes a reopened day over, so the day stays open while the
+ * old entries go in and an admin closes it once, by hand, however long ago it was (Lili 2026-11-02, Takarmánykivétel: the day
+ * closed by itself between two rows). An existing lock is returned as it is: a day closed before stays closed.
+ */
+export async function ensureJournalDayForEntry(tx: Tx, kind: JournalKind, groupId: string | null, day: string, opener: { actorId: string; today: string }) {
+  const existed = await tx.journalDay.findFirst({ where: { kind, groupId, businessDay: dayToDate(day) } });
+  if (existed) return existed;
+  const row = await ensureJournalDay(tx, kind, groupId, day);
+  if (day < opener.today && !(await tx.journalReopen.findFirst({ where: { journalDayId: row.id, reclosedAt: null } }))) {
+    await tx.journalReopen.create({ data: { journalDayId: row.id, reopenedById: opener.actorId, reason: BACKFILL_REASON } });
+    await writeAudit(tx, {
+      userId: opener.actorId,
+      action: "REOPEN",
+      entityType: "JournalDay",
+      entityId: row.id,
+      changes: { state: { before: null, after: "OPEN" }, businessDay: { before: null, after: day } },
+      reason: BACKFILL_REASON,
+    });
+  }
   return row;
 }
 
