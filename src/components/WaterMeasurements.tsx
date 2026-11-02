@@ -244,6 +244,9 @@ function UnitChangeForm({ t, units, today }: { t: MeasurementTypeView; units: Un
   const own = t.pools.filter((p) => p.own);
   const empty = { from: today, unitId: "", zimsUnit: "", decimals: String(t.decimals), pMin: "", pMax: "", rMin: "", rMax: "", pools: Object.fromEntries(own.map((p) => [p.poolId, { min: "", max: "" }])) as Record<string, { min: string; max: string }> };
   const [f, setF] = useState(empty);
+  // the state is made at the first render; a pool that gets its own range later (the reference row above, saved and refreshed)
+  // has no entry yet: an empty one, not a crash of the whole page (task caparium-beallitasok-osszeomlas)
+  const poolField = (poolId: string) => f.pools[poolId] ?? { min: "", max: "" };
   const { msg, busy, save } = useSave();
   const unit = units.find((u) => u.id === f.unitId);
   const ready = f.from && f.unitId && f.zimsUnit.trim();
@@ -286,8 +289,8 @@ function UnitChangeForm({ t, units, today }: { t: MeasurementTypeView; units: Un
           <span key={p.poolId} style={{ display: "contents" }}>
             <label className="form-label" htmlFor={`wmu-pool-${t.id}-${p.poolId}`}>{p.name} saját referenciája{unit ? ` (${unit.symbol})` : ""}; most: {now(p.range)}</label>
             <span className="toolbar" style={{ margin: 0 }}>
-              <input id={`wmu-pool-${t.id}-${p.poolId}`} className="input small" inputMode="decimal" aria-label={`${p.name} új referencia alja`} value={f.pools[p.poolId].min} onChange={(e) => setF({ ...f, pools: { ...f.pools, [p.poolId]: { ...f.pools[p.poolId], min: e.target.value } } })} />
-              <input className="input small" inputMode="decimal" aria-label={`${p.name} új referencia teteje`} value={f.pools[p.poolId].max} onChange={(e) => setF({ ...f, pools: { ...f.pools, [p.poolId]: { ...f.pools[p.poolId], max: e.target.value } } })} />
+              <input id={`wmu-pool-${t.id}-${p.poolId}`} className="input small" inputMode="decimal" aria-label={`${p.name} új referencia alja`} value={poolField(p.poolId).min} onChange={(e) => setF({ ...f, pools: { ...f.pools, [p.poolId]: { ...poolField(p.poolId), min: e.target.value } } })} />
+              <input className="input small" inputMode="decimal" aria-label={`${p.name} új referencia teteje`} value={poolField(p.poolId).max} onChange={(e) => setF({ ...f, pools: { ...f.pools, [p.poolId]: { ...poolField(p.poolId), max: e.target.value } } })} />
             </span>
           </span>
         ))}
@@ -312,7 +315,7 @@ function UnitChangeForm({ t, units, today }: { t: MeasurementTypeView; units: Un
                 plausibleMax: f.pMax || null,
                 referenceMin: f.rMin || null,
                 referenceMax: f.rMax || null,
-                poolReferences: own.map((p) => ({ poolId: p.poolId, min: f.pools[p.poolId].min || null, max: f.pools[p.poolId].max || null })),
+                poolReferences: own.map((p) => ({ poolId: p.poolId, min: poolField(p.poolId).min || null, max: poolField(p.poolId).max || null })),
               },
               "Mértékegység váltva; a folytatás a lista következő sora.",
             );
