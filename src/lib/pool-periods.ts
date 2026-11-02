@@ -81,7 +81,7 @@ export async function setPoolPeriods(actor: Actor, poolId: string, input: z.infe
     }
     const today = businessDayOf(new Date());
     await tx.pool.update({ where: { id: poolId }, data: { active: after.some((p) => poolCovers(p, today)) } });
-    const memberships = await groupStartFollowsPeriods(tx, poolId, after[0]?.firstDay ?? null);
+    const memberships = await groupStartFollowsPeriods(tx, poolId, after[0]?.firstDay ?? null, before[0]?.firstDay ?? null);
     await writeAudit(tx, {
       userId: actor.id,
       action: "MASTER_CHANGE",
@@ -95,13 +95,15 @@ export async function setPoolPeriods(actor: Actor, poolId: string, input: z.infe
 }
 
 /**
- * A pool's first membership of each of its groups begins no later than its first period (Lili keys old data in back to 2018;
- * acrobot 40205, B4): a pool added today got its memberships from today, so drawing its period back still left it out of the old
- * days' tables (measured: NOT_IN_GROUP on 2019 after the period was set from 2018-12-07). Only drawn back, never pushed later:
- * a later first period does not cut a membership whose old days may hold measurements.
+ * When the admin draws a pool's first period BACK (its first day earlier than before), the pool's first membership of each of its
+ * groups follows it (Lili keys old data in back to 2018; acrobot 40205 B4 and 40257): a pool added today got its memberships from
+ * today, so drawing its period back still left it out of the old days' tables (measured: NOT_IN_GROUP on 2019 after the period was
+ * set from 2018-12-07). Any other change of the periods (a gap, an end, a later first day) moves no membership: a pool that joined
+ * a table later (#186, the Karantén from 2026-06-10) keeps its own day until the period itself is drawn back (barracuda on #195).
+ * Never pushed later: a membership whose old days may hold measurements is not cut.
  */
-async function groupStartFollowsPeriods(tx: Tx, poolId: string, firstDay: string | null) {
-  if (!firstDay) return [];
+async function groupStartFollowsPeriods(tx: Tx, poolId: string, firstDay: string | null, previousFirstDay: string | null) {
+  if (!firstDay || (previousFirstDay !== null && firstDay >= previousFirstDay)) return [];
   const start = resolveLocalDateTime(`${firstDay}T00:00`)!.instant;
   const all = await tx.groupMembership.findMany({ where: { poolId }, orderBy: { validFrom: "asc" } });
   const moved: { before: string; after: string }[] = [];

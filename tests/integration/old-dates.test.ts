@@ -2,7 +2,7 @@
 // dated long ago must not change today's numbers, must not be refused for a pool added since, must not make an empty old day read
 // as fasting, and may name a former colleague. Own chemical, feed and pool, so other files' rows do not move the stock's start.
 // Days in 2019, February 2026 (after the synthetic animals' arrival) and 2031, used by no other integration file.
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPool } from "@/lib/admin";
 import { prisma } from "@/lib/db";
 import { createChemical, recordMovement, saveDosing, stockLevels } from "@/lib/dosing";
@@ -23,6 +23,15 @@ const feed: Record<string, string> = {};
 // "now": a day in 2031, so the 2019 entries are years old and nothing of today's real date is involved
 const NOW = new Date("2031-02-11T10:00:00+01:00");
 const later = (min: number) => new Date(NOW.getTime() + min * 60_000);
+
+// the pools made here are closed again at the end (membership and period before 2020), so the tables of today that other files
+// read (small-tanks-order, the water exports) do not meet them
+const madePools: string[] = [];
+afterAll(async () => {
+  if (!madePools.length) return;
+  for (const id of madePools) await setPoolPeriods(f.admin, id, { requestId: rid(), periods: [{ firstDay: "2018-12-07", lastDay: "2019-12-31" }] });
+  await prisma.groupMembership.updateMany({ where: { poolId: { in: madePools } }, data: { validTo: new Date("2020-01-01T00:00:00+01:00") } });
+});
 
 beforeAll(async () => {
   f = await fixtures();
@@ -66,6 +75,7 @@ describe("a feed's freezer stock counts from its first RECORDED intake (A3)", ()
 describe("a pool added today, its period drawn back: its group membership follows (B4)", () => {
   it("an old measurement on it is taken, where it was refused NOT_IN_GROUP before; the membership never moves later", async () => {
     const r = (await createPool(f.admin, { requestId: rid(), name: "Regi datum medence", code: "REGI_DATUM", volumeLiters: "100", groupIds: [f.group("NAPI_NAGY")] }, NOW)) as { id: string };
+    madePools.push(r.id);
     const old = { requestId: rid(), groupId: f.group("NAPI_NAGY"), poolId: r.id, parameterId: f.param("PH"), value: "8.1", measuredAtLocal: "2019-03-11T08:00" };
     await expect(createMeasurement(f.admin, old, later(1))).rejects.toMatchObject({ code: "NOT_IN_GROUP" });
     await setPoolPeriods(f.admin, r.id, { requestId: rid(), periods: [{ firstDay: "2018-12-07", lastDay: null }] });
@@ -75,6 +85,22 @@ describe("a pool added today, its period drawn back: its group membership follow
     // a later first period does not cut it back (its old days may hold measurements)
     await setPoolPeriods(f.admin, r.id, { requestId: rid(), periods: [{ firstDay: "2020-01-01", lastDay: null }] });
     expect((await prisma.groupMembership.findFirstOrThrow({ where: { poolId: r.id } })).validFrom.toISOString()).toBe(m.validFrom.toISOString());
+  });
+
+  it("a pool that joined a table later (#186) keeps its own day when its periods change otherwise; only a drawn-back first day moves it", async () => {
+    const r = (await createPool(f.admin, { requestId: rid(), name: "Kesobb belepett medence", code: "KESOBB_BELEPETT", volumeLiters: "100", groupIds: [f.group("NAPI_NAGY")] }, NOW)) as { id: string };
+    madePools.push(r.id);
+    await setPoolPeriods(f.admin, r.id, { requestId: rid(), periods: [{ firstDay: "2018-12-07", lastDay: null }] });
+    // it joins the small tanks' table later, as the Karantén did on 2026-06-10 (#186)
+    const joined = new Date("2026-06-10T00:00:00+02:00");
+    await prisma.groupMembership.create({ data: { groupId: f.group("NAPI_KIS"), poolId: r.id, sortOrder: 99, validFrom: joined } });
+    const kis = () => prisma.groupMembership.findFirstOrThrow({ where: { poolId: r.id, groupId: f.group("NAPI_KIS") } });
+    // a renovation gap, and an end: the periods change, the first day does not move back
+    await setPoolPeriods(f.admin, r.id, { requestId: rid(), periods: [{ firstDay: "2018-12-07", lastDay: "2024-03-01" }, { firstDay: "2024-05-01", lastDay: null }] });
+    expect((await kis()).validFrom.toISOString()).toBe(joined.toISOString());
+    // the admin draws the first period back: now the memberships follow it (acrobot 40257)
+    await setPoolPeriods(f.admin, r.id, { requestId: rid(), periods: [{ firstDay: "2018-06-01", lastDay: "2024-03-01" }, { firstDay: "2024-05-01", lastDay: null }] });
+    expect((await kis()).validFrom.toISOString()).toBe(new Date("2018-06-01T00:00:00+02:00").toISOString());
   });
 });
 
@@ -97,8 +123,10 @@ describe("a former colleague as the measurement's 'végezte' (C9)", () => {
   });
 });
 
+// Only the outcome: the race itself is not forced (the two saves may run one after the other), so this test passed without the
+// row lock too (barracuda on #195). The lock's reason is in src/lib/master.ts ensureJournalDayForEntry.
 describe("two first entries of the same old day at once (barracuda on #194)", () => {
-  it("make one backfill reopening, not two", async () => {
+  it("make one backfill reopening, not two (the outcome only)", async () => {
     const day = "2019-03-13";
     const take = (feedId: string) => saveWithdrawalItem(f.admin, { requestId: rid(), day, useDay: day, feedId, quantities: [{ value: "5", unitId: unit.g }] }, NOW);
     await Promise.all([take(feed["Teszt hal"]), take(feed["Teszt kagyló"])]);
