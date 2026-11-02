@@ -282,10 +282,14 @@ async function findOrCreateRound(
   return round;
 }
 
-async function responsibleUser(tx: Tx, id: string): Promise<string> {
+/**
+ * The "Mérést végezte" of a measurement: an aquarist or an admin; an active one for today, an inactive one (a former colleague)
+ * too for an earlier day, as old measurements are keyed in back to 2018 (acrobot 40205, C9).
+ */
+async function responsibleUser(tx: Tx, id: string, day: string, today: string): Promise<string> {
   const u = await tx.user.findUnique({ where: { id } });
-  if (!u || !u.active || (u.role !== "AQUARIST" && u.role !== "ADMIN")) {
-    throw new AppError(422, "INVALID_RESPONSIBLE", "A „Mérést végezte” mezőben aktív dolgozó álljon.");
+  if (!u || (u.role !== "AQUARIST" && u.role !== "ADMIN") || (!u.active && day >= today)) {
+    throw new AppError(422, "INVALID_RESPONSIBLE", "A „Mérést végezte” mezőben aktív dolgozó álljon (korábbi napon volt dolgozó is lehet).");
   }
   return u.id;
 }
@@ -374,7 +378,7 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
 
       const round = await findOrCreateRound(tx, actor, group.id, day, { roundId: input.roundId, newRound: input.newRound });
       cell = { roundId: round.id };
-      const responsibleId = await responsibleUser(tx, input.responsibleUserId ?? actor.id);
+      const responsibleId = await responsibleUser(tx, input.responsibleUserId ?? actor.id, day, entryToday(serverNow, clientTs));
       const ref = await referenceAt(tx, param.id, pool.id, measuredAt);
 
       const created = await tx.measurement.create({
@@ -525,7 +529,7 @@ export async function updateMeasurement(
       }
       target = { roundId, poolId: cur.poolId, parameterId: cur.parameterId };
       const responsibleId =
-        input.responsibleUserId !== undefined ? await responsibleUser(tx, input.responsibleUserId) : cur.responsibleUserId;
+        input.responsibleUserId !== undefined ? await responsibleUser(tx, input.responsibleUserId, newDay, entryToday(serverNow, clientTs)) : cur.responsibleUserId;
       const ref = await referenceAt(tx, cur.parameterId, cur.poolId, measuredAt);
 
       const res = await tx.measurement.updateMany({

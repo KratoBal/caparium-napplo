@@ -96,7 +96,8 @@ export async function saveIntakeItem(actor: Actor, raw: IntakeInput, serverNow =
       await tx.feedIntakeQuantity.deleteMany({ where: { itemId: prior.id } });
       item = await tx.feedIntakeItem.findUniqueOrThrow({ where: { id: prior.id } });
     } else {
-      item = await tx.feedIntakeItem.create({ data: { ...data, requestId: input.requestId, createdById: actor.id } });
+      // createdAt is the save's clock (the database's is the same live): the stock starts at the first RECORDED intake (feedStock)
+      item = await tx.feedIntakeItem.create({ data: { ...data, requestId: input.requestId, createdById: actor.id, createdAt: serverNow } });
     }
     await tx.feedIntakeQuantity.createMany({ data: quantities.map((q) => ({ ...q, itemId: item.id })) });
     await writeAudit(tx, {
@@ -269,11 +270,27 @@ export async function feedStock(now = new Date(), until?: string): Promise<Stock
     }
     return r;
   };
-  // the day of each row's first intake that was NOT sent back: the stock counts from there (Lili's screen, 2026-10-30 11:26 UTC)
+  // the day of each row's first intake that was NOT sent back: the stock counts from there (Lili's screen, 2026-10-30 11:26 UTC).
+  // "First" is the first RECORDED (the smallest createdAt), not the earliest-dated: an intake of 2019 keyed in today must not
+  // draw the start back and take every old withdrawal out of today's stock (Lili keys old data in back to 2018; acrobot 40205,
+  // A3: measured 1000 g became 800 g). The set start (feed_stock_start) still overrides this, as before.
   const from = new Map<string, Date>();
-  for (const it of intake) {
-    if (archiveBefore && it.intakeDay < archiveBefore) continue;
-    if (untilDate && it.intakeDay > untilDate) continue;
+  const firstRecorded = new Map<string, Date>();
+  const inScope = intake.filter((it) => !(archiveBefore && it.intakeDay < archiveBefore) && !(untilDate && it.intakeDay > untilDate));
+  for (const it of inScope) {
+    if (it.returned) continue;
+    for (const q of it.quantities) {
+      const r = row(it, q.unit.dimension, baseOf.get(q.unit.dimension) ?? q.unit.symbol);
+      r.tracked = true;
+      const first = firstRecorded.get(r.key);
+      if (!first || it.createdAt < first) {
+        firstRecorded.set(r.key, it.createdAt);
+        from.set(r.key, it.intakeDay);
+      }
+    }
+  }
+  // an intake dated before the start is archive, as a withdrawal is; a send-back is only shown (it never was in the stock), as before
+  for (const it of inScope) {
     for (const q of it.quantities) {
       const r = row(it, q.unit.dimension, baseOf.get(q.unit.dimension) ?? q.unit.symbol);
       const v = Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
@@ -281,10 +298,9 @@ export async function feedStock(now = new Date(), until?: string): Promise<Stock
         r.returned += v;
         continue;
       }
+      const start = from.get(r.key);
+      if (start && it.intakeDay < start) continue;
       r.received += v;
-      r.tracked = true;
-      const first = from.get(r.key);
-      if (!first || it.intakeDay < first) from.set(r.key, it.intakeDay);
     }
   }
   for (const it of taken) {
@@ -332,7 +348,7 @@ export type BalanceRow = {
 
 /**
  * Lili 2026-11-01 (point 7): the period's balance per feed and dimension, by feedStock's rules: what is dated before the set start
- * of the stock is archive; the stock counts from the feed's first intake that was not sent back, so a withdrawal before it is not
+ * of the stock is archive; the stock counts from the feed's first RECORDED intake that was not sent back (A3), so a withdrawal before it is not
  * taken from the stock. Such a withdrawal inside the period stands in its own column ("before the stock started"), and does not
  * make the opening negative: a feed without a stock yet opens at 0, not at minus its withdrawals (feedStock's tracked = false
  * level). For a tracked feed the closing is feedStock(until = to)'s level; a feed without a stock closes at 0 (feedStock counts it
@@ -340,8 +356,9 @@ export type BalanceRow = {
  */
 export async function feedBalance(from: string, to: string, now = new Date()): Promise<BalanceRow[]> {
   const [intake, taken, baseOf, set] = await Promise.all([
+    // every intake, not only those up to `to`: the stock's start is the first RECORDED one, which may be dated after the period
     prisma.feedIntakeItem.findMany({
-      where: { status: "VALID", returned: false, intakeDay: { lte: dayToDate(to) } },
+      where: { status: "VALID", returned: false },
       include: { quantities: { include: { unit: true } }, feed: { include: { names: true } } },
     }),
     prisma.withdrawalItem.findMany({
@@ -367,17 +384,32 @@ export async function feedBalance(from: string, to: string, now = new Date()): P
     }
     return r;
   };
+  // the stock's start, as feedStock: the day of the first RECORDED intake (an old intake keyed in later does not draw it back)
+  const toDate = dayToDate(to);
   const first = new Map<string, Date>();
-  for (const it of intake) {
-    if (archiveBefore && it.intakeDay < archiveBefore) continue;
+  const firstRecorded = new Map<string, Date>();
+  const counted = intake.filter((it) => !(archiveBefore && it.intakeDay < archiveBefore));
+  for (const it of counted) {
+    for (const q of it.quantities) {
+      const key = `${it.feedId}|${it.otherName ? otherKey(it.otherName) : ""}|${q.unit.dimension}`;
+      const f = firstRecorded.get(key);
+      if (!f || it.createdAt < f) {
+        firstRecorded.set(key, it.createdAt);
+        first.set(key, it.intakeDay);
+      }
+    }
+  }
+  for (const it of counted) {
+    if (it.intakeDay > toDate) continue;
     for (const q of it.quantities) {
       const r = row(it, q.unit.dimension, baseOf.get(q.unit.dimension) ?? q.unit.symbol);
+      const start = first.get(r.key);
+      // dated before the stock's start: archive, as in feedStock
+      if (start && it.intakeDay < start) continue;
       const v = Number(q.quantity) * Number(q.unit.factorToBase ?? 1);
       if (it.intakeDay < fromDate) r.opening += v;
       else r.received += v;
       r.tracked = true;
-      const f = first.get(r.key);
-      if (!f || it.intakeDay < f) first.set(r.key, it.intakeDay);
     }
   }
   for (const it of taken) {

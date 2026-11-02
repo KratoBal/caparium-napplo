@@ -79,8 +79,9 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
           useDay={addDays(day, 1)}
           feeds={feeds}
           otherNames={otherNames}
-          // the Takarmányhűtő stock: only a feed with an intake has one
-          stock={stock.filter((s) => s.tracked).map((s) => ({ feedId: s.feedId, otherName: s.otherName, dimension: s.dimension, unit: s.unit, level: s.level }))}
+          // the Takarmányhűtő stock: only a feed with an intake has one. Today's stock is for today's withdrawal: on an earlier day
+          // (old data keyed in, back to 2018) it would warn about a stock that day never had, so it is not shown (acrobot 40205, C10)
+          stock={day < today ? [] : stock.filter((s) => s.tracked).map((s) => ({ feedId: s.feedId, otherName: s.otherName, dimension: s.dimension, unit: s.unit, level: s.level }))}
           items={view.items}
           editable={editable}
         />

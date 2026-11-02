@@ -183,8 +183,8 @@ describe("the stock's first day, set by an admin", () => {
       // nothing was deleted: the logs still hold the early items
       expect((await intakeDayView("2026-08-05")).some((i) => i.feedId === feedId)).toBe(true);
       expect(await prisma.withdrawalItem.count({ where: { feedId, status: "VALID" } })).toBe(2);
-      // an item recorded back in time, before the day, does not touch the stock
-      await receive("2026-08-02", feedId, { quantities: [{ value: "9", unitId: unit.kg }] }, f.admin);
+      // an item recorded back in time (keyed in on the 12th, dated the 2nd), before the day, does not touch the stock
+      await saveIntakeItem(f.admin, { requestId: rid(), day: "2026-08-02", feedId, quantities: [{ value: "9", unitId: unit.kg }] }, at("2026-08-12", "10:04"));
       expect((await rowsOf(feedId, now))[0]).toMatchObject({ received: 2000, level: 1900 });
       // a feed whose only intake is archive has no stock from the day on
       const archived = await newFeed("Hűtő-teszt csak archív");
@@ -194,7 +194,9 @@ describe("the stock's first day, set by an admin", () => {
       await expectCode(set("2026-08-08", f.admin, "10:03"), "NO_CHANGE");
       await set("", f.admin, "10:05");
       expect(await getStockStart()).toBeNull();
-      expect((await rowsOf(feedId, now))[0]).toMatchObject({ received: 14000, taken: 600, level: 13400 });
+      // without the set day the stock counts from the first RECORDED intake (the 5th): the intake of the 2nd, keyed in back in
+      // time after it, does not draw the start back (acrobot 40205, A3: old data keyed in back to 2018); before, it made 14000
+      expect((await rowsOf(feedId, now))[0]).toMatchObject({ received: 5000, taken: 600, level: 4400 });
     } finally {
       if (await getStockStart()) await set("", f.admin, "10:09");
     }

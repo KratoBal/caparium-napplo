@@ -5,7 +5,6 @@
 // negative level is allowed and flagged (R-16). The day's lock is the DOSING journal day (midnight).
 // NY-08 default (temporary, documented): no starting stock; intake is admin work.
 
-import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { diffFields, writeAudit } from "./audit";
 import { poolIsOn } from "./pool-periods";
@@ -119,6 +118,8 @@ export async function saveDosing(actor: Actor, raw: z.input<typeof dosingSchema>
           dosingId,
           requestId: `${input.requestId}:mozgas`,
           createdById: actor.id,
+          // the save's own clock (the database's is the same live): the stock's start is the first RECORDED movement (stockStarts)
+          createdAt: serverNow,
         },
       });
     }
@@ -207,6 +208,7 @@ export async function recordMovement(actor: Actor, raw: z.input<typeof intakeSch
         note: input.note ?? null,
         requestId: input.requestId,
         createdById: actor.id,
+        createdAt: serverNow,
       },
     });
     await writeAudit(tx, {
@@ -309,22 +311,49 @@ export async function updateChemical(actor: Actor, id: string, raw: z.input<type
   });
 }
 
-/** ADA-06: the level of each chemical (the sum of its valid movements) and its usage of the last 7 and 30 days. */
+/**
+ * The day a chemical's stock begins: the business day of its FIRST RECORDED movement (the smallest createdAt), not of its
+ * earliest-dated one. Lili keys old data in back to 2018 (2026-11-02; acrobot 40205, A1): a dosing of 2019 recorded today must
+ * not take the whole past out of today's stock (measured: 1 l became -4 l, and the "fogy" warning fired). A movement dated
+ * before this day is archive; a late entry of an ordinary day after it still counts. No movement: no start.
+ */
+export function stockStarts(rows: { chemicalId: string; businessDay: Date; createdAt: Date }[]): Map<string, Date> {
+  const first = new Map<string, { createdAt: Date; businessDay: Date }>();
+  for (const r of rows) {
+    const f = first.get(r.chemicalId);
+    if (!f || r.createdAt < f.createdAt) first.set(r.chemicalId, { createdAt: r.createdAt, businessDay: r.businessDay });
+  }
+  return new Map([...first].map(([id, f]) => [id, f.businessDay]));
+}
+
+/**
+ * ADA-06: the level of each chemical (the sum of its valid movements from its stock's start, stockStarts) and its usage of the
+ * last 7 and 30 days, from the same movements: the "fogy" warning (notices.ts runningOut) reads only today's stock.
+ */
 export async function stockLevels(now = new Date()) {
   const today = businessDayOf(now);
   const chems = await prisma.chemical.findMany({ include: { names: true, stockUnit: true, _count: { select: { dosings: true, movements: true } } } });
-  const sums = await prisma.stockMovement.groupBy({ by: ["chemicalId"], where: { status: "VALID" }, _sum: { quantity: true } });
-  const usage = async (days: number) =>
-    prisma.stockMovement.groupBy({
-      by: ["chemicalId"],
-      where: { status: "VALID", type: "USAGE", businessDay: { gt: dayToDate(addDays(today, -days)), lte: dayToDate(today) } },
-      _sum: { quantity: true },
-    });
-  const [w, m] = await Promise.all([usage(7), usage(30)]);
-  const val = (rows: { chemicalId: string; _sum: { quantity: Prisma.Decimal | null } }[], id: string) => Number(rows.find((r) => r.chemicalId === id)?._sum.quantity ?? 0);
+  const moves = await prisma.stockMovement.findMany({ where: { status: "VALID" }, select: { chemicalId: true, type: true, quantity: true, businessDay: true, createdAt: true } });
+  const starts = stockStarts(moves);
+  const weekFrom = dayToDate(addDays(today, -7));
+  const monthFrom = dayToDate(addDays(today, -30));
+  const todayDate = dayToDate(today);
+  const sum = new Map<string, { level: number; week: number; month: number }>();
+  for (const m of moves) {
+    if (m.businessDay < starts.get(m.chemicalId)!) continue;
+    const r = sum.get(m.chemicalId) ?? { level: 0, week: 0, month: 0 };
+    const q = Number(m.quantity);
+    r.level += q;
+    if (m.type === "USAGE" && m.businessDay <= todayDate) {
+      if (m.businessDay > weekFrom) r.week += q;
+      if (m.businessDay > monthFrom) r.month += q;
+    }
+    sum.set(m.chemicalId, r);
+  }
   return chems
     .map((c) => {
-      const level = val(sums, c.id);
+      const own = sum.get(c.id) ?? { level: 0, week: 0, month: 0 };
+      const level = own.level;
       return {
         id: c.id,
         name: pickValid(c.names, now)?.name ?? c.names.at(-1)?.name ?? "?",
@@ -336,8 +365,8 @@ export async function stockLevels(now = new Date()) {
         uses: c._count.dosings + c._count.movements,
         level: Math.round(level * 10000) / 10000,
         negative: level < 0,
-        week: Math.round(-val(w, c.id) * 10000) / 10000,
-        month: Math.round(-val(m, c.id) * 10000) / 10000,
+        week: Math.round(-own.week * 10000) / 10000,
+        month: Math.round(-own.month * 10000) / 10000,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name, "hu"));
