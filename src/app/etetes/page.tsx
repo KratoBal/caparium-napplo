@@ -81,7 +81,7 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
     .map((t) => ({ code: t.code, name: t.name, emoji: t.emoji, feeds: t.feeds.filter((f) => f.active).map((f) => ({ id: f.id, name: f.name })) }))
     .filter((t) => t.feeds.length > 0);
   return (
-    <Shell title="Takarmánynapló" active="feeding" user={user} helper={await feedingHelper(await helperStockAccess(user))}>
+    <Shell title="Napi etetés" active="feeding" user={user} helper={await feedingHelper(await helperStockAccess(user))}>
       <div className="toolbar toolbar-end">
         <DayNav path="/etetes" day={day} today={today} />
         {/* Lili 2026-10-27 12:32 and 12:36 UTC (item 7): the jump calendar beside the arrows, as on the eating log */}

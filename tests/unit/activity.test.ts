@@ -59,7 +59,7 @@ describe("every audited entity type has a kind", () => {
 });
 
 describe("groupSaves", () => {
-  it("counts a feeding save once, in Takarmánynapló, whatever eating statuses it also wrote", () => {
+  it("counts a feeding save once, in Napi etetés, whatever eating statuses it also wrote", () => {
     const rows = [
       row({ requestId: "r1", action: "INVALIDATE", entityType: "EatingStatus" }),
       row({ requestId: "r1", entityType: "FeedingSelection" }),
