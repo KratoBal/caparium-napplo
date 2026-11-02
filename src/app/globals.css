@@ -37,14 +37,16 @@ h1, h2, h3 { margin: 0; font-weight: 600; }
 button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---- shell ---- */
-.shell { display: grid; grid-template-columns: 240px 1fr; grid-template-rows: auto 1fr; min-height: 100vh; }
+/* minmax(0, 1fr): a plain 1fr grows to its content's width, and the head pushed the page past the screen on a tablet
+   (1024 px: 77 px on the water pages, 152 px on the feeding page; Lili uses an iPad) */
+.shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); grid-template-rows: auto 1fr; min-height: 100vh; }
 /* the brand and the topbar stand in the head: no box of its own above a phone (its children are the grid's cells as before) */
 .head { display: contents; }
 .brand { grid-row: 1; grid-column: 1; background: var(--c-white); border-left: 8px solid var(--c-primary); padding: 18px 20px; }
 .brand-title { font-size: 22px; font-weight: 600; letter-spacing: 0.02em; }
 .brand-sub { color: var(--c-primary); font-weight: 600; font-size: 13px; }
-.topbar { grid-row: 1; grid-column: 2; background: var(--c-white); display: flex; align-items: center; gap: 16px; padding: 14px 28px; }
-.topbar h1 { font-size: 26px; flex: 1; }
+.topbar { grid-row: 1; grid-column: 2; background: var(--c-white); display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 28px; min-width: 0; }
+.topbar h1 { font-size: 26px; flex: 1; min-width: 0; }
 .pill { background: var(--c-field); border-radius: var(--radius-sm); padding: 10px 16px; font-weight: 600; font-size: 14px; white-space: nowrap; }
 /* a pill whose text is a sentence (the chemical calculator's result, Lili 2026-10-29 item 5a): it wraps in its box */
 .pill-wrap { white-space: normal; overflow-wrap: anywhere; }
@@ -77,6 +79,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .main { grid-row: 2; grid-column: 2; padding: 28px; min-width: 0; }
 .userbox { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--c-muted); }
 .userbox form { margin: 0; }
+/* where the head wraps (a tablet), the name and the buttons go to the right of the second line */
+.topbar > .userbox { margin-left: auto; }
 
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
