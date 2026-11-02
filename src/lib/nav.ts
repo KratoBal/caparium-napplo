@@ -11,7 +11,7 @@ export type NavTone = "water" | "feed";
  * apart, "nem raknék mindegyikhez"). Kept apart from `label`, which stays the plain name: the menu shows the icon hidden
  * from screen readers, so a link's accessible name (the tests' handle) does not change.
  */
-export type NavItem = { key: NavKey; href: string; label: string; tone?: NavTone; icon?: string };
+export type NavItem = { key: NavKey; href: string; label: string; tone?: NavTone; icon?: string; parent?: NavKey };
 
 // Lili 2026-10-26 (caparium-menu-sorrend-szinek, channel msg 1564292920016904403 and 1564295015704957030): the
 // order of the list she sent, and a label color for two groups (#A8DDE0 water, #FFCFC2 feeding, in globals.css).
@@ -37,14 +37,15 @@ const NAV: NavItem[] = [
   { key: "reports", href: "/kimutatasok", label: "Kimutatások" },
 ];
 
-// The admin entries, in Lili's order: Függő mentések, Állatok, Beállítások. The animal list is admin only for
-// now (Lili 2026-10-26 09:51 UTC, msg 1564214896453750805). Aktivitás (who recorded what, card 70cadcf8) closes
-// the admin block (acrobot 38464).
+// The admin entries. Lili 2026-11-02 (caparium-egyszerusites, msg 1566815500221022380): Állatok, Függő mentések and Aktivitás
+// are a drop-down under Beállítások (`parent`); their pages, URLs and rules are as they were. The order inside the
+// drop-down is the one they stood in before; Lili gives the logical order later. The animal list is admin only for now
+// (Lili 2026-10-26 09:51 UTC, msg 1564214896453750805).
 const ADMIN_EXTRA: NavItem[] = [
-  { key: "pending", href: "/fuggo", label: "Függő mentések" },
-  { key: "animals", href: "/allatok", label: "Állatok" },
   { key: "settings", href: "/beallitasok", label: "Beállítások" },
-  { key: "activity", href: "/aktivitas", label: "Aktivitás" },
+  { key: "pending", href: "/fuggo", label: "Függő mentések", parent: "settings" },
+  { key: "animals", href: "/allatok", label: "Állatok", parent: "settings" },
+  { key: "activity", href: "/aktivitas", label: "Aktivitás", parent: "settings" },
 ];
 
 /**
@@ -54,6 +55,11 @@ const ADMIN_EXTRA: NavItem[] = [
 export function navFor(role: "ADMIN" | "AQUARIST" | "SYSTEM"): NavItem[] {
   const admin = role === "ADMIN";
   return [...NAV, ...(admin ? ADMIN_EXTRA : [])];
+}
+
+/** The entries that hang under `parent` in the menu (a drop-down), in their order. */
+export function navChildren(items: NavItem[], parent: NavKey): NavItem[] {
+  return items.filter((n) => n.parent === parent);
 }
 
 /** The phone menu's two drop-downs (Lili 2026-11-01, point 12): every entry of a color group under one name. */

@@ -17,6 +17,12 @@ async function logout(page: Page) {
   await expect(page.getByLabel("Felhasználónév")).toBeVisible();
 }
 
+// Lili 2026-11-02: Állatok, Függő mentések and Aktivitás hang in a drop-down under Beállítások; open it (once) before a click on one of them
+async function openSettingsMenu(page: Page) {
+  const caret = page.getByRole("button", { name: "Beállítások almenü" });
+  if ((await caret.getAttribute("aria-expanded")) !== "true") await caret.click();
+}
+
 async function login(page: Page, loginId: string) {
   await page.goto("/belepes");
   await page.getByLabel("Felhasználónév").fill(loginId);
@@ -290,6 +296,7 @@ test("admin corrects and invalidates an earlier day's measurement with a reason 
 
 test("the pending list is for admins; an aquarist is sent to the no-access page", async ({ page }) => {
   await login(page, "teszt.admin");
+  await openSettingsMenu(page);
   await page.getByRole("link", { name: "Függő mentések" }).click();
   await expect(page.getByRole("heading", { name: "Késve érkezett mentések" })).toBeVisible();
   await logout(page);
@@ -401,6 +408,7 @@ test("animals: the list from the events, a transfer recorded, the history kept; 
   const target = tablet ? "Karantén" : "Kismedence";
   // Lili 2026-10-26: the animal list is for admins only now
   await login(page, "teszt.admin");
+  await openSettingsMenu(page);
   await page.getByRole("link", { name: "Állatok" }).click();
   await expect(page.getByTestId("animals-table")).toContainText("Teszt Egy");
   await page.getByTestId("animals-table").getByRole("link", { name }).click();
@@ -1680,6 +1688,7 @@ test("conveniences: a feeding plan, the list from it, the feed type icons", asyn
   await login(page, "teszt.admin");
   // Lili 2026-10-29 (package item 6): an animal's page has no "Etetési napok" row any more; the feeding timetable
   // writes the same plan (feeding_plan), so the plan is made there
+  await openSettingsMenu(page);
   await page.getByRole("link", { name: "Állatok" }).click();
   await page.getByTestId("animals-table").getByRole("link", { name: "Teszt Három" }).click();
   await expect(page.getByText("Etetési napok")).toHaveCount(0);
@@ -1945,12 +1954,46 @@ test("animals: an admin edits an animal's data, with the reasons off no reason i
 test("animals: an aquarist has no menu entry and the page sends them to the no-access page", async ({ page }) => {
   await login(page, "teszt.akvarista1");
   await expect(page.getByRole("link", { name: "Állatok" })).toHaveCount(0);
-  await page.goto("/allatok");
-  await expect(page).toHaveURL(/\/nincs-jogosultsag/);
+  // Lili 2026-11-02: the drop-down under Beállítások is not there for an aquarist either; the pages still send them away (the entry is not the guard)
+  await expect(page.getByRole("button", { name: "Beállítások almenü" })).toHaveCount(0);
+  for (const path of ["/allatok", "/fuggo", "/aktivitas"]) {
+    await page.goto(path);
+    await expect(page, path).toHaveURL(/\/nincs-jogosultsag/);
+  }
+  await page.goto("/");
   // Takarmánylista stays for the aquarist, directly above Kimutatások
   const nav = page.getByRole("navigation", { name: "Fő navigáció" });
   const links = await nav.getByRole("link").allInnerTexts();
   expect(links.indexOf("Kimutatások") - links.indexOf("Takarmánylista")).toBe(1);
+});
+
+// Lili 2026-11-02 (msg 1566815500221022380): a drop-down under Beállítások with Állatok, Függő mentések and Aktivitás; their URLs stay.
+// It must open on the phone too (the row; the list is a portal under it) and close again.
+test("the Beállítások drop-down opens its three entries, on a phone and a desktop alike, and the old URLs still open", async ({ page }) => {
+  await login(page, "teszt.admin");
+  const entries = ["Függő mentések", "Állatok", "Aktivitás"];
+  for (const name of entries) await expect(page.getByRole("link", { name, exact: true })).toHaveCount(0);
+  const caret = page.getByRole("button", { name: "Beállítások almenü" });
+  await expect(caret).toHaveAttribute("aria-expanded", "false");
+  await caret.click();
+  await expect(caret).toHaveAttribute("aria-expanded", "true");
+  const list = page.getByRole("group", { name: "Beállítások almenü" });
+  await expect(list.getByRole("link")).toHaveText(entries);
+  for (const l of await list.getByRole("link").all()) await expect(l).toBeInViewport();
+  await caret.click();
+  await expect(caret).toHaveAttribute("aria-expanded", "false");
+  await expect(list).toHaveCount(0);
+  // Beállítások itself is still a link to its page
+  await expect(page.getByRole("link", { name: "Beállítások", exact: true })).toHaveAttribute("href", "/beallitasok");
+  // an entry opens its page, and the old URLs are reachable directly
+  await caret.click();
+  await page.getByRole("group", { name: "Beállítások almenü" }).getByRole("link", { name: "Aktivitás" }).click();
+  await expect(page).toHaveURL(/\/aktivitas/);
+  for (const path of ["/allatok", "/fuggo", "/aktivitas"]) {
+    await page.goto(path);
+    await expect(page, path).toHaveURL(new RegExp(path));
+    await expect(page.getByRole("button", { name: "Beállítások almenü" })).toBeVisible();
+  }
 });
 
 // Last in the file: it loads the description's 25 animals into the shared e2e database (acrobot 33380). The loader's
