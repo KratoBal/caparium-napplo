@@ -35,9 +35,13 @@ afterAll(async () => {
 });
 
 async function code(p: Promise<unknown>): Promise<string> {
+  return (await failure(p)).code;
+}
+
+async function failure(p: Promise<unknown>): Promise<AppError> {
   const e = await p.then(() => null, (err: unknown) => err);
   expect(e).toBeInstanceOf(AppError);
-  return (e as AppError).code;
+  return e as AppError;
 }
 
 const input = (over: Record<string, unknown> = {}) =>
@@ -60,7 +64,9 @@ const input = (over: Record<string, unknown> = {}) =>
 describe("a new measurement type (point 9)", () => {
   it("admin only; the chosen pools must be the group's", async () => {
     expect(await code(createMeasurementType(f.aq1, input()))).toBe("ADMIN_ONLY");
-    expect(await code(createMeasurementType(f.admin, input({ tables: [{ groupId, poolIds: [f.pool("KORALLOS")] }] })))).toBe("POOL_NOT_IN_GROUP");
+    // a pool never in the table: refused by its name (Lili 2026-11-02 07:05 UTC, acrobot 39946)
+    const never = await failure(createMeasurementType(f.admin, input({ tables: [{ groupId, poolIds: [f.pool("NAGY"), f.pool("KORALLOS")] }] })));
+    expect([never.code, never.message]).toEqual(["POOL_NOT_IN_GROUP", "Korallos: a megadott időszakban egyszer sem tartozott a(z) Pont 9 teszt táblához."]);
     expect(await code(createMeasurementType(f.admin, input({ plausibleMin: "5", plausibleMax: "1" })))).toBe("BAD_RANGE");
   });
 
@@ -95,6 +101,30 @@ describe("a new measurement type (point 9)", () => {
     const cols = async (g: string) => (await getGrid(g, "2026-05-27"))!.layout.parameters.filter((x) => x.id === r.id).map((x) => x.pools);
     expect(await cols(groupId)).toEqual([[f.pool("NAGY")]]);
     expect(await cols(otherGroupId)).toEqual([[f.pool("KORALLOS")]]);
+  });
+
+  // Lili 2026-11-02 07:05 UTC (acrobot 39946): from 2018-12-07 with a pool that joined the table later was refused. A pool that is the
+  // table's on SOME day of the period is taken; the column is filled there on the days it is (the intersection).
+  it("a pool that joined the table during the period is taken, its column filled from its joining; one that never was, refused by name", async () => {
+    // the Karantén joins this file's table on 2026-06-10 (local midnight, summer time)
+    await prisma.groupMembership.create({ data: { groupId, poolId: f.pool("KARANTEN"), sortOrder: 3, validFrom: new Date("2026-06-09T22:00:00Z") } });
+    const tables = [{ groupId, poolIds: [f.pool("NAGY"), f.pool("KARANTEN")] }];
+    // a period that ends before it joined: refused, by its name
+    const before = await failure(createMeasurementType(f.admin, input({ name: "Korábbi időszak próba", tables, from: "2026-06-01", to: "2026-06-09" })));
+    expect([before.code, before.message]).toEqual(["POOL_NOT_IN_GROUP", "Karantén: a megadott időszakban egyszer sem tartozott a(z) Pont 9 teszt táblához."]);
+    // a period it joins in: taken
+    const r = (await createMeasurementType(f.admin, input({ name: "Később belépett próba", tables, from: "2026-06-01" }))) as { id: string };
+    const rowsWith = async (day: string) => {
+      const g = (await getGrid(groupId, day))!;
+      const col = g.layout.parameters.find((x) => x.id === r.id)!;
+      return g.layout.pools.map((p) => p.id).filter((id) => col.pools!.includes(id));
+    };
+    expect(await rowsWith("2026-06-05")).toEqual([f.pool("NAGY")]);
+    expect(await rowsWith("2026-06-12")).toEqual([f.pool("NAGY"), f.pool("KARANTEN")]);
+    const measure = (day: string) =>
+      createMeasurement(f.aq1, { requestId: rid(), groupId, poolId: f.pool("KARANTEN"), parameterId: r.id, value: "0,05", measuredAtLocal: `${day}T08:00`, newRound: true } as Parameters<typeof createMeasurement>[1], cest(`${day}T08:00`));
+    expect(await code(measure("2026-06-05"))).toBe("NOT_IN_GROUP");
+    await measure("2026-06-12");
   });
 
   // Lili 2026-11-01 22:52 and 22:54 UTC: the density was measured in SG for years, then in ppt

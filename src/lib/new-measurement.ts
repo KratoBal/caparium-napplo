@@ -6,7 +6,7 @@ import { writeAudit } from "./audit";
 import { prisma, type Tx } from "./db";
 import { compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
-import { FIRST_NAME_FROM, moduleLevel, validAt } from "./master";
+import { FIRST_NAME_FROM, moduleLevel, pickValid } from "./master";
 import type { Role } from "./permissions";
 import { addDays, resolveLocalDateTime } from "./time";
 
@@ -81,9 +81,25 @@ export async function createMeasurementType(actor: Actor, input: z.infer<typeof 
       for (const t of tables) {
         const group = await tx.measurementGroup.findUnique({ where: { id: t.groupId } });
         if (!group || !group.active) throw new AppError(404, "GROUP_NOT_FOUND", "A mérési csoport nem található.");
-        // the chosen pools are the table's on the first day
-        const members = await tx.groupMembership.findMany({ where: { groupId: group.id, poolId: { in: t.poolIds }, ...validAt(at) }, select: { poolId: true } });
-        if (members.length !== t.poolIds.length) throw new AppError(422, "POOL_NOT_IN_GROUP", `Egy kijelölt medence ezen a napon nem tartozik a(z) ${group.name} táblához.`);
+        // Lili 2026-11-02 07:05 UTC (acrobot 39946): a chosen pool is the table's on SOME day of the period, not
+        // necessarily on its first: from 2018-12-07 a pool that joined the table later was refused. The column is
+        // filled in it on the days it is the table's (the grid's rows are the day's members), so the measurement type
+        // holds there on the intersection of the two periods. Refused only a pool that never was, by its name.
+        const members = await tx.groupMembership.findMany({
+          where: { groupId: group.id, poolId: { in: t.poolIds }, ...(until ? { validFrom: { lt: until } } : {}), OR: [{ validTo: null }, { validTo: { gt: at } }] },
+          select: { poolId: true },
+        });
+        const member = new Set(members.map((m) => m.poolId));
+        const never = t.poolIds.filter((id) => !member.has(id));
+        if (never.length > 0) {
+          const pools = await tx.pool.findMany({ where: { id: { in: never } }, include: { names: true }, orderBy: { sortOrder: "asc" } });
+          const names = pools.map((p) => pickValid(p.names, new Date())?.displayName ?? p.code);
+          throw new AppError(
+            422,
+            "POOL_NOT_IN_GROUP",
+            `${names.join(", ")}: a megadott időszakban egyszer sem ${names.length > 1 ? "tartoztak" : "tartozott"} a(z) ${group.name} táblához.`,
+          );
+        }
         groups.push({ id: group.id, name: group.name, poolIds: t.poolIds });
       }
       // the name is one of a kind among the parameters' current names
