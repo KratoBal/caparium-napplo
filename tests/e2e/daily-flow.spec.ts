@@ -2308,16 +2308,26 @@ test("the feeding timetable is the admin's: an aquarist has no entry, is sent aw
 
 // Lili 2026-10-29 (task caparium-lili-nagyobb-m, item 8): the small ticks under the pool's name on the daily measurement.
 // Each layout works its own group; the tick saves on its click, apart from the Mentés button, and is put back off at the end.
-test("daily measurement: the pool ticks save on their own and survive a reload; the big pools have two, the small tanks one", async ({ page }, info) => {
+// Lili 2026-11-01 23:30-23:32 UTC: "Rátöltés" first, and the Nagymedence's backwash is three ticks, its sand filters 1, 2, 3.
+test("daily measurement: the pool ticks save on their own and survive a reload; the Nagymedence has its three sand filters, the small tanks one", async ({ page }, info) => {
   const p = plan(info.project.name);
-  const kinds = info.project.name === "tablet" ? [["WATER_CHANGE", "Vízcsere"]] : [["BACKWASH", "Visszamosás"], ["TOPUP", "Rátöltés"]];
+  const kinds =
+    info.project.name === "tablet"
+      ? [["WATER_CHANGE", "Vízcsere"]]
+      : [["TOPUP", "Rátöltés"], ["BACKWASH", "Visszamosás, 1. homokszűrő"], ["BACKWASH_2", "Visszamosás, 2. homokszűrő"], ["BACKWASH_3", "Visszamosás, 3. homokszűrő"]];
   const other = info.project.name === "tablet" ? "Visszamosás" : "Vízcsere";
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Napi vízmérés", exact: true }).first().click();
   await page.getByRole("tab", { name: p.tab }).click();
   await expect(page.getByRole("heading", { name: /Napi paraméterek/ })).toBeVisible();
   const row = page.getByTestId(`row-${p.pool}`);
-  await expect(row.getByLabel(other)).toHaveCount(0);
+  await expect(row.getByLabel(other, { exact: true })).toHaveCount(0);
+  for (const [kind, label] of kinds) await expect(row.getByLabel(label, { exact: true }), label).toHaveAttribute("data-testid", `tick-${p.pool}-${kind}`);
+  if (info.project.name !== "tablet") {
+    // the word once, then the three numbers; "Rátöltés" before it
+    const text = (await row.locator(".pool-ticks").innerText()).replace(/\s+/g, " ").trim();
+    expect(text).toBe("Rátöltés Visszamosás 1 2 3");
+  }
   // The box ticks at once and the save goes after it (MeasurementGrid.tsx), so each change waits for its own saved answer
   // before the reload: a reload in flight cancelled the save, and the tablet run failed on it (#138, CI 41049678125).
   const saved = async (change: Promise<void>) => {

@@ -13,26 +13,58 @@ import { canCreate } from "./permissions";
 import { ensureJournalDay, moduleLevel } from "./master";
 import { businessDayOf, dayToDate, isValidDay } from "./time";
 
-export const TICK_LABEL: Record<PoolTickKind, string> = { BACKWASH: "Visszamosás", TOPUP: "Rátöltés", WATER_CHANGE: "Vízcsere" };
-/** The order the ticks stand in: on the page, in the Excel columns and in the PDF. */
-export const TICK_ORDER: PoolTickKind[] = ["BACKWASH", "TOPUP", "WATER_CHANGE"];
+export const TICK_LABEL: Record<PoolTickKind, string> = {
+  BACKWASH: "Visszamosás",
+  BACKWASH_2: "Visszamosás",
+  BACKWASH_3: "Visszamosás",
+  TOPUP: "Rátöltés",
+  WATER_CHANGE: "Vízcsere",
+};
+/**
+ * The order the ticks stand in on the page. Lili 2026-11-01 23:30 UTC (msg 1566595309285679208): "Rátöltés" before
+ * "Visszamosás", so the Nagymedence's three backwash ticks run in under the cells.
+ */
+export const TICK_ORDER: PoolTickKind[] = ["TOPUP", "BACKWASH", "BACKWASH_2", "BACKWASH_3", "WATER_CHANGE"];
 
 const KINDS_OF_GROUP: Record<string, PoolTickKind[]> = {
-  NAPI_NAGY: ["BACKWASH", "TOPUP"],
+  NAPI_NAGY: ["TOPUP", "BACKWASH"],
   NAPI_KIS: ["WATER_CHANGE"],
 };
 
-/** The ticks a daily group offers; none for any other group. */
-export function tickKindsOf(groupCode: string): PoolTickKind[] {
-  return KINDS_OF_GROUP[groupCode] ?? [];
+/**
+ * Lili 2026-11-01 23:32 UTC (msg 1566595759384821893): "a homokszűrők száma és csak a nagymedencének van 3". The pools
+ * with three sand filters, by code: their backwash is three ticks (1, 2, 3 on the page; HSZ1, HSZ2, HSZ3 in the Excel).
+ */
+const THREE_FILTER_POOLS = new Set(["NAGY"]);
+const FILTERS: PoolTickKind[] = ["BACKWASH", "BACKWASH_2", "BACKWASH_3"];
+
+/** The ticks a daily group offers a pool; none for any other group. */
+export function tickKindsOf(groupCode: string, poolCode: string): PoolTickKind[] {
+  const kinds = KINDS_OF_GROUP[groupCode] ?? [];
+  return THREE_FILTER_POOLS.has(poolCode) ? kinds.flatMap((k) => (k === "BACKWASH" ? FILTERS : [k])) : kinds;
 }
+
+/**
+ * The Excel's tick columns, in the page's order. A three-filter pool's backwash goes under HSZ1-HSZ3, every other
+ * pool's under "Visszamosás" (`filters`: which pools a column is for; null = every pool).
+ */
+export const TICK_COLUMNS: { header: string; kind: PoolTickKind; filters: boolean | null }[] = [
+  { header: TICK_LABEL.TOPUP, kind: "TOPUP", filters: null },
+  { header: TICK_LABEL.BACKWASH, kind: "BACKWASH", filters: false },
+  { header: "HSZ1", kind: "BACKWASH", filters: true },
+  { header: "HSZ2", kind: "BACKWASH_2", filters: true },
+  { header: "HSZ3", kind: "BACKWASH_3", filters: true },
+  { header: TICK_LABEL.WATER_CHANGE, kind: "WATER_CHANGE", filters: null },
+];
+
+export const hasThreeFilters = (poolCode: string) => THREE_FILTER_POOLS.has(poolCode);
 
 export const poolTickSchema = z.object({
   requestId: z.string().min(8).max(100),
   groupId: z.uuid(),
   poolId: z.uuid(),
   day: z.string().refine(isValidDay, "Hibás nap."),
-  kind: z.enum(["BACKWASH", "TOPUP", "WATER_CHANGE"]),
+  kind: z.enum(["BACKWASH", "BACKWASH_2", "BACKWASH_3", "TOPUP", "WATER_CHANGE"]),
   done: z.boolean(),
 });
 
@@ -47,9 +79,9 @@ export async function setPoolTick(actor: Actor, raw: z.input<typeof poolTickSche
   return prisma.$transaction(async (tx) => {
     const group = await tx.measurementGroup.findUnique({ where: { id: input.groupId } });
     if (!group || !group.active) throw new AppError(404, "GROUP_NOT_FOUND", "A mérési csoport nem található.");
-    if (!tickKindsOf(group.code).includes(input.kind)) throw new AppError(422, "TICK_NOT_FOR_GROUP", "Ez a jelölő nem tartozik ehhez a csoporthoz.");
-    const member = await tx.groupMembership.findFirst({ where: { groupId: group.id, poolId: input.poolId } });
+    const member = await tx.groupMembership.findFirst({ where: { groupId: group.id, poolId: input.poolId }, include: { pool: { select: { code: true } } } });
     if (!member) throw new AppError(422, "POOL_NOT_IN_GROUP", "A medence nem ennek a csoportnak a tagja.");
+    if (!tickKindsOf(group.code, member.pool.code).includes(input.kind)) throw new AppError(422, "TICK_NOT_FOR_GROUP", "Ez a jelölő nem tartozik ehhez a medencéhez.");
     // point 16: in use on the tick's day, by its period
     if (!(await poolIsOn(tx, input.poolId, input.day))) throw new AppError(422, "POOL_INACTIVE", "Ezen a napon a medence nincs használatban, jelölő nem rögzíthető rá.");
     const journal = await ensureJournalDay(tx, "WATER", group.id, input.day);
