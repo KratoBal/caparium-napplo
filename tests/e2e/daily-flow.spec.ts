@@ -1968,8 +1968,8 @@ test("animals: an aquarist has no menu entry and the page sends them to the no-a
 });
 
 // Lili 2026-11-02 (msg 1566815500221022380): a drop-down under Beállítások with Állatok, Függő mentések and Aktivitás; their URLs stay.
-// It must open on the phone too (the row; the list is a portal under it) and close again.
-test("the Beállítások drop-down opens its three entries, on a phone and a desktop alike, and the old URLs still open", async ({ page }) => {
+// The two layouts here (tablet 1024, desktop 1440) open it inline in the side menu; the phone's row has its own test in phone-header.spec.ts.
+test("the Beállítások drop-down opens its three entries in the side menu, and the old URLs still open", async ({ page }) => {
   await login(page, "teszt.admin");
   const entries = ["Függő mentések", "Állatok", "Aktivitás"];
   for (const name of entries) await expect(page.getByRole("link", { name, exact: true })).toHaveCount(0);

@@ -139,6 +139,41 @@ test.describe("touch phone, 390 px", () => {
   });
 });
 
+// Lili 2026-11-02 (msg 1566815500221022380): Állatok, Függő mentések and Aktivitás hang in a drop-down under Beállítások. On a phone the menu
+// is the sideways-scrolling row, so the list opens like the Takarmányozás one: outside the row, under it, and a tap on an entry opens its page.
+test.describe("touch phone, 390 px, the Beállítások drop-down", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test("a tap on the caret opens Állatok, Függő mentések and Aktivitás under the row; a tap on one opens its page", async ({ page }) => {
+    await login(page, "teszt.admin");
+    const nav = page.getByRole("navigation", { name: "Fő navigáció" });
+    await nav.evaluate((el) => (el.scrollLeft = el.scrollWidth));
+    const caret = nav.getByRole("button", { name: "Beállítások almenü" });
+    await expect(caret).toHaveAttribute("aria-expanded", "false");
+    await caret.tap();
+    const list = page.getByRole("group", { name: "Beállítások almenü" });
+    await expect(list).toBeVisible();
+    await expect(list.getByRole("link")).toHaveText(["Függő mentések", "Állatok", "Aktivitás"]);
+    // outside the scrolling row, hung right under it, inside the screen, and it does not close when the bars move
+    expect(await list.evaluate((el) => el.closest(".nav") === null && el.parentElement === document.body)).toBe(true);
+    await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+    await page.evaluate(() => window.dispatchEvent(new Event("scroll")));
+    await expect(list, "still open after the bars moved").toBeVisible();
+    const box = (await list.boundingBox())!;
+    const row = (await nav.boundingBox())!;
+    expect(Math.abs(box.y - (row.y + row.height))).toBeLessThan(2);
+    for (const l of await list.getByRole("link").all()) {
+      const b = (await l.boundingBox())!;
+      expect(b.x).toBeGreaterThanOrEqual(0);
+      expect(b.x + b.width).toBeLessThanOrEqual(390);
+      expect(b.y + b.height).toBeLessThanOrEqual(844);
+    }
+    await list.getByRole("link", { name: "Aktivitás" }).tap();
+    await expect(page).toHaveURL(/\/aktivitas$/);
+    await expect(page.getByRole("group", { name: "Beállítások almenü" })).toHaveCount(0);
+  });
+});
+
 test.describe("tablet, 1024 px", () => {
   test.use({ viewport: { width: 1024, height: 768 } });
 
