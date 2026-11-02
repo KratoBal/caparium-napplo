@@ -1437,9 +1437,15 @@ test("a pool's own band and volume in the settings; the chemical calculator unde
   await expect(ca, "a pool without its own range shows the common one").toContainText("a közös érték");
   await ca.getByLabel(`${pool} Ca minimum`).fill("400");
   await ca.getByLabel(`${pool} Ca maximum`).fill("440");
+  // the pool's first own range: after the save the page refreshes, and the Mértékegység váltása form below it gains a row for the
+  // pool. The page must survive that refresh (it fell to "This page couldn't load" on a field the form had not made yet; task
+  // caparium-beallitasok-osszeomlas). The "Mentve." stands before the refresh lands, so the test waits for the refreshed data.
+  const refreshed = page.waitForResponse((r) => r.url().includes("/beallitasok") && r.url().includes("_rsc="));
   await ca.getByRole("button", { name: "Mentés" }).click();
   await expect(ca.getByRole("status")).toHaveText("Mentve.");
-  await page.waitForLoadState("networkidle");
+  await refreshed;
+  await expect(page.getByTestId("wm-edit-Ca-ppm").getByLabel(`${pool} új referencia alja`)).toBeVisible();
+  await expect(ca).not.toContainText("a közös érték");
   await page.reload();
   await expect((await openMeasurement(page, "Ca (ppm)")).getByTestId(`ref-${pool}-Ca`)).not.toContainText("a közös érték");
 
