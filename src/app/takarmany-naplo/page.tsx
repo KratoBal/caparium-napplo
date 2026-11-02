@@ -6,7 +6,7 @@ import { AppError } from "@/lib/errors";
 import { weekShade } from "@/lib/exports/feeding-excel";
 import { feedingLog } from "@/lib/feeding-log";
 import { listAnimals } from "@/lib/animals";
-import { moduleLevel, pickValid } from "@/lib/master";
+import { pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
 import { addDays, businessDayOf, formatDay, isValidDay, weekdayLetter } from "@/lib/time";
 import { poolInUse } from "@/lib/pool-periods";
@@ -28,10 +28,9 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
   const poolId = sp.medence && uuid.test(sp.medence) ? sp.medence : null;
   const animalId = sp.allat && uuid.test(sp.allat) ? sp.allat : null;
   const now = new Date();
-  const [pools, animals, exportLevel] = await Promise.all([
+  const [pools, animals] = await Promise.all([
     prisma.pool.findMany({ where: poolInUse(today), include: { names: true }, orderBy: { code: "asc" } }),
     listAnimals(now),
-    moduleLevel(prisma, user.id, user.role, "EXPORT"),
   ]);
   let log: Awaited<ReturnType<typeof feedingLog>> | null = null;
   let error: string | null = null;
@@ -81,21 +80,6 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
       {error && <div className="banner banner-error">{error}</div>}
       {log && (
         <>
-          {/* Lili 2026-10-28: above the lists, which grow; not at the page's end */}
-          {exportLevel !== "NONE" && (
-            <div className="toolbar no-print" data-testid="feedlog-exports">
-              {(["etetes", "evesi"] as const).map((kind) => (
-                <form key={kind} method="post" action="/api/exports/feeding">
-                  <input type="hidden" name="kind" value={kind} />
-                  <input type="hidden" name="from" value={from} />
-                  <input type="hidden" name="to" value={to} />
-                  <button className="btn" type="submit">
-                    {kind === "etetes" ? "Egyedi takarmánynapló" : "Evési minta"} (Excel)
-                  </button>
-                </form>
-              ))}
-            </div>
-          )}
           <div className="card">
             <h2>Evési minta</h2>
             <div className="table-scroll">

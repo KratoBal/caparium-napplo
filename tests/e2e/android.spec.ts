@@ -30,7 +30,7 @@ test("the menu's drop-downs open on a tap and lead to their pages", async ({ pag
   await nav.getByRole("button", { name: /Takarmányozás/ }).tap();
   const feed = page.getByRole("menu", { name: "Takarmányozás" });
   await expect(feed.getByRole("menuitem")).toHaveCount(7);
-  await feed.getByRole("menuitem", { name: /Takarmánynapló/ }).tap();
+  await feed.getByRole("menuitem", { name: /Napi etetés/ }).tap();
   await expect(page).toHaveURL(/\/etetes$/);
   expect(await noSideways(page)).toBeLessThanOrEqual(0);
 });

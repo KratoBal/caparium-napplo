@@ -29,7 +29,7 @@ async function todayFor(userId: string) {
 }
 
 describe("the activity of real saves", () => {
-  it("a feeding save of two animals is one Takarmánynapló save, however many rows it wrote", async () => {
+  it("a feeding save of two animals is one Napi etetés save, however many rows it wrote", async () => {
     const before = await todayFor(f.aq2.id);
     await setSelection(f.aq2, { requestId: rid("act"), day: DAY, animalIds: [a["Teszt Egy"], a["Teszt Kettő"]], selected: true }, onDay);
     const after = await todayFor(f.aq2.id);

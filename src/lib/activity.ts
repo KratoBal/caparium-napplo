@@ -29,7 +29,7 @@ export const ACTIVITY_KINDS: readonly ActivityKind[] = [
   { key: "fridges", label: "Hűtők", entityTypes: ["FridgeReading", "Fridge"] },
   {
     key: "feeding",
-    label: "Takarmánynapló",
+    label: "Napi etetés",
     entityTypes: ["FeedingDay", "FeedingItem", "FeedingList", "FeedingSelection", "FeedingPlan", "FeedingReference", "CalculatorRun"],
   },
   { key: "withdrawal", label: "Fagyasztó és kivétel", entityTypes: ["FeedIntakeItem", "WithdrawalItem"] },

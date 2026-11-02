@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { navFor, phoneGroups } from "@/lib/nav";
+import { navChildren, navFor, phoneGroups } from "@/lib/nav";
 
 // Lili 2026-10-26 (card f67b1a06, items 6 and 7): "Takarmánylista" directly above "Kimutatások" for everyone,
 // the "Állatok" entry for admins only.
@@ -21,11 +21,34 @@ describe("the main navigation", () => {
   });
 
   it("gives admins the extra entries after the common ones, and nobody else", () => {
-    expect(labels("ADMIN").slice(-4)).toEqual(["Függő mentések", "Állatok", "Beállítások", "Aktivitás"]);
+    expect(labels("ADMIN").slice(-4)).toEqual(["Beállítások", "Függő mentések", "Állatok", "Aktivitás"]);
     for (const role of ["AQUARIST", "SYSTEM"] as const) {
       expect(labels(role)).not.toContain("Függő mentések");
       expect(labels(role)).not.toContain("Beállítások");
       expect(labels(role)).not.toContain("Aktivitás");
+    }
+  });
+
+  // Lili 2026-11-02 (caparium-egyszerusites, msg 1566815500221022380): Állatok, Függő mentések and Aktivitás are a drop-down under
+  // Beállítások; their routes stay, and so does who sees them (admins only; the pages guard themselves).
+  it("hangs Állatok, Függő mentések and Aktivitás under Beállítások, with their old URLs", () => {
+    const admin = navFor("ADMIN");
+    const kids = navChildren(admin, "settings");
+    expect(kids.map((n) => [n.label, n.href])).toEqual([
+      ["Függő mentések", "/fuggo"],
+      ["Állatok", "/allatok"],
+      ["Aktivitás", "/aktivitas"],
+    ]);
+    expect(admin.find((n) => n.key === "settings")?.parent).toBeUndefined();
+    // the control: nothing else hangs under a parent, and the main entries have none
+    expect(admin.filter((n) => n.parent).length).toBe(3);
+    expect(navChildren(admin, "export")).toEqual([]);
+  });
+
+  it("gives an aquarist and the system no drop-down at all", () => {
+    for (const role of ["AQUARIST", "SYSTEM"] as const) {
+      expect(navFor(role).some((n) => n.parent)).toBe(false);
+      expect(navChildren(navFor(role), "settings")).toEqual([]);
     }
   });
 
@@ -37,16 +60,16 @@ describe("the main navigation", () => {
   // Lili 2026-10-26 (caparium-menu-sorrend-szinek): the exact order of her list, and the color group of each entry.
   it("keeps Lili's order for an admin", () => {
     expect(labels("ADMIN")).toEqual([
-      "START", "Napi vízmérés", "Heti vízmérés", "Export", "Takarmánynapló", "Evési napló", "Takarmánykivétel",
+      "START", "Napi vízmérés", "Heti vízmérés", "Export", "Napi etetés", "Evési napló", "Takarmánykivétel",
       "Takarmánykalkulátor", "Vegyszeradagolás", "Vízmérési napló", "Takarmányozási napló", "Fagyasztó",
-      "Takarmánylista", "Kimutatások", "Függő mentések", "Állatok", "Beállítások", "Aktivitás",
+      "Takarmánylista", "Kimutatások", "Beállítások", "Függő mentések", "Állatok", "Aktivitás",
     ]);
   });
 
   it("puts each entry in its color group, and leaves the rest plain", () => {
     const tone = (label: string) => navFor("ADMIN").find((n) => n.label === label)?.tone;
     for (const l of ["Napi vízmérés", "Heti vízmérés", "Vegyszeradagolás", "Vízmérési napló"]) expect(tone(l), l).toBe("water");
-    for (const l of ["Takarmánynapló", "Evési napló", "Takarmánykivétel", "Takarmánykalkulátor", "Takarmányozási napló", "Fagyasztó", "Takarmánylista"]) {
+    for (const l of ["Napi etetés", "Evési napló", "Takarmánykivétel", "Takarmánykalkulátor", "Takarmányozási napló", "Fagyasztó", "Takarmánylista"]) {
       expect(tone(l), l).toBe("feed");
     }
     // the control: the entries Lili marked "szín marad" are really plain, so the two checks above cannot pass on a menu where everything is colored
@@ -59,7 +82,7 @@ describe("the main navigation", () => {
     expect(icons).toEqual({
       "Napi vízmérés": "💧",
       "Heti vízmérés": "📅",
-      Takarmánynapló: "🍤",
+      "Napi etetés": "🍤",
       "Evési napló": "🦈",
       Takarmánykivétel: "➖",
       Takarmánykalkulátor: "🧮",

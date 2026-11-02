@@ -3,10 +3,11 @@ import { Fragment } from "react";
 import type { SessionUser } from "@/lib/auth";
 import type { HelperData } from "@/lib/helpers";
 import { greetingName } from "@/lib/helper-notice";
-import { navFor, phoneGroups, type NavKey } from "@/lib/nav";
+import { navChildren, navFor, phoneGroups, type NavKey } from "@/lib/nav";
 import { Helper } from "./Helper";
 import { HelperToggle } from "./HelperToggle";
 import { NavGroup } from "./NavGroup";
+import { NavSub } from "./NavSub";
 import { ReasonProvider } from "./ReasonSwitch";
 import { TopbarUser } from "./TopbarUser";
 
@@ -74,8 +75,11 @@ export function ShellView({
  */
 function NavLinks({ items, active }: { items: ReturnType<typeof navFor>; active?: NavKey }) {
   const groups = phoneGroups(items);
-  return items.map((n) => {
+  // an entry with a `parent` is rendered inside its parent's drop-down (NavSub), not in the row
+  return items.filter((n) => !n.parent).map((n) => {
     const group = groups.get(n.key);
+    const children = navChildren(items, n.key);
+    if (children.length) return <NavSub key={n.label} parent={n} items={children} active={active} />;
     return (
       <Fragment key={n.label}>
         {group && <NavGroup label={group.label} tone={group.tone} items={group.items} active={active} />}
