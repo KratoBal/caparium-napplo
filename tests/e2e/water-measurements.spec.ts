@@ -43,9 +43,12 @@ test("one order: pH moved before Sűrűség on the card is the daily table's ord
     await openAllSettings(page);
     await page.getByTestId("water-order-box").locator("summary").click();
     await page.getByTestId("water-order").getByRole("button", { name: `${name} feljebb` }).click();
-    await page.getByTestId("save-water-order").click();
-    await expect(page.getByTestId("water-order-box").getByRole("status")).toBeVisible();
-    await page.waitForLoadState("networkidle");
+    // the saved answer, not the "Mentve." under the list: the list is rebuilt in its new order at once, and the line goes with it
+    const [res] = await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith("/api/admin/parameter-order") && r.request().method() === "POST"),
+      page.getByTestId("save-water-order").click(),
+    ]);
+    expect(res.ok(), `order save: HTTP ${res.status()}`).toBe(true);
   };
   await move("pH (pH)");
   try {
