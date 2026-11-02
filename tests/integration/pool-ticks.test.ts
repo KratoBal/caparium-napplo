@@ -21,7 +21,7 @@ const code = (p: Promise<unknown>) => p.then(() => null, (e: unknown) => (e as A
 
 const DAY = "2029-02-14"; // winter time: UTC+1
 const now = new Date(`${DAY}T10:00:00+01:00`);
-const tick = (pool: string, kind: "BACKWASH" | "TOPUP" | "WATER_CHANGE", done: boolean, group = "NAPI_NAGY", at = now, actor = f.aq1) =>
+const tick = (pool: string, kind: "BACKWASH" | "BACKWASH_2" | "BACKWASH_3" | "TOPUP" | "WATER_CHANGE", done: boolean, group = "NAPI_NAGY", at = now, actor = f.aq1) =>
   setPoolTick(actor, { requestId: rid(), groupId: f.group(group), poolId: f.pool(pool), day: DAY, kind, done }, at);
 
 describe("the pool ticks", () => {
@@ -34,7 +34,9 @@ describe("the pool ticks", () => {
     expect((await setPoolTick(f.aq1, input, now)).replayed).toBe(true);
     expect(await ticksOfDay(DAY)).toEqual({ [`${f.pool("NAGY")}:TOPUP`]: true });
     const grid = await getGrid(f.group("NAPI_NAGY"), DAY);
-    expect(grid?.tickKinds).toEqual(["BACKWASH", "TOPUP"]);
+    // Lili 2026-11-01 23:30-23:32 UTC: "Rátöltés" first; the Nagymedence's backwash is its three sand filters, the others' one tick
+    expect(grid?.tickKinds[f.pool("NAGY")]).toEqual(["TOPUP", "BACKWASH", "BACKWASH_2", "BACKWASH_3"]);
+    expect(grid?.tickKinds[f.pool("KIS")]).toEqual(["TOPUP", "BACKWASH"]);
     expect(grid?.ticks).toEqual({ [`${f.pool("NAGY")}:TOPUP`]: true });
     // unticking what is not ticked changes nothing
     await tick("NAGY", "BACKWASH", false);
@@ -43,11 +45,13 @@ describe("the pool ticks", () => {
     // the small tanks have their own kind, and a weekly group has none
     await tick("KORALLOS", "WATER_CHANGE", true, "NAPI_KIS");
     expect(Object.keys(await ticksOfDay(DAY)).sort()).toEqual([`${f.pool("KORALLOS")}:WATER_CHANGE`, `${f.pool("NAGY")}:BACKWASH`, `${f.pool("NAGY")}:TOPUP`].sort());
-    expect((await getGrid(f.group("HETI"), DAY))?.tickKinds).toEqual([]);
+    expect(Object.values((await getGrid(f.group("HETI"), DAY))!.tickKinds).flat()).toEqual([]);
   });
 
   it("refuses a kind the group does not have, a pool that is not in the group, another day for an aquarist; an admin may", async () => {
     expect(await code(tick("NAGY", "WATER_CHANGE", true))).toBe("TICK_NOT_FOR_GROUP");
+    // the second and third sand filter are the Nagymedence's only
+    expect(await code(tick("KIS", "BACKWASH_2", true))).toBe("TICK_NOT_FOR_GROUP");
     expect(await code(tick("KORALLOS", "BACKWASH", true, "NAPI_NAGY"))).toBe("POOL_NOT_IN_GROUP");
     expect(await code(tick("NAGY", "TOPUP", false, "NAPI_NAGY", new Date("2029-02-15T10:00:00+01:00")))).toBe("NOT_TODAY");
     await tick("KARANTEN", "BACKWASH", true, "NAPI_NAGY", new Date("2029-02-15T10:00:00+01:00"), f.admin); // an admin, another day
@@ -64,16 +68,30 @@ describe("the pool ticks", () => {
       );
     await measure("PH", "8,1", "09:00");
     await measure("TEMP", "24", "09:05");
-    const { buffer } = await buildWaterWorkbook({ from: DAY, to: DAY, poolIds: [f.pool("NAGY")] });
+    // the Nagymedence's first sand filter (its BACKWASH, on above) and its third; the Kismedence's one backwash
+    await tick("NAGY", "BACKWASH_3", true);
+    await tick("KIS", "BACKWASH", true);
+    await createMeasurement(
+      f.aq1,
+      { requestId: rid(), groupId: f.group("NAPI_NAGY"), poolId: f.pool("KIS"), parameterId: f.param("PH"), value: "8,2", measuredAtLocal: `${DAY}T09:10` },
+      new Date(`${DAY}T09:10:00+01:00`),
+    );
+    const { buffer } = await buildWaterWorkbook({ from: DAY, to: DAY, poolIds: [f.pool("NAGY"), f.pool("KIS")] });
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+    const ticksOf = (ws: ExcelJS.Worksheet, r: number) => [12, 13, 14, 15, 16, 17].map((c) => ws.getRow(r).getCell(c).value ?? "");
+    for (const name of ["Vízmérés teljes", "Nagymedence", "Kismedence"]) {
+      const ws = wb.getWorksheet(name)!;
+      // Lili 2026-11-01 23:30-23:32 UTC: "Rátöltés" first, the Nagymedence's sand filters HSZ1-HSZ3
+      expect((ws.getRow(1).values as unknown[]).slice(12), name).toEqual(["Rátöltés", "Visszamosás", "HSZ1", "HSZ2", "HSZ3", "Vízcsere"]);
+    }
     for (const name of ["Vízmérés teljes", "Nagymedence"]) {
       const ws = wb.getWorksheet(name)!;
-      expect((ws.getRow(1).values as unknown[]).slice(12), name).toEqual(["Visszamosás", "Rátöltés", "Vízcsere"]);
-      const ticksOf = (r: number) => [12, 13, 14].map((c) => ws.getRow(r).getCell(c).value ?? "");
-      expect(ticksOf(2), name).toEqual(["volt", "volt", ""]); // the first row of the pool and the day
-      expect(ticksOf(3), name).toEqual(["", "", ""]); // the second row of the same day: not repeated
+      expect(ticksOf(ws, 2), name).toEqual(["volt", "", "volt", "", "volt", ""]); // the first row of the pool and the day
+      expect(ticksOf(ws, 3), name).toEqual(["", "", "", "", "", ""]); // the second row of the same day: not repeated
     }
+    // the Kismedence's backwash under "Visszamosás", not under HSZ1
+    expect(ticksOf(wb.getWorksheet("Kismedence")!, 2)).toEqual(["", "volt", "", "", "", ""]);
     // Lili (acrobot msg 38143, 2026-10-29 22:01): the ticks are NOT in the PDF report, only in the Excel
     const report = await waterReport(DAY);
     expect(report.pools.find((p) => p.pool === "Nagymedence")).toBeDefined();

@@ -23,8 +23,10 @@ import { canonicalDecimal, multiplyDecimal, parseDecimalInput } from "@/lib/deci
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 import { useLeaveWarning } from "./useLeaveWarning";
 
-type TickKind = "BACKWASH" | "TOPUP" | "WATER_CHANGE";
-const TICK_TEXT: Record<TickKind, string> = { BACKWASH: "Visszamosás", TOPUP: "Rátöltés", WATER_CHANGE: "Vízcsere" };
+type TickKind = "BACKWASH" | "BACKWASH_2" | "BACKWASH_3" | "TOPUP" | "WATER_CHANGE";
+const TICK_TEXT: Record<TickKind, string> = { BACKWASH: "Visszamosás", BACKWASH_2: "Visszamosás", BACKWASH_3: "Visszamosás", TOPUP: "Rátöltés", WATER_CHANGE: "Vízcsere" };
+// Lili 2026-11-01 23:32 UTC: the Nagymedence's three sand filters, one tick each, a number beside it (HSZ1-3 in the Excel)
+const FILTER_TICKS: TickKind[] = ["BACKWASH", "BACKWASH_2", "BACKWASH_3"];
 
 type Grid = {
   group: { id: string; name: string };
@@ -34,7 +36,7 @@ type Grid = {
     parameters: { id: string; name: string; decimals: number; unit: { symbol: string }; dilution: boolean; conversion?: ReadingConversion | null; pools?: string[] | null }[];
   };
   /** the pool ticks this group offers (Lili 2026-10-29, item 8): empty for the weekly groups */
-  tickKinds: TickKind[];
+  tickKinds: Record<string, TickKind[]>;
   /** "poolId:kind" -> true while the tick is on for the day */
   ticks: Record<string, true>;
   rounds: { id: string; seq: number }[];
@@ -718,20 +720,37 @@ export function MeasurementGrid({
                         {pool.name}
                         {!pool.active && <span className="hint"> (inaktív)</span>}
                       </button>
-                      {grid.tickKinds.length > 0 && (
+                      {(grid.tickKinds[pool.id] ?? []).length > 0 && (
                         <div className="pool-ticks">
-                          {grid.tickKinds.map((kind) => (
-                            <label key={kind} className="check pool-tick">
-                              <input
-                                type="checkbox"
-                                checked={!!grid.ticks[`${pool.id}:${kind}`]}
-                                disabled={readOnly || !pool.active || !!tickBusy[`${pool.id}:${kind}`]}
-                                onChange={(e) => void toggleTick(pool.id, kind, e.target.checked)}
-                                data-testid={`tick-${pool.name}-${kind}`}
-                              />
-                              {TICK_TEXT[kind]}
-                            </label>
-                          ))}
+                          {(() => {
+                            const kinds = grid.tickKinds[pool.id] ?? [];
+                            const filters = kinds.includes("BACKWASH_2");
+                            const box = (kind: TickKind, text: string, label?: string) => (
+                              <label key={kind} className="check pool-tick">
+                                <input
+                                  type="checkbox"
+                                  checked={!!grid.ticks[`${pool.id}:${kind}`]}
+                                  disabled={readOnly || !pool.active || !!tickBusy[`${pool.id}:${kind}`]}
+                                  onChange={(e) => void toggleTick(pool.id, kind, e.target.checked)}
+                                  aria-label={label}
+                                  data-testid={`tick-${pool.name}-${kind}`}
+                                />
+                                {text}
+                              </label>
+                            );
+                            return kinds.map((kind) =>
+                              filters && FILTER_TICKS.includes(kind) ? (
+                                kind === "BACKWASH" ? (
+                                  <span key="filters" className="pool-tick pool-tick-filters" role="group" aria-label="Visszamosás, homokszűrők">
+                                    {TICK_TEXT.BACKWASH}
+                                    {FILTER_TICKS.map((k, i) => box(k, String(i + 1), `Visszamosás, ${i + 1}. homokszűrő`))}
+                                  </span>
+                                ) : null
+                              ) : (
+                                box(kind, TICK_TEXT[kind])
+                              ),
+                            );
+                          })()}
                         </div>
                       )}
                     </td>

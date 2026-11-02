@@ -24,6 +24,11 @@ test("an aquarist changes their own display name; the monogram and the ZIMS name
   const admin = page.getByTestId("own-admin-fields");
   await expect(admin).toContainText("Monogram:");
   await expect(admin.locator("input")).toHaveCount(0);
+  // Lili 2026-11-01 22:43 UTC: one card; the login name is named as such, the nickname field is on it
+  const card = page.getByTestId("own-name-card");
+  await expect(card).toContainText("Bejelentkezési név: teszt.akvarista2.");
+  await expect(card).toContainText("A megjelenő név látszik a fejlécben és a naplókban.");
+  await expect(card.getByTestId("own-nickname").getByLabel("Becenév")).toBeVisible();
   const box = page.getByTestId("own-name");
   const field = box.getByLabel("Megjelenő név");
   await expect(field).toHaveValue(original);

@@ -204,6 +204,9 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .pool-ticks { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
 .pool-tick { font-size: 14px; font-weight: 400; color: var(--c-muted); min-height: 28px; gap: 6px; }
 .pool-tick input { width: 18px; height: 18px; }
+/* Lili 2026-11-01 23:32 UTC: the Nagymedence's backwash, three numbered ticks on one line after the word */
+.pool-tick-filters { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+.pool-tick-filters .pool-tick { min-height: 0; gap: 3px; }
 /* Lili 2026-10-29: only while the measurement table is wider than its place (MeasurementGrid marks it): the header row
    sticks on top of a box that scrolls both ways, the pool column at its left, the corner above both. Each stuck cell
    has its own background, or the scrolled ones show through. Where the table fits, none of this applies. */
@@ -243,6 +246,7 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
   .pool-cell button { min-height: 44px; }
   .pool-ticks { flex-direction: row; flex-wrap: wrap; gap: 2px 16px; margin-top: 0; }
   .pool-tick { min-height: 44px; }
+  .pool-tick-filters .pool-tick { min-height: 44px; gap: 6px; }
   /* one line, so a pair of fields stands level; a label too long for its half ends in an ellipsis rather than wrapping */
   .grid-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--c-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cell-input, .cell-value, .meta-row, .clearable-block { min-width: 0; max-width: none; }

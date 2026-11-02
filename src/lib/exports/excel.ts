@@ -9,7 +9,7 @@ import ExcelJS from "exceljs";
 import { prisma } from "../db";
 import { canonicalDecimal } from "../decimal";
 import { nameAt, pickValid } from "../master";
-import { TICK_LABEL, TICK_ORDER } from "../pool-ticks";
+import { hasThreeFilters, TICK_COLUMNS } from "../pool-ticks";
 import { evaluateReference } from "../reference";
 import { BUSINESS_TZ, dateToDay, dayToDate, formatDay, resolveLocalDateTime, wallClock } from "../time";
 
@@ -18,8 +18,9 @@ export const TEMPLATE_HEADER = ["Dátum", "Idő", "Akvárium", "Vízparaméter",
 // Lili 2026-11-01 22:35 UTC: the dilution is a factor now; the value before it stands beside it (the ZIMS takes the result only)
 export const EXTRA_HEADER = ["Hígítás", "RO/SW", "Hígítás előtti érték"];
 // Lili 2026-10-29 (task caparium-lili-nagyobb-m, item 8): after the last column, one column per pool tick; "volt" where it
-// was ticked. A plain Excel fact, not part of the ZIMS export. On the FIRST row of the pool and the day, once.
-export const TICK_HEADER = TICK_ORDER.map((k) => TICK_LABEL[k]);
+// was ticked. A plain Excel fact, not part of the ZIMS export. On the FIRST row of the pool and the day, once. Lili
+// 2026-11-01 23:30-23:32 UTC: "Rátöltés" first, and the Nagymedence's three sand filters as HSZ1-HSZ3 (src/lib/pool-ticks.ts).
+export const TICK_HEADER = TICK_COLUMNS.map((c) => c.header);
 export const SUMMARY_SHEET = "Vízmérés teljes";
 
 const RED = "FFDF5B5B";
@@ -93,7 +94,7 @@ export async function buildWaterWorkbook(f: ExcelFilter): Promise<{ buffer: Buff
     const head = ws.addRow(header);
     head.font = { bold: true };
     head.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: WATER_HEAD_FILL } }));
-    ws.columns = [12, 8, 16, 16, 10, 13, 15, 11, 9, 8, 14, 12, 10, 10].map((width) => ({ width }));
+    ws.columns = [12, 8, 16, 16, 10, 13, 15, 11, 9, 8, 14, 10, 12, 7, 7, 7, 10].map((width) => ({ width }));
     ws.views = [{ state: "frozen", ySplit: 1 }];
   }
   const ticked = await prisma.poolTick.findMany({
@@ -128,7 +129,8 @@ export async function buildWaterWorkbook(f: ExcelFilter): Promise<{ buffer: Buff
       m.dilution ?? "",
       m.diluentWater ?? "",
       m.baseValue === null ? "" : Number(canonicalDecimal(m.baseValue)),
-      ...TICK_ORDER.map((kind) => {
+      ...TICK_COLUMNS.map(({ kind, filters }) => {
+        if (filters !== null && filters !== hasThreeFilters(m.pool.code)) return "";
         const key = `${m.poolId}:${dateToDay(m.businessDay)}:${kind}`;
         if (!tickAt.has(key) || tickShown.has(key)) return "";
         tickShown.add(key);

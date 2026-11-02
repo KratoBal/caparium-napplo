@@ -500,9 +500,11 @@ export async function updateMeasurement(
             ? { rawReading: null, conversionId: null }
             : {};
       checkDilutionAllowed(param, input);
-      // the dilution's factor again when the value or the dilution changes (an old row too: its value is the value before it)
+      // the dilution's factor again when the value or the dilution changes (an old row too: its value is the value before it).
+      // A dilution sent back unchanged is no change: the grid sends it with every RO/SW pick (barracuda on #179)
+      const dilutionChanged = input.dilution !== undefined && input.dilution !== cur.dilution;
       let diluted: { value?: string; baseValue?: string | null } = {};
-      if (param.dilution && (newValue !== undefined || input.dilution !== undefined)) {
+      if (param.dilution && (newValue !== undefined || dilutionChanged)) {
         const base = newValue ?? (cur.baseValue !== null ? canonicalDecimal(cur.baseValue) : canonicalDecimal(cur.value));
         const d = applyDilution(base, input.dilution !== undefined ? input.dilution : cur.dilution);
         diluted = d;

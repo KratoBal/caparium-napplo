@@ -323,6 +323,9 @@ describe("weekly measurement (VIZ-05, VIZ-06, DN-07)", () => {
     await ownerPrisma.measurement.update({ where: { id: old.measurement.id }, data: { dilution: 10 } });
     const t = await updateMeasurement(f.aq1, old.measurement.id, { requestId: rid(), expectedVersion: 1, measuredAtLocal: "2026-06-28T09:10" }, cest("2026-06-28T09:20"));
     expect(t.measurement).toMatchObject({ value: "8.4", baseValue: null, dilution: 10 });
+    // nor an RO/SW pick, which the grid sends with the dilution as it was (barracuda on #179)
+    const u = await updateMeasurement(f.aq1, old.measurement.id, { requestId: rid(), expectedVersion: 2, diluentWater: "SW", dilution: 10 }, cest("2026-06-28T09:20"));
+    expect(u.measurement).toMatchObject({ value: "8.4", baseValue: null, dilution: 10, diluentWater: "SW" });
   });
 
   it("rejects a dilution outside 1–100", async () => {

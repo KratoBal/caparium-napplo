@@ -394,6 +394,9 @@ enum PoolTickKind {
   BACKWASH
   TOPUP
   WATER_CHANGE
+  // Lili 2026-11-01 23:30 UTC: the Nagymedence's three sand filters; its BACKWASH is the first (HSZ1)
+  BACKWASH_2
+  BACKWASH_3
 }
 
 model PoolTick {
