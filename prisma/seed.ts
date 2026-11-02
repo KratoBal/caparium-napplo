@@ -7,7 +7,7 @@
 import { PrismaClient } from "@prisma/client";
 import { rebuildAnimal } from "../src/lib/animals";
 import { hashPassword } from "../src/lib/auth";
-import { BASE_FEEDS, loadBaseData, PARAMETERS, SINCE } from "../src/lib/base-data";
+import { BASE_FEEDS, HISTORY_SINCE, loadBaseData, PARAMETERS, SINCE } from "../src/lib/base-data";
 import { FEED_HISTORY_START } from "../src/lib/feed-history";
 import { syntheticWanted } from "../src/lib/seed-switch";
 
@@ -58,7 +58,7 @@ async function main() {
     const parameterId = paramId.get(p.code)!;
     if (await prisma.referenceRange.findFirst({ where: { parameterId, poolId: null } })) continue;
     await prisma.referenceRange.create({
-      data: { parameterId, min: p.ref[0], max: p.ref[1], unitId: unitId.get(p.unit)!, validFrom: SINCE, createdById: SYSTEM_USER_ID },
+      data: { parameterId, min: p.ref[0], max: p.ref[1], unitId: unitId.get(p.unit)!, validFrom: HISTORY_SINCE, createdById: SYSTEM_USER_ID },
     });
   }
 
@@ -70,8 +70,8 @@ async function main() {
         fullName: u.fullName,
         role: u.role,
         passwordHash: await hashPassword(password),
-        monograms: { create: { monogram: u.monogram, validFrom: SINCE } },
-        zimsNames: { create: { zimsName: u.zims, validFrom: SINCE } },
+        monograms: { create: { monogram: u.monogram, validFrom: HISTORY_SINCE } },
+        zimsNames: { create: { zimsName: u.zims, validFrom: HISTORY_SINCE } },
       },
     });
   }
