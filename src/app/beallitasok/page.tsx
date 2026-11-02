@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { ConversionRow, MonthlyZimsRecipient, NewMeasurementForm, NewPoolForm, NewUserForm, PoolList, PoolSystemForm, PoolVolumeForm, ReferenceRow, SaveReminderSwitch, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
+import { DilutionRecalc } from "@/components/DilutionRecalc";
 import { SettingsCard } from "@/components/SettingsCard";
 import { Shell } from "@/components/Shell";
 import { listAnimals, listGroupsWithNames } from "@/lib/animals";
@@ -189,6 +190,11 @@ export default async function SettingsPage() {
             </tbody>
           </table>
         </div>
+      </SettingsCard>
+
+      {/* acrobot 39888: the weekly rows saved before the dilution became a factor (src/lib/dilution-recalc.ts) */}
+      <SettingsCard id="regi-higitas" title="Régi hígított sorok átszámolása" testId="dilution-recalc-card">
+        <DilutionRecalc />
       </SettingsCard>
 
       <SettingsCard id="medencek" title="Medencék">
