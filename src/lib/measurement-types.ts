@@ -254,6 +254,8 @@ export async function changeMeasurementUnit(actor: Actor, raw: z.input<typeof un
   const common = reference(input.referenceMin, input.referenceMax, "A közös referencia");
   const own = input.poolReferences.map((r) => ({ poolId: r.poolId, ...reference(r.min, r.max, "A medence referenciája") })).filter((r) => r.min !== null || r.max !== null);
   return prisma.$transaction(async (tx) => {
+    // the order first (it shifts it), then the row, in the order an order save takes them too: no deadlock (parameter-order.ts)
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('parameter-order'))`;
     await tx.$queryRaw`SELECT id FROM "parameter" WHERE id = ${input.parameterId}::uuid FOR UPDATE`;
     const old = await tx.parameter.findUnique({ where: { id: input.parameterId }, include: { names: true, zimsNames: true } });
     if (!old) throw new AppError(404, "NOT_FOUND", "A mérés nem található.");

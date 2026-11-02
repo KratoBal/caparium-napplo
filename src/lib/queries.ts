@@ -270,7 +270,7 @@ export async function measurementHistory(id: string) {
       createdByName: mono.name(m.createdById),
       createdById: m.createdById,
       groupId: m.round.groupId,
-      dilutable: m.round.group.frequency === "WEEKLY" && takesDilution(m.parameter.code),
+      dilutable: m.round.group.frequency === "WEEKLY" && takesDilution(m.parameter.baseCode ?? m.parameter.code),
       measuredAtLocal: localDateTimeOf(m.measuredAt),
       responsibleUserId: m.responsibleUserId,
       traineePerformed: m.traineePerformed,

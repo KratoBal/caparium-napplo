@@ -24,6 +24,8 @@ export async function setParameterOrder(actor: Actor, raw: z.input<typeof parame
     throw new AppError(403, "ADMIN_ONLY", "A mérések sorrendjét csak adminisztrátor állíthatja.");
   }
   return prisma.$transaction(async (tx) => {
+    // barracuda on #188: an order save and a unit change (which shifts the order) one after the other
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('parameter-order'))`;
     const params = await tx.parameter.findMany({ select: { id: true, code: true, sortOrder: true, names: true } });
     const known = new Set(params.map((p) => p.id));
     if (input.ids.some((id) => !known.has(id))) throw new AppError(404, "PARAMETER_NOT_FOUND", "Az egyik mérés nem található.");

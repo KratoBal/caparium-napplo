@@ -19,6 +19,8 @@ export type CalcPool = {
   systemType: SystemType | null;
   latest: Partial<Record<Code, { value: string; day: string }>>;
   band: Partial<Record<Code, { min: string | null; max: string | null; unit: string }>>;
+  /** a measurement closed by a unit change: the calculator does not compute for it, and says why */
+  stopped?: Partial<Record<Code, string>>;
 };
 
 const hu = (v: string) => v.replace(".", ",");
@@ -56,6 +58,16 @@ function Card({
   // Lili 2026-10-29 (package item 5b, Balázs's limits): the dose split into days, not all of it at once
   const plan = result?.kind === "dose" && system ? dailyPlan(code, system, toNumber(current), toNumber(target), result.grams) : null;
   const raiseFmt = new Intl.NumberFormat("hu-HU", { maximumFractionDigits: 2 });
+  const stopped = pool?.stopped?.[code];
+  if (stopped)
+    return (
+      <div className="card chem-card" data-testid={`chem-${code}`} style={{ margin: 0 }}>
+        <h3>{title}</h3>
+        <p className="err" data-testid={`chem-${code}-stopped`} role="status">
+          {stopped}
+        </p>
+      </div>
+    );
   return (
     <div className="card chem-card" data-testid={`chem-${code}`} style={{ margin: 0 }}>
       <h3>{title}</h3>

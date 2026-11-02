@@ -13,8 +13,13 @@ const CODES = ["CA", "MG", "KH"] as const;
 export async function chemistryCalcPools(now = new Date()): Promise<CalcPool[]> {
   const [pools, params] = await Promise.all([
     prisma.pool.findMany({ where: poolInUse(businessDayOf(now)), include: { names: true }, orderBy: { code: "asc" } }),
-    prisma.parameter.findMany({ where: { code: { in: [...CODES] } } }),
+    prisma.parameter.findMany({ where: { code: { in: [...CODES] } }, include: { successor: { select: { id: true } } } }),
   ]);
+  // barracuda on #188: after a unit change the built-in measurement is closed and its successor goes on in another unit; the
+  // calculator works in ppm and dKH, so it stops loudly instead of computing from the closed measurement's last value
+  const stopped = Object.fromEntries(
+    params.filter((p) => p.successor).map((p) => [p.code, "A mérés mértékegysége megváltozott, ezért a kalkulátor ehhez nem számol."]),
+  ) as NonNullable<CalcPool["stopped"]>;
   const codeOf = new Map(params.map((p) => [p.id, p.code as (typeof CODES)[number]]));
   const [latest, ranges] = await Promise.all([
     prisma.measurement.findMany({
@@ -32,11 +37,12 @@ export async function chemistryCalcPools(now = new Date()): Promise<CalcPool[]> 
       systemType: pool.systemType,
       latest: {},
       band: {},
+      stopped,
     };
-    for (const m of latest.filter((x) => x.poolId === pool.id)) {
+    for (const m of latest.filter((x) => x.poolId === pool.id && !stopped[codeOf.get(x.parameterId)!])) {
       out.latest[codeOf.get(m.parameterId)!] = { value: canonicalDecimal(m.value), day: dateToDay(m.businessDay) };
     }
-    for (const p of params) {
+    for (const p of params.filter((x) => !stopped[x.code as (typeof CODES)[number]])) {
       const r = ranges.find((x) => x.parameterId === p.id && x.poolId === pool.id) ?? ranges.find((x) => x.parameterId === p.id && x.poolId === null);
       if (r) {
         out.band[codeOf.get(p.id)!] = {

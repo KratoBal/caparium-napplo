@@ -130,7 +130,8 @@ export async function groupLayout(
       id: gp.parameter.id,
       code: gp.parameter.code,
       name: pickValid(gp.parameter.names, at)?.displayName ?? gp.parameter.code,
-      dilution: takesDilution(gp.parameter.code),
+      // a unit change's successor keeps the built-in behaviour (src/lib/measurement-types.ts)
+      dilution: takesDilution(gp.parameter.baseCode ?? gp.parameter.code),
       decimals: gp.parameter.decimals,
       unit: {
         id: gp.parameter.unit.id,
