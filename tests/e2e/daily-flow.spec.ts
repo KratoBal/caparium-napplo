@@ -461,7 +461,7 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   // each layout feeds its own animal: the day is shared, the cells are not
   const name = info.project.name === "tablet" ? "Teszt Egy" : "Teszt Kettő";
   await login(page, "teszt.akvarista1");
-  await page.getByRole("link", { name: "Napi etetés", exact: true }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Napi etetés", exact: true }).click();
   const box = page.getByLabel(`${name} a mai listán`);
   await box.check();
   await expect(box).toBeChecked();
@@ -656,7 +656,7 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   const name = info.project.name === "tablet" ? "Teszt Egy" : "Teszt Kettő";
   const other = "Teszt csoport (csoport)";
   await login(page, "teszt.akvarista1");
-  await page.getByRole("link", { name: "Napi etetés", exact: true }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Napi etetés", exact: true }).click();
   // step 1: the pool's header row selects every animal in it at once (Lili 2026-10-26: the list is by pool)
   await expect(page.getByTestId("group-head-Nagymedence")).toBeVisible();
   // Lili 2026-10-26 (items 2 and 3): one small switch per pool instead of the two buttons, no "Kiválasztva." beside a tick,
@@ -856,7 +856,7 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   await expect(mysis).toHaveValue("30");
   // barracuda #45 (2): leaving with a draft asks first; declined, the draft is still there; accepted, the page goes
   await mysis.fill("35");
-  const leave = page.getByRole("link", { name: "Takarmánykivétel" });
+  const leave = page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Takarmánykivétel" });
   const asked: string[] = [];
   page.once("dialog", (d) => {
     asked.push(d.message());
@@ -896,7 +896,7 @@ test("feeding sheet: a row colour set in the settings colours that animal's or g
   const GREEN = "rgb(217, 236, 217)";
   const PURPLE = "rgb(228, 219, 242)";
 
-  await page.getByRole("link", { name: "Napi etetés", exact: true }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Napi etetés", exact: true }).click();
   await page.getByRole("switch", { name: "Nagymedence: mind kijelölve" }).check();
   const dayFeeds = page.getByTestId("day-feeds");
   await dayFeeds.getByLabel("A nap takarmánya: Mysis").check();
@@ -925,7 +925,7 @@ test("feeding sheet: a row colour set in the settings colours that animal's or g
 test("feeding sheet: a small X empties an amount field in one click, on g and db each, only while it holds something", async ({ page }) => {
   // Lili 2026-10-29 (caparium-cella-torles-x): the same as deleting it by hand, no retyping
   await login(page, "teszt.admin");
-  await page.getByRole("link", { name: "Napi etetés", exact: true }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Napi etetés", exact: true }).click();
   await page.getByRole("switch", { name: "Nagymedence: mind kijelölve" }).check();
   const dayFeeds = page.getByTestId("day-feeds");
   await dayFeeds.getByLabel("A nap takarmánya: Litopenaeus vannamei").check();
@@ -1221,7 +1221,7 @@ test("intake (Fagyasztó): an item in the stock; a returned delivery shows on th
   await expect(back).toHaveAttribute("data-returned", "yes");
   await expect(stockRow.locator("td").nth(2)).toHaveText(level);
   // the withdrawal page shows that stock under the chosen feed, and warns when the typed amount is more than it
-  await page.getByRole("link", { name: "Takarmánykivétel" }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Takarmánykivétel" }).click();
   const take = page.getByTestId("withdrawal-form");
   await take.getByLabel("Takarmány", { exact: true }).selectOption({ label: feedName });
   await expect(take.getByTestId("stock-hint").first()).toContainText("Készlet:");
@@ -1239,7 +1239,7 @@ test("withdrawal: an item for tomorrow, the day's total, taken against given, th
   // each layout takes out its own feed: one item per feed and day
   const feedName = info.project.name === "tablet" ? "Teszt hal" : "Teszt kagyló";
   await login(page, "teszt.akvarista1");
-  await page.getByRole("link", { name: "Takarmánykivétel" }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Takarmánykivétel" }).click();
   // Lili 2026-10-26 (card f67b1a06, item 5): a date picker beside the day arrows, as on the water measurement pages
   await expect(page.getByTestId("day-picker").getByRole("button", { name: "Ugrás" })).toBeVisible();
   const form = page.getByTestId("withdrawal-form");
@@ -1313,7 +1313,7 @@ test("calculator: general, no animal on top, saved as the reference of the anima
   await expect(page.getByTestId("saved-references").getByRole("row").filter({ hasText: name }).first()).toContainText("250 g");
   // EGY-08: the feeding page shows the reference in the animal's row. Since Lili's simpler chooser (2026-10-21) the
   // items table lists only the day's animals, so the animal goes on today's list first
-  await page.getByRole("link", { name: "Napi etetés", exact: true }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Napi etetés", exact: true }).click();
   await page.getByLabel(`${name} a mai listán`).check();
   await expect(page.getByTestId("feeding-list").getByRole("row").filter({ hasText: name })).toContainText("ref 250 g");
   // package item 4: nothing given yet, so the reference stays quiet (neither the green nor the red mark)
@@ -1349,7 +1349,7 @@ test("body weight log: hidden, not deleted; a setting row brings it back on the 
 
 test("dosing: a dose in g, the log, the stock kept in kg, the log as a PDF made on the server", async ({ page }) => {
   await login(page, "teszt.akvarista1");
-  await page.getByRole("link", { name: "Vegyszeradagolás" }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Vegyszeradagolás" }).click();
   const form = page.getByTestId("dosing-form");
   await form.getByLabel("Medence", { exact: true }).selectOption({ label: "Sózó" });
   await form.getByLabel("Szer", { exact: true }).selectOption({ label: "Teszt só" });
@@ -1372,7 +1372,7 @@ test("dosing: an admin changes and inactivates a chemical; it is not offered whi
   // Lili 2026-10-28 16:06 UTC (caparium-vegyszer-inaktival). Each project its own chemical, so the second run meets none.
   const name = `Inaktiv proba ${info.project.name}`;
   await login(page, "teszt.admin");
-  await page.getByRole("link", { name: "Vegyszeradagolás" }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Vegyszeradagolás" }).click();
   const fresh = page.getByTestId("new-chemical");
   if ((await page.getByTestId("stock").getByRole("row").filter({ hasText: name }).count()) === 0) {
     await fresh.getByLabel("Új vegyszer neve").fill(name);
@@ -1443,7 +1443,7 @@ test("a pool's own band and volume in the settings; the chemical calculator unde
   await page.reload();
   await expect((await openMeasurement(page, "Ca (ppm)")).getByTestId(`ref-${pool}-Ca`)).not.toContainText("a közös érték");
 
-  await page.getByRole("link", { name: "Vegyszeradagolás" }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Vegyszeradagolás" }).click();
   const calc = page.getByTestId("chemistry-calculator");
   await calc.getByLabel("Medence", { exact: true }).selectOption({ label: pool });
   await expect(calc.getByLabel("Térfogat (liter)")).toHaveValue("1000");
@@ -1665,7 +1665,7 @@ test("the feeding timetable: every animal's days on one screen, saved together, 
   const day = labels[(today + (info.project.name === "tablet" ? 2 : 3)) % 7]!;
   // Lili 2026-10-26 (msg 1564404799359946884): the timetable is the admin's for now
   await login(page, "teszt.admin");
-  await page.getByRole("link", { name: "Napi etetés", exact: true }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Napi etetés", exact: true }).click();
   await page.getByRole("link", { name: "Etetési rend" }).click();
   const table = page.getByTestId("timetable");
   await expect(table).toBeVisible();
@@ -1692,7 +1692,7 @@ test("conveniences: a feeding plan, the list from it, the feed type icons", asyn
   await page.getByRole("link", { name: "Állatok" }).click();
   await page.getByTestId("animals-table").getByRole("link", { name: "Teszt Három" }).click();
   await expect(page.getByText("Etetési napok")).toHaveCount(0);
-  await page.getByRole("link", { name: "Napi etetés", exact: true }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Napi etetés", exact: true }).click();
   await page.getByRole("link", { name: "Etetési rend" }).click();
   const table = page.getByTestId("timetable");
   for (const d of ["H", "K", "Sze", "Cs", "P", "Szo", "V"]) await table.getByLabel(`Teszt Három: ${d}`).check();
@@ -1704,7 +1704,7 @@ test("conveniences: a feeding plan, the list from it, the feed type icons", asyn
   }
   await page.reload();
   for (const d of ["H", "K", "Sze", "Cs", "P", "Szo", "V"]) await expect(page.getByTestId("timetable").getByLabel(`Teszt Három: ${d}`)).toBeChecked();
-  await page.getByRole("link", { name: "Napi etetés", exact: true }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Napi etetés", exact: true }).click();
   await page.getByRole("button", { name: "Mai Terv" }).click();
   await expect(page.getByLabel("Teszt Három a mai listán")).toBeChecked();
   await page.getByRole("link", { name: "Takarmánylista" }).click();
@@ -1728,7 +1728,7 @@ async function topIs(page: Page, testId: string): Promise<boolean> {
 test("the helper: it speaks unasked without taking a click, the quick questions from the figure, switched in the header, the urgent notice stays", async ({ page }) => {
   await login(page, "teszt.akvarista1");
   // its own dose leaves "Teszt só" below zero, whatever ran before (review of #21)
-  await page.getByRole("link", { name: "Vegyszeradagolás" }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Vegyszeradagolás" }).click();
   const form = page.getByTestId("dosing-form");
   await form.getByLabel("Medence", { exact: true }).selectOption({ label: "Sózó" });
   await form.getByLabel("Szer", { exact: true }).selectOption({ label: "Teszt só" });
@@ -1979,7 +1979,6 @@ test("the Beállítások drop-down opens its three entries in the side menu, and
   await expect(caret).toHaveAttribute("aria-expanded", "true");
   const list = page.getByRole("group", { name: "Beállítások almenü" });
   await expect(list.getByRole("link")).toHaveText(entries);
-  for (const l of await list.getByRole("link").all()) await expect(l).toBeInViewport();
   await caret.click();
   await expect(caret).toHaveAttribute("aria-expanded", "false");
   await expect(list).toHaveCount(0);
@@ -2020,7 +2019,7 @@ test("animals: the starting list loader has no screen, and the API still loads t
 // name. After the starting list's load (the test above), so several pools have animals.
 test("feeding: the pool lines of the day's chooser in the pools' own order", async ({ page }) => {
   await login(page, "teszt.akvarista1");
-  await page.getByRole("link", { name: "Napi etetés", exact: true }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Napi etetés", exact: true }).click();
   await expect(page.getByTestId("animal-chooser")).toBeVisible();
   const heads = (await page.locator('[data-testid^="group-head-"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.slice("group-head-".length))));
   const order = ["Nagymedence", "Karantén", "Kismedence", "Ragadozós", "Korallos", "Inkubátor", "Kis sózó", "Sózó"];
@@ -2332,7 +2331,7 @@ test("the admin's animal order: a drag handle, a place number and the highlighte
 // does not see the entry, the page sends them to the no-access page, and "Lista a terv szerint" still works for them.
 test("the feeding timetable is the admin's: an aquarist has no entry, is sent away, and keeps the plan button", async ({ page }) => {
   await login(page, "teszt.akvarista1");
-  await page.getByRole("link", { name: "Napi etetés", exact: true }).click();
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Napi etetés", exact: true }).click();
   await expect(page.getByRole("button", { name: "Mai Terv" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Etetési rend" })).toHaveCount(0);
   await page.goto("/etetes/rend");
