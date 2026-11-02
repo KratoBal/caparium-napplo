@@ -13,4 +13,8 @@ describe("export file names", () => {
     expect(periodFileName(FILE_BASE.eating, "2026-11-01", "2026-11-02", "xlsx")).toBe("capasuli_evesimintazat_2026-11-01_2026-11-02.xlsx");
     expect(periodFileName(FILE_BASE.withdrawal, "2026-11-01", "2026-11-01", "xlsx")).toBe("capasuli_takarmanykivetel_2026-11-01.xlsx");
   });
+  it("names the fridges' temperature book capasuli_, the Excel and the PDF alike (task caparium-hutok)", () => {
+    expect(periodFileName(FILE_BASE.fridges, "2026-11-01", "2026-11-30", "xlsx")).toBe("capasuli_hutok_homerseklete_2026-11-01_2026-11-30.xlsx");
+    expect(periodFileName(FILE_BASE.fridges, "2026-11-02", "2026-11-02", "pdf")).toBe("capasuli_hutok_homerseklete_2026-11-02.pdf");
+  });
 });

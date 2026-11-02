@@ -223,6 +223,22 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .cell-value { display: flex; align-items: center; min-height: 56px; font-size: 20px; padding: 0 14px; border-radius: var(--radius-sm); background: var(--c-field); max-width: 160px; }
 .cell-value.empty { color: var(--c-muted); }
 .cell-value.out { background: var(--c-error-soft); color: var(--c-error); }
+/* the fridges' card (task caparium-hutok): a temperature outside the fridge's range, typed or saved */
+.input.out { background: var(--c-error-soft); color: var(--c-error); }
+.fridge-table td.fridge-out { color: var(--c-error); font-weight: 600; }
+.fridge-table tr.fridge-reading td { border-top: 0; }
+/* on a phone (Lili tries the site on an Android phone too): every fridge is a card, the fields under their own labels, nothing scrolls sideways */
+@media (max-width: 720px) {
+  .fridge-table, .fridge-table tbody { display: block; }
+  .fridge-table thead { display: none; }
+  .fridge-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-top: 10px; padding: 10px 0; border: 1px solid var(--c-line); border-radius: var(--radius-sm); }
+  .fridge-table tr.fridge-reading { margin-top: 4px; border-style: dashed; }
+  .fridge-table tr > td { display: block; min-width: 0; padding: 0 12px; border: 0; }
+  .fridge-table tr > td.fridge-gap { display: none; }
+  .fridge-table tr > td:first-child:not(.fridge-gap), .fridge-table tr > td[data-label="Dátum és idő"], .fridge-table tr > td[data-label="Megjegyzés"], .fridge-table tr > td.keep:last-child { grid-column: 1 / -1; }
+  .fridge-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--c-muted); }
+  .fridge-table td .input { width: 100%; min-width: 0; }
+}
 .meta-row { display: flex; gap: 6px; margin-top: 6px; max-width: 160px; }
 .meta-select { height: 40px; flex: 1; min-width: 0; border-radius: 8px; border: 1px solid var(--c-line); background-color: var(--c-white); font-size: 14px; padding: 0 20px 0 6px; background-position: right 6px center; background-size: 10px 7px; }
 .cell-meta { font-size: 12px; color: var(--c-muted); margin-top: 4px; min-height: 16px; }

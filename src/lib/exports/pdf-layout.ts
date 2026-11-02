@@ -15,7 +15,7 @@ export type PdfPage = {
   left: number;
   band(text: string): void;
   /** a table: the widths add up to at most `width`; `total` rows stand out like the exports' total rows */
-  table(widths: number[], head: string[], rows: { cells: string[]; total?: boolean; align?: ("left" | "right")[] }[]): void;
+  table(widths: number[], head: string[], rows: { cells: string[]; total?: boolean; align?: ("left" | "right")[]; colors?: (string | null)[] }[]): void;
   note(text: string): void;
   done(): Promise<Buffer>;
 };
@@ -53,7 +53,7 @@ export function pdfPage(opts: { title: string; subtitle: string; landscape?: boo
     table(widths, head, rows) {
       const xs = widths.map((_, i) => left + widths.slice(0, i).reduce((a, b) => a + b, 0));
       const total = widths.reduce((a, b) => a + b, 0);
-      const line = (cells: string[], o: { header?: boolean; total?: boolean; align?: ("left" | "right")[] }) => {
+      const line = (cells: string[], o: { header?: boolean; total?: boolean; align?: ("left" | "right")[]; colors?: (string | null)[] }) => {
         doc.fontSize(8.5);
         const h = Math.max(...cells.map((c, i) => doc.heightOfString(c, { width: widths[i] - 6 }))) + 4;
         if (doc.y + h > bottom()) {
@@ -63,12 +63,18 @@ export function pdfPage(opts: { title: string; subtitle: string; landscape?: boo
         const y = doc.y;
         if (o.header || o.total) doc.save().rect(left, y - 2, total, h).fill(o.header ? BG_HEADER : BG_TOTAL).restore();
         doc.fontSize(8.5).fillColor(o.header ? "#333" : "#000");
-        cells.forEach((c, i) => doc.text(c, xs[i] + 2, y, { width: widths[i] - 6, align: o.align?.[i] ?? "left" }));
+        // a cell's own colour (an out-of-range reading in red), back to the row's colour after it
+        cells.forEach((c, i) => {
+          const own = o.colors?.[i];
+          if (own) doc.fillColor(own);
+          doc.text(c, xs[i] + 2, y, { width: widths[i] - 6, align: o.align?.[i] ?? "left" });
+          if (own) doc.fillColor(o.header ? "#333" : "#000");
+        });
         doc.x = left;
         doc.y = y + h;
       };
       line(head, { header: true });
-      for (const r of rows) line(r.cells, { total: r.total, align: r.align });
+      for (const r of rows) line(r.cells, { total: r.total, align: r.align, colors: r.colors });
       doc.fillColor("#000").moveDown(0.6);
     },
     note(text) {

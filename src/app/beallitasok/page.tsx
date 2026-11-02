@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { MonthlyZimsRecipient, NewMeasurementForm, NewPoolForm, NewUserForm, PoolList, PoolSystemForm, PoolVolumeForm, SaveReminderSwitch, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
 import { DilutionRecalc } from "@/components/DilutionRecalc";
+import { FridgeSettings } from "@/components/FridgeSettings";
 import { WaterMeasurements } from "@/components/WaterMeasurements";
 import { SettingsCard } from "@/components/SettingsCard";
 import { Shell } from "@/components/Shell";
@@ -9,6 +10,7 @@ import { listAnimals, listGroupsWithNames } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { canonicalDecimal } from "@/lib/decimal";
 import { getSetting, moduleLevel, pickValid, validAt } from "@/lib/master";
+import { listFridges } from "@/lib/fridges";
 import { listMeasurementTypes } from "@/lib/measurement-types";
 import { reasonsRequired } from "@/lib/reasons";
 import { saveReminderOn } from "@/lib/save-reminder-setting";
@@ -84,6 +86,16 @@ export default async function SettingsPage() {
           />
         </div>
         <p className="banner banner-warn" style={{ marginTop: 16 }}>A tesztkörnyezet referenciaértékei bemutató adatok.</p>
+      </SettingsCard>
+
+      {/* Lili 2026-11-02 (task caparium-hutok): the fridges of the daily temperature book; their own card, not a water measurement */}
+      <SettingsCard id="hutok" title="Hűtők" testId="fridges-card">
+        <p className="hint">
+          Hűtőnként és fagyasztónként egy sor: név, fajta és a megengedett tartomány (°C). A napi vízmérés oldalán, a Nagy medencék tábla alatt
+          rögzíthető a hőmérséklet; a tartományon kívüli érték piros. Törlés nincs: a lezárt hűtőre nem rögzíthető új leolvasás, a régiek
+          megmaradnak, és újranyitható. Az új tartomány mostantól érvényes, a korábbi leolvasások a sajátjukat tartják.
+        </p>
+        <FridgeSettings fridges={await listFridges({ closedToo: true })} />
       </SettingsCard>
 
       {/* acrobot 39888: the weekly rows saved before the dilution became a factor (src/lib/dilution-recalc.ts) */}

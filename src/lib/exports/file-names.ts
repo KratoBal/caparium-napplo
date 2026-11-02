@@ -19,6 +19,8 @@ export const FILE_BASE = {
   feeding: "capasuli_takarmanynaplo",
   eating: "capasuli_evesimintazat",
   withdrawal: "capasuli_takarmanykivetel",
+  // Lili 2026-11-02 (task caparium-hutok): the fridges' temperature book
+  fridges: "capasuli_hutok_homerseklete",
 } as const;
 
 /**
