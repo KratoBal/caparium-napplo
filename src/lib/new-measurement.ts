@@ -39,7 +39,7 @@ export const newMeasurementSchema = z.object({
 type Actor = { id: string; role: Role };
 
 /** A code for the new parameter: the name's letters, capital, ascii, with a number when it is taken. */
-async function freeCode(tx: Tx, name: string): Promise<string> {
+export async function freeCode(tx: Tx, name: string): Promise<string> {
   const base = name.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 20) || "MERES";
   for (let i = 1; ; i++) {
     const code = i === 1 ? base : `${base}_${i}`;
@@ -47,7 +47,20 @@ async function freeCode(tx: Tx, name: string): Promise<string> {
   }
 }
 
-function decimal(v: string | null | undefined, what: string): string | null {
+/**
+ * A measurement's name is one of a kind among the measurements still in force (acrobot 39960): a type closed for good (none
+ * of its table columns open now or later) gives its name to its successor; `except` is the one being closed by a unit change.
+ */
+export async function nameTaken(tx: Tx, name: string, now: Date, except?: string): Promise<boolean> {
+  const rows = await tx.parameterName.findMany({
+    where: { displayName: { equals: name.trim(), mode: "insensitive" }, validTo: null, ...(except ? { parameterId: { not: except } } : {}) },
+    select: { parameter: { select: { groups: { select: { validTo: true } } } } },
+  });
+  // a built-in measurement without any column yet still holds its name
+  return rows.some((r) => r.parameter.groups.length === 0 || r.parameter.groups.some((g) => g.validTo === null || g.validTo > now));
+}
+
+export function decimal(v: string | null | undefined, what: string): string | null {
   if (v === undefined || v === null || v.trim() === "") return null;
   const d = parseDecimalInput(v);
   if (d === null) throw new AppError(422, "INVALID_VALUE", `${what}: nem szám.`);
@@ -103,8 +116,7 @@ export async function createMeasurementType(actor: Actor, input: z.infer<typeof 
         groups.push({ id: group.id, name: group.name, poolIds: t.poolIds });
       }
       // the name is one of a kind among the parameters' current names
-      const clash = await tx.parameterName.findFirst({ where: { displayName: { equals: input.name, mode: "insensitive" }, validTo: null } });
-      if (clash) throw new AppError(409, "NAME_TAKEN", "Ilyen nevű mérés már van.");
+      if (await nameTaken(tx, input.name, new Date())) throw new AppError(409, "NAME_TAKEN", "Ilyen nevű mérés már van.");
       const lastParam = await tx.parameter.aggregate({ _max: { sortOrder: true } });
       const parameter = await tx.parameter.create({
         data: {

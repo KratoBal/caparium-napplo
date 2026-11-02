@@ -112,7 +112,8 @@ export async function groupLayout(
     }),
     tx.groupParameter.findMany({
       where: { groupId, ...validAt(at) },
-      orderBy: { sortOrder: "asc" },
+      // Lili 2026-11-02 (acrobot 39956, point 4): one order everywhere, the measurements' own (src/lib/parameter-order.ts)
+      orderBy: [{ parameter: { sortOrder: "asc" } }, { sortOrder: "asc" }],
       include: { parameter: { include: { names: true, unit: true, conversions: { where: validAt(at), orderBy: { validFrom: "desc" }, take: 1 } } } },
     }),
   ]);
