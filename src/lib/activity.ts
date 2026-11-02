@@ -14,7 +14,7 @@ import type { AuditAction } from "@prisma/client";
 import { prisma, SYSTEM_USER_ID } from "./db";
 import { addDays, businessDayOf, resolveLocalDateTime } from "./time";
 
-export type ActivityKindKey = "water" | "feeding" | "withdrawal" | "dosing" | "animals" | "settings" | "export" | "eating";
+export type ActivityKindKey = "water" | "fridges" | "feeding" | "withdrawal" | "dosing" | "animals" | "settings" | "export" | "eating";
 
 export type ActivityKind = { key: ActivityKindKey; label: string; entityTypes: readonly string[] };
 
@@ -25,6 +25,8 @@ export type ActivityKind = { key: ActivityKindKey; label: string; entityTypes: r
  */
 export const ACTIVITY_KINDS: readonly ActivityKind[] = [
   { key: "water", label: "Vízmérés", entityTypes: ["Measurement", "MeasurementRound", "PoolTick"] },
+  // the fridges' temperature book (task caparium-hutok): recorded on the water page, but its own kind, as it is its own data
+  { key: "fridges", label: "Hűtők", entityTypes: ["FridgeReading", "Fridge"] },
   {
     key: "feeding",
     label: "Takarmánynapló",
@@ -152,6 +154,8 @@ export const ENTITY_LABEL: Readonly<Record<string, string>> = {
   Measurement: "vízmérés",
   MeasurementRound: "mérési kör",
   PoolTick: "medence-pipa",
+  FridgeReading: "hűtő-leolvasás",
+  Fridge: "hűtő",
   FeedingDay: "etetési nap",
   FeedingItem: "takarmánytétel",
   FeedingList: "etetési lista",

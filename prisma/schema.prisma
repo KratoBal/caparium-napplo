@@ -645,6 +645,8 @@ enum ExportKind {
   PDF_INTAKE
   PDF_DOSING
   PDF_REPORT
+  EXCEL_FRIDGE
+  PDF_FRIDGE
 }
 
 enum ExportPurpose {
@@ -1450,4 +1452,61 @@ model FeedingListFeed {
 
   @@id([listId, feedId])
   @@map("feeding_list_feed")
+}
+
+// ---------------------------------------------------------------------------
+// Fridges and freezers (Lili 2026-11-02, Caparium thread msg 1566792513673764997 and 1566804526357413899; task
+// caparium-hutok): the daily temperature book of the fridges, recorded under the big pools' daily water table. Their own
+// tables on purpose: nothing here is a measurement, a parameter or a group, so the water exports, the weekly table, the
+// ZIMS and the water order never see a fridge.
+// ---------------------------------------------------------------------------
+
+enum FridgeKind {
+  FRIDGE
+  FREEZER
+}
+
+// No delete: a fridge taken out of use is closed (active = false) and may be opened again; its readings stay.
+model Fridge {
+  id          String          @id @default(uuid()) @db.Uuid
+  name        String          @unique
+  kind        FridgeKind
+  minC        Decimal         @db.Decimal(5, 1)
+  maxC        Decimal         @db.Decimal(5, 1)
+  active      Boolean         @default(true)
+  sortOrder   Int
+  createdById String          @db.Uuid
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedById String          @db.Uuid
+  updatedAt   DateTime        @default(now()) @db.Timestamptz(3)
+  readings    FridgeReading[]
+
+  @@map("fridge")
+}
+
+// One reading. The range valid when it was taken is kept on the row (minC, maxC), so a later change of the fridge's range
+// does not turn an old reading red or back. A correction invalidates the row and records a new one; nothing is overwritten.
+model FridgeReading {
+  id                 String       @id @default(uuid()) @db.Uuid
+  fridgeId           String       @db.Uuid
+  measuredAt         DateTime     @db.Timestamptz(3)
+  businessDay        DateTime     @db.Date
+  temperatureC       Decimal      @db.Decimal(5, 1)
+  minC               Decimal      @db.Decimal(5, 1)
+  maxC               Decimal      @db.Decimal(5, 1)
+  defrost            Boolean      @default(false)
+  note               String?
+  status             RecordStatus @default(VALID)
+  invalidationReason String?
+  version            Int          @default(1)
+  requestId          String       @unique
+  createdById        String       @db.Uuid
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedById        String       @db.Uuid
+  updatedAt          DateTime     @default(now()) @db.Timestamptz(3)
+  fridge             Fridge       @relation(fields: [fridgeId], references: [id])
+
+  @@index([businessDay])
+  @@index([fridgeId, businessDay])
+  @@map("fridge_reading")
 }

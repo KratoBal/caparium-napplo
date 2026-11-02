@@ -20,6 +20,7 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
   const level = await moduleLevel(prisma, user.id, user.role, "EXPORT");
   if (level === "NONE") redirect("/nincs-jogosultsag");
   const feedingLevel = await moduleLevel(prisma, user.id, user.role, "FEEDING");
+  const waterLevel = await moduleLevel(prisma, user.id, user.role, "WATER");
   const sp = await searchParams;
   const today = businessDayOf(new Date());
   const to = sp.ig && isValidDay(sp.ig) ? sp.ig : today;
@@ -85,6 +86,26 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
           <button className="btn" type="submit" data-testid="excel-download">Excel letöltése ({formatPeriod(from, to)})</button>
         </form>
       </div>
+
+      {/* Lili 2026-11-02 (task caparium-hutok): the fridges' book, apart from the water exports above (they never hold a fridge) */}
+      {waterLevel !== "NONE" && (
+        <div className="card" data-testid="fridge-export">
+          <h2>Hűtők hőmérséklete</h2>
+          <p className="hint">A hűtők és fagyasztók leolvasásai az időszakra, havi bontásban (Excelben havonta egy lap): idő, hőmérséklet, a tartomány, leolvasztás, megjegyzés, ki rögzítette. A tartományon kívüli érték piros.</p>
+          <div className="toolbar">
+            {(["excel", "pdf"] as const).map((kind) => (
+              <form key={kind} method="post" action="/api/exports/fridges">
+                <input type="hidden" name="kind" value={kind} />
+                <input type="hidden" name="from" value={from} />
+                <input type="hidden" name="to" value={to} />
+                <button className="btn" type="submit" data-testid={`fridge-${kind}`}>
+                  {kind === "excel" ? "Excel" : "PDF"} ({formatPeriod(from, to)})
+                </button>
+              </form>
+            ))}
+          </div>
+        </div>
+      )}
 
       {feedingLevel !== "NONE" && (
         <div className="card">

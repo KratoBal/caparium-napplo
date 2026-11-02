@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { DayControls } from "@/components/DayControls";
+import { FridgeCard } from "@/components/FridgeCard";
 import { MeasurementGrid } from "@/components/MeasurementGrid";
 import { dayStatus } from "@/lib/journal";
 import { Shell } from "@/components/Shell";
 import { waterHelper } from "@/lib/helpers";
 import { helperStockAccess } from "@/lib/helper-access";
 import { prisma } from "@/lib/db";
+import { fridgeDay } from "@/lib/fridges";
+import { monogramResolver } from "@/lib/master";
 import { getGrid, listGroups } from "@/lib/queries";
 import { saveReminderOn } from "@/lib/save-reminder-setting";
 import { requireModuleRead } from "@/lib/session";
-import { businessDayOf, formatDay, isValidDay, weekdayName } from "@/lib/time";
+import { businessDayOf, formatDay, isValidDay, localDateTimeOf, weekdayName } from "@/lib/time";
 
 /**
  * The two daily group buttons carry a picture above the text (Lili 2026-10-26: Nagy medencék -> the capybara,
@@ -127,6 +130,37 @@ export async function MeasurementPage({
           {dayPicker}
         </div>
       )}
+      {/* Lili 2026-11-02 (task caparium-hutok): the fridges' book under the big pools' daily table; its own data, not a measurement */}
+      {frequency === "DAILY" && group.code === "NAPI_NAGY" && (await fridgeSection(day, today, level))}
     </Shell>
+  );
+}
+
+/** The "Hűtők" card of a day: the fridges, the day's readings, who recorded each. */
+async function fridgeSection(day: string, today: string, level: string) {
+  const { fridges, readings } = await fridgeDay(day);
+  const who = await monogramResolver(readings.map((r) => r.createdById));
+  return (
+    <FridgeCard
+      fridges={fridges}
+      readings={readings.map((r) => ({
+        id: r.id,
+        fridgeId: r.fridgeId,
+        measuredAt: r.measuredAt,
+        temperature: r.temperature,
+        min: r.min,
+        max: r.max,
+        outOfRange: r.outOfRange,
+        defrost: r.defrost,
+        note: r.note,
+        version: r.version,
+        by: who.monogram(r.createdById, new Date(r.measuredAt)),
+      }))}
+      canWrite={level === "RECORD" || level === "ADMIN"}
+      isAdmin={level === "ADMIN"}
+      day={day}
+      today={today}
+      nowAt={localDateTimeOf(new Date())}
+    />
   );
 }
