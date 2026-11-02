@@ -552,7 +552,7 @@ export function ConversionRow(p: {
  */
 export function NewMeasurementForm({ units, groups, today }: { units: { id: string; symbol: string }[]; groups: { id: string; name: string; pools: { id: string; name: string }[] }[]; today: string }) {
   // Lili 2026-11-01 22:21 UTC: several tables at once (the daily Korallos and the daily Nagymedence table), each with its own pools
-  const empty = { name: "", unitId: "", decimals: "1", pMin: "", pMax: "", rMin: "", rMax: "", zimsName: "", zimsUnit: "", tables: {} as Record<string, string[]>, from: today };
+  const empty = { name: "", unitId: "", decimals: "1", pMin: "", pMax: "", rMin: "", rMax: "", zimsName: "", zimsUnit: "", tables: {} as Record<string, string[]>, from: today, to: "" };
   const [f, setF] = useState(empty);
   const { msg, busy, save } = useSave();
   const set = (k: keyof typeof empty, v: string) => setF((x) => ({ ...x, [k]: v }));
@@ -604,6 +604,11 @@ export function NewMeasurementForm({ units, groups, today }: { units: { id: stri
           Mettől
           <input className="input" type="date" aria-label="Mettől" value={f.from} onChange={(e) => set("from", e.target.value)} />
         </label>
+        {/* Lili 2026-11-01 22:54 UTC: an optional last day, for a measurement of the past (the density in SG) */}
+        <label className="field">
+          Meddig (ha lezárt)
+          <input className="input" type="date" aria-label="Meddig" value={f.to} min={f.from} onChange={(e) => set("to", e.target.value)} />
+        </label>
       </div>
       <fieldset className="field" style={{ border: 0, padding: 0, marginTop: 12 }} data-testid="new-measurement-tables">
         Melyik napi vagy heti táblákba, és ott melyik medencékben
@@ -647,6 +652,7 @@ export function NewMeasurementForm({ units, groups, today }: { units: { id: stri
                 zimsUnit: f.zimsUnit.trim(),
                 tables: Object.entries(f.tables).map(([groupId, poolIds]) => ({ groupId, poolIds })),
                 from: f.from,
+                to: f.to || null,
               },
               "Mérésfajta felvéve.",
             );

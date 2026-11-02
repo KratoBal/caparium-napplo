@@ -16,15 +16,16 @@ export default async function OwnProfilePage() {
   const zimsName = pickValid(u.zimsNames, now)?.zimsName ?? "";
   return (
     <Shell title="Saját beállítások" user={user}>
-      <div className="card">
+      {/* Lili 2026-11-01 22:43 UTC: the login name, the display name and the nickname on one card, each with its own sentence */}
+      <div className="card" data-testid="own-name-card">
         <h2>Név</h2>
-        <p className="hint">Felhasználónév: {u.loginId}. Ez a név látszik a fejlécben és a naplókban; a köszöntés a becenevet használja.</p>
+        <p className="hint">Bejelentkezési név: {u.loginId}.</p>
+        <p className="hint">A megjelenő név látszik a fejlécben és a naplókban.</p>
         <OwnNameForm fullName={u.fullName} />
-      </div>
-      {/* Lili 2026-11-01 (point 17): the helper's greeting only; the header and the logs keep the official name */}
-      <div className="card">
-        <h2>Becenév</h2>
-        <p className="hint">Ezen a néven köszön a segítő. Üresen a hivatalos név keresztneve: {greetingName({ fullName: u.fullName })}.</p>
+        {/* Lili 2026-11-01 (point 17): the helper's greeting only; the header and the logs keep the display name */}
+        <p className="hint">
+          Ezen a becenéven köszön a segítő. Ha üres, a megjelenő név keresztnevét használja: {greetingName({ fullName: u.fullName })}.
+        </p>
         <OwnNicknameForm nickname={u.nickname ?? ""} />
       </div>
       <div className="card">
