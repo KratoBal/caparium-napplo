@@ -10,7 +10,6 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { buildWaterWorkbook } from "@/lib/exports/excel";
 import { createZimsExport } from "@/lib/exports/zims";
-import { missedMeasurements } from "@/lib/notices";
 import { getGrid } from "@/lib/queries";
 import { waterReport } from "@/lib/water-report";
 import { fixtures, ownerPrisma, rid } from "./fixtures";
@@ -41,39 +40,44 @@ describe("the water tables since 2018-12-07", () => {
     );
     expect((zims as AppError).code).toBe("NOTHING_TO_EXPORT");
     expect((await waterReport(OLD_DAY)).pools).toEqual([]);
-    // the missing-measurement signal and the home page's count look at TODAY only (src/lib/notices.ts, its callers pass
-    // the clock): a day before 2026 is never asked, so the old days cannot raise one
-    const today = await missedMeasurements(new Date());
-    expect(today.day >= "2026-01-01").toBe(true);
+    // The missing-measurement signal and the home page's count are not this test's: their callers pass today only
+    // (src/app/page.tsx: dailyProgress(today), missedMeasurements(); src/lib/helpers.ts: missedMeasurements(now)), so an
+    // old day is never asked. What the signal itself says for a day is in tests/integration/helpers.test.ts.
   });
 
   it("the migration moves only the open rows that began on 2026-01-01; a closed one and a later one stay", async () => {
     expect(HISTORY_SINCE.toISOString()).toBe("2018-12-06T23:00:00.000Z");
     const sql = readFileSync("prisma/migrations/20261102100000_water_tables_since_2018/migration.sql", "utf8")
-      .split("\n")
-      .filter((l) => l.startsWith("UPDATE"));
+      .split(";")
+      .map((x) => x.replace(/^(\s*--[^\n]*\n)*/g, "").trim())
+      .filter((x) => x.startsWith("UPDATE"));
     expect(sql).toHaveLength(9);
     const later = new Date("2026-03-01T00:00:00Z");
     // in a transaction that is rolled back: the shared test database keeps its rows
     const rolledBack = new Error("rollback");
     const seen = await ownerPrisma
       .$transaction(async (tx) => {
-        const pool = f.pool("KARANTEN");
-        await tx.poolName.updateMany({ where: { poolId: pool }, data: { validTo: later } });
+        // a pool of its own: the base data's pools have their names from 2018 already
+        const pool = (await tx.pool.create({ data: { code: `MIGR_${rid().slice(-8)}` } })).id;
         const open = await tx.poolName.create({ data: { poolId: pool, displayName: "Nyitott 2026", validFrom: SINCE } });
         const closed = await tx.poolName.create({ data: { poolId: pool, displayName: "Zárt 2026", validFrom: SINCE, validTo: later } });
         const after = await tx.poolName.create({ data: { poolId: pool, displayName: "Később", validFrom: later } });
+        // barracuda on #187: a thing that already has a row before 2026 keeps its open 2026 row where it is (no overlap)
+        const other = f.pool("INKUBATOR");
+        await tx.poolName.updateMany({ where: { poolId: other }, data: { validTo: new Date("2017-01-01T00:00:00Z") } });
+        await tx.poolName.create({ data: { poolId: other, displayName: "Korábbi", validFrom: new Date("2016-01-01T00:00:00Z"), validTo: new Date("2017-01-01T00:00:00Z") } });
+        const guarded = await tx.poolName.create({ data: { poolId: other, displayName: "Őrzött 2026", validFrom: SINCE } });
         for (const s of sql) await tx.$executeRawUnsafe(s);
-        const rows = await tx.poolName.findMany({ where: { id: { in: [open.id, closed.id, after.id] } } });
+        const rows = await tx.poolName.findMany({ where: { id: { in: [open.id, closed.id, after.id, guarded.id] } } });
         const at = (id: string) => rows.find((r) => r.id === id)!.validFrom.toISOString();
-        throw Object.assign(rolledBack, { seen: [at(open.id), at(closed.id), at(after.id)] });
+        throw Object.assign(rolledBack, { seen: [at(open.id), at(closed.id), at(after.id), at(guarded.id)] });
       })
       .catch((e: Error & { seen?: string[] }) => {
         if (e !== rolledBack) throw e;
         return e.seen!;
       });
-    expect(seen).toEqual(["2018-12-06T23:00:00.000Z", SINCE.toISOString(), later.toISOString()]);
+    expect(seen).toEqual(["2018-12-06T23:00:00.000Z", SINCE.toISOString(), later.toISOString(), SINCE.toISOString()]);
     // nothing of it stayed
-    expect(await prisma.poolName.count({ where: { displayName: { in: ["Nyitott 2026", "Zárt 2026", "Később"] } } })).toBe(0);
+    expect(await prisma.poolName.count({ where: { displayName: { in: ["Nyitott 2026", "Zárt 2026", "Később", "Korábbi", "Őrzött 2026"] } } })).toBe(0);
   });
 });
