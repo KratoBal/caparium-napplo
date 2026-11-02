@@ -7,7 +7,7 @@ import { writeAudit } from "./audit";
 import { prisma, type Tx } from "./db";
 import { AppError } from "./errors";
 import { aliveOnDay, selectedOn, setSelection, ensureFeedingDay } from "./feeding";
-import { moduleLevel, pickValid } from "./master";
+import { entryToday, moduleLevel, pickValid } from "./master";
 import type { Actor } from "./measurements";
 import { dayToDate } from "./time";
 
@@ -121,7 +121,8 @@ export async function addAnimalsToDay(
   serverNow = new Date(),
 ) {
   const alive = await aliveOnDay(prisma, input.day, animalIds);
-  const fd = await prisma.$transaction((tx) => ensureFeedingDay(tx, input.day));
+  const opener = { actorId: actor.id, today: entryToday(serverNow, input.clientTimestamp ? new Date(input.clientTimestamp) : null) };
+  const fd = await prisma.$transaction((tx) => ensureFeedingDay(tx, input.day, opener));
   const already = await selectedOn(prisma, fd.fd.id);
   const candidates = animalIds.filter((id) => alive.has(id) && !already.has(id));
   // a manual fasting day is a person's decision for that day: the plan does not override it (setSelection

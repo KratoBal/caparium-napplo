@@ -13,7 +13,7 @@ import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
 import { dayBounds } from "./feeding";
-import { ensureJournalDay, ensureJournalDayForEntry, moduleLevel, pickValid } from "./master";
+import { ensureJournalDay, ensureJournalDayForEntry, entryToday, moduleLevel, pickValid } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { closedAt } from "./measurements";
@@ -44,12 +44,11 @@ export async function ensureWithdrawalDay(tx: Tx, d: string, opener?: { actorId:
 /** The writers of a withdrawal day wait for each other, as on a feeding day (review of #10). */
 async function facts(tx: Tx, actor: Actor, d: string, serverNow: Date, clientTs: Date | null) {
   const level: Level = await moduleLevel(tx, actor.id, actor.role, "WITHDRAWAL");
-  const eff = effectiveNow(serverNow, clientTs, 30, 48);
-  const today = businessDayOf(eff.now);
-  const ensured = await ensureWithdrawalDay(tx, d, { actorId: actor.id, today });
+  const ensured = await ensureWithdrawalDay(tx, d, { actorId: actor.id, today: entryToday(serverNow, clientTs) });
   await tx.$queryRaw`SELECT "id" FROM "withdrawal_day" WHERE "id" = ${ensured.wd.id}::uuid FOR UPDATE`;
   const journal = await tx.journalDay.findUniqueOrThrow({ where: { id: ensured.journal.id } });
-  return { level, wd: ensured.wd, journal, today, closed: closedAt(journal, eff.now) };
+  const eff = effectiveNow(serverNow, clientTs, 30, 48);
+  return { level, wd: ensured.wd, journal, today: businessDayOf(eff.now), closed: closedAt(journal, eff.now) };
 }
 
 async function enforce(tx: Tx, decision: Decision, why: string | undefined) {

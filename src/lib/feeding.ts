@@ -14,7 +14,7 @@ import { prisma, type Tx } from "./db";
 import { canonicalDecimal, compareDecimal, parseDecimalInput } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
 import { doseAt, doseInstant } from "./feed-dose";
-import { ensureJournalDay, moduleLevel, nameAt, pickValid } from "./master";
+import { ensureJournalDay, ensureJournalDayForEntry, entryToday, moduleLevel, nameAt, pickValid } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { closedAt } from "./measurements";
@@ -25,9 +25,12 @@ const requestId = z.string().min(8).max(100);
 const reason = z.string().trim().min(3, "Az indoklás legalább 3 karakter legyen.").max(500);
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-/** The day's feeding row and its lock, created on first use (the scheduled run also pre-creates it, R-15). */
-export async function ensureFeedingDay(tx: Tx, d: string) {
-  const journal = await ensureJournalDay(tx, "FEEDING", null, d);
+/**
+ * The day's feeding row and its lock, created on first use (the scheduled run also pre-creates it, R-15). `opener`: a write keys
+ * the day in; an old day's lock is then born open for the backfill (ensureJournalDayForEntry).
+ */
+export async function ensureFeedingDay(tx: Tx, d: string, opener?: { actorId: string; today: string }) {
+  const journal = opener ? await ensureJournalDayForEntry(tx, "FEEDING", null, d, opener) : await ensureJournalDay(tx, "FEEDING", null, d);
   await tx.$executeRaw`
     INSERT INTO "feeding_day" ("id", "businessDay", "journalDayId", "listState")
     VALUES (gen_random_uuid(), ${dayToDate(d)}::date, ${journal.id}::uuid, 'NOT_FINALIZED')
@@ -79,7 +82,7 @@ export async function lockFeedingDay(tx: Tx, feedingDayId: string) {
 
 export async function facts(tx: Tx, actor: Actor, d: string, serverNow: Date, clientTs: Date | null) {
   const level = await moduleLevel(tx, actor.id, actor.role, "FEEDING");
-  const ensured = await ensureFeedingDay(tx, d);
+  const ensured = await ensureFeedingDay(tx, d, { actorId: actor.id, today: entryToday(serverNow, clientTs) });
   const fd = await lockFeedingDay(tx, ensured.fd.id);
   // the day's lock state read again under the lock (a close may have happened meanwhile)
   const journal = await tx.journalDay.findUniqueOrThrow({ where: { id: ensured.journal.id } });

@@ -16,7 +16,7 @@ import { AppError, isUniqueViolation } from "./errors";
 import { dayFeedsSchema, ensureFeedingDay, selectedOn, selectionSchema, setDayFeeds, setSelection } from "./feeding";
 import { addAnimalsToDay, animalNames } from "./feeding-plan";
 import { feedsOn } from "./feed-periods";
-import { moduleLevel } from "./master";
+import { entryToday, moduleLevel } from "./master";
 import type { Actor } from "./measurements";
 import { businessDayOf, dayToDate } from "./time";
 
@@ -175,7 +175,8 @@ export async function applyFeedingList(actor: Actor, raw: z.input<typeof applyLi
   const feedIds = list ? list.feeds.filter((f) => on.has(f.feedId)).map((f) => f.feedId) : [];
   const base = { clientTimestamp: input.clientTimestamp, day: input.day, reason: input.reason };
 
-  const { fd } = await prisma.$transaction((tx) => ensureFeedingDay(tx, input.day));
+  const opener = { actorId: actor.id, today: entryToday(serverNow, input.clientTimestamp ? new Date(input.clientTimestamp) : null) };
+  const { fd } = await prisma.$transaction((tx) => ensureFeedingDay(tx, input.day, opener));
   const current = await selectedOn(prisma, fd.id);
   const notInList = [...current].filter((id) => !animalIds.includes(id));
   const recorded = await withRecordsOn(fd.id, notInList);

@@ -131,10 +131,12 @@ export async function recloseDay(actor: Actor, input: DayActionInput, now = new 
   if (await replayed(input.requestId)) return { replayed: true };
   return prisma.$transaction(async (tx) => {
     const kind = input.kind ?? "WATER";
-    // an old withdrawal day nobody has keyed in has no lock yet, and the page shows it open with its close button: closing it
-    // makes the lock and closes it ("nothing was taken that day"), instead of a refusal the page did not announce
-    if (kind === "WITHDRAWAL" && input.day <= businessDayOf(now) && !(await tx.journalDay.findFirst({ where: dayWhere(input) }))) {
-      await ensureJournalDay(tx, "WITHDRAWAL", null, input.day);
+    // an old withdrawal or feeding day nobody has keyed in has no lock yet, and the page shows it open with its close button:
+    // closing it makes the lock and closes it ("nothing on that day"), instead of a refusal the page did not announce. A water
+    // day shows no close button until it is reopened, so it never gets here without a lock
+    if ((kind === "WITHDRAWAL" || kind === "FEEDING") && input.day <= businessDayOf(now) && !(await tx.journalDay.findFirst({ where: dayWhere(input) }))) {
+      if (kind === "FEEDING") await ensureFeedingDay(tx, input.day);
+      else await ensureJournalDay(tx, "WITHDRAWAL", null, input.day);
     }
     const j = await tx.journalDay.findFirst({
       where: dayWhere(input),

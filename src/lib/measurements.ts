@@ -9,7 +9,7 @@ import { prisma, type Tx } from "./db";
 import { compareDecimal, parseDecimalInput, canonicalDecimal, multiplyDecimal } from "./decimal";
 import { AppError, isUniqueViolation } from "./errors";
 import { valueFromReading } from "./conversion";
-import { ensureJournalDay, getSetting, groupLayout, moduleLevel, referenceAt } from "./master";
+import { ensureJournalDayForEntry, entryToday, getSetting, groupLayout, moduleLevel, referenceAt } from "./master";
 import { requireReason } from "./reasons";
 import { canCreate, canModify, effectiveNow, type Decision, type Role } from "./permissions";
 import { businessDayOf, dateToDay, dayToDate, resolveLocalDateTime } from "./time";
@@ -362,7 +362,7 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
       value = diluted.value;
       checkPlausible(value, param, input.confirmPlausibility);
 
-      const journal = await ensureJournalDay(tx, "WATER", group.id, day);
+      const journal = await ensureJournalDayForEntry(tx, "WATER", group.id, day, { actorId: actor.id, today: entryToday(serverNow, clientTs) });
       const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
       const { decision, pending } = decideWithLateRule(
         (today, at) => canCreate(level, { day, today, closed: closedAt(journal, at) }),
@@ -465,8 +465,9 @@ export async function updateMeasurement(
       const oldDay = dateToDay(cur.businessDay);
       const newDay = businessDayOf(measuredAt);
 
-      const oldJournal = await ensureJournalDay(tx, "WATER", cur.round.groupId, oldDay);
-      const newJournal = newDay === oldDay ? oldJournal : await ensureJournalDay(tx, "WATER", cur.round.groupId, newDay);
+      const opener = { actorId: actor.id, today: entryToday(serverNow, clientTs) };
+      const oldJournal = await ensureJournalDayForEntry(tx, "WATER", cur.round.groupId, oldDay, opener);
+      const newJournal = newDay === oldDay ? oldJournal : await ensureJournalDayForEntry(tx, "WATER", cur.round.groupId, newDay, opener);
       const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
       const { decision } = decideWithLateRule(
         (today, at) =>
@@ -602,7 +603,7 @@ export async function invalidateMeasurement(
     }
     const grace = await lateWindow(tx, serverNow);
     const day = dateToDay(cur.businessDay);
-    const journal = await ensureJournalDay(tx, "WATER", cur.round.groupId, day);
+    const journal = await ensureJournalDayForEntry(tx, "WATER", cur.round.groupId, day, { actorId: actor.id, today: entryToday(serverNow, clientTs) });
     const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
     const { decision } = decideWithLateRule(
       (today, at) => canModify(level, { day, today, closed: closedAt(journal, at), isOwn: cur.createdById === actor.id, othersToo: true }),
@@ -650,7 +651,7 @@ export async function openNewRound(actor: Actor, input: NewRoundInput, serverNow
     const group = await tx.measurementGroup.findUnique({ where: { id: input.groupId } });
     if (!group || !group.active) throw new AppError(404, "GROUP_NOT_FOUND", "A mérési csoport nem található.");
     const grace = await lateWindow(tx, serverNow);
-    const journal = await ensureJournalDay(tx, "WATER", group.id, input.day);
+    const journal = await ensureJournalDayForEntry(tx, "WATER", group.id, input.day, { actorId: actor.id, today: entryToday(serverNow, clientTs) });
     const level = await moduleLevel(tx, actor.id, actor.role, "WATER");
     const { decision } = decideWithLateRule(
       (today, at) => canCreate(level, { day: input.day, today, closed: closedAt(journal, at) }),

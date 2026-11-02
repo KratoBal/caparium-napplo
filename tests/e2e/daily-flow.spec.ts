@@ -960,8 +960,9 @@ test("feeding sheet: a small X empties an amount field in one click, on g and db
 });
 
 test("the day's close also under the save button: the same action, it asks first beside an unsaved row", async ({ page }, info) => {
-  // Lili 2026-10-29 08:29 UTC (msg 1565281522519375953). A past day of its own per project, so today's tests are untouched.
-  const day = info.project.name === "tablet" ? "2026-01-13" : "2026-01-14";
+  // Lili 2026-10-29 08:29 UTC (msg 1565281522519375953). A past day of its own per project, so today's tests are untouched; and
+  // per attempt, as the test closes it (a retry must find it open)
+  const day = info.project.name === "tablet" ? (info.retry ? "2026-01-15" : "2026-01-13") : info.retry ? "2026-01-16" : "2026-01-14";
   await login(page, "teszt.admin");
   await page.goto(`/evesi-naplo?nap=${day}`);
   const bottom = page.getByTestId("day-status-bottom");
@@ -984,14 +985,14 @@ test("the day's close also under the save button: the same action, it asks first
   await bottom.getByRole("button", { name: "Nap lezárása" }).click();
   await expect.poll(() => asked).toContain("mentetlen");
   await expect(page.getByTestId("day-status")).toContainText("Nyitott");
-  // without a draft it calls the same close as the top button, with the same answer from the server: a past day that
-  // was not reopened is not closed by hand (the server's rule, unchanged), and both buttons say so
+  // without a draft it calls the same close as the top button. A past day nobody keyed in has no lock yet: the close makes it and
+  // closes it, and both buttons go (Lili 2026-11-02, task caparium-kivetel-regi-nap-zaras: before, the page offered the close on
+  // such a day and the server refused it with "Csak újranyitott napot lehet kézzel lezárni.")
   await page.reload();
-  const answer = "Csak újranyitott napot lehet kézzel lezárni.";
   await page.getByTestId("day-status-bottom").getByRole("button", { name: "Nap lezárása" }).click();
-  await expect(page.getByTestId("day-status-bottom")).toContainText(answer);
-  await page.getByTestId("day-status").getByRole("button", { name: "Nap lezárása" }).click();
-  await expect(page.getByTestId("day-status")).toContainText(answer);
+  await expect(page.getByTestId("day-status")).toContainText("Lezárva");
+  await expect(page.getByRole("button", { name: "Nap lezárása" })).toHaveCount(0);
+  await expect(page.getByText("Csak újranyitott napot lehet kézzel lezárni.")).toHaveCount(0);
   // the feeding page has it under the sheet's save button too (today's day is not closed here)
   await page.goto("/etetes");
   await page.getByRole("switch", { name: "Nagymedence: mind kijelölve" }).check();

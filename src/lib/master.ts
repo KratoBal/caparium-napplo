@@ -5,7 +5,7 @@ import { writeAudit } from "./audit";
 import { prisma, type Tx } from "./db";
 import { canonicalDecimal } from "./decimal";
 import { takesDilution } from "./dilution";
-import { effectiveLevel, type Level, type Role } from "./permissions";
+import { effectiveLevel, effectiveNow, type Level, type Role } from "./permissions";
 import type { ReadingConversion } from "./reading";
 import { businessDayOf, dateToDay, dayToDate } from "./time";
 
@@ -177,6 +177,16 @@ export async function ensureJournalDay(tx: Tx, kind: JournalKind, groupId: strin
   const row = await tx.journalDay.findFirst({ where: { kind, groupId, businessDay } });
   if (!row) throw new Error("journal day could not be created");
   return row;
+}
+
+/**
+ * "Today" for ensureJournalDayForEntry: the business day of the client's clock when it is at most 48 hours behind the server
+ * (a save made yesterday evening that arrives after midnight is yesterday's own entry, not a backfill: the K9 late rule decides
+ * it), else the server's.
+ */
+export function entryToday(serverNow: Date, clientTs: Date | null): string {
+  const e = effectiveNow(serverNow, clientTs, 0, 48);
+  return businessDayOf(e.clientNow ?? e.now);
 }
 
 /** The reason of the open reopening a past day's lock is born with when an entry keys the day in afterwards. */
