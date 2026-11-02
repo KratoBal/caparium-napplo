@@ -1,6 +1,6 @@
 // The feeding log on screen (TAK-04): a period filtered by pool and animal, totals in base units, a
 // group item counted for its participants, the eating pattern of the same filter. Days in June 2026.
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createPool, renamePool } from "@/lib/admin";
 import { createGroup, createLifecycleEvent } from "@/lib/animals";
 import { prisma } from "@/lib/db";
@@ -108,15 +108,26 @@ describe("the feeding log (TAK-04)", () => {
     expect(egy.pattern[0]!.cells["2026-06-01"]).toBeUndefined();
   });
 
+  // "Today" is a day no other file writes a feeding on (two water tests measure on it), by the clock set to it: with the real date, a file that writes a fixed day which happens
+  // to be today put Teszt Kettő on today's list first, and this test failed on that one day only, in that order only
+  // (reports-export.test.ts writes 2026-11-02; measured on 2026-11-02, task caparium-feeding-log-today-billeges). Only Date is
+  // faked: the saves and the log read "now" from it, the database and the timers run as they do.
   it("TODAY: no derived fasting day before the list is finalized, then there is (barracuda #48, acrobot 34622)", async () => {
-    const today = businessDayOf(new Date());
-    const day = { from: today, to: today, poolId: null };
-    await setSelection(f.aq1, { requestId: rid(), day: today, animalIds: [a["Teszt Egy"]], selected: true });
-    // the morning: Teszt Kettő is not on the list yet, which does not mean it does not eat
-    expect((await feedingLog({ ...day, animalId: a["Teszt Kettő"] })).pattern).toEqual([]);
-    await finalizeList(f.aq1, { requestId: rid(), day: today });
-    const after = await feedingLog({ ...day, animalId: a["Teszt Kettő"] });
-    expect(after.pattern.map((p) => p.cells[today])).toEqual([{ state: "FASTING", vitamin: false, medicine: false }]);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-06-10T10:00:00+02:00"));
+    try {
+      const today = businessDayOf(new Date());
+      expect(today).toBe("2026-06-10");
+      const day = { from: today, to: today, poolId: null };
+      await setSelection(f.aq1, { requestId: rid(), day: today, animalIds: [a["Teszt Egy"]], selected: true });
+      // the morning: Teszt Kettő is not on the list yet, which does not mean it does not eat
+      expect((await feedingLog({ ...day, animalId: a["Teszt Kettő"] })).pattern).toEqual([]);
+      await finalizeList(f.aq1, { requestId: rid(), day: today });
+      const after = await feedingLog({ ...day, animalId: a["Teszt Kettő"] });
+      expect(after.pattern.map((p) => p.cells[today])).toEqual([{ state: "FASTING", vitamin: false, medicine: false }]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
