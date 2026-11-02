@@ -522,7 +522,11 @@ export function MeasurementGrid({
           ? { kind: "warn", text: `${left} mentés várakozik a kapcsolatra.` }
           : { kind: "ok", text: "Minden érték mentve." },
     );
-  }, [drafts, metaDrafts, saveCell, flushQueue, readQueue, reasonsOn]);
+    // the page around the table is the server's: a save can change the day's state (an old day keyed in is born open for the
+    // backfill), and the header must say what the server holds, or it offers what the server then refuses (Lili 2026-11-02;
+    // e2e old-day.spec.ts). The table keeps its own state: `initial` only seeds it.
+    router.refresh();
+  }, [drafts, metaDrafts, saveCell, flushQueue, readQueue, reasonsOn, router]);
 
   const openNewRound = useCallback(async () => {
     if (unsavedRef.current > 0) reminder.current?.leaving();
