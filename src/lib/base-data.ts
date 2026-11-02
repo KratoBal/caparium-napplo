@@ -19,6 +19,12 @@ import { FEED_HISTORY_START } from "./feed-history";
 import { initialAnimalsWanted } from "./seed-switch";
 
 export const SINCE = new Date("2025-12-31T23:00:00.000Z"); // 2026-01-01 00:00 Europe/Budapest
+/**
+ * Lili 2026-11-01 (point 14) and acrobot 2026-11-02 (39955): the water tables reach back to the start of the history, as the
+ * pool periods do: their members, their columns, the names, the ZIMS names. 2018-12-07 00:00 Europe/Budapest. The migration
+ * 20261102100000_water_tables_since_2018 moved an existing database's open 2026-01-01 rows the same way.
+ */
+export const HISTORY_SINCE = new Date("2018-12-06T23:00:00.000Z");
 
 export const UNITS: { symbol: string; dimension: Dimension; factor: string | null; base: boolean }[] = [
   { symbol: "ppm", dimension: "CONCENTRATION", factor: "1", base: true },
@@ -163,7 +169,7 @@ export async function loadBaseData(prisma: PrismaClient): Promise<BaseDataIds> {
           plausibleMin: p.plausible[0],
           plausibleMax: p.plausible[1],
           sortOrder: i + 1,
-          names: { create: { displayName: p.name, validFrom: SINCE } },
+          names: { create: { displayName: p.name, validFrom: HISTORY_SINCE } },
         },
       }));
     paramId.set(p.code, row.id);
@@ -178,7 +184,7 @@ export async function loadBaseData(prisma: PrismaClient): Promise<BaseDataIds> {
         data: {
           code: p.code,
           sortOrder: p.order,
-          names: { create: { displayName: p.name, validFrom: SINCE } },
+          names: { create: { displayName: p.name, validFrom: HISTORY_SINCE } },
           // Lili 2026-11-01 (point 16): in use from the start of the history, as the migration gave every pool
           periods: { create: { firstDay: new Date("2018-12-07T00:00:00.000Z"), lastDay: null, createdById: "00000000-0000-0000-0000-000000000001" } },
         },
@@ -195,8 +201,8 @@ export async function loadBaseData(prisma: PrismaClient): Promise<BaseDataIds> {
         frequency: g.frequency,
         sortOrder: i + 1,
         active: g.active,
-        memberships: { create: g.pools.map((c, j) => ({ poolId: poolId.get(c)!, sortOrder: j + 1, validFrom: SINCE })) },
-        parameters: { create: g.params.map((c, j) => ({ parameterId: paramId.get(c)!, sortOrder: j + 1, validFrom: SINCE })) },
+        memberships: { create: g.pools.map((c, j) => ({ poolId: poolId.get(c)!, sortOrder: j + 1, validFrom: HISTORY_SINCE })) },
+        parameters: { create: g.params.map((c, j) => ({ parameterId: paramId.get(c)!, sortOrder: j + 1, validFrom: HISTORY_SINCE })) },
       },
     });
   }
@@ -204,12 +210,12 @@ export async function loadBaseData(prisma: PrismaClient): Promise<BaseDataIds> {
   for (const [code, zimsName] of Object.entries(ZIMS_PARAMETER_NAMES)) {
     const parameterId = paramId.get(code)!;
     if (await prisma.zimsParameterName.findFirst({ where: { parameterId } })) continue;
-    await prisma.zimsParameterName.create({ data: { parameterId, zimsName, validFrom: SINCE } });
+    await prisma.zimsParameterName.create({ data: { parameterId, zimsName, validFrom: HISTORY_SINCE } });
   }
   for (const [symbol, zimsUnit] of Object.entries(ZIMS_UNIT_NAMES)) {
     const id = unitId.get(symbol)!;
     if (await prisma.zimsUnitName.findFirst({ where: { unitId: id, parameterId: null } })) continue;
-    await prisma.zimsUnitName.create({ data: { unitId: id, zimsUnit, validFrom: SINCE } });
+    await prisma.zimsUnitName.create({ data: { unitId: id, zimsUnit, validFrom: HISTORY_SINCE } });
   }
   // Export profile v1 (adatmodell 5. terület): the sample file's header and CRLF, "Sep 20, 2026",
   // 24-hour local time, every row filled (T-14). Not yet approved by a trial import (NY-01).
