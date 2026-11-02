@@ -202,7 +202,11 @@ export async function ensureJournalDayForEntry(tx: Tx, kind: JournalKind, groupI
   const existed = await tx.journalDay.findFirst({ where: { kind, groupId, businessDay: dayToDate(day) } });
   if (existed) return existed;
   const row = await ensureJournalDay(tx, kind, groupId, day);
-  if (day < opener.today && !(await tx.journalReopen.findFirst({ where: { journalDayId: row.id, reclosedAt: null } }))) {
+  if (day >= opener.today) return row;
+  // two first entries of the same old day at once: the second waits here for the first's reopening, sees it and makes no second
+  // one (barracuda on #194: two REOPEN audit rows otherwise, harmless but doubled)
+  await tx.$queryRaw`SELECT "id" FROM "journal_day" WHERE "id" = ${row.id}::uuid FOR UPDATE`;
+  if (!(await tx.journalReopen.findFirst({ where: { journalDayId: row.id, reclosedAt: null } }))) {
     await tx.journalReopen.create({ data: { journalDayId: row.id, reopenedById: opener.actorId, reason: BACKFILL_REASON } });
     await writeAudit(tx, {
       userId: opener.actorId,
@@ -214,6 +218,19 @@ export async function ensureJournalDayForEntry(tx: Tx, kind: JournalKind, groupI
     });
   }
   return row;
+}
+
+/**
+ * The people the "Mérést végezte" may name on a day: the active aquarists and admins, and for an earlier day the inactive ones too
+ * (a former colleague of an old measurement; acrobot 40205, C9), marked so. The server checks the same (measurements.ts).
+ */
+export async function responsiblePeople(day: string, today: string) {
+  const rows = await prisma.user.findMany({
+    where: { role: { in: ["AQUARIST", "ADMIN"] }, ...(day < today ? {} : { active: true }) },
+    orderBy: [{ active: "desc" }, { fullName: "asc" }],
+    select: { id: true, fullName: true, active: true },
+  });
+  return rows.map((u) => ({ id: u.id, fullName: u.active ? u.fullName : `${u.fullName} (inaktív)` }));
 }
 
 /** Monogram valid at an instant for many users at once (R-13: the single source). */

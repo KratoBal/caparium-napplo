@@ -10,6 +10,9 @@
 // eat", and the whole stock would read blue in the morning (barracuda #48; acrobot 34622 from Lili's words: the
 // fasting day is for the closed or finalized days, today stays empty until the list is ready). A past day's list
 // no longer changes, so a past day is derived as it is.
+// NO DATA IS NOT FASTING (Lili 2026-11-02, keying in old data back to 2018; acrobot 40205, C7): a past day derives fasting only
+// when it HAS a feeding day, i.e. the log was kept that day. Since the go-live every day has one (the scheduled run makes it, and
+// any entry does), so nothing changes there; an old day nobody keyed in stays empty instead of reading all blue.
 import { prisma } from "./db";
 import { dateToDay, dayToDate } from "./time";
 
@@ -18,6 +21,8 @@ export type ListFacts = {
   selected: Set<string>;
   /** the days whose list is final: finalized, or the day closed */
   settled: Set<string>;
+  /** the days that have a feeding day at all: the log was kept on them */
+  kept: Set<string>;
 };
 
 export async function listFacts(from: string, to: string): Promise<ListFacts> {
@@ -32,11 +37,12 @@ export async function listFacts(from: string, to: string): Promise<ListFacts> {
   return {
     selected: new Set(rows.map((r) => `${r.animalId}|${dateToDay(r.feedingDay.businessDay)}`)),
     settled: new Set(days.filter((d) => d.listState === "FINALIZED" || d.journalDay.state === "CLOSED").map((d) => dateToDay(d.businessDay))),
+    kept: new Set(days.map((d) => dateToDay(d.businessDay))),
   };
 }
 
 /** A cell without a stored status, on a day the animal lived: a fasting day when it was not on that day's list. */
 export function isDerivedFasting(facts: ListFacts, animalId: string, day: string, today: string): boolean {
-  if (day > today || (day === today && !facts.settled.has(day))) return false;
+  if (day > today || (day === today && !facts.settled.has(day)) || !facts.kept.has(day)) return false;
   return !facts.selected.has(`${animalId}|${day}`);
 }

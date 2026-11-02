@@ -8,7 +8,7 @@ import { waterHelper } from "@/lib/helpers";
 import { helperStockAccess } from "@/lib/helper-access";
 import { prisma } from "@/lib/db";
 import { fridgeDay } from "@/lib/fridges";
-import { monogramResolver } from "@/lib/master";
+import { monogramResolver, responsiblePeople } from "@/lib/master";
 import { getGrid, listGroups } from "@/lib/queries";
 import { saveReminderOn } from "@/lib/save-reminder-setting";
 import { requireModuleRead } from "@/lib/session";
@@ -56,11 +56,7 @@ export async function MeasurementPage({
   const roundSeq = Number(sp.kor) || undefined;
   const grid = await getGrid(group.id, day, roundSeq);
   const status = await dayStatus(group.id, day);
-  const people = await prisma.user.findMany({
-    where: { active: true, role: { in: ["AQUARIST", "ADMIN"] } },
-    orderBy: { fullName: "asc" },
-    select: { id: true, fullName: true },
-  });
+  const people = await responsiblePeople(day, today);
 
   // Lili 2026-11-01 22:59 UTC (msg 1566587603879469096): less dead space in the head. The date and the day's state on one row;
   // the table picker, the day picker and the save button on the next (MeasurementGrid draws that row, the button is its)

@@ -5,6 +5,7 @@ import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { canModify } from "@/lib/permissions";
 import { formatDecimalHu } from "@/lib/decimal";
+import { responsiblePeople } from "@/lib/master";
 import { measurementHistory } from "@/lib/queries";
 import { requireModuleRead } from "@/lib/session";
 import { businessDayOf, dayToDate, formatDateTime, formatDay } from "@/lib/time";
@@ -58,13 +59,7 @@ export default async function MeasurementHistoryPage({ params }: { params: Promi
           othersToo: true,
         })
       : null;
-  const people = decision?.kind === "ALLOW"
-    ? await prisma.user.findMany({
-        where: { active: true, role: { in: ["AQUARIST", "ADMIN"] } },
-        orderBy: { fullName: "asc" },
-        select: { id: true, fullName: true },
-      })
-    : [];
+  const people = decision?.kind === "ALLOW" ? await responsiblePeople(m.businessDay, businessDayOf(new Date())) : [];
   return (
     <Shell title="Mérés előzménye" active="log" user={user}>
       <p>
