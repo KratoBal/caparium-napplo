@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { MonthlyZimsRecipient, NewMeasurementForm, NewPoolForm, NewUserForm, PoolList, PoolSystemForm, PoolVolumeForm, SaveReminderSwitch, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
-import { DilutionRecalc } from "@/components/DilutionRecalc";
 import { FridgeSettings } from "@/components/FridgeSettings";
 import { WaterMeasurements } from "@/components/WaterMeasurements";
 import { SettingsCard } from "@/components/SettingsCard";
@@ -96,11 +95,6 @@ export default async function SettingsPage() {
           megmaradnak, és újranyitható. Az új tartomány mostantól érvényes, a korábbi leolvasások a sajátjukat tartják.
         </p>
         <FridgeSettings fridges={await listFridges({ closedToo: true })} />
-      </SettingsCard>
-
-      {/* acrobot 39888: the weekly rows saved before the dilution became a factor (src/lib/dilution-recalc.ts) */}
-      <SettingsCard id="regi-higitas" title="Régi hígított sorok átszámolása" testId="dilution-recalc-card">
-        <DilutionRecalc />
       </SettingsCard>
 
       <SettingsCard id="medencek" title="Medencék">

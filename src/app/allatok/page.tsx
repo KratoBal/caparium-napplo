@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AnimalOrder } from "@/components/AnimalOrder";
-import { AnimalActions, AnimalEditForm, GroupActive, InitialAnimalsLoader, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
+import { AnimalActions, AnimalEditForm, GroupActive, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
 import { InactiveListFilter, InactiveRowShell } from "@/components/InactiveListFilter";
 import { Shell } from "@/components/Shell";
 import { withIcon } from "@/lib/icons";
 import { animalEvents, listAnimals, listGroupsAdmin, listGroupsWithNames } from "@/lib/animals";
 import { prisma } from "@/lib/db";
-import { initialAnimalsStatus } from "@/lib/initial-animals";
 import { pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
 import { businessDayOf, formatDay, localDateTimeOf, localTimeOf } from "@/lib/time";
@@ -125,13 +124,6 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
           <NewArrival species={species.map((s) => ({ id: s.id, name: s.hungarianName ? `${s.scientificName} (${s.hungarianName})` : s.scientificName }))} pools={poolOpts} groups={groups} />
           <SimpleCreate url="/api/admin/species" label="Új faj tudományos neve" field="scientificName" testId="new-species" />
           <SimpleCreate url="/api/admin/animal-groups" label="Új csoport neve" field="name" testId="new-group" />
-        </div>
-      )}
-
-      {isAdmin && (
-        <div className="card">
-          <h2>Kezdő állatlista</h2>
-          <InitialAnimalsLoader {...(await initialAnimalsStatus())} />
         </div>
       )}
 

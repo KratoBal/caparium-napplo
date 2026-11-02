@@ -1,5 +1,4 @@
 import { FeedActive, FeedEdit, FeedPeriods, NewFeed } from "@/components/AnimalForms";
-import { FeedCopies } from "@/components/FeedCopies";
 import { InactiveListFilter, InactiveRowShell } from "@/components/InactiveListFilter";
 import { OrderList } from "@/components/AnimalOrder";
 import { Shell } from "@/components/Shell";
@@ -88,8 +87,6 @@ export default async function FeedsPage() {
         </div>
       )}
       </InactiveListFilter>
-      {/* package item 14: the basic data's copies, an admin's operation with a dry run */}
-      {isAdmin && <FeedCopies />}
     </Shell>
   );
 }

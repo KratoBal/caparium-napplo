@@ -23,7 +23,7 @@ const NAV: NavItem[] = [
   { key: "daily", href: "/vizmeres", label: "Napi vízmérés", tone: "water", icon: "💧" },
   { key: "weekly", href: "/heti", label: "Heti vízmérés", tone: "water", icon: "📅" },
   { key: "export", href: "/export", label: "Export" },
-  { key: "feeding", href: "/etetes", label: "Takarmánynapló", tone: "feed", icon: "🍤" },
+  { key: "feeding", href: "/etetes", label: "Napi etetés", tone: "feed", icon: "🍤" },
   { key: "eating", href: "/evesi-naplo", label: "Evési napló", tone: "feed", icon: "🦈" },
   { key: "withdrawal", href: "/kivetel", label: "Takarmánykivétel", tone: "feed", icon: "➖" },
   { key: "calculator", href: "/kalkulator", label: "Takarmánykalkulátor", tone: "feed", icon: "🧮" },

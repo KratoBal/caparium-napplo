@@ -87,7 +87,7 @@ test.describe("phone, 390 px", () => {
     await expect(feed).toHaveAttribute("aria-expanded", "true");
     const menu = page.getByRole("menu", { name: "Takarmányozás" });
     await expect(menu.getByRole("menuitem")).toHaveText([
-      /Takarmánynapló/, /Evési napló/, /Takarmánykivétel/, /Takarmánykalkulátor/, /Takarmányozási napló/, /Fagyasztó/, /Takarmánylista/,
+      /Napi etetés/, /Evési napló/, /Takarmánykivétel/, /Takarmánykalkulátor/, /Takarmányozási napló/, /Fagyasztó/, /Takarmánylista/,
     ]);
     // the list opens under the menu row, inside the screen
     const box = (await menu.boundingBox())!;

@@ -37,7 +37,7 @@ describe("the main navigation", () => {
   // Lili 2026-10-26 (caparium-menu-sorrend-szinek): the exact order of her list, and the color group of each entry.
   it("keeps Lili's order for an admin", () => {
     expect(labels("ADMIN")).toEqual([
-      "START", "Napi vízmérés", "Heti vízmérés", "Export", "Takarmánynapló", "Evési napló", "Takarmánykivétel",
+      "START", "Napi vízmérés", "Heti vízmérés", "Export", "Napi etetés", "Evési napló", "Takarmánykivétel",
       "Takarmánykalkulátor", "Vegyszeradagolás", "Vízmérési napló", "Takarmányozási napló", "Fagyasztó",
       "Takarmánylista", "Kimutatások", "Függő mentések", "Állatok", "Beállítások", "Aktivitás",
     ]);
@@ -46,7 +46,7 @@ describe("the main navigation", () => {
   it("puts each entry in its color group, and leaves the rest plain", () => {
     const tone = (label: string) => navFor("ADMIN").find((n) => n.label === label)?.tone;
     for (const l of ["Napi vízmérés", "Heti vízmérés", "Vegyszeradagolás", "Vízmérési napló"]) expect(tone(l), l).toBe("water");
-    for (const l of ["Takarmánynapló", "Evési napló", "Takarmánykivétel", "Takarmánykalkulátor", "Takarmányozási napló", "Fagyasztó", "Takarmánylista"]) {
+    for (const l of ["Napi etetés", "Evési napló", "Takarmánykivétel", "Takarmánykalkulátor", "Takarmányozási napló", "Fagyasztó", "Takarmánylista"]) {
       expect(tone(l), l).toBe("feed");
     }
     // the control: the entries Lili marked "szín marad" are really plain, so the two checks above cannot pass on a menu where everything is colored
@@ -59,7 +59,7 @@ describe("the main navigation", () => {
     expect(icons).toEqual({
       "Napi vízmérés": "💧",
       "Heti vízmérés": "📅",
-      Takarmánynapló: "🍤",
+      "Napi etetés": "🍤",
       "Evési napló": "🦈",
       Takarmánykivétel: "➖",
       Takarmánykalkulátor: "🧮",
