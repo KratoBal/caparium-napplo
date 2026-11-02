@@ -75,6 +75,9 @@ describe("a reading: the range, the defrost, the note", () => {
     await expectCode(read("2031-03-27T09:00", "Teszt hűtő 1", "4,55"), "INVALID_TEMPERATURE");
     await expectCode(read("2031-03-27T09:00", "Teszt hűtő 1", "hideg"), "INVALID_TEMPERATURE");
     await expectCode(read("2031-03-27T09:00", "Teszt hűtő 1", "45"), "IMPLAUSIBLE_TEMPERATURE");
+    // the note goes into the Excel as the name does: no leading formula character (barracuda on #190)
+    for (const note of ["=HYPERLINK(1)", "+1", "-5 reggel", "@x"]) await expect(read("2031-03-27T09:00", "Teszt hűtő 1", "4", f.aq1, { note })).rejects.toThrow(/megjegyzés nem kezdődhet/);
+    expect((await read("2031-03-27T09:01", "Teszt hűtő 1", "4", f.aq1, { note: "reggel -5 fok volt kint" })).outOfRange).toBe(false);
   });
 
   it("a new range acts from now on: the reading taken before keeps its own and does not turn red", async () => {

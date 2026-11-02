@@ -25,13 +25,16 @@ export const FRIDGE_KIND_LABEL: Record<FridgeKindKey, string> = { FRIDGE: "hűt�
 
 const requestId = z.string().min(8).max(100);
 const reason = z.string().trim().min(3, "Az indoklás legalább 3 karakter legyen.").max(500);
-// the name goes into the Excel: no leading character a spreadsheet reads as a formula (as the other names, src/lib/admin.ts)
+// the name and the note go into the Excel: no leading character a spreadsheet reads as a formula (as the other names,
+// src/lib/admin.ts, and the dosing notes, src/lib/dosing.ts); both, so the file is safe wherever it is opened or converted
+// (barracuda on #190)
+const noFormula = (v: string) => !/^[=+\-@\t\r]/.test(v);
 const fridgeName = z
   .string()
   .trim()
   .min(1, "A név nem lehet üres.")
   .max(60)
-  .refine((v) => !/^[=+\-@\t\r]/.test(v), "A név nem kezdődhet =, +, -, @ jellel (táblázatkezelőben képletként futna).");
+  .refine(noFormula, "A név nem kezdődhet =, +, -, @ jellel (táblázatkezelőben képletként futna).");
 const temperatureText = z.string().trim().min(1, "Adj meg hőmérsékletet.").max(16);
 
 /** The widest a thermometer of a fridge or a freezer may say: beyond it the number is a typo, not a reading. */
@@ -178,7 +181,12 @@ export const fridgeReadingSchema = z.object({
   measuredAtLocal: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/).optional(),
   temperature: temperatureText,
   defrost: z.boolean().default(false),
-  note: z.string().trim().max(200, "A megjegyzés legfeljebb 200 karakter.").optional(),
+  note: z
+    .string()
+    .trim()
+    .max(200, "A megjegyzés legfeljebb 200 karakter.")
+    .refine(noFormula, "A megjegyzés nem kezdődhet =, +, -, @ jellel (táblázatkezelőben képletként futna).")
+    .optional(),
   /** a correction: the reading this one replaces, invalidated in the same transaction */
   replacesId: z.uuid().optional(),
   expectedVersion: z.number().int().min(1).optional(),
