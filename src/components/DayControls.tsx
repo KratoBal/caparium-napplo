@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 
-type Status = { state: "OPEN" | "CLOSED"; closeMode: "MANUAL" | "AUTOMATIC" | null; reopened: boolean };
+type Status = { state: "OPEN" | "CLOSED"; closeMode: "MANUAL" | "AUTOMATIC" | null; reopened: boolean; backfill?: boolean };
 
 function requestId(): string {
   const b = new Uint8Array(16);
@@ -41,13 +41,16 @@ export function DayControls({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const reasonsOn = useReasonsOn();
-  const label = status.reopened
-    ? "Újranyitva"
-    : status.state === "CLOSED"
-      ? status.closeMode === "AUTOMATIC"
-        ? "Lezárva (automatikusan, éjfélkor)"
-        : "Lezárva"
-      : "Nyitott";
+  // an old day keyed in afterwards stays open until it is closed once, by hand (src/lib/master.ts, ensureJournalDayForEntry)
+  const label = status.backfill
+    ? "Nyitott (visszamenőleges bevitel)"
+    : status.reopened
+      ? "Újranyitva"
+      : status.state === "CLOSED"
+        ? status.closeMode === "AUTOMATIC"
+          ? "Lezárva (automatikusan, éjfélkor)"
+          : "Lezárva"
+        : "Nyitott";
 
   async function act(path: "reopen" | "close") {
     setError(null);

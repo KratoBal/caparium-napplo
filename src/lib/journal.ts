@@ -8,7 +8,7 @@ import { writeAudit } from "./audit";
 import { prisma, SYSTEM_USER_ID } from "./db";
 import { AppError } from "./errors";
 import { ensureFeedingDay, recomputeFasting } from "./feeding";
-import { ensureJournalDay, moduleLevel } from "./master";
+import { BACKFILL_REASON, ensureJournalDay, moduleLevel } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { addDays, businessDayOf, dateToDay, dayToDate, resolveLocalDateTime } from "./time";
@@ -130,6 +130,12 @@ export async function recloseDay(actor: Actor, input: DayActionInput, now = new 
   await requireAdmin(actor, input.kind ?? "WATER");
   if (await replayed(input.requestId)) return { replayed: true };
   return prisma.$transaction(async (tx) => {
+    const kind = input.kind ?? "WATER";
+    // an old withdrawal day nobody has keyed in has no lock yet, and the page shows it open with its close button: closing it
+    // makes the lock and closes it ("nothing was taken that day"), instead of a refusal the page did not announce
+    if (kind === "WITHDRAWAL" && input.day <= businessDayOf(now) && !(await tx.journalDay.findFirst({ where: dayWhere(input) }))) {
+      await ensureJournalDay(tx, "WITHDRAWAL", null, input.day);
+    }
     const j = await tx.journalDay.findFirst({
       where: dayWhere(input),
       include: { reopenings: { where: { reclosedAt: null } } },
@@ -172,5 +178,7 @@ export async function dayStatus(groupId: string | null, day: string, kind: "WATE
     state: (j?.state ?? "OPEN") as "OPEN" | "CLOSED",
     closeMode: j?.closeMode ?? null,
     reopened: (j?.reopenings.length ?? 0) > 0,
+    // opened for an old day's entries (ensureJournalDayForEntry), not by an admin's reopen
+    backfill: (j?.reopenings ?? []).some((r) => r.reason === BACKFILL_REASON),
   };
 }
