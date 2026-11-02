@@ -138,8 +138,7 @@ function TypeEditor({ t, units, today, reasons }: { t: MeasurementTypeView; unit
         <>
           <h3>Hígítás</h3>
           <p className="hint" data-testid="wm-dilution">
-            Heti mérésnél hígítással mérhető: a mentett érték a leolvasás és a hígítás szorzata. A 2026.11.02. előtt mentett, még nem
-            szorzott sorok átszámolása a <a href="#regi-higitas">Régi hígított sorok átszámolása</a> kártyán.
+            Heti mérésnél hígítással mérhető: a mentett érték a leolvasás és a hígítás szorzata.
           </p>
         </>
       )}
