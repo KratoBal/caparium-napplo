@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { readFileSync } from "node:fs";
 import { greetingFigure } from "../../src/lib/helper-notice";
 import { businessDayOf } from "../../src/lib/time";
-import { openAllSettings } from "../support/settings-folds";
+import { openAllSettings, openMeasurement } from "../support/settings-folds";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
 
@@ -310,10 +310,9 @@ test("settings: an admin changes a reference range and creates a user who can lo
   const login1 = tablet ? "uj.akvarista.t" : "uj.akvarista.d";
   await login(page, "teszt.admin");
   await page.getByRole("link", { name: "Beállítások", exact: true }).click();
-  await openAllSettings(page);
-  await expect(page.getByRole("heading", { name: "Vízparaméterek és referenciaértékek" })).toBeVisible();
-
-  const row = page.getByTestId("ref-NO3");
+  // Lili 2026-11-02 (acrobot 39956): the references are under the measurement's Szerkesztés on the Vízmérések card
+  const editor = await openMeasurement(page, "NO3 (ppm)");
+  const row = editor.getByTestId("ref-NO3");
   await row.getByLabel("NO3 maximum").fill(tablet ? "5" : "4");
   await row.getByRole("button", { name: "Mentés" }).click();
   await expect(row.getByRole("status")).toHaveText("Mentve.");
@@ -1420,9 +1419,7 @@ test("a pool's own band and volume in the settings; the chemical calculator unde
     await page.waitForLoadState("networkidle");
   }
 
-  const block = page.getByTestId(`pool-ref-${pool}`);
-  await block.locator("summary").click();
-  const ca = block.getByTestId(`ref-${pool}-Ca`);
+  const ca = (await openMeasurement(page, "Ca (ppm)")).getByTestId(`ref-${pool}-Ca`);
   await expect(ca, "a pool without its own range shows the common one").toContainText("a közös érték");
   await ca.getByLabel(`${pool} Ca minimum`).fill("400");
   await ca.getByLabel(`${pool} Ca maximum`).fill("440");
@@ -1430,9 +1427,7 @@ test("a pool's own band and volume in the settings; the chemical calculator unde
   await expect(ca.getByRole("status")).toHaveText("Mentve.");
   await page.waitForLoadState("networkidle");
   await page.reload();
-  await openAllSettings(page);
-  await page.getByTestId(`pool-ref-${pool}`).locator("summary").click();
-  await expect(page.getByTestId(`ref-${pool}-Ca`)).not.toContainText("a közös érték");
+  await expect((await openMeasurement(page, "Ca (ppm)")).getByTestId(`ref-${pool}-Ca`)).not.toContainText("a közös érték");
 
   await page.getByRole("link", { name: "Vegyszeradagolás" }).click();
   const calc = page.getByTestId("chemistry-calculator");
