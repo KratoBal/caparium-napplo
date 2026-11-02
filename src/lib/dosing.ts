@@ -16,6 +16,7 @@ import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { closedAt } from "./measurements";
 import { canCreate, canModify, effectiveNow } from "./permissions";
+import { stockStartDay } from "./stock-start";
 import { addDays, businessDayOf, dateToDay, dayToDate, resolveLocalDateTime } from "./time";
 
 const requestId = z.string().min(8).max(100);
@@ -315,7 +316,8 @@ export async function updateChemical(actor: Actor, id: string, raw: z.input<type
  * The day a chemical's stock begins: the business day of its FIRST RECORDED movement (the smallest createdAt), not of its
  * earliest-dated one. Lili keys old data in back to 2018 (2026-11-02; acrobot 40205, A1): a dosing of 2019 recorded today must
  * not take the whole past out of today's stock (measured: 1 l became -4 l, and the "fogy" warning fired). A movement dated
- * before this day is archive; a late entry of an ordinary day after it still counts. No movement: no start.
+ * before this day is archive; a late entry of an ordinary day after it still counts. No movement: no start. A first movement that
+ * is itself a backfill starts the stock on the day it was recorded (stockStartDay).
  */
 export function stockStarts(rows: { chemicalId: string; businessDay: Date; createdAt: Date }[]): Map<string, Date> {
   const first = new Map<string, { createdAt: Date; businessDay: Date }>();
@@ -323,7 +325,7 @@ export function stockStarts(rows: { chemicalId: string; businessDay: Date; creat
     const f = first.get(r.chemicalId);
     if (!f || r.createdAt < f.createdAt) first.set(r.chemicalId, { createdAt: r.createdAt, businessDay: r.businessDay });
   }
-  return new Map([...first].map(([id, f]) => [id, f.businessDay]));
+  return new Map([...first].map(([id, f]) => [id, stockStartDay(f.businessDay, f.createdAt)]));
 }
 
 /**

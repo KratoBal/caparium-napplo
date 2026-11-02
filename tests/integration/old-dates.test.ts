@@ -55,6 +55,32 @@ describe("a chemical's stock counts from its first recorded movement (A1, A2)", 
   });
 });
 
+describe("a stock whose FIRST recorded row is itself a backfill (e2e old-day.spec.ts; acrobot 40291: the 7 days are a decision)", () => {
+  it("a chemical without movements: a 2019 dosing as its first leaves today at 0, no 'fogy'; a first one noted 3 days late counts", async () => {
+    const chem = ((await createChemical(f.admin, { requestId: rid(), name: "Regi elso szer", stockUnitId: unit.l }, NOW)) as { id: string }).id;
+    const level = async () => (await stockLevels(later(60))).find((c) => c.id === chem)!.level;
+    // a chemical at zero is "fogy" from the start (runningOut: level <= 0); the old dosing must leave that line as it was
+    const fogy = async () => (await runningOut(later(60))).filter((c) => c.name === "Regi elso szer");
+    const before = await fogy();
+    await saveDosing(f.admin, { requestId: rid(), performedAtLocal: "2019-03-11T09:00", poolId: f.pool("SOZO"), chemicalId: chem, quantity: "5", unitId: unit.l }, NOW);
+    expect(await level()).toBe(0);
+    expect(await fogy()).toEqual(before);
+    const late = ((await createChemical(f.admin, { requestId: rid(), name: "Kesve rogzitett szer", stockUnitId: unit.l }, NOW)) as { id: string }).id;
+    await saveDosing(f.admin, { requestId: rid(), performedAtLocal: "2031-02-08T09:00", poolId: f.pool("SOZO"), chemicalId: late, quantity: "2", unitId: unit.l }, NOW);
+    expect((await stockLevels(later(60))).find((c) => c.id === late)!.level).toBe(-2);
+  });
+
+  it("a feed without intakes: a 2019 intake as its first starts no stock (not tracked, no 'fogy'); a first one noted 3 days late does", async () => {
+    const type = await prisma.feedType.findFirstOrThrow({ where: { code: "HAL" } });
+    const old = ((await createFeed(f.admin, { requestId: rid(), typeId: type.id, name: "Regi elso hal", dimensions: ["MASS"], defaultUnitId: unit.g }, NOW)) as { id: string }).id;
+    await saveIntakeItem(f.admin, { requestId: rid(), day: "2019-03-11", feedId: old, quantities: [{ value: "500", unitId: unit.g }] }, NOW);
+    expect((await feedStock(later(60))).filter((r) => r.feedId === old).map((r) => [r.level, r.tracked])).toEqual([[0, false]]);
+    const late = ((await createFeed(f.admin, { requestId: rid(), typeId: type.id, name: "Kesve rogzitett hal", dimensions: ["MASS"], defaultUnitId: unit.g }, NOW)) as { id: string }).id;
+    await saveIntakeItem(f.admin, { requestId: rid(), day: "2031-02-08", feedId: late, quantities: [{ value: "500", unitId: unit.g }] }, NOW);
+    expect((await feedStock(later(60))).filter((r) => r.feedId === late).map((r) => [r.level, r.tracked])).toEqual([[500, true]]);
+  });
+});
+
 describe("a feed's freezer stock counts from its first RECORDED intake (A3)", () => {
   it("an intake dated 2019 keyed in later does not draw the start back: the old withdrawals stay out of today's stock and the balance", async () => {
     const type = await prisma.feedType.findFirstOrThrow({ where: { code: "HAL" } });

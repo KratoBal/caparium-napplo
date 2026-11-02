@@ -17,6 +17,7 @@ import type { Actor } from "./measurements";
 import { canCreate, canModify, effectiveNow, type Decision, type Level } from "./permissions";
 import { RUN_OUT_DAYS } from "./notices";
 import { requireReason } from "./reasons";
+import { stockStartDay } from "./stock-start";
 import { addDays, businessDayOf, dateToDay, dayToDate } from "./time";
 
 const requestId = z.string().min(8).max(100);
@@ -281,11 +282,10 @@ export async function feedStock(now = new Date(), until?: string): Promise<Stock
     if (it.returned) continue;
     for (const q of it.quantities) {
       const r = row(it, q.unit.dimension, baseOf.get(q.unit.dimension) ?? q.unit.symbol);
-      r.tracked = true;
       const first = firstRecorded.get(r.key);
       if (!first || it.createdAt < first) {
         firstRecorded.set(r.key, it.createdAt);
-        from.set(r.key, it.intakeDay);
+        from.set(r.key, stockStartDay(it.intakeDay, it.createdAt));
       }
     }
   }
@@ -301,6 +301,8 @@ export async function feedStock(now = new Date(), until?: string): Promise<Stock
       const start = from.get(r.key);
       if (start && it.intakeDay < start) continue;
       r.received += v;
+      // a stock only with an intake it counts: an old first intake keyed in later starts nothing, and raises no "fogy"
+      r.tracked = true;
     }
   }
   for (const it of taken) {
@@ -395,7 +397,7 @@ export async function feedBalance(from: string, to: string, now = new Date()): P
       const f = firstRecorded.get(key);
       if (!f || it.createdAt < f) {
         firstRecorded.set(key, it.createdAt);
-        first.set(key, it.intakeDay);
+        first.set(key, stockStartDay(it.intakeDay, it.createdAt));
       }
     }
   }
