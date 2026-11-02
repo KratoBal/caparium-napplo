@@ -283,8 +283,15 @@ model Parameter {
   plausibleMax Decimal? @db.Decimal(14, 4)
   active       Boolean  @default(true)
   sortOrder    Int
+  // Lili 2026-11-02 (acrobot 39956, 39960): a unit change closes a measurement type and starts its successor with the same
+  // name and tables; the successor points back here, and the list shows the two together
+  predecessorId String?  @unique @db.Uuid
+  // the built-in code whose behaviour a successor keeps (the NO3 and PO4 dilution, src/lib/dilution.ts); null: its own code
+  baseCode      String?
 
   unit            Unit                  @relation(fields: [unitId], references: [id])
+  predecessor     Parameter?            @relation("ParameterSuccession", fields: [predecessorId], references: [id], onDelete: Restrict)
+  successor       Parameter?            @relation("ParameterSuccession")
   names           ParameterName[]
   referenceRanges ReferenceRange[]
   groups          GroupParameter[]

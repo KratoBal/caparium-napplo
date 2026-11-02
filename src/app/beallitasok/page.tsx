@@ -1,13 +1,15 @@
 import { redirect } from "next/navigation";
-import { ConversionRow, MonthlyZimsRecipient, NewMeasurementForm, NewPoolForm, NewUserForm, PoolList, PoolSystemForm, PoolVolumeForm, ReferenceRow, SaveReminderSwitch, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
+import { MonthlyZimsRecipient, NewMeasurementForm, NewPoolForm, NewUserForm, PoolList, PoolSystemForm, PoolVolumeForm, SaveReminderSwitch, SheetColorForm, UserRow, WaterReportRecipient } from "@/components/SettingsForms";
 import { IconForm } from "@/components/FeedingForms";
 import { DilutionRecalc } from "@/components/DilutionRecalc";
+import { WaterMeasurements } from "@/components/WaterMeasurements";
 import { SettingsCard } from "@/components/SettingsCard";
 import { Shell } from "@/components/Shell";
 import { listAnimals, listGroupsWithNames } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { canonicalDecimal } from "@/lib/decimal";
 import { getSetting, moduleLevel, pickValid, validAt } from "@/lib/master";
+import { listMeasurementTypes } from "@/lib/measurement-types";
 import { reasonsRequired } from "@/lib/reasons";
 import { saveReminderOn } from "@/lib/save-reminder-setting";
 import { poolCovers, poolInUse, poolPeriodView } from "@/lib/pool-periods";
@@ -29,21 +31,8 @@ export default async function SettingsPage() {
   });
   // Lili 2026-11-01 (point 16): "active" is in use today, by the pool's periods
   const today = businessDayOf(now);
-  const [params, pools, users, feedTypes, groups, animals, animalGroups] = await Promise.all([
-    prisma.parameter.findMany({
-      where: { active: true },
-      orderBy: { sortOrder: "asc" },
-      include: { names: true, unit: true, referenceRanges: { where: validAt(now) }, conversions: { where: validAt(now), take: 1 } },
-    }),
-    prisma.pool.findMany({
-      where: poolInUse(today),
-      orderBy: { code: "asc" },
-      include: {
-        names: true,
-        // a pool's measured parameters are its measurement groups' parameters
-        memberships: { where: validAt(now), include: { group: { include: { parameters: { where: validAt(now), orderBy: { sortOrder: "asc" } } } } } },
-      },
-    }),
+  const [pools, users, feedTypes, groups, animals, animalGroups] = await Promise.all([
+    prisma.pool.findMany({ where: poolInUse(today), orderBy: { code: "asc" }, include: { names: true } }),
     // user management is for the admin role only (review of #2), not for a SETTINGS override
     user.role === "ADMIN"
       ? prisma.user.findMany({
@@ -58,6 +47,7 @@ export default async function SettingsPage() {
     listGroupsWithNames(now),
   ]);
   // point 9: the units a water value is measured in, and each group with its pools today
+  const measurementTypes = await listMeasurementTypes(now);
   const [measureUnits, groupPools] = await Promise.all([
     prisma.unit.findMany({ where: { active: true, dimension: { notIn: ["MASS", "COUNT", "VOLUME"] } }, orderBy: { symbol: "asc" } }),
     prisma.measurementGroup.findMany({
@@ -68,128 +58,32 @@ export default async function SettingsPage() {
   ]);
   return (
     <Shell title="Beállítások" active="settings" user={user}>
-      <SettingsCard id="referenciak" title="Vízparaméterek és referenciaértékek medencénként" testId="pool-references">
+      {/* Lili 2026-11-02 09:36-09:40 UTC (acrobot 39956, 39960): the water measurements on one card, as the pools, the feeds and
+          the animals; the per-pool and the common references, the tester conversion and the new measurement moved in here */}
+      <SettingsCard id="vizmeresek" title="Vízmérések" testId="water-measurements-card">
         <p className="hint">
-          Minden medence a saját mért paramétereit látja (a mérési csoportjaiból). Ahol a medencének nincs saját értéke, a lenti
-          közös érték érvényes rá; az első mentés a medence saját értékét hozza létre, mostantól. A korábbi mérések a régi
-          értékhez mérődnek; a „helyesbítés” elírást javít, és a múltra is hat.
+          Mérésenként egy sor; a Szerkesztés alatt a név (attól a naptól), a tizedesjegy és a hihető tartomány, a referenciák (közös és
+          medencénkénti), a mérőeszköz-átváltás, a lezárás és a mértékegység váltása. Törlés nincs: a lezárt mérés régi értékei megmaradnak.
         </p>
-        {pools
-          .filter((pool) => pool.memberships.length > 0)
-          .map((pool) => {
-            const poolName = pickValid(pool.names, now)?.displayName ?? pool.code;
-            // point 9: a parameter measured in some pools only belongs to those
-            const measured = new Set(pool.memberships.flatMap((m) => m.group.parameters.filter((gp) => gp.poolIds.length === 0 || gp.poolIds.includes(pool.id)).map((gp) => gp.parameterId)));
-            return (
-              <details key={pool.id} data-testid={`pool-ref-${poolName}`}>
-                <summary>{poolName}</summary>
-                <div className="table-scroll">
-                  <table className="log-table">
-                    <thead>
-                      <tr><th>Paraméter</th><th>Mértékegység</th><th>Minimum</th><th>Maximum</th><th>Fajta</th>{reasons && <th>Indoklás</th>}<th></th></tr>
-                    </thead>
-                    <tbody>
-                      {params
-                        .filter((p) => measured.has(p.id))
-                        .map((p) => {
-                          const own = p.referenceRanges.find((r) => r.poolId === pool.id);
-                          const r = own ?? p.referenceRanges.find((x) => x.poolId === null);
-                          return (
-                            <ReferenceRow
-                              key={`${pool.id}:${p.id}`}
-                              parameterId={p.id}
-                              name={pickValid(p.names, now)?.displayName ?? p.code}
-                              unit={p.unit.symbol}
-                              min={r?.min ? canonicalDecimal(r.min) : null}
-                              max={r?.max ? canonicalDecimal(r.max) : null}
-                              pool={{ id: pool.id, name: poolName, inherited: !own }}
-                            />
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                </div>
-              </details>
-            );
-          })}
-      </SettingsCard>
-
-      <SettingsCard id="kozos-referenciak" title="Közös referenciaértékek">
-        <p className="hint">
-          Az az érték, amiből minden saját érték nélküli medence indul (paraméterenként). A „változás” mostantól érvényes, a
-          korábbi mérések a régi értékhez mérődnek; a „helyesbítés” elírást javít, és a múltra is hat.
-        </p>
-        <div className="table-scroll">
-          <table className="log-table">
-            <thead>
-              <tr><th>Paraméter</th><th>Mértékegység</th><th>Minimum</th><th>Maximum</th><th>Fajta</th>{reasons && <th>Indoklás</th>}<th></th></tr>
-            </thead>
-            <tbody>
-              {params.map((p) => {
-                const r = p.referenceRanges.find((x) => x.poolId === null);
-                return (
-                  <ReferenceRow
-                    key={p.id}
-                    parameterId={p.id}
-                    name={pickValid(p.names, now)?.displayName ?? p.code}
-                    unit={p.unit.symbol}
-                    min={r?.min ? canonicalDecimal(r.min) : null}
-                    max={r?.max ? canonicalDecimal(r.max) : null}
-                  />
-                );
-              })}
-            </tbody>
-          </table>
+        <WaterMeasurements rows={measurementTypes} units={measureUnits.map((u) => ({ id: u.id, symbol: u.symbol }))} today={businessDayOf(now)} reasons={reasons} />
+        <div data-testid="new-measurement-card">
+          <h3 style={{ marginTop: 20 }}>Új mérés</h3>
+          <p className="hint">
+            Új vízérték mérésének kezdete (például nitrit vagy oldott oxigén): a kiválasztott napi vagy heti táblába új oszlop kerül, amely
+            csak a bejelölt medencékben tölthető ki, a megadott naptól; a többi medencében kötőjel áll. A hihető tartományon kívüli
+            értéknél a tábla rákérdez, a referencián kívülit pirossal jelzi. A ZIMS-név és -mértékegység betűre úgy kell, ahogy a ZIMS várja.
+          </p>
+          <NewMeasurementForm
+            today={businessDayOf(now)}
+            units={measureUnits.map((u) => ({ id: u.id, symbol: u.symbol }))}
+            groups={groupPools.map((g) => ({
+              id: g.id,
+              name: `${g.name} (${g.frequency === "DAILY" ? "napi" : "heti"})`,
+              pools: g.memberships.map((m) => ({ id: m.pool.id, name: pickValid(m.pool.names, now)?.displayName ?? m.pool.code })),
+            }))}
+          />
         </div>
         <p className="banner banner-warn" style={{ marginTop: 16 }}>A tesztkörnyezet referenciaértékei bemutató adatok.</p>
-      </SettingsCard>
-
-      {/* Lili 2026-11-01 (point 9): a new measurement, in some pools of a daily or weekly table */}
-      <SettingsCard id="uj-meres" title="Új mérésfajta" testId="new-measurement-card">
-        <p className="hint">
-          Új vízérték mérésének kezdete (például nitrit vagy oldott oxigén): a kiválasztott napi vagy heti táblába új oszlop kerül, amely
-          csak a bejelölt medencékben tölthető ki, a megadott naptól; a többi medencében kötőjel áll. A hihető tartományon kívüli
-          értéknél a tábla rákérdez, a referencián kívülit pirossal jelzi. A ZIMS-név és -mértékegység betűre úgy kell, ahogy a ZIMS várja.
-        </p>
-        <NewMeasurementForm
-          today={businessDayOf(now)}
-          units={measureUnits.map((u) => ({ id: u.id, symbol: u.symbol }))}
-          groups={groupPools.map((g) => ({
-            id: g.id,
-            name: `${g.name} (${g.frequency === "DAILY" ? "napi" : "heti"})`,
-            pools: g.memberships.map((m) => ({ id: m.pool.id, name: pickValid(m.pool.names, now)?.displayName ?? m.pool.code })),
-          }))}
-        />
-      </SettingsCard>
-
-      <SettingsCard id="atvaltas" title="Mérőeszköz-átváltás" testId="conversions">
-        <p className="hint">
-          Ha egy mérőeszköz nem a mérés értékét mutatja, hanem egy leolvasást (például Hanna HI755 a KH-hoz: × 0,056, 1 tizedes;
-          HI736 a PO4-hez: × 0,003066, 3 tizedes), itt állítható be, a megadott naptól. A napi és heti táblában a leolvasást kell
-          beírni: a mező elhagyáskor átváltja, az átváltott értéket egy kis pötty jelzi, és a leolvasás is megmarad.
-        </p>
-        <div className="table-scroll">
-          <table className="log-table">
-            <thead>
-              <tr><th>Paraméter</th><th>Most érvényes</th><th>Mérőeszköz</th><th>Szorzó</th><th>Tizedes</th><th>Mettől</th><th></th></tr>
-            </thead>
-            <tbody>
-              {params.map((p) => {
-                const c = p.conversions[0];
-                return (
-                  <ConversionRow
-                    key={p.id}
-                    parameterId={p.id}
-                    name={pickValid(p.names, now)?.displayName ?? p.code}
-                    unit={p.unit.symbol}
-                    current={c ? { label: c.label, factor: canonicalDecimal(c.factor), decimals: c.decimals, from: businessDayOf(c.validFrom) } : null}
-                    today={businessDayOf(now)}
-                  />
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
       </SettingsCard>
 
       {/* acrobot 39888: the weekly rows saved before the dilution became a factor (src/lib/dilution-recalc.ts) */}

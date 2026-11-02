@@ -3,6 +3,7 @@
 // On Mg with a test factor (2, no decimals): no other e2e test types Mg. Each project its own pool; the conversion is set once
 // (the second project finds it in force).
 import { expect, test, type Page } from "@playwright/test";
+import { openMeasurement } from "../support/settings-folds";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
 
@@ -22,10 +23,8 @@ test("a reading typed for a converted parameter becomes the value, with a dot, a
   const pool = info.project.name === "tablet" ? "Karantén" : "Kismedence";
   await login(page, "teszt.admin");
   await page.goto("/beallitasok");
-  // the module may start closed (point 15): opened if it is
-  const card = page.getByTestId("conversions");
-  if (!(await card.evaluate((d) => (d as HTMLDetailsElement).open))) await card.locator(":scope > summary").click();
-  const row = page.getByTestId("conversion-Mg");
+  // Lili 2026-11-02 (acrobot 39956): the conversion is under the measurement's Szerkesztés on the Vízmérések card
+  const row = (await openMeasurement(page, "Mg (ppm)")).getByTestId("conversion-Mg");
   if ((await row.innerText()).includes("nincs")) {
     await row.getByLabel("Mg mérőeszköz").fill("E2E mérő");
     await row.getByLabel("Mg szorzó").fill("2");

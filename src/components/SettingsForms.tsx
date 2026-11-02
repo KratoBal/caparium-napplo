@@ -28,7 +28,7 @@ async function post(url: string, method: string, body: Record<string, unknown>):
   }
 }
 
-function useSave() {
+export function useSave() {
   const router = useRouter();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,7 +44,7 @@ function useSave() {
   return { msg, busy, save };
 }
 
-function Msg({ msg }: { msg: { ok: boolean; text: string } | null }) {
+export function Msg({ msg }: { msg: { ok: boolean; text: string } | null }) {
   if (!msg) return null;
   return <span className={msg.ok ? "hint" : "err"} role="status">{msg.text}</span>;
 }
@@ -79,7 +79,9 @@ export function ReferenceRow(p: {
   return (
     <tr data-testid={p.pool ? `ref-${p.pool.name}-${p.name}` : `ref-${p.name}`}>
       <td>
-        <b>{p.name}</b>
+        {/* Lili 2026-11-02 (acrobot 39956): the rows stand under one measurement on the Vízmérések card: the pool's name,
+            or "Közös" for the common one */}
+        <b>{p.pool ? p.pool.name : "Közös"}</b>
         {inherited && <div className="hint">a közös érték</div>}
       </td>
       <td>{p.unit}</td>

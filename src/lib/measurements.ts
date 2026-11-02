@@ -340,6 +340,9 @@ export async function createMeasurement(actor: Actor, input: CreateInput, server
 
       const group = await tx.measurementGroup.findUnique({ where: { id: input.groupId } });
       if (!group || !group.active) throw new AppError(404, "GROUP_NOT_FOUND", "A mérési csoport nem található.");
+      // barracuda on #188: the measurement type's row held while its column is checked and the value written, so closing it
+      // or changing its unit (FOR UPDATE, src/lib/measurement-types.ts) waits, and then sees this value (VALUES_AFTER)
+      await tx.$queryRaw`SELECT id FROM "parameter" WHERE id = ${input.parameterId}::uuid FOR SHARE`;
       const layout = await groupLayout(tx, group.id, measuredAt);
       const pool = layout.pools.find((p) => p.id === input.poolId);
       const param = layout.parameters.find((p) => p.id === input.parameterId);
@@ -484,6 +487,8 @@ export async function updateMeasurement(
       // and the user gets the denial (only creations queue as PENDING, K9).
       await enforce(tx, decision, input.reason);
 
+      // barracuda on #188: as on a new value, the type's row held while the column is checked
+      await tx.$queryRaw`SELECT id FROM "parameter" WHERE id = ${cur.parameterId}::uuid FOR SHARE`;
       const layout = await groupLayout(tx, cur.round.groupId, measuredAt);
       const param = layout.parameters.find((p) => p.id === cur.parameterId);
       if (!layout.pools.some((p) => p.id === cur.poolId) || !param) {

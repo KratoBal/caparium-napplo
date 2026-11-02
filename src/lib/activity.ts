@@ -36,7 +36,7 @@ export const ACTIVITY_KINDS: readonly ActivityKind[] = [
   {
     key: "settings",
     label: "Beállítások",
-    entityTypes: ["Feed", "FeedOrder", "Chemical", "Pool", "Parameter", "ReferenceRange", "ParameterConversion", "Setting", "User"],
+    entityTypes: ["Feed", "FeedOrder", "Chemical", "Pool", "Parameter", "ParameterOrder", "ReferenceRange", "ParameterConversion", "Setting", "User"],
   },
   { key: "export", label: "Export, levél, napzárás", entityTypes: ["ExportRun", "MonthlyZimsMail", "WaterReportMail", "JournalDay"] },
   { key: "eating", label: "Evési napló", entityTypes: ["EatingStatus", "BodyWeight"] },
@@ -171,6 +171,7 @@ export const ENTITY_LABEL: Readonly<Record<string, string>> = {
   Species: "faj",
   Feed: "takarmány",
   FeedOrder: "takarmány-sorrend",
+  ParameterOrder: "mérés-sorrend",
   Chemical: "vegyszer",
   Pool: "medence",
   Parameter: "mérésfajta",

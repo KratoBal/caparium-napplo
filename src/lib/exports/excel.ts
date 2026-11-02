@@ -68,7 +68,7 @@ export async function buildWaterWorkbook(f: ExcelFilter): Promise<{ buffer: Buff
       parameter: { include: { names: true } },
       referenceRange: { include: { unit: true } },
     },
-    orderBy: [{ measuredAt: "asc" }, { createdAt: "asc" }],
+    orderBy: [{ measuredAt: "asc" }, { parameter: { sortOrder: "asc" } }, { createdAt: "asc" }],
   });
   const people = await prisma.userMonogram.findMany({ where: { userId: { in: [...new Set(rows.map((r) => r.responsibleUserId))] } } });
   // a measurement recorded back in time, before the worker's first monogram began (point 1: the "?" rows were the old

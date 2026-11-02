@@ -2,6 +2,7 @@
 // from today; the weekly table gets the column, a field in the chosen pool, a dash in the others. Each project its own name; the
 // weekly table (no other spec after this one fills every weekly field).
 import { expect, test, type Page } from "@playwright/test";
+import { openAllSettings } from "../support/settings-folds";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
 
@@ -21,8 +22,9 @@ test("a new measurement in one pool of the weekly table: a column, a field there
   const name = `Nitrit ${info.project.name}`;
   await login(page, "teszt.admin");
   await page.goto("/beallitasok");
+  // Lili 2026-11-02 (acrobot 39956): the new measurement is at the bottom of the Vízmérések card
+  await openAllSettings(page);
   const card = page.getByTestId("new-measurement-card");
-  if (!(await card.evaluate((d) => (d as HTMLDetailsElement).open))) await card.locator(":scope > summary").click();
   const form = card.getByTestId("new-measurement");
   await form.getByLabel("Név (például Nitrit)").fill(name);
   // the units Lili asked for are offered
