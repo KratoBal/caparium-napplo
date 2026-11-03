@@ -10,6 +10,7 @@ import { AppError } from "../errors";
 import { dayBounds } from "../feeding";
 import { feedBalance, feedStock, stockStatus } from "../feed-intake";
 import { pickValid } from "../master";
+import { periodDays, periodTooLongText, ROW_EXPORT_MAX_DAYS } from "./period-limit";
 import { otherLabel } from "../other-name";
 import { plainNumber, rowForDisplay } from "../mass-display";
 import { dateToDay, dayToDate } from "../time";
@@ -24,13 +25,11 @@ export type BalanceLine = { unit: string; opening: string; received: string; tak
 export type BalanceTable = { feed: string; lines: BalanceLine[] };
 export type IntakeReport = { from: string; to: string; intake: IntakeReportRow[]; balance: BalanceTable[] };
 
-const MAX_DAYS = 366;
-
 const num = (v: string) => v.replace(".", ",");
 
 export async function intakeReport(f: { from: string; to: string }, now = new Date()): Promise<IntakeReport> {
   if (f.from > f.to) throw new AppError(422, "BAD_PERIOD", "Az időszak vége nem lehet a kezdete előtt.");
-  if ((dayToDate(f.to).getTime() - dayToDate(f.from).getTime()) / 86_400_000 >= MAX_DAYS) throw new AppError(422, "PERIOD_TOO_LONG", "Az időszak legfeljebb egy év lehet.");
+  if (periodDays(f.from, f.to) > ROW_EXPORT_MAX_DAYS) throw new AppError(422, "PERIOD_TOO_LONG", periodTooLongText(ROW_EXPORT_MAX_DAYS));
   const range = { gte: dayToDate(f.from), lte: dayToDate(f.to) };
   // "as of the end of the period": the stock's windows (the 7 and 30 day withdrawal, so the "fogyóban" mark) and the names are
   // read at the period's last day, not today, so a stock that was running out then still says so (barracuda on #143). Never

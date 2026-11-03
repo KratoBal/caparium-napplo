@@ -3,6 +3,7 @@ import { sameOrigin, userFromRequest } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { FILE_BASE, periodFileName } from "@/lib/exports/file-names";
 import { buildFridgePdf, buildFridgeWorkbook } from "@/lib/exports/fridge-export";
+import { periodDays, periodTooLongText, ROW_EXPORT_MAX_DAYS } from "@/lib/exports/period-limit";
 import { moduleLevel } from "@/lib/master";
 import { seeOther } from "@/lib/redirect";
 import { dayToDate, isValidDay } from "@/lib/time";
@@ -23,8 +24,8 @@ export async function POST(req: Request) {
   const to = String(form?.get("to") ?? "");
   if (kind !== "excel" && kind !== "pdf") return new Response("Ismeretlen exportfajta.", { status: 422 });
   if (!isValidDay(from) || !isValidDay(to) || from > to) return new Response("Az időszak érvénytelen.", { status: 422 });
-  // at most a year, as the other exports
-  if ((dayToDate(to).getTime() - dayToDate(from).getTime()) / 86_400_000 >= 366) return new Response("Legfeljebb egy év kérhető le egyszerre.", { status: 422 });
+  // a limit, as the other row exports: ten years (src/lib/exports/period-limit.ts)
+  if (periodDays(from, to) > ROW_EXPORT_MAX_DAYS) return new Response(periodTooLongText(ROW_EXPORT_MAX_DAYS), { status: 422 });
   const exportKind = kind === "excel" ? "EXCEL_FRIDGE" : "PDF_FRIDGE";
   const built = kind === "excel" ? await buildFridgeWorkbook(from, to) : await buildFridgePdf(from, to);
   await prisma.$transaction(async (tx) => {

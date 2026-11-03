@@ -3,6 +3,7 @@ import { sameOrigin, userFromRequest } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { buildDosingPdf } from "@/lib/exports/dosing-pdf";
+import { periodDays, periodTooLongText, ROW_EXPORT_MAX_DAYS } from "@/lib/exports/period-limit";
 import { moduleLevel } from "@/lib/master";
 import { seeOther } from "@/lib/redirect";
 import { dayToDate, isValidDay } from "@/lib/time";
@@ -18,8 +19,8 @@ export async function POST(req: Request) {
   const from = String(form?.get("from") ?? "");
   const to = String(form?.get("to") ?? "");
   if (!isValidDay(from) || !isValidDay(to) || from > to) return new Response("Az időszak érvénytelen.", { status: 422 });
-  // at most a year, as the other exports (barracuda on #170): a longer one would build a very large PDF
-  if ((dayToDate(to).getTime() - dayToDate(from).getTime()) / 86_400_000 >= 366) return new Response("Legfeljebb egy év kérhető le egyszerre.", { status: 422 });
+  // a limit, as the other exports (barracuda on #170): ten years since C12, the PDF streams (src/lib/exports/period-limit.ts)
+  if (periodDays(from, to) > ROW_EXPORT_MAX_DAYS) return new Response(periodTooLongText(ROW_EXPORT_MAX_DAYS), { status: 422 });
   const uuid = /^[0-9a-f-]{36}$/;
   const poolId = String(form?.get("pool") ?? "");
   const chemicalId = String(form?.get("chemical") ?? "");
