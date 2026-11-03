@@ -9,6 +9,7 @@ import { buildWaterWorkbook } from "@/lib/exports/excel";
 import { buildFridgePdf, buildFridgeWorkbook } from "@/lib/exports/fridge-export";
 import { createZimsExport } from "@/lib/exports/zims";
 import { createFridge, fridgeDay, fridgeReadings, invalidateFridgeReading, saveFridgeReading, updateFridge } from "@/lib/fridges";
+import { fridgeAlert } from "@/lib/fridge-alert";
 import { createMeasurement } from "@/lib/measurements";
 import { resolveLocalDateTime } from "@/lib/time";
 import { waterReport } from "@/lib/water-report";
@@ -158,6 +159,24 @@ describe("a correction: invalidated and recorded again, nothing overwritten", ()
     );
     await invalidateFridgeReading(f.aq1, r.readingId, { requestId: rid(), expectedVersion: 1, reason: "rossz hűtő" }, at("2031-03-31T08:10"));
     expect((await fridgeReadings("2031-03-31", "2031-03-31")).length).toBe(0);
+  });
+
+  // the tile's corner mark (task caparium-fagyaszto-csempe, barracuda's question on #199): fridgeDay gives the VALID
+  // readings only, so an invalidated out-of-range reading neither keeps the mark red nor counts the fridge as read
+  it("the corner mark counts valid readings only: an invalidated out-of-range reading turns into a missing one", async () => {
+    const day = "2031-04-05";
+    const id = fridge["Teszt hűtő 1"];
+    const alertOf = async () => {
+      const { fridges, readings } = await fridgeDay(day);
+      return fridgeAlert(
+        fridges.filter((x) => x.id === id),
+        readings.filter((x) => x.fridgeId === id),
+      );
+    };
+    const r = await read(`${day}T08:00`, "Teszt hűtő 1", "12");
+    expect(await alertOf()).toEqual({ missing: 0, out: 1 });
+    await invalidateFridgeReading(f.aq1, r.readingId, { requestId: rid(), expectedVersion: 1, reason: "rossz hűtő" }, at(`${day}T08:10`));
+    expect(await alertOf()).toEqual({ missing: 1, out: 0 });
   });
 });
 
