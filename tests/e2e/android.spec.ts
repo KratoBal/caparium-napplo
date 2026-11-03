@@ -61,6 +61,32 @@ for (const path of ["/vizmeres?csoport=NAPI_NAGY", "/heti", "/vizmeres/hutok"]) 
   });
 }
 
+// Lili's iPhone photos (2026-11-03, acrobot 41478): scrolling, the 100 px helper covered the last fields. The page keeps
+// room under its last element for the figure, and while a field of the page is being filled in the helper fades and lets
+// taps through. Its size stays (Balázs asked for the larger one).
+for (const path of ["/vizmeres?csoport=NAPI_NAGY", "/adagolas"]) {
+  test(`${path}: the last element scrolls clear of the helper; a focused field makes it step back`, async ({ page }) => {
+    await login(page, "teszt.akvarista1");
+    await page.goto(path);
+    const figure = page.locator(".helper-figure");
+    await expect(figure).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const lastBottom = await page.evaluate(() => {
+      const last = document.querySelector("main")?.lastElementChild?.getBoundingClientRect();
+      return last ? last.bottom : 0;
+    });
+    const figureTop = (await figure.boundingBox())!.y;
+    // at least 24 px clear: with the old 120 px room the last element ended 4 px above the figure (measured on a Pixel 7),
+    // and on an iPhone the Safari bar and the figure's name take more than that
+    expect(lastBottom, "the page's last element ends at least 24 px above the helper").toBeLessThanOrEqual(figureTop - 24);
+    const helper = page.getByTestId("helper");
+    expect(Number(await helper.evaluate((el) => getComputedStyle(el).opacity))).toBeGreaterThan(0.9);
+    await page.locator("main").locator("input:not([type=hidden]):not([type=checkbox]), select").first().focus();
+    await expect.poll(async () => Number(await helper.evaluate((el) => getComputedStyle(el).opacity))).toBeLessThan(0.5);
+    expect(await figure.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe("none");
+  });
+}
+
 test("the daily table: a pool's card opens on a tap, a value saves", async ({ page }) => {
   // an admin on a past day of its own, so the other projects' days are not touched; the reason the past day asks for is given
   page.on("dialog", (d) => void d.accept("android próba"));
