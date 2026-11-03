@@ -294,8 +294,6 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
   /* the weekly nitrate and phosphate cells carry the dilution and the diluent water: they take the whole card width, the two selects side by side under the field */
   .grid-table td:has(.meta-row) { grid-column: 1 / -1; }
   .meta-select { height: 44px; font-size: 15px; }
-  /* the figure is smaller where the fields are, so a column of fields is not hidden behind it */
-  .shell:has(.grid-table) .helper-face { height: 64px; }
 }
 
 /* ---- log ---- */
@@ -463,6 +461,22 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
    tablet's 768px beside the daily table pictures) the save button goes under the day picker, still beside the tables */
 .water-head-actions { flex: 1 1 280px; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: flex-end; gap: 10px; }
 .toolbar.water-rounds-row { margin: 0 0 12px; }
+/* the phone (Lili 2026-11-03 17:37 UTC, her iPhone photos: "itt meg mindig nagy a holtter, nyugodtan picit aranyosithatjuk
+   oket merettel"): the three picture tiles share one row, a third of it each, with a smaller picture and a two-line label;
+   the day picker and the save button are one row from the left edge, the date field taking what the buttons leave */
+@media (max-width: 720px) {
+  .water-head-row .tabs { flex: 1 1 100%; flex-wrap: nowrap; gap: 8px; }
+  .water-head-row .tab-picture { flex: 1 1 0; min-width: 0; width: auto; padding: 6px; }
+  .water-head-row .tab-picture .tab-label { font-size: 13px; white-space: normal; line-height: 1.2; }
+  .water-head-row .tab-picture-box-wide { aspect-ratio: 360 / 334; }
+  /* min-width 0: the block's automatic minimum is its content's (the date field's own 179 px), and it ran 28 px past the
+     row, the save button off the screen (measured on a Pixel 7) */
+  .water-head-actions { flex: 1 1 100%; min-width: 0; flex-wrap: nowrap; justify-content: flex-start; }
+  /* basis 0, not auto: from its own width the date field would not give way, and the save button ran off the screen */
+  .water-head-actions form { flex: 1 1 0; min-width: 0; }
+  .water-head-actions form .field { flex: 1 1 0; min-width: 0; }
+  .water-head-actions form .input { width: 100%; min-width: 0; }
+}
 .day-controls .badge { font-size: 13px; padding: 6px 12px; }
 .err { color: var(--c-error); font-weight: 600; }
 
@@ -530,7 +544,9 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .helper-notice { pointer-events: none; margin: 0; font-size: 13px; }
 /* the page keeps room under its last row for the figure, so nothing ends up behind it */
 .shell:has(.helper, .helper-urgent) .main { padding-bottom: 150px; }
-/* on a phone the figure keeps its size of before (it must not cover a save button), and so does the room under the page */
+/* on a phone the figure is one size on every page, the larger one (Lili 2026-11-03 17:39-17:40 UTC: the weekly page showed
+   it at 64 px, the pages without a grid table at 100; the 100 is the right one, and since the helper can be switched off,
+   covering a little is fine). Until then the pages with a grid table had their own smaller size */
 @media (max-width: 720px) {
   .helper-face { height: 100px; }
   .shell:has(.helper, .helper-urgent) .main { padding-bottom: 120px; }
