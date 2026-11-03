@@ -263,6 +263,14 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
   .fridge-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--c-muted); }
   .fridge-table td .input { width: 100%; min-width: 0; }
 }
+/* iOS SAFARI (Lili 2026-11-03 17:50 UTC, her iPhone, /vizmeres/hutok): the "Dátum és idő" field ran past the fridge card on the
+   right while the other fields fit. Safari gives a date or time input its own native minimum width that neither width: 100%
+   nor min-width: 0 lifts; dropping the native appearance does, and the picker still opens on a tap. Scoped to iOS Safari
+   (-webkit-touch-callout is its own), so Chromium, Android and the CI's WebKit render exactly as before */
+@supports (-webkit-touch-callout: none) {
+  .input[type="date"], .input[type="datetime-local"], .input[type="time"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; }
+}
+
 .meta-row { display: flex; gap: 6px; margin-top: 6px; max-width: 160px; }
 .meta-select { height: 40px; flex: 1; min-width: 0; border-radius: 8px; border: 1px solid var(--c-line); background-color: var(--c-white); font-size: 14px; padding: 0 20px 0 6px; background-position: right 6px center; background-size: 10px 7px; }
 .cell-meta { font-size: 12px; color: var(--c-muted); margin-top: 4px; min-height: 16px; }
