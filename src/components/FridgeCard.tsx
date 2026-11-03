@@ -1,6 +1,7 @@
 "use client";
 
-// The daily water page's "Hűtők" card, under the big pools' table (Lili 2026-11-02, task caparium-hutok): one row per fridge to
+// The "Hűtők" card (Lili 2026-11-02, task caparium-hutok), since 2026-11-03 on its own page behind the "Fagyasztók
+// hőmérséklete" tile (task caparium-fagyaszto-csempe), content and layout unchanged: one row per fridge to
 // record a reading (temperature, date and time, now by default, the defrost tick and a short note), and the day's readings
 // under it. A temperature outside the fridge's range is red, already while it is typed. A reading is corrected by recording
 // it again ("Javítás": the old one is invalidated, the new one saved together) or invalidated; nothing is overwritten. The
