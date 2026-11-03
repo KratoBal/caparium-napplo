@@ -59,9 +59,10 @@ describe("the report's data", () => {
     expect(mine(before.intake)).toEqual([]);
   });
 
-  it("a backwards or a longer than a year period is refused", async () => {
+  it("a backwards or a longer than ten years period is refused; the history since 2018-12-07 is taken (C12)", async () => {
     await expect(intakeReport({ from: "2026-09-10", to: "2026-09-01" })).rejects.toMatchObject({ code: "BAD_PERIOD" });
-    await expect(intakeReport({ from: "2025-01-01", to: "2026-09-01" })).rejects.toMatchObject({ code: "PERIOD_TOO_LONG" });
+    await expect(intakeReport({ from: "2016-01-01", to: "2026-09-01" })).rejects.toMatchObject({ code: "PERIOD_TOO_LONG" });
+    await expect(intakeReport({ from: "2018-12-07", to: "2026-09-01" })).resolves.toMatchObject({ from: "2018-12-07" });
   });
 });
 
