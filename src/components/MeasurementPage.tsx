@@ -29,15 +29,15 @@ const TAB_LOOK: Record<string, { image: string; width: number; height: number; l
 /**
  * THE THIRD TILE (Lili 2026-11-03 16:29 UTC, task caparium-fagyaszto-csempe): "Fagyasztók hőmérséklete", the shark in a
  * woolly hat. It opens the fridges' own page (the "Hűtők" card moved there from under the big pools' table); it is no
- * measurement group, so the water exports and reports never see it. The picture is portrait (360 x 461); the box keeps the
- * Kis Akváriumok tile's ratio, so the row does not grow, and the picture fits inside it whole (object-fit: contain).
+ * measurement group, so the water exports and reports never see it. The picture is portrait (360 x 461) and the label long, so
+ * its box has its own class (.tab-picture-box-wide in globals.css): 2 : 1, so the tile is no taller than Kis Akváriumok, and the
+ * picture fits inside whole (object-fit: contain); on the tablet, where the tiles have one fixed width, the Kis Akváriumok ratio.
  */
 const FRIDGE_TILE = {
   href: "/vizmeres/hutok",
   image: "/vizmeres/fagyasztok.webp",
   width: 360,
   height: 461,
-  box: "360 / 334",
   label: "Fagyasztók hőmérséklete",
 };
 
@@ -98,7 +98,7 @@ function waterTabs({
               !
             </span>
           )}
-          <span className="tab-picture-box" style={{ aspectRatio: FRIDGE_TILE.box }}>
+          <span className="tab-picture-box tab-picture-box-wide">
             <img src={FRIDGE_TILE.image} alt="" width={FRIDGE_TILE.width} height={FRIDGE_TILE.height} />
           </span>
           <span className="tab-label">{FRIDGE_TILE.label}</span>
