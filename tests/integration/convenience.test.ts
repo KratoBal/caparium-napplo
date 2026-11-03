@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { setEatingStatus } from "@/lib/eating";
-import { feedingDayView } from "@/lib/feeding";
+import { aliveOnDay, feedingDayView } from "@/lib/feeding";
 import { applyPlan, currentPlans, setFeedingPlan, setFeedingPlans } from "@/lib/feeding-plan";
 import { knownOtherNames } from "@/lib/feeds";
 import { setIcon } from "@/lib/icons";
@@ -83,6 +83,48 @@ describe("the feeding plan is the admin's to change", () => {
     await setFeedingPlan(f.admin, { requestId: rid(), animalId: a["Teszt Kettő"], weekdays: [1] }, at("2026-12-27", "08:00"));
     expect(await applyPlan(f.aq1, { requestId: rid(), day: monday }, at(monday, "08:00"))).toMatchObject({ added: expect.any(Number) });
     expect((await feedingDayView(monday)).animals.find((x) => x.id === a["Teszt Kettő"])?.selected).toBe(true);
+  });
+});
+
+/*
+  THE PLAN OF THE DAY, NOT TODAY'S (C11 of the old-date survey, 2026-11-02). WHAT TURNS RED: an old day getting the plan valid
+  now (the old Monday is left out, the old Tuesday taken); the change day getting the version that began after it; a day
+  before the first version coming out empty. Days in February 2027, an animal no other test gives a plan.
+*/
+describe("the feeding plan of the day (C11)", () => {
+  it("an old day gets the version valid then; the change day the new one; a day before the first version the first one", async () => {
+    const days = ["2027-01-25", "2027-02-02", "2027-02-08", "2027-02-09"];
+    const planned = new Set((await prisma.feedingPlan.findMany({ select: { animalId: true } })).map((p) => p.animalId));
+    const candidates = (await prisma.animal.findMany({ select: { id: true }, orderBy: { id: "asc" } })).map((x) => x.id).filter((id) => !planned.has(id));
+    let x: string | undefined;
+    for (const id of candidates) {
+      const alive = await Promise.all(days.map((d) => aliveOnDay(prisma, d, [id])));
+      if (alive.every((s) => s.has(id))) {
+        x = id;
+        break;
+      }
+    }
+    expect(x, "an animal without any plan, alive on every test day").toBeDefined();
+    const id = x!;
+    // Monday from 2027-02-01, Tuesday from 2027-02-09 08:00
+    await setFeedingPlan(f.admin, { requestId: rid(), animalId: id, weekdays: [1] }, at("2027-02-01", "08:00"));
+    await setFeedingPlan(f.admin, { requestId: rid(), animalId: id, weekdays: [2] }, at("2027-02-09", "08:00"));
+    const selected = async (d: string) => (await feedingDayView(d)).animals.find((y) => y.id === id)?.selected;
+    const later = at("2027-02-10", "09:00");
+    const reason = "teszt: visszamenőleges lista";
+
+    // an old Monday under the Monday plan: taken, although today's plan is Tuesday
+    await applyPlan(f.admin, { requestId: rid(), day: "2027-02-08", reason }, later);
+    expect(await selected("2027-02-08")).toBe(true);
+    // an old Tuesday under the Monday plan: not taken, although today's plan is Tuesday
+    await applyPlan(f.admin, { requestId: rid(), day: "2027-02-02", reason }, later);
+    expect(await selected("2027-02-02")).not.toBe(true);
+    // the change day itself, later that day: the new version counts for it
+    await applyPlan(f.admin, { requestId: rid(), day: "2027-02-09" }, at("2027-02-09", "09:00"));
+    expect(await selected("2027-02-09")).toBe(true);
+    // a Monday before the first version: the first version, as the names before their first row
+    await applyPlan(f.admin, { requestId: rid(), day: "2027-01-25", reason }, later);
+    expect(await selected("2027-01-25")).toBe(true);
   });
 });
 

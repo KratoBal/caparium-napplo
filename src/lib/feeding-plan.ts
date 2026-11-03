@@ -6,8 +6,8 @@ import { z } from "zod";
 import { writeAudit } from "./audit";
 import { prisma, type Tx } from "./db";
 import { AppError } from "./errors";
-import { aliveOnDay, selectedOn, setSelection, ensureFeedingDay } from "./feeding";
-import { entryToday, moduleLevel, pickValid } from "./master";
+import { aliveOnDay, dayBounds, selectedOn, setSelection, ensureFeedingDay } from "./feeding";
+import { entryToday, moduleLevel, nameAt, pickValid } from "./master";
 import type { Actor } from "./measurements";
 import { dayToDate } from "./time";
 
@@ -97,16 +97,29 @@ export async function currentPlans(): Promise<Record<string, number[]>> {
 export const applySchema = z.object({ requestId, clientTimestamp: z.iso.datetime({ offset: true }).optional(), day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), reason: z.string().trim().min(3).max(500).optional() });
 
 /**
- * "Lista a terv szerint": selects the animals alive that day whose plan includes its weekday and that
+ * The animals whose plan of THAT day includes its weekday (C11 of the old-date survey, 2026-11-02: an old day keyed in
+ * got the plan valid now, not the one valid then). A plan is versioned, so each animal gets the version in force at the
+ * end of the day: an edit made during the day counts for that day, as the admin's change of today's timetable counts for
+ * today's list. Before an animal's first version, that first one, as `nameAt` does for names: the timetable was there
+ * before it was keyed in, and a day keyed in back in time should not come out empty only for that.
+ */
+export async function plannedOn(day: string): Promise<string[]> {
+  const wd = weekdayOf(day);
+  const at = new Date(dayBounds(day).end.getTime() - 1);
+  const versions = await prisma.feedingPlan.findMany({ orderBy: [{ animalId: "asc" }, { validFrom: "asc" }] });
+  const byAnimal = new Map<string, typeof versions>();
+  for (const v of versions) byAnimal.set(v.animalId, [...(byAnimal.get(v.animalId) ?? []), v]);
+  return [...byAnimal].filter(([, rows]) => nameAt(rows, at)?.weekdays.includes(wd)).map(([animalId]) => animalId);
+}
+
+/**
+ * "Lista a terv szerint": selects the animals alive that day whose plan of that day includes its weekday and that
  * are not on the list yet. It only adds; removing stays a person's step (with its R-3 confirmation).
  * The day's permissions are setSelection's.
  */
 export async function applyPlan(actor: Actor, raw: z.input<typeof applySchema>, serverNow = new Date()) {
   const input = applySchema.parse(raw);
-  const wd = weekdayOf(input.day);
-  const plans = await prisma.feedingPlan.findMany({ where: { validTo: null } });
-  const planned = plans.filter((p) => p.weekdays.includes(wd)).map((p) => p.animalId);
-  return addAnimalsToDay(actor, input, planned, serverNow);
+  return addAnimalsToDay(actor, input, await plannedOn(input.day), serverNow);
 }
 
 /**
