@@ -557,7 +557,16 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
    covering a little is fine). Until then the pages with a grid table had their own smaller size */
 @media (max-width: 720px) {
   .helper-face { height: 100px; }
-  .shell:has(.helper, .helper-urgent) .main { padding-bottom: 120px; }
+  /* Lili's iPhone photos, 2026-11-03 18:2x: scrolling, the 100 px figure covered the last fields (Ragadozós ORP, Karantén pH,
+     the calculator's text, the fridges' save button). The room under the page is the figure, its name and its 16 px offset
+     (about 136 px) plus a margin, so the last field and button scroll clear of it on every page */
+  .shell:has(.helper, .helper-urgent) .main { padding-bottom: 160px; }
+  /* while a field of the page is being filled in (not one in the helper's own bubble), the helper steps back: faded, and a tap goes through it to the field (same size,
+     acrobot 41478: "a meretet NE csokkentsd") */
+  .helper { transition: opacity 0.2s; }
+  .shell:has(.main :is(input, select, textarea):focus) .helper { opacity: 0.15; }
+  .shell:has(.main :is(input, select, textarea):focus) .helper-figure,
+  .shell:has(.main :is(input, select, textarea):focus) .helper-bubble { pointer-events: none; }
 }
 .helper-qs { display: flex; flex-wrap: wrap; gap: 8px; }
 .helper-animal { display: flex; gap: 6px; }
