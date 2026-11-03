@@ -155,11 +155,26 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Picture buttons (daily water page): the picture is as wide as the text and keeps its aspect ratio; the labels
    line up at the bottom of the row. The picture box takes no width of its own (width 0, min-width 100%), so the
    label decides the width. */
-.tab-picture { flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 6px; padding: 10px 20px; }
+.tab-picture { position: relative; flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 6px; padding: 10px 20px; }
 .tab-picture-box { display: block; width: 0; min-width: 100%; }
 .tab-picture-box img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .tab-picture .tab-label { text-align: center; white-space: nowrap; }
 .tab-picture:not(.active) img { filter: grayscale(1); }
+/* min-height 0 and overflow hidden: without them the portrait picture's own height overrides the box ratio (the automatic minimum
+   of an aspect-ratio box); the other two tiles never showed it, their picture and box have one ratio */
+.tab-picture-box-wide { aspect-ratio: 2 / 1; min-height: 0; overflow: hidden; }
+/* the fridge tile's corner mark (Lili 2026-11-03, task caparium-fagyaszto-csempe): a reading is missing or out of range on
+   the shown day; red on the inactive (gray) tile too, since the mark is the reason to open it */
+.tab-alert { position: absolute; top: 8px; right: 8px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: var(--c-error); color: #fff; font-size: 14px; font-weight: 700; line-height: 24px; text-align: center; }
+/* the tablet (721..1279 px, measured on 1024 in Chromium): the three tiles, the day picker and the save button must share one
+   row (Lili 2026-11-01, water-head.spec.ts). At the desktop size the three tiles took 640 px of the row's 710, and smaller
+   labels alone left 10 px. So here every picture tile is one fixed width, the same for all three, and a label takes two lines
+   where it needs them: the width no longer depends on the font (WebKit on the real tablet), 3 x 132 + 2 x 10 = 416 px */
+@media (min-width: 721px) and (max-width: 1279px) {
+  .tab-picture { width: 132px; padding: 8px 10px; }
+  .tab-picture .tab-label { font-size: 15px; white-space: normal; line-height: 1.2; }
+  .tab-picture-box-wide { aspect-ratio: 360 / 334; }
+}
 .toolbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 18px 0; }
 .toolbar .spacer { flex: 1; }
 .toolbar-end { align-items: flex-end; }

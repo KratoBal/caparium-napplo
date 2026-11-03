@@ -19,7 +19,7 @@ test.beforeAll(() => {
   if (!PASSWORD) throw new Error("SEED_TEST_PASSWORD must be set for the e2e run");
 });
 
-test("a fridge added in the settings is recorded under the big pools' table; out of range is red", async ({ page, browser }, info) => {
+test("a fridge added in the settings is recorded behind the Fagyasztók hőmérséklete tile; out of range is red", async ({ page, browser }, info) => {
   // a fridge of its own per project and per attempt, so a retry or the other project does not find this one's readings
   const name = `E2E hűtő ${info.project.name} ${info.retry}`;
   await login(page, "teszt.admin");
@@ -35,12 +35,16 @@ test("a fridge added in the settings is recorded under the big pools' table; out
 
   const aq = await browser.newPage();
   await login(aq, "teszt.akvarista1");
+  // Lili 2026-11-03 (task caparium-fagyaszto-csempe): the card is no longer under the big pools' table; the third tile
+  // opens it, and its corner mark says a fridge has no reading yet today
   await aq.goto("/vizmeres?csoport=NAPI_NAGY");
+  await expect(aq.getByTestId("fridge-card")).toHaveCount(0);
+  const tile = aq.getByTestId("fridge-tile");
+  await expect(tile.getByTestId("fridge-alert")).toHaveAttribute("aria-label", /még nincs beírva/);
+  await tile.click();
+  await expect(aq).toHaveURL(/\/vizmeres\/hutok\?nap=/);
+  await expect(aq.getByTestId("fridge-tile")).toHaveAttribute("aria-selected", "true");
   const card = aq.getByTestId("fridge-card");
-  // under the big pools' table
-  const gridBox = await aq.locator(".grid-table").first().boundingBox();
-  const cardBox = await card.boundingBox();
-  expect(cardBox!.y).toBeGreaterThan(gridBox!.y + gridBox!.height - 1);
   const row = card.getByTestId(`fridge-${name}`);
   const temp = row.getByLabel(`${name} hőmérséklete (°C)`);
   await temp.fill("9,5");
@@ -53,6 +57,9 @@ test("a fridge added in the settings is recorded under the big pools' table; out
   await expect(saved).toHaveCount(1);
   await expect(saved.locator("td.fridge-out")).toHaveText("9,5 °C");
   await expect(saved).toContainText("Leolvasztás");
+  // after a reload the mark names the out-of-range reading
+  await aq.reload();
+  await expect(aq.getByTestId("fridge-alert")).toHaveAttribute("aria-label", /tartományon kívüli érték/);
 
   // the small tanks' table has no fridge card
   await aq.goto("/vizmeres?csoport=NAPI_KIS");
