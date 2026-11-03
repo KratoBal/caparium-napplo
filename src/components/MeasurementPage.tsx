@@ -193,10 +193,9 @@ export async function MeasurementPage({
         />
       )}
       {!grid && (
-        <div className="toolbar toolbar-end">
+        <div className="toolbar toolbar-end water-head-row">
           {tables}
-          <span className="spacer" />
-          {dayPicker}
+          <div className="water-head-actions">{dayPicker}</div>
         </div>
       )}
     </Shell>
@@ -221,7 +220,8 @@ export async function FridgePage({ sp }: { sp: { nap?: string } }) {
           {formatDay(day)} · {weekdayName(day)}
         </p>
       </div>
-      <div className="toolbar toolbar-end">
+      {/* the water pages' head row (the same classes as MeasurementGrid's), so the phone rules apply here too */}
+      <div className="toolbar toolbar-end water-head-row">
         {waterTabs({
           groups,
           activeGroupId: null,
@@ -230,8 +230,7 @@ export async function FridgePage({ sp }: { sp: { nap?: string } }) {
           daily: true,
           fridge: { active: true, alert: fridgeAlert(data.fridges, data.readings) },
         })}
-        <span className="spacer" />
-        {dayPickerFor(FRIDGE_TILE.href, day, today)}
+        <div className="water-head-actions">{dayPickerFor(FRIDGE_TILE.href, day, today)}</div>
       </div>
       {await fridgeSection(data, day, today, level)}
     </Shell>
