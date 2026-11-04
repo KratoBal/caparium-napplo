@@ -601,7 +601,8 @@ export function WithdrawalForm({
               value={values[d.dimension] ?? ""}
               onChange={(e) => setValues({ ...values, [d.dimension]: e.target.value })}
               onKeyDown={(e) => {
-                if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+                // a nyomva tartott Enter ismételt keydown-t küld: az csak egy mentést indítson (barracuda, #202)
+                if (e.key !== "Enter" || e.repeat || e.nativeEvent.isComposing) return;
                 e.preventDefault();
                 if (!busy) void save();
               }}
