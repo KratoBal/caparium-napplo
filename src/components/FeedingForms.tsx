@@ -594,9 +594,17 @@ export function WithdrawalForm({
             <input
               className="input"
               inputMode="decimal"
+              // Lili 2026-11-04 09:13 UTC (msg 1567466777309614121, acrobot 42102): a külső numerikus billentyűzet Entere
+              // ugyanaz, mint a "Kivétel mentése" gomb; a következő takarmányt ő választja, a nap lezárása gombos marad
+              enterKeyHint="done"
               style={{ width: 110 }}
               value={values[d.dimension] ?? ""}
               onChange={(e) => setValues({ ...values, [d.dimension]: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+                e.preventDefault();
+                if (!busy) void save();
+              }}
               aria-label={`Mennyiség (${DIM[d.dimension] ?? d.dimension})`}
             />
             <select className="input" value={units[d.dimension] ?? d.units[0]?.id} onChange={(e) => setUnits({ ...units, [d.dimension]: e.target.value })} aria-label={`Egység (${DIM[d.dimension] ?? d.dimension})`}>
