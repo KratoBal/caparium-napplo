@@ -70,3 +70,63 @@ test("a fridge added in the settings is recorded behind the Fagyasztók hőmérs
   await expect(aq.getByTestId("fridge-export").getByRole("button", { name: /^PDF/ })).toBeVisible();
   await aq.close();
 });
+
+// Lili 2026-11-05: the iPhone's decimal keypad has no minus sign. A sign button sits beside every reading field; a freezer starts
+// on minus, a fridge on plus, and what is typed as 20 in a freezer is saved as -20. Run on the phone and on the tablet projects.
+test("the sign button: a freezer's 18 is saved as -18, a fridge starts on plus, the button flips both", async ({ page, browser }, info) => {
+  const freezer = `E2E fagyasztó ${info.project.name} ${info.retry}`;
+  const fridge = `E2E hűtő előjel ${info.project.name} ${info.retry}`;
+  await login(page, "teszt.admin");
+  await page.goto("/beallitasok");
+  await openAllSettings(page);
+  const box = page.getByTestId("new-fridge");
+  await box.getByLabel("Név").fill(freezer);
+  await box.getByLabel("Új hűtő fajtája").selectOption("FREEZER");
+  await box.getByLabel("Minimum (°C)").fill("-23");
+  await box.getByLabel("Maximum (°C)").fill("-18");
+  await box.getByRole("button", { name: "Hűtő felvétele" }).click();
+  await expect(box.getByRole("status")).toHaveText("Felvéve.");
+  await box.getByLabel("Név").fill(fridge);
+  await box.getByLabel("Új hűtő fajtája").selectOption("FRIDGE");
+  await box.getByLabel("Minimum (°C)").fill("2");
+  await box.getByLabel("Maximum (°C)").fill("8");
+  await box.getByRole("button", { name: "Hűtő felvétele" }).click();
+  await expect(box.getByRole("status")).toHaveText("Felvéve.");
+
+  const aq = await browser.newPage();
+  await login(aq, "teszt.akvarista1");
+  await aq.goto("/vizmeres?csoport=NAPI_NAGY");
+  await aq.getByTestId("fridge-tile").click();
+  const card = aq.getByTestId("fridge-card");
+
+  // the freezer: the button starts on minus, the digits typed without a sign are in range and saved negative
+  const fRow = card.getByTestId(`fridge-${freezer}`);
+  await expect(fRow.getByTestId("sign-toggle")).toHaveText("−");
+  await expect(fRow.getByTestId("sign-toggle")).toHaveAttribute("aria-pressed", "true");
+  const fTemp = fRow.getByLabel(`${freezer} hőmérséklete (°C)`);
+  await fTemp.fill("20");
+  await expect(fTemp).not.toHaveAttribute("aria-invalid", "true");
+  await fRow.getByRole("button", { name: "Mentés" }).click();
+  await expect(fRow.getByRole("status")).toHaveText("Mentve.");
+  await expect(card.getByTestId("fridge-reading").filter({ hasText: /-20/ })).toHaveCount(1);
+
+  // pressing the button turns the freezer's sign to plus: 5 is then a warm reading, out of range
+  await fRow.getByTestId("sign-toggle").click();
+  await expect(fRow.getByTestId("sign-toggle")).toHaveText("+");
+  await fTemp.fill("5");
+  await expect(fTemp).toHaveAttribute("aria-invalid", "true");
+
+  // the fridge: the button starts on plus, a typed 4 is in range; pressing the button makes it -4, out of range
+  const rRow = card.getByTestId(`fridge-${fridge}`);
+  await expect(rRow.getByTestId("sign-toggle")).toHaveText("+");
+  const rTemp = rRow.getByLabel(`${fridge} hőmérséklete (°C)`);
+  await rTemp.fill("4");
+  await expect(rTemp).not.toHaveAttribute("aria-invalid", "true");
+  await rRow.getByTestId("sign-toggle").click();
+  await expect(rRow.getByTestId("sign-toggle")).toHaveText("−");
+  await expect(rTemp).toHaveAttribute("aria-invalid", "true");
+  // a minus typed on a keyboard still works and wins over the button
+  await rTemp.fill("-3");
+  await expect(rRow.getByTestId("sign-toggle")).toHaveText("−");
+  await aq.close();
+});

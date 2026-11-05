@@ -249,6 +249,8 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .cell-value.out { background: var(--c-error-soft); color: var(--c-error); }
 /* the fridges' card (task caparium-hutok): a temperature outside the fridge's range, typed or saved */
 .input.out { background: var(--c-error-soft); color: var(--c-error); }
+.temp-field { display: inline-flex; align-items: stretch; gap: 6px; }
+.sign-btn { min-width: 44px; min-height: 44px; padding: 0 12px; font-size: 22px; line-height: 1; }
 .fridge-table td.fridge-out { color: var(--c-error); font-weight: 600; }
 .fridge-table tr.fridge-reading td { border-top: 0; }
 /* on a phone (Lili tries the site on an Android phone too): every fridge is a card, the fields under their own labels, nothing scrolls sideways */
