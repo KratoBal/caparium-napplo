@@ -155,11 +155,26 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Picture buttons (daily water page): the picture is as wide as the text and keeps its aspect ratio; the labels
    line up at the bottom of the row. The picture box takes no width of its own (width 0, min-width 100%), so the
    label decides the width. */
-.tab-picture { flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 6px; padding: 10px 20px; }
+.tab-picture { position: relative; flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 6px; padding: 10px 20px; }
 .tab-picture-box { display: block; width: 0; min-width: 100%; }
 .tab-picture-box img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .tab-picture .tab-label { text-align: center; white-space: nowrap; }
 .tab-picture:not(.active) img { filter: grayscale(1); }
+/* min-height 0 and overflow hidden: without them the portrait picture's own height overrides the box ratio (the automatic minimum
+   of an aspect-ratio box); the other two tiles never showed it, their picture and box have one ratio */
+.tab-picture-box-wide { aspect-ratio: 2 / 1; min-height: 0; overflow: hidden; }
+/* the fridge tile's corner mark (Lili 2026-11-03, task caparium-fagyaszto-csempe): a reading is missing or out of range on
+   the shown day; red on the inactive (gray) tile too, since the mark is the reason to open it */
+.tab-alert { position: absolute; top: 8px; right: 8px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: var(--c-error); color: #fff; font-size: 14px; font-weight: 700; line-height: 24px; text-align: center; }
+/* the tablet (721..1279 px, measured on 1024 in Chromium): the three tiles, the day picker and the save button must share one
+   row (Lili 2026-11-01, water-head.spec.ts). At the desktop size the three tiles took 640 px of the row's 710, and smaller
+   labels alone left 10 px. So here every picture tile is one fixed width, the same for all three, and a label takes two lines
+   where it needs them: the width no longer depends on the font (WebKit on the real tablet), 3 x 132 + 2 x 10 = 416 px */
+@media (min-width: 721px) and (max-width: 1279px) {
+  .tab-picture { width: 132px; padding: 8px 10px; }
+  .tab-picture .tab-label { font-size: 15px; white-space: normal; line-height: 1.2; }
+  .tab-picture-box-wide { aspect-ratio: 360 / 334; }
+}
 .toolbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 18px 0; }
 .toolbar .spacer { flex: 1; }
 .toolbar-end { align-items: flex-end; }
@@ -234,6 +249,10 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .cell-value.out { background: var(--c-error-soft); color: var(--c-error); }
 /* the fridges' card (task caparium-hutok): a temperature outside the fridge's range, typed or saved */
 .input.out { background: var(--c-error-soft); color: var(--c-error); }
+.temp-field { display: inline-flex; align-items: stretch; gap: 6px; }
+/* the button is shown LEFT of the field whatever the DOM order (a label wraps the input first, see FridgeSettings) */
+.temp-field > .sign-btn { order: -1; }
+.sign-btn { min-width: 44px; min-height: 44px; padding: 0 12px; font-size: 22px; line-height: 1; }
 .fridge-table td.fridge-out { color: var(--c-error); font-weight: 600; }
 .fridge-table tr.fridge-reading td { border-top: 0; }
 /* on a phone (Lili tries the site on an Android phone too): every fridge is a card, the fields under their own labels, nothing scrolls sideways */
@@ -248,6 +267,14 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
   .fridge-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--c-muted); }
   .fridge-table td .input { width: 100%; min-width: 0; }
 }
+/* iOS SAFARI (Lili 2026-11-03 17:50 UTC, her iPhone, /vizmeres/hutok): the "Dátum és idő" field ran past the fridge card on the
+   right while the other fields fit. Safari gives a date or time input its own native minimum width that neither width: 100%
+   nor min-width: 0 lifts; dropping the native appearance does, and the picker still opens on a tap. Scoped to iOS Safari
+   (-webkit-touch-callout is its own), so Chromium, Android and the CI's WebKit render exactly as before */
+@supports (-webkit-touch-callout: none) {
+  .input[type="date"], .input[type="datetime-local"], .input[type="time"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; }
+}
+
 .meta-row { display: flex; gap: 6px; margin-top: 6px; max-width: 160px; }
 .meta-select { height: 40px; flex: 1; min-width: 0; border-radius: 8px; border: 1px solid var(--c-line); background-color: var(--c-white); font-size: 14px; padding: 0 20px 0 6px; background-position: right 6px center; background-size: 10px 7px; }
 .cell-meta { font-size: 12px; color: var(--c-muted); margin-top: 4px; min-height: 16px; }
@@ -279,8 +306,6 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
   /* the weekly nitrate and phosphate cells carry the dilution and the diluent water: they take the whole card width, the two selects side by side under the field */
   .grid-table td:has(.meta-row) { grid-column: 1 / -1; }
   .meta-select { height: 44px; font-size: 15px; }
-  /* the figure is smaller where the fields are, so a column of fields is not hidden behind it */
-  .shell:has(.grid-table) .helper-face { height: 64px; }
 }
 
 /* ---- log ---- */
@@ -448,6 +473,22 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
    tablet's 768px beside the daily table pictures) the save button goes under the day picker, still beside the tables */
 .water-head-actions { flex: 1 1 280px; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: flex-end; gap: 10px; }
 .toolbar.water-rounds-row { margin: 0 0 12px; }
+/* the phone (Lili 2026-11-03 17:37 UTC, her iPhone photos: "itt meg mindig nagy a holtter, nyugodtan picit aranyosithatjuk
+   oket merettel"): the three picture tiles share one row, a third of it each, with a smaller picture and a two-line label;
+   the day picker and the save button are one row from the left edge, the date field taking what the buttons leave */
+@media (max-width: 720px) {
+  .water-head-row .tabs { flex: 1 1 100%; flex-wrap: nowrap; gap: 8px; }
+  .water-head-row .tab-picture { flex: 1 1 0; min-width: 0; width: auto; padding: 6px; }
+  .water-head-row .tab-picture .tab-label { font-size: 13px; white-space: normal; line-height: 1.2; }
+  .water-head-row .tab-picture-box-wide { aspect-ratio: 360 / 334; }
+  /* min-width 0: the block's automatic minimum is its content's (the date field's own 179 px), and it ran 28 px past the
+     row, the save button off the screen (measured on a Pixel 7) */
+  .water-head-actions { flex: 1 1 100%; min-width: 0; flex-wrap: nowrap; justify-content: flex-start; }
+  /* basis 0, not auto: from its own width the date field would not give way, and the save button ran off the screen */
+  .water-head-actions form { flex: 1 1 0; min-width: 0; }
+  .water-head-actions form .field { flex: 1 1 0; min-width: 0; }
+  .water-head-actions form .input { width: 100%; min-width: 0; }
+}
 .day-controls .badge { font-size: 13px; padding: 6px 12px; }
 .err { color: var(--c-error); font-weight: 600; }
 
@@ -515,10 +556,21 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .helper-notice { pointer-events: none; margin: 0; font-size: 13px; }
 /* the page keeps room under its last row for the figure, so nothing ends up behind it */
 .shell:has(.helper, .helper-urgent) .main { padding-bottom: 150px; }
-/* on a phone the figure keeps its size of before (it must not cover a save button), and so does the room under the page */
+/* on a phone the figure is one size on every page, the larger one (Lili 2026-11-03 17:39-17:40 UTC: the weekly page showed
+   it at 64 px, the pages without a grid table at 100; the 100 is the right one, and since the helper can be switched off,
+   covering a little is fine). Until then the pages with a grid table had their own smaller size */
 @media (max-width: 720px) {
   .helper-face { height: 100px; }
-  .shell:has(.helper, .helper-urgent) .main { padding-bottom: 120px; }
+  /* Lili's iPhone photos, 2026-11-03 18:2x: scrolling, the 100 px figure covered the last fields (Ragadozós ORP, Karantén pH,
+     the calculator's text, the fridges' save button). The room under the page is the figure, its name and its 16 px offset
+     (about 136 px) plus a margin, so the last field and button scroll clear of it on every page */
+  .shell:has(.helper, .helper-urgent) .main { padding-bottom: 160px; }
+  /* while a field of the page is being filled in (not one in the helper's own bubble), the helper steps back: faded, and a tap goes through it to the field (same size,
+     acrobot 41478: "a meretet NE csokkentsd") */
+  .helper { transition: opacity 0.2s; }
+  .shell:has(.main :is(input, select, textarea):focus) .helper { opacity: 0.15; }
+  .shell:has(.main :is(input, select, textarea):focus) .helper-figure,
+  .shell:has(.main :is(input, select, textarea):focus) .helper-bubble { pointer-events: none; }
 }
 .helper-qs { display: flex; flex-wrap: wrap; gap: 8px; }
 .helper-animal { display: flex; gap: 6px; }

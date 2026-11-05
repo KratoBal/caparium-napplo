@@ -1255,7 +1255,8 @@ test("withdrawal: an item for tomorrow, the day's total, taken against given, th
   await taken.getByRole("button", { name: "módosítás" }).click();
   await expect(form.getByLabel("Mennyiség (tömeg)", { exact: true })).toHaveValue("200");
   await form.getByLabel("Mennyiség (tömeg)", { exact: true }).fill("250");
-  await form.getByRole("button", { name: "Módosítás mentése" }).click();
+  // Lili 2026-11-04 (acrobot 42102): the Enter in the amount field saves, the same as the button
+  await form.getByLabel("Mennyiség (tömeg)", { exact: true }).press("Enter");
   await expect(form.getByRole("status")).toHaveText("Kivétel módosítva.");
   await expect(taken).toHaveCount(1);
   await expect(taken).toContainText("250 g");

@@ -4,7 +4,9 @@
 // closing. No delete: a closed fridge takes no new reading and leaves the daily card, its readings stay in the book and the
 // exports, and it may be opened again. A new range acts from now on; the readings already taken keep theirs.
 import { useState } from "react";
+import { hasDigit, signedTemperature, startsNegative } from "@/lib/fridge-sign";
 import { Msg, useSave } from "./SettingsForms";
+import { SignButton } from "./SignButton";
 
 export type FridgeSetting = { id: string; name: string; kind: "FRIDGE" | "FREEZER"; min: string; max: string; active: boolean };
 
@@ -25,16 +27,21 @@ function FridgeSettingRow({ f }: { f: FridgeSetting }) {
   const [kind, setKind] = useState(f.kind);
   const [min, setMin] = useState(hu(f.min));
   const [max, setMax] = useState(hu(f.max));
+  // the saved texts carry their own sign here; the sign button flips it (the phone's decimal keypad has no minus)
+  const [minNeg, setMinNeg] = useState(false);
+  const [maxNeg, setMaxNeg] = useState(false);
   const { msg, busy, save } = useSave();
-  const unchanged = name.trim() === f.name && kind === f.kind && dot(min) === f.min && dot(max) === f.max;
+  const minSigned = dot(signedTemperature(min, minNeg));
+  const maxSigned = dot(signedTemperature(max, maxNeg));
+  const unchanged = name.trim() === f.name && kind === f.kind && minSigned === f.min && maxSigned === f.max;
   return (
     <tr data-testid={`fridge-setting-${f.name}`} className={f.active ? undefined : "invalid"}>
       <td className="keep"><input className="input" aria-label={`${f.name} neve`} value={name} onChange={(e) => setName(e.target.value)} /></td>
       <td className="keep"><KindSelect label={`${f.name} fajtája`} value={kind} onChange={setKind} /></td>
-      <td className="keep"><input className="input small" inputMode="decimal" aria-label={`${f.name} minimuma (°C)`} value={min} onChange={(e) => setMin(e.target.value)} /></td>
-      <td className="keep"><input className="input small" inputMode="decimal" aria-label={`${f.name} maximuma (°C)`} value={max} onChange={(e) => setMax(e.target.value)} /></td>
+      <td className="keep"><span className="temp-field"><SignButton name={`${f.name} minimuma`} text={min} negative={minNeg} onToggle={(n) => { setMin(n.text); setMinNeg(n.negative); }} /><input className="input small" inputMode="decimal" aria-label={`${f.name} minimuma (°C)`} value={min} onChange={(e) => setMin(e.target.value)} /></span></td>
+      <td className="keep"><span className="temp-field"><SignButton name={`${f.name} maximuma`} text={max} negative={maxNeg} onToggle={(n) => { setMax(n.text); setMaxNeg(n.negative); }} /><input className="input small" inputMode="decimal" aria-label={`${f.name} maximuma (°C)`} value={max} onChange={(e) => setMax(e.target.value)} /></span></td>
       <td className="keep">
-        <button className="btn" type="button" disabled={busy || unchanged} onClick={() => void save(`/api/admin/fridges/${f.id}`, "PATCH", { name: name.trim(), kind, min: dot(min), max: dot(max) })}>
+        <button className="btn" type="button" disabled={busy || unchanged} onClick={() => void save(`/api/admin/fridges/${f.id}`, "PATCH", { name: name.trim(), kind, min: minSigned, max: maxSigned })}>
           Mentés
         </button>{" "}
         <button
@@ -60,6 +67,11 @@ function NewFridgeForm() {
   const [kind, setKind] = useState<"FRIDGE" | "FREEZER">("FRIDGE");
   const [min, setMin] = useState("");
   const [max, setMax] = useState("");
+  // a freezer's range is negative: both fields start on minus for it, on plus for a fridge; the button flips each one
+  const [minNeg, setMinNeg] = useState(startsNegative("FRIDGE"));
+  const [maxNeg, setMaxNeg] = useState(startsNegative("FRIDGE"));
+  const minSigned = signedTemperature(min, minNeg);
+  const maxSigned = signedTemperature(max, maxNeg);
   const { msg, busy, save } = useSave();
   return (
     <div className="toolbar" data-testid="new-fridge">
@@ -69,25 +81,43 @@ function NewFridgeForm() {
       </label>
       <label className="field">
         Fajta
-        <KindSelect label="Új hűtő fajtája" value={kind} onChange={setKind} />
+        <KindSelect
+          label="Új hűtő fajtája"
+          value={kind}
+          onChange={(next) => {
+            setKind(next);
+            setMinNeg(startsNegative(next));
+            setMaxNeg(startsNegative(next));
+          }}
+        />
       </label>
       <label className="field">
         Minimum (°C)
-        <input className="input small" inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} />
+        {/* the INPUT comes first in the DOM: a wrapping <label> belongs to its first labelable descendant, and a button before the
+            input took the label (the e2e's getByLabel("Minimum (°C)") then found the button); the button is shown on the left by CSS */}
+        <span className="temp-field">
+          <input className="input small" inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} />
+          <SignButton name="Új hűtő minimuma" text={min} negative={minNeg} onToggle={(n) => { setMin(n.text); setMinNeg(n.negative); }} />
+        </span>
       </label>
       <label className="field">
         Maximum (°C)
-        <input className="input small" inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} />
+        <span className="temp-field">
+          <input className="input small" inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} />
+          <SignButton name="Új hűtő maximuma" text={max} negative={maxNeg} onToggle={(n) => { setMax(n.text); setMaxNeg(n.negative); }} />
+        </span>
       </label>
       <button
         className="btn"
         type="button"
-        disabled={busy || !name.trim() || !min.trim() || !max.trim()}
+        disabled={busy || !name.trim() || !hasDigit(minSigned) || !hasDigit(maxSigned)}
         onClick={async () => {
-          if (await save("/api/admin/fridges", "POST", { name: name.trim(), kind, min: dot(min), max: dot(max) }, "Felvéve.")) {
+          if (await save("/api/admin/fridges", "POST", { name: name.trim(), kind, min: dot(minSigned), max: dot(maxSigned) }, "Felvéve.")) {
             setName("");
             setMin("");
             setMax("");
+            setMinNeg(startsNegative(kind));
+            setMaxNeg(startsNegative(kind));
           }
         }}
       >
