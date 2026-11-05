@@ -93,16 +93,18 @@ function NewFridgeForm() {
       </label>
       <label className="field">
         Minimum (°C)
+        {/* the INPUT comes first in the DOM: a wrapping <label> belongs to its first labelable descendant, and a button before the
+            input took the label (the e2e's getByLabel("Minimum (°C)") then found the button); the button is shown on the left by CSS */}
         <span className="temp-field">
-          <SignButton name="Új hűtő minimuma" text={min} negative={minNeg} onToggle={(n) => { setMin(n.text); setMinNeg(n.negative); }} />
           <input className="input small" inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} />
+          <SignButton name="Új hűtő minimuma" text={min} negative={minNeg} onToggle={(n) => { setMin(n.text); setMinNeg(n.negative); }} />
         </span>
       </label>
       <label className="field">
         Maximum (°C)
         <span className="temp-field">
-          <SignButton name="Új hűtő maximuma" text={max} negative={maxNeg} onToggle={(n) => { setMax(n.text); setMaxNeg(n.negative); }} />
           <input className="input small" inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} />
+          <SignButton name="Új hűtő maximuma" text={max} negative={maxNeg} onToggle={(n) => { setMax(n.text); setMaxNeg(n.negative); }} />
         </span>
       </label>
       <button
