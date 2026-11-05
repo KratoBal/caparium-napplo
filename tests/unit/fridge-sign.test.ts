@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isNegative, signedTemperature, startsNegative, toggleSign } from "@/lib/fridge-sign";
+import { hasDigit, isNegative, signedTemperature, startsNegative, toggleSign } from "@/lib/fridge-sign";
 import { typedOutOfRange } from "@/components/FridgeCard";
 
 // Lili 2026-11-05: the iPhone decimal keypad has no minus sign, so a freezer reading could not be typed. What turns this red: a
@@ -37,6 +37,30 @@ describe("signedTemperature", () => {
     expect(typedOutOfRange(signedTemperature("17", true), "-23", "-18")).toBe(true);
     // without the sign the 20 would read as +20 and be red
     expect(typedOutOfRange("20", "-23", "-18")).toBe(true);
+  });
+});
+
+describe("typed signs (barracuda, cap#204): never doubled, a lone sign is not a value", () => {
+  it("a doubled or mixed typed sign is ONE sign, the first, and the digits", () => {
+    expect(signedTemperature("--5", false)).toBe("-5");
+    expect(signedTemperature("-−5", false)).toBe("-5");
+    expect(signedTemperature("-+5", false)).toBe("-5");
+    expect(signedTemperature("+-5", true)).toBe("5");
+    expect(signedTemperature("- 5", false)).toBe("-5");
+  });
+  it("a sign typed on its own is empty, so there is nothing to save yet", () => {
+    for (const lone of ["-", "+", "−", "--", "- "]) expect(signedTemperature(lone, true)).toBe("");
+  });
+  it("hasDigit keeps the save off for an empty text, a lone sign and letters", () => {
+    expect(hasDigit(signedTemperature("-", true))).toBe(false);
+    expect(hasDigit("")).toBe(false);
+    expect(hasDigit("abc")).toBe(false);
+    expect(hasDigit(signedTemperature("18", true))).toBe(true);
+    expect(hasDigit("-0,5")).toBe(true);
+  });
+  it("the button strips every leading sign when it flips", () => {
+    expect(toggleSign("--5", false)).toEqual({ text: "5", negative: false });
+    expect(toggleSign("-", true)).toEqual({ text: "", negative: false });
   });
 });
 

@@ -4,7 +4,7 @@
 // closing. No delete: a closed fridge takes no new reading and leaves the daily card, its readings stay in the book and the
 // exports, and it may be opened again. A new range acts from now on; the readings already taken keep theirs.
 import { useState } from "react";
-import { signedTemperature, startsNegative } from "@/lib/fridge-sign";
+import { hasDigit, signedTemperature, startsNegative } from "@/lib/fridge-sign";
 import { Msg, useSave } from "./SettingsForms";
 import { SignButton } from "./SignButton";
 
@@ -108,7 +108,7 @@ function NewFridgeForm() {
       <button
         className="btn"
         type="button"
-        disabled={busy || !name.trim() || !minSigned || !maxSigned}
+        disabled={busy || !name.trim() || !hasDigit(minSigned) || !hasDigit(maxSigned)}
         onClick={async () => {
           if (await save("/api/admin/fridges", "POST", { name: name.trim(), kind, min: dot(minSigned), max: dot(maxSigned) }, "Felvéve.")) {
             setName("");

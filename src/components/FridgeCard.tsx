@@ -6,7 +6,7 @@
 // under it. A temperature outside the fridge's range is red, already while it is typed. A reading is corrected by recording
 // it again ("Javítás": the old one is invalidated, the new one saved together) or invalidated; nothing is overwritten. The
 // server decides every permission; this card only hides what the user cannot do anyway.
-import { signedTemperature, startsNegative } from "@/lib/fridge-sign";
+import { hasDigit, signedTemperature, startsNegative } from "@/lib/fridge-sign";
 import { SignButton } from "./SignButton";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -180,7 +180,7 @@ function Entry({ fridge, c }: { fridge: FridgeRow; c: Common }) {
         <input className="input" maxLength={200} aria-label={`${fridge.name}: megjegyzés`} placeholder="megjegyzés" value={note} onChange={(e) => setNote(e.target.value)} />
       </td>
       <td className="keep">
-        <button className="btn" type="button" disabled={busy || !signed || !at.value} onClick={() => void save()}>
+        <button className="btn" type="button" disabled={busy || !hasDigit(signed) || !at.value} onClick={() => void save()}>
           Mentés
         </button>{" "}
         <Msg msg={msg} />
@@ -246,7 +246,7 @@ function Reading({ fridge, r, c, canWrite }: { fridge: FridgeRow; r: FridgeReadi
           <input className="input" maxLength={200} aria-label={`${fridge.name}: javított megjegyzés`} value={note} onChange={(e) => setNote(e.target.value)} />
         </td>
         <td className="keep">
-          <button className="btn" type="button" disabled={busy || !signed || !when} onClick={() => void correct()}>
+          <button className="btn" type="button" disabled={busy || !hasDigit(signed) || !when} onClick={() => void correct()}>
             Mentés
           </button>{" "}
           <button className="btn btn-soft" type="button" disabled={busy} onClick={() => setOpen(false)}>
