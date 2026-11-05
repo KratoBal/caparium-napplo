@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createLifecycleEvent } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { setEatingStatus } from "@/lib/eating";
-import { buildEatingWorkbook, buildFeedingWorkbook, DAY_BAND, DAY_ROW_FILLS, TOTAL_FILL } from "@/lib/exports/feeding-excel";
+import { buildEatingWorkbook, buildFeedingWorkbook, buildWithdrawalWorkbook, DAY_BAND, DAY_ROW_FILLS, TOTAL_FILL } from "@/lib/exports/feeding-excel";
 import { finalizeList, saveFeedingItem, setSelection } from "@/lib/feeding";
 import { feedingLog } from "@/lib/feeding-log";
 import { otherLabel } from "@/lib/other-name";
@@ -196,10 +196,32 @@ describe("the other feeds' names, normalized", () => {
   });
 });
 
+/*
+  THE EXPORT PERIOD (C12 of the old-date survey, 2026-11-02). WHAT TURNS RED: the feed journal still stops at a year (the
+  history since 2018-12-07 would take eight requests); the eating pattern or the withdrawal summary takes more than a year
+  (a column per day, a pie per week); a century is built before it is refused.
+*/
 describe("the export period", () => {
-  it("at most a year, refused before any work (the eating sheet has a column per day)", async () => {
-    for (const build of [buildFeedingWorkbook, buildEatingWorkbook]) {
+  it("a century is refused before any work, by all three", async () => {
+    for (const build of [buildFeedingWorkbook, buildEatingWorkbook, buildWithdrawalWorkbook]) {
       await expect(build({ from: "2000-01-01", to: "2099-12-31" })).rejects.toMatchObject({ code: "PERIOD_TOO_LONG" });
+    }
+  });
+
+  it("the feed journal takes the history since 2018-12-07 in one go; the eating pattern and the withdrawal a year", async () => {
+    const history = { from: "2018-12-07", to: "2026-12-31" };
+    expect((await buildFeedingWorkbook(history)).buffer.length).toBeGreaterThan(0);
+    await expect(buildFeedingWorkbook({ from: "2016-01-01", to: "2026-12-31" })).rejects.toMatchObject({
+      code: "PERIOD_TOO_LONG",
+      message: "Legfeljebb tíz év kérhető le egyszerre.",
+    });
+    for (const build of [buildEatingWorkbook, buildWithdrawalWorkbook]) {
+      // 367 days with both ends: one over the year limit (2025-01-01 .. 2026-01-01 is 366 and is taken)
+      await expect(build({ from: "2025-01-01", to: "2026-01-02" })).rejects.toMatchObject({
+        code: "PERIOD_TOO_LONG",
+        message: "Legfeljebb egy év kérhető le egyszerre.",
+      });
+      expect((await build({ from: "2025-01-01", to: "2025-12-31" })).buffer.length).toBeGreaterThan(0);
     }
   });
 });

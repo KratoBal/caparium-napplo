@@ -60,10 +60,13 @@ describe("after the merges (barracuda's notes)", () => {
     expect(await name(ids.slice(0, 1))).not.toContain("capasuli_teljes");
   });
 
-  it("the dosing PDF takes at most a year", async () => {
+  // the limit stays (barracuda on #170: a very large PDF); C12 raised it to ten years, with the streaming measured
+  // (src/lib/exports/period-limit.ts), so the whole history since 2018-12-07 comes in one request
+  it("the dosing PDF takes at most ten years: the history since 2018 in one go, not more", async () => {
     const c = await cookie();
-    const res = await dosingRoute(form("/api/exports/dosing", c, [["from", "2025-01-01"], ["to", "2026-03-01"]]));
+    const res = await dosingRoute(form("/api/exports/dosing", c, [["from", "2016-01-01"], ["to", "2026-03-01"]]));
     expect(res.status).toBe(422);
-    expect((await dosingRoute(form("/api/exports/dosing", c, [["from", "2026-01-01"], ["to", "2026-01-02"]]))).status).toBe(200);
+    expect(await res.text()).toBe("Legfeljebb tíz év kérhető le egyszerre.");
+    expect((await dosingRoute(form("/api/exports/dosing", c, [["from", "2018-12-07"], ["to", "2026-03-01"]]))).status).toBe(200);
   });
 });

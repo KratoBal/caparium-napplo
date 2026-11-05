@@ -16,6 +16,7 @@ import { GIVEN } from "../eating-labels";
 import { dayBounds } from "../feeding";
 import { isDerivedFasting, listFacts } from "../eating-pattern";
 import { pickValid } from "../master";
+import { periodDays, periodTooLongText, ROW_EXPORT_MAX_DAYS, YEAR_EXPORT_MAX_DAYS } from "./period-limit";
 import { feedingLog } from "../feeding-log";
 import { breakdown, type ReportLine } from "../reports";
 import { addDays, businessDayOf, dateToDay, dayToDate, EXCEL_DATE_FORMAT, formatDay, resolveLocalDateTime, weekdayLetter, weekdayName } from "../time";
@@ -76,13 +77,11 @@ function colLetter(n: number): string {
   return s;
 }
 
-const MAX_DAYS = 366; // the eating sheet has a column per day, and Excel stops at 16384
-
-function daysOf(from: string, to: string): string[] {
+// the feed journal is a row per day: ten years; the eating sheet has a column per day and the withdrawal summary a pie per
+// week: a year (src/lib/exports/period-limit.ts)
+function daysOf(from: string, to: string, maxDays: number): string[] {
   // checked before any work (review of #10): a century would otherwise be built first
-  if ((dayToDate(to).getTime() - dayToDate(from).getTime()) / 86_400_000 + 1 > MAX_DAYS) {
-    throw new AppError(422, "PERIOD_TOO_LONG", "Legfeljebb egy év kérhető le egyszerre.");
-  }
+  if (periodDays(from, to) > maxDays) throw new AppError(422, "PERIOD_TOO_LONG", periodTooLongText(maxDays));
   const out: string[] = [];
   for (let d = from; d <= to; d = addDays(d, 1)) out.push(d);
   return out;
@@ -92,7 +91,7 @@ export type FeedingExcelFilter = { from: string; to: string };
 
 /** EGY-10: one row per day and recipient, one column per feed and unit, SUM per unit (D-30). */
 export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buffer: Buffer; rows: number }> {
-  const days = daysOf(f.from, f.to);
+  const days = daysOf(f.from, f.to, ROW_EXPORT_MAX_DAYS);
   const endOfPeriod = resolveLocalDateTime(`${f.to}T23:59`)!.instant;
   const [items, types, baseUnits] = await Promise.all([
     prisma.feedingItem.findMany({
@@ -300,7 +299,7 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
 
 /** EVE-07: species, name, group; the days run across; one coloured cell per animal and day. */
 export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buffer: Buffer; rows: number }> {
-  const days = daysOf(f.from, f.to);
+  const days = daysOf(f.from, f.to, YEAR_EXPORT_MAX_DAYS);
   const start = dayBounds(f.from).start;
   const end = dayBounds(f.to).end;
   const today = businessDayOf(new Date());
@@ -427,7 +426,7 @@ export const WITHDRAWAL_SUMMARY_SHEET = "Heti összesítő";
 const PIE_ROWS = 16;
 
 export async function buildWithdrawalWorkbook(f: FeedingExcelFilter): Promise<{ buffer: Buffer; rows: number }> {
-  daysOf(f.from, f.to);
+  daysOf(f.from, f.to, YEAR_EXPORT_MAX_DAYS);
   const items = await prisma.withdrawalItem.findMany({
     where: { status: "VALID", withdrawalDay: { businessDay: { gte: dayToDate(f.from), lte: dayToDate(f.to) } } },
     include: { withdrawalDay: true, quantities: { include: { unit: true } }, feed: { include: { names: true, type: true } } },
