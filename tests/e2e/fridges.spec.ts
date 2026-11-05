@@ -130,3 +130,32 @@ test("the sign button: a freezer's 18 is saved as -18, a fridge starts on plus, 
   await expect(rRow.getByTestId("sign-toggle")).toHaveText("−");
   await aq.close();
 });
+
+// Lili 2026-11-05: the Beállítások range fields get the same sign button (a freezer's range is negative, the phone keypad has no
+// minus). A new freezer's range typed without a minus (23 and 18) is saved as -23 and -18; a fridge's stays plus; the button flips.
+test("the range fields' sign button: a freezer's 23..18 is saved as -23..-18, the button flips a field", async ({ page }, info) => {
+  const freezer = `E2E tartomány ${info.project.name} ${info.retry}`;
+  await login(page, "teszt.admin");
+  await page.goto("/beallitasok");
+  await openAllSettings(page);
+  const box = page.getByTestId("new-fridge");
+  await box.getByLabel("Név").fill(freezer);
+  await box.getByLabel("Új hűtő fajtája").selectOption("FREEZER");
+  // both range buttons start on minus for a freezer
+  await expect(box.getByTestId("sign-toggle").nth(0)).toHaveText("−");
+  await expect(box.getByTestId("sign-toggle").nth(1)).toHaveText("−");
+  await box.getByLabel("Minimum (°C)").fill("23");
+  await box.getByLabel("Maximum (°C)").fill("18");
+  await box.getByRole("button", { name: "Hűtő felvétele" }).click();
+  await expect(box.getByRole("status")).toHaveText("Felvéve.");
+  const row = page.getByTestId(`fridge-setting-${freezer}`);
+  await expect(row.getByLabel(`${freezer} minimuma (°C)`)).toHaveValue(/^-23/);
+  await expect(row.getByLabel(`${freezer} maximuma (°C)`)).toHaveValue(/^-18/);
+  // the row's button flips the saved minus to plus (text without the sign, the button on plus)
+  await row.getByTestId("sign-toggle").nth(1).click();
+  await expect(row.getByTestId("sign-toggle").nth(1)).toHaveText("+");
+  await expect(row.getByLabel(`${freezer} maximuma (°C)`)).toHaveValue(/^18/);
+  // a fridge's range fields start on plus
+  await box.getByLabel("Új hűtő fajtája").selectOption("FRIDGE");
+  await expect(box.getByTestId("sign-toggle").nth(0)).toHaveText("+");
+});

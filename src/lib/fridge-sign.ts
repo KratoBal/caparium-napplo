@@ -4,6 +4,8 @@
 // pressing the button.
 const MINUS = /^[-−]/;
 const PLUS = /^\+/;
+// every sign character at the front (a typed "--5" or "-+5" is one sign, the FIRST one, and the digits)
+const LEADING_SIGNS = /^[-+−\s]+/;
 
 /** The sign the button starts on for a kind of fridge. */
 export const startsNegative = (kind: "FRIDGE" | "FREEZER"): boolean => kind === "FREEZER";
@@ -20,14 +22,20 @@ export function isNegative(text: string, negative: boolean): boolean {
 export function signedTemperature(text: string, negative: boolean): string {
   const t = text.trim();
   if (t === "") return "";
-  if (MINUS.test(t)) return `-${t.slice(1).trim()}`;
-  if (PLUS.test(t)) return t.slice(1).trim();
+  const explicit = MINUS.test(t) || PLUS.test(t);
+  const rest = t.replace(LEADING_SIGNS, "");
+  // a sign with no digits after it yet ("-" typed on its own) is not a value: empty, so the save stays off
+  if (explicit && rest === "") return "";
+  if (explicit) return MINUS.test(t) ? `-${rest}` : rest;
   return negative ? `-${t}` : t;
 }
+
+/** Is there a digit to save: a lone sign, or letters, are not a reading (the save button stays off). */
+export const hasDigit = (signed: string): boolean => /\d/.test(signed);
 
 /** The sign button: flips the sign, keeps the digits, and leaves the sign in the button's state (the text holds no sign any more). */
 export function toggleSign(text: string, negative: boolean): { text: string; negative: boolean } {
   const now = isNegative(text, negative);
-  const magnitude = text.trim().replace(/^[-+−]\s*/, "");
+  const magnitude = text.trim().replace(LEADING_SIGNS, "");
   return { text: magnitude, negative: !now };
 }

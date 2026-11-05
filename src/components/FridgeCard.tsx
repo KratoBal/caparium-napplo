@@ -6,7 +6,8 @@
 // under it. A temperature outside the fridge's range is red, already while it is typed. A reading is corrected by recording
 // it again ("Javítás": the old one is invalidated, the new one saved together) or invalidated; nothing is overwritten. The
 // server decides every permission; this card only hides what the user cannot do anyway.
-import { isNegative, signedTemperature, startsNegative, toggleSign } from "@/lib/fridge-sign";
+import { hasDigit, signedTemperature, startsNegative } from "@/lib/fridge-sign";
+import { SignButton } from "./SignButton";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
@@ -108,23 +109,6 @@ function useAt({ day, today, nowAt }: Common) {
   return { value: touched ?? clock, touched: touched !== null, set: setTouched, reset: () => setTouched(null) };
 }
 
-/** The big, finger-sized sign button beside a reading field: the phone's decimal keypad has no minus. */
-function SignButton({ name, text, negative, onToggle }: { name: string; text: string; negative: boolean; onToggle: (next: { text: string; negative: boolean }) => void }) {
-  const minus = isNegative(text, negative);
-  return (
-    <button
-      className="btn btn-soft sign-btn"
-      type="button"
-      aria-label={`${name}: előjel váltása`}
-      aria-pressed={minus}
-      data-testid="sign-toggle"
-      onClick={() => onToggle(toggleSign(text, negative))}
-    >
-      {minus ? "\u2212" : "+"}
-    </button>
-  );
-}
-
 function Entry({ fridge, c }: { fridge: FridgeRow; c: Common }) {
   const [temp, setTemp] = useState("");
   // a freezer starts on minus (its range is negative), a fridge on plus; the sign button flips it (the phone keypad has no minus)
@@ -196,7 +180,7 @@ function Entry({ fridge, c }: { fridge: FridgeRow; c: Common }) {
         <input className="input" maxLength={200} aria-label={`${fridge.name}: megjegyzés`} placeholder="megjegyzés" value={note} onChange={(e) => setNote(e.target.value)} />
       </td>
       <td className="keep">
-        <button className="btn" type="button" disabled={busy || !signed || !at.value} onClick={() => void save()}>
+        <button className="btn" type="button" disabled={busy || !hasDigit(signed) || !at.value} onClick={() => void save()}>
           Mentés
         </button>{" "}
         <Msg msg={msg} />
@@ -262,7 +246,7 @@ function Reading({ fridge, r, c, canWrite }: { fridge: FridgeRow; r: FridgeReadi
           <input className="input" maxLength={200} aria-label={`${fridge.name}: javított megjegyzés`} value={note} onChange={(e) => setNote(e.target.value)} />
         </td>
         <td className="keep">
-          <button className="btn" type="button" disabled={busy || !signed || !when} onClick={() => void correct()}>
+          <button className="btn" type="button" disabled={busy || !hasDigit(signed) || !when} onClick={() => void correct()}>
             Mentés
           </button>{" "}
           <button className="btn btn-soft" type="button" disabled={busy} onClick={() => setOpen(false)}>
