@@ -5,7 +5,7 @@ import type { Writable } from "node:stream";
 import ExcelJS from "exceljs";
 import { intakeReport, type IntakeReport } from "./intake-report";
 import { EXCEL_DATE_FORMAT, reportTitle } from "./intake-report-text";
-import { pace, PACE_ROWS, workbookBuffer, workbookWriter, type StreamedWorkbook } from "./xlsx-stream";
+import { finish, pace, PACE_ROWS, workbookBuffer, workbookWriter, type StreamedWorkbook } from "./xlsx-stream";
 
 const HEAD = "FFA6CAEC"; // the same header blue as the other exports
 /** The red ink of a delivery that was sent back (Lili: "piros betűszínnel", PDF and Excel). */
@@ -91,7 +91,7 @@ export function intakeWorkbook(report: IntakeReport): StreamedWorkbook {
       await pace(out, b);
     }
     b.commit();
-    await wb.commit();
+    await finish(wb, out);
   };
   return { rows: report.intake.length + lines, write };
 }

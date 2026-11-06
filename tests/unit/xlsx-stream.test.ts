@@ -1,11 +1,11 @@
 // The streamed Excel (task caparium-streamelo-excel, src/lib/exports/xlsx-stream.ts). WHAT TURNS RED: the writer keeps every formula
 // cell it wrote again (a later ExcelJS renames the store pace empties, and ten years of the feeding log grow with their SUM cells);
-// a slow reader no longer holds the rows back; a reader that went away does not stop the writing; the file read back is not the
-// one written.
+// a slow reader no longer holds the rows back; a reader that went away does not stop the writing, or (barracuda on #206) one that
+// goes after the last pace leaves the write pending for good; the file read back is not the one written.
 import { PassThrough, Writable } from "node:stream";
 import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
-import { pace, PACE_ROWS, workbookBody, workbookBuffer, workbookWriter, type StreamedWorkbook } from "@/lib/exports/xlsx-stream";
+import { finish, pace, PACE_ROWS, workbookBody, workbookBuffer, workbookWriter, type StreamedWorkbook } from "@/lib/exports/xlsx-stream";
 
 /** n rows of a value and a SUM over it, paced as the exports pace; `seen` gets the formula store's size at each pace. */
 function book(n: number, seen: number[] = []): StreamedWorkbook {
@@ -25,7 +25,7 @@ function book(n: number, seen: number[] = []): StreamedWorkbook {
         }
       }
       ws.commit();
-      await wb.commit();
+      await finish(wb, out);
     },
   };
 }
@@ -63,6 +63,36 @@ describe("the streamed Excel", () => {
     await paced;
     expect(done).toBe(true);
   });
+
+  it.each(["before the sheet's commit", "before the book's commit", "while the zip is closing"] as const)(
+    "a reader gone after the last pace, %s: the write fails, it does not hang",
+    async (when) => {
+      const out = new PassThrough();
+      out.on("data", () => {});
+      const write = (async () => {
+        const wb = workbookWriter(out);
+        const ws = wb.addWorksheet("Lap");
+        for (let i = 1; i <= 2 * PACE_ROWS + 200; i++) {
+          ws.getRow(i).getCell(1).value = i;
+          ws.getRow(i).commit();
+          if (i % PACE_ROWS === 0) await pace(out, ws);
+        }
+        if (when === "before the sheet's commit") out.destroy();
+        ws.commit();
+        if (when === "before the book's commit") out.destroy();
+        if (when === "while the zip is closing") setImmediate(() => out.destroy());
+        await finish(wb, out);
+      })();
+      const settled = await Promise.race([
+        write.then(
+          () => "resolved",
+          (e: Error) => e.message,
+        ),
+        new Promise((resolve) => setTimeout(() => resolve("pending"), 3000)),
+      ]);
+      expect(settled).toBe("the export's reader went away");
+    },
+  );
 
   it("a reader that went away stops the writing, and the body ends in an error, not a short file", async () => {
     const out = new PassThrough();
