@@ -3,6 +3,9 @@
 // (a row per day or item) take ten years: measured 2026-11-03 on synthetic rows, exceljs with 29 200 rows x 8 columns
 // peaked at +183 MB heap, pdfkit with 29 200 table rows at +18 MB and 1.6 s (it streams). Two keep a year, for their
 // layout, not their size: the eating pattern has a column per day, and the withdrawal summary a pie chart per week.
+// Since task caparium-streamelo-excel the feeding log and the Takarmányhűtő Excel are written row by row (xlsx-stream.ts):
+// measured 2026-11-06, ten years of the feeding log (105 937 rows x 35 columns) under a 192 MB heap limit, which the in-memory
+// workbook already ran out of on one year.
 
 import { dayToDate } from "../time";
 

@@ -6,8 +6,9 @@ import { FILE_BASE, periodFileName } from "@/lib/exports/file-names";
 import { REPORT_FILE_BASE } from "@/lib/exports/intake-report-text";
 import { buildIntakePdf } from "@/lib/exports/intake-pdf";
 import { buildReportPdf } from "@/lib/exports/report-pdf";
-import { buildIntakeWorkbook } from "@/lib/exports/intake-excel";
-import { buildEatingWorkbook, buildFeedingWorkbook, buildReportWorkbook, buildWithdrawalWorkbook } from "@/lib/exports/feeding-excel";
+import { intakeWorkbookOf } from "@/lib/exports/intake-excel";
+import { buildEatingWorkbook, buildReportWorkbook, buildWithdrawalWorkbook, feedingWorkbook } from "@/lib/exports/feeding-excel";
+import { workbookBody, type StreamedWorkbook } from "@/lib/exports/xlsx-stream";
 import { moduleLevel } from "@/lib/master";
 import { seeOther } from "@/lib/redirect";
 import { dayToDate, isValidDay } from "@/lib/time";
@@ -37,15 +38,17 @@ export async function POST(req: Request) {
   // the Takarmányhűtő report and (Lili 2026-11-01, point 8) the Kimutatások come as PDF too
   const pdf = (kind === "huto" || kind === "kimutatas") && String(form?.get("format") ?? "") === "pdf";
   const reportFilter = { from, to, poolId: uuid.test(poolId) ? poolId : null, animalId: uuid.test(animalId) ? animalId : null };
-  let built: { buffer: Buffer; rows: number };
+  // the two ten-year row exports (the feeding log, the Takarmányhűtő Excel) are written into the answer as they are made
+  // (xlsx-stream.ts); the data is read before, so a refusal is still a status, not a broken file
+  let built: { buffer: Buffer; rows: number } | StreamedWorkbook;
   try {
     built =
       kind === "huto"
         ? pdf
           ? await buildIntakePdf({ from, to })
-          : await buildIntakeWorkbook({ from, to })
+          : await intakeWorkbookOf({ from, to })
         : kind === "etetes"
-        ? await buildFeedingWorkbook({ from, to })
+        ? await feedingWorkbook({ from, to })
         : kind === "evesi"
           ? await buildEatingWorkbook({ from, to })
           : kind === "kivetel"
@@ -86,7 +89,7 @@ export async function POST(req: Request) {
   const base =
     kind === "huto" ? REPORT_FILE_BASE : kind === "etetes" ? FILE_BASE.feeding : kind === "evesi" ? FILE_BASE.eating : kind === "kivetel" ? FILE_BASE.withdrawal : "Kimutatas";
   const name = periodFileName(base, from, to, pdf ? "pdf" : "xlsx");
-  return new Response(new Uint8Array(built.buffer), {
+  return new Response("buffer" in built ? new Uint8Array(built.buffer) : workbookBody(built), {
     headers: {
       "Content-Type": pdf ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${name}"`,
