@@ -53,6 +53,31 @@ export async function pace(out: Writable, ws: ExcelJS.Worksheet): Promise<void> 
   if (out.destroyed) throw new Error("the export's reader went away");
 }
 
+/**
+ * The book's last step, in place of wb.commit(): it ends when the file is out, or fails when the reader went away first. ExcelJS
+ * waits for the stream's "finish", and a destroyed stream never gives one (barracuda on #206, measured: a reader gone after the
+ * last pace left the write pending for good).
+ */
+export async function finish(wb: ExcelJS.stream.xlsx.WorkbookWriter, out: Writable): Promise<void> {
+  if (out.destroyed) throw new Error("the export's reader went away");
+  await new Promise<void>((resolve, reject) => {
+    const closed = () => {
+      if (!out.writableFinished) reject(new Error("the export's reader went away"));
+    };
+    out.once("close", closed);
+    wb.commit().then(
+      () => {
+        out.off("close", closed);
+        resolve();
+      },
+      (e: unknown) => {
+        out.off("close", closed);
+        reject(e instanceof Error ? e : new Error(String(e)));
+      },
+    );
+  });
+}
+
 /** The whole file in a buffer: the tests read it back with ExcelJS. */
 export async function workbookBuffer(w: StreamedWorkbook): Promise<{ buffer: Buffer; rows: number }> {
   const out = new PassThrough();

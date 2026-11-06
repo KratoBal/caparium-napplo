@@ -22,7 +22,7 @@ import { feedingLog } from "../feeding-log";
 import { breakdown, type ReportLine } from "../reports";
 import { addDays, businessDayOf, dateToDay, dayToDate, EXCEL_DATE_FORMAT, formatDay, resolveLocalDateTime, weekdayLetter, weekdayName } from "../time";
 import { addPies, type Pie } from "./xlsx-pie";
-import { pace, PACE_ROWS, workbookBuffer, workbookWriter, type StreamedWorkbook } from "./xlsx-stream";
+import { finish, pace, PACE_ROWS, workbookBuffer, workbookWriter, type StreamedWorkbook } from "./xlsx-stream";
 
 // the template's theme fills, resolved (theme_note of the extracts): Excel tints in HSL lightness
 const FILL = {
@@ -305,7 +305,7 @@ export async function feedingWorkbook(f: FeedingExcelFilter): Promise<StreamedWo
       sumRow.getCell(c).value = sorted.length ? { formula: `SUM(${colLetter(c)}${firstData}:${colLetter(c)}${sumRow.number - 1})`, result } : 0;
     }
     ws.commit();
-    await wb.commit();
+    await finish(wb, out);
   };
   return { rows: sorted.length, write };
 }
