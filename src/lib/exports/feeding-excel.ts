@@ -9,6 +9,7 @@
 import { otherKey, otherLabel } from "../other-name";
 import type { Dimension } from "@prisma/client";
 import ExcelJS from "exceljs";
+import type { Writable } from "node:stream";
 import { prisma } from "../db";
 import { byAnimalOrder, compareAnimals } from "../animal-order";
 import { AppError } from "../errors";
@@ -21,6 +22,7 @@ import { feedingLog } from "../feeding-log";
 import { breakdown, type ReportLine } from "../reports";
 import { addDays, businessDayOf, dateToDay, dayToDate, EXCEL_DATE_FORMAT, formatDay, resolveLocalDateTime, weekdayLetter, weekdayName } from "../time";
 import { addPies, type Pie } from "./xlsx-pie";
+import { pace, PACE_ROWS, workbookBuffer, workbookWriter, type StreamedWorkbook } from "./xlsx-stream";
 
 // the template's theme fills, resolved (theme_note of the extracts): Excel tints in HSL lightness
 const FILL = {
@@ -89,8 +91,11 @@ function daysOf(from: string, to: string, maxDays: number): string[] {
 
 export type FeedingExcelFilter = { from: string; to: string };
 
-/** EGY-10: one row per day and recipient, one column per feed and unit, SUM per unit (D-30). */
-export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buffer: Buffer; rows: number }> {
+/**
+ * EGY-10: one row per day and recipient, one column per feed and unit, SUM per unit (D-30). Ten years in one request (#198), so
+ * the data is read here and the file written row by row into the answer (xlsx-stream.ts).
+ */
+export async function feedingWorkbook(f: FeedingExcelFilter): Promise<StreamedWorkbook> {
   const days = daysOf(f.from, f.to, ROW_EXPORT_MAX_DAYS);
   const endOfPeriod = resolveLocalDateTime(`${f.to}T23:59`)!.instant;
   const [items, types, baseUnits] = await Promise.all([
@@ -210,91 +215,104 @@ export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buf
   const sumCol = (k: number) => FIRST + cols.length + k;
   const last = sumCol(sumUnits.length - 1);
 
-  const wb = new ExcelJS.Workbook();
-  wb.creator = "Cápárium nAPPló";
-  wb.created = new Date();
-  const ws = wb.addWorksheet("Egyedi takarmánynapló");
-  const r1 = ws.getRow(1);
-  const r2 = ws.getRow(2);
-  const r3 = ws.getRow(3);
-  r1.getCell(5).value = "Takarmány";
-  r2.getCell(5).value = "Mértékegység";
-  cols.forEach((c, i) => {
-    r1.getCell(FIRST + i).value = c.name;
-    r2.getCell(FIRST + i).value = c.unit;
-  });
-  // a feed with two units: its name over both columns (the template's J1:K1)
-  for (let i = 0; i < cols.length; ) {
-    let j = i;
-    // the same feed AND the same other name: two "Egyéb" names share their feed and must not merge
-    while (j + 1 < cols.length && cols[j + 1].feedId === cols[i].feedId && cols[j + 1].other === cols[i].other) j++;
-    if (j > i) ws.mergeCells(1, FIRST + i, 1, FIRST + j);
-    i = j + 1;
-  }
-  sumUnits.forEach((u, k) => {
-    r1.getCell(sumCol(k)).value = "SUM/Állat";
-    r2.getCell(sumCol(k)).value = u;
-  });
-  r3.getCell(1).value = "Dátum";
-  r3.getCell(2).value = "Nap";
-  r3.getCell(3).value = "Állatfaj";
-  r3.getCell(4).value = "Név";
-  for (let c = 1; c <= last; c++) {
-    fill(r1.getCell(c), c <= 4 ? FILL.grey : FILL.head);
-    fill(r2.getCell(c), c <= 4 ? FILL.grey : FILL.unit);
-    fill(r3.getCell(c), c <= 4 ? FILL.head : FILL.dark);
-  }
-  // the totals' heads stand out like their cells
-  sumUnits.forEach((_, k) => [r1, r2].forEach((r) => fill(r.getCell(sumCol(k)), TOTAL_FILL)));
-  r1.font = { bold: true };
-  r3.font = { bold: true };
-
-  const firstData = 4;
   const dayIndex = new Map(days.map((d, i) => [d, i]));
-  sorted.forEach((row, n) => {
-    const r = ws.getRow(firstData + n);
-    r.getCell(1).value = dayToDate(row.day);
-    r.getCell(1).numFmt = EXCEL_DATE_FORMAT;
-    r.getCell(2).value = weekdayName(row.day);
-    r.getCell(3).value = row.species;
-    r.getCell(4).value = row.name;
-    for (const [i, v] of row.values) r.getCell(FIRST + i).value = v;
-    for (const i of row.ticks) if (!row.values.has(i)) r.getCell(FIRST + i).value = GIVEN;
-    // EGY-05: what the animal did not get that day stays empty and coloured
-    for (let c = FIRST; c < FIRST + cols.length; c++) {
-      const cell = r.getCell(c);
-      if (cell.value === null || cell.value === undefined) fill(cell, EMPTY);
+  const write = async (out: Writable) => {
+    const wb = workbookWriter(out);
+    // the widths and the frozen panes before the first row: a streamed sheet writes them at its head
+    const ws = wb.addWorksheet("Egyedi takarmánynapló", { views: [{ state: "frozen", xSplit: 4, ySplit: 3 }] });
+    ws.columns = Array.from({ length: last }, (_, i) => ({ width: i < 4 ? [12, 11, 22, 22][i] : 14 }));
+    const r1 = ws.getRow(1);
+    const r2 = ws.getRow(2);
+    const r3 = ws.getRow(3);
+    r1.getCell(5).value = "Takarmány";
+    r2.getCell(5).value = "Mértékegység";
+    cols.forEach((c, i) => {
+      r1.getCell(FIRST + i).value = c.name;
+      r2.getCell(FIRST + i).value = c.unit;
+    });
+    // a feed with two units: its name over both columns (the template's J1:K1)
+    for (let i = 0; i < cols.length; ) {
+      let j = i;
+      // the same feed AND the same other name: two "Egyéb" names share their feed and must not merge
+      while (j + 1 < cols.length && cols[j + 1].feedId === cols[i].feedId && cols[j + 1].other === cols[i].other) j++;
+      if (j > i) ws.mergeCells(1, FIRST + i, 1, FIRST + j);
+      i = j + 1;
     }
     sumUnits.forEach((u, k) => {
-      const members = cols.map((c, i) => (c.unit === u ? FIRST + i : 0)).filter(Boolean);
-      const result = members.reduce((s, c) => s + (typeof r.getCell(c).value === "number" ? (r.getCell(c).value as number) : 0), 0);
-      r.getCell(sumCol(k)).value = { formula: `SUM(${members.map((c) => `${colLetter(c)}${r.number}`).join(",")})`, result };
-      fill(r.getCell(sumCol(k)), TOTAL_FILL);
-      r.getCell(sumCol(k)).font = { bold: true };
+      r1.getCell(sumCol(k)).value = "SUM/Állat";
+      r2.getCell(sumCol(k)).value = u;
     });
-    // point 2: every other day's rows in a pale band (an empty feed cell keeps its own grey, EGY-05)
-    if ((dayIndex.get(row.day) ?? 0) % 2 === 1) {
-      for (let c = 1; c < FIRST + cols.length; c++) if (!r.getCell(c).fill || c < FIRST) fill(r.getCell(c), DAY_BAND);
+    r3.getCell(1).value = "Dátum";
+    r3.getCell(2).value = "Nap";
+    r3.getCell(3).value = "Állatfaj";
+    r3.getCell(4).value = "Név";
+    for (let c = 1; c <= last; c++) {
+      fill(r1.getCell(c), c <= 4 ? FILL.grey : FILL.head);
+      fill(r2.getCell(c), c <= 4 ? FILL.grey : FILL.unit);
+      fill(r3.getCell(c), c <= 4 ? FILL.head : FILL.dark);
     }
-  });
+    // the totals' heads stand out like their cells
+    sumUnits.forEach((_, k) => [r1, r2].forEach((r) => fill(r.getCell(sumCol(k)), TOTAL_FILL)));
+    r1.font = { bold: true };
+    r3.font = { bold: true };
+    r3.commit();
 
-  // EGY-11: the SUM row is always the last, under every recipient
-  const sumRow = ws.getRow(firstData + sorted.length);
-  sumRow.getCell(1).value = "SUM/Takarmány";
-  ws.mergeCells(sumRow.number, 1, sumRow.number, 4);
-  for (let c = 1; c <= last; c++) fill(sumRow.getCell(c), TOTAL_FILL);
-  sumRow.font = { bold: true };
-  for (let c = FIRST; c <= last; c++) {
-    let result = 0;
-    for (let n = firstData; n < sumRow.number; n++) {
-      const v = ws.getRow(n).getCell(c).value;
-      result += typeof v === "number" ? v : v && typeof v === "object" && "result" in v ? Number(v.result) || 0 : 0;
+    // EGY-11's totals, summed while the rows go out: a committed row cannot be read back
+    const totals = new Map<number, number>();
+    const firstData = 4;
+    for (const [n, row] of sorted.entries()) {
+      const r = ws.getRow(firstData + n);
+      r.getCell(1).value = dayToDate(row.day);
+      r.getCell(1).numFmt = EXCEL_DATE_FORMAT;
+      r.getCell(2).value = weekdayName(row.day);
+      r.getCell(3).value = row.species;
+      r.getCell(4).value = row.name;
+      for (const [i, v] of row.values) r.getCell(FIRST + i).value = v;
+      for (const i of row.ticks) if (!row.values.has(i)) r.getCell(FIRST + i).value = GIVEN;
+      // EGY-05: what the animal did not get that day stays empty and coloured
+      for (let c = FIRST; c < FIRST + cols.length; c++) {
+        const cell = r.getCell(c);
+        if (cell.value === null || cell.value === undefined) fill(cell, EMPTY);
+      }
+      sumUnits.forEach((u, k) => {
+        const members = cols.map((c, i) => (c.unit === u ? FIRST + i : 0)).filter(Boolean);
+        const result = members.reduce((s, c) => s + (typeof r.getCell(c).value === "number" ? (r.getCell(c).value as number) : 0), 0);
+        r.getCell(sumCol(k)).value = { formula: `SUM(${members.map((c) => `${colLetter(c)}${r.number}`).join(",")})`, result };
+        fill(r.getCell(sumCol(k)), TOTAL_FILL);
+        r.getCell(sumCol(k)).font = { bold: true };
+      });
+      // point 2: every other day's rows in a pale band (an empty feed cell keeps its own grey, EGY-05)
+      if ((dayIndex.get(row.day) ?? 0) % 2 === 1) {
+        for (let c = 1; c < FIRST + cols.length; c++) if (!r.getCell(c).fill || c < FIRST) fill(r.getCell(c), DAY_BAND);
+      }
+      for (let c = FIRST; c <= last; c++) {
+        const v = r.getCell(c).value;
+        const add = typeof v === "number" ? v : v && typeof v === "object" && "result" in v ? Number(v.result) || 0 : 0;
+        totals.set(c, (totals.get(c) ?? 0) + add);
+      }
+      r.commit();
+      if ((n + 1) % PACE_ROWS === 0) await pace(out, ws);
     }
-    sumRow.getCell(c).value = sorted.length ? { formula: `SUM(${colLetter(c)}${firstData}:${colLetter(c)}${sumRow.number - 1})`, result } : 0;
-  }
-  ws.columns.forEach((c, i) => (c.width = i < 4 ? [12, 11, 22, 22][i] : 14));
-  ws.views = [{ state: "frozen", xSplit: 4, ySplit: 3 }];
-  return { buffer: Buffer.from(await wb.xlsx.writeBuffer()), rows: sorted.length };
+
+    // EGY-11: the SUM row is always the last, under every recipient
+    const sumRow = ws.getRow(firstData + sorted.length);
+    sumRow.getCell(1).value = "SUM/Takarmány";
+    ws.mergeCells(sumRow.number, 1, sumRow.number, 4);
+    for (let c = 1; c <= last; c++) fill(sumRow.getCell(c), TOTAL_FILL);
+    sumRow.font = { bold: true };
+    for (let c = FIRST; c <= last; c++) {
+      const result = totals.get(c) ?? 0;
+      sumRow.getCell(c).value = sorted.length ? { formula: `SUM(${colLetter(c)}${firstData}:${colLetter(c)}${sumRow.number - 1})`, result } : 0;
+    }
+    ws.commit();
+    await wb.commit();
+  };
+  return { rows: sorted.length, write };
+}
+
+/** The feeding log in a buffer (the tests); the route streams feedingWorkbook. */
+export async function buildFeedingWorkbook(f: FeedingExcelFilter): Promise<{ buffer: Buffer; rows: number }> {
+  return workbookBuffer(await feedingWorkbook(f));
 }
 
 /** EVE-07: species, name, group; the days run across; one coloured cell per animal and day. */
