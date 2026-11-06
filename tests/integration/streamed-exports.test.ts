@@ -72,7 +72,7 @@ describe("the streamed exports' route", () => {
   it("over ten years: a 422 with the sentence, before any file, and no export recorded", async () => {
     const c = await cookie();
     const before = (await lastRun()).id;
-    for (const fields of [
+    for (const fields of <Record<string, string>[]>[
       { kind: "etetes", from: "2016-01-01", to: "2026-12-31" },
       { kind: "huto", format: "xlsx", from: "2016-01-01", to: "2026-12-31" },
     ]) {
