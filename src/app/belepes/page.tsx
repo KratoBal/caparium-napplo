@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Shell } from "@/components/Shell";
 import { currentUser } from "@/lib/session";
@@ -37,6 +38,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <button className="btn" type="submit">Bejelentkezés</button>
             <p className="hint">Az alkalmazás minden műveletet felhasználóhoz kapcsol.</p>
           </form>
+          {/* task e7f9e84d: the forgotten password */}
+          <p>
+            <Link href="/elfelejtett-jelszo">Elfelejtettem a jelszavam</Link>
+          </p>
         </div>
       </div>
     </Shell>

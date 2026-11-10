@@ -51,6 +51,12 @@ repository: `CAPARIUM_SMTP_HOST`, `CAPARIUM_SMTP_PORT` (587 = STARTTLS required,
 `CAPARIUM_SMTP_USER`, `CAPARIUM_SMTP_PASSWORD` (secret), `CAPARIUM_MAIL_FROM`. Without them the button names
 the missing variables and sends nothing. The recipient is set in Beállítások.
 
+**Forgotten password:** a user with an e-mail address (Saját beállítások) asks for a link on the login page ("Elfelejtettem a
+jelszavam"); a one-time link, valid for 30 minutes, goes to that address. It needs the SMTP variables above AND
+`CAPARIUM_PUBLIC_URL`, the site's https root (the link is built from it, never from a request's Host). Without them no mail goes
+and the page still answers the same. An admin can always make a one-day link by hand (Beállítások, Felhasználók,
+"Visszaállító link").
+
 **Monthly ZIMS package by e-mail:** the hourly job mails the previous month's package (or a warning that there is none) to
 the "Havi ZIMS-csomag levélben" recipients of Beállítások, once per month. It runs ONLY where
 `CAPARIUM_MONTHLY_ZIMS_MAIL=on` is set (and the SMTP variables above are): set it on the production instance, never on a

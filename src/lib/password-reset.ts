@@ -24,10 +24,16 @@ export async function issueResetToken(
   input: { userId: string; createdById: string | null; ttlMs: number },
   now = new Date(),
 ): Promise<{ token: string; expiresAt: Date }> {
-  await tx.passwordReset.updateMany({ where: { userId: input.userId, usedAt: null, expiresAt: { gt: now } }, data: { expiresAt: now } });
+  // an admin's link ends every earlier one; a mailed one ends only the earlier MAILED ones (barracuda on #219: anyone who knows
+  // a login id must not cancel the link an admin handed over)
+  await tx.passwordReset.updateMany({
+    where: { userId: input.userId, usedAt: null, expiresAt: { gt: now }, ...(input.createdById === null ? { createdById: null } : {}) },
+    data: { expiresAt: now },
+  });
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(now.getTime() + input.ttlMs);
-  await tx.passwordReset.create({ data: { id: hashOf(token), userId: input.userId, createdById: input.createdById, expiresAt } });
+  // createdAt from the same clock as expiresAt and usedAt, so the throttle and the lock's starting point read one clock
+  await tx.passwordReset.create({ data: { id: hashOf(token), userId: input.userId, createdById: input.createdById, createdAt: now, expiresAt } });
   return { token, expiresAt };
 }
 
@@ -66,6 +72,12 @@ export async function resetPassword(input: ResetPasswordInput, client: string | 
     if (!row || !row.user.active) throw new AppError(410, "RESET_LINK_GONE", GONE);
     const taken = await tx.passwordReset.updateMany({ where: { id: row.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } });
     if (taken.count !== 1) throw new AppError(410, "RESET_LINK_GONE", GONE);
+    // the password is new: every other live link of the user ends too (barracuda on #219: a mailed and an admin's link can live
+    // side by side, and the one handed over on paper must not outlive the reset)
+    await tx.passwordReset.updateMany({
+      where: { userId: row.userId, usedAt: null, expiresAt: { gt: now }, id: { not: row.id } },
+      data: { expiresAt: now },
+    });
     await tx.user.update({ where: { id: row.userId }, data: { passwordHash } });
     await tx.session.deleteMany({ where: { userId: row.userId } });
     await writeAudit(tx, {
