@@ -4,7 +4,7 @@
 // e-mail change, or told when there was none.
 import { beforeAll, describe, expect, it } from "vitest";
 import { POST as requestRoute } from "@/app/api/password-reset/request/route";
-import { createUser, updateUser } from "@/lib/admin";
+import { createPasswordResetLink, createUser, updateUser } from "@/lib/admin";
 import { prisma } from "@/lib/db";
 import type { MailSender } from "@/lib/mail";
 import { resetLinkUsable } from "@/lib/password-reset";
@@ -95,6 +95,19 @@ describe("the forgotten password by e-mail", () => {
     for (let i = 0; i < 4; i++) outcomes.push(await requestPasswordReset(withMail.loginId, { env: ENV, send: box.send }, later));
     expect(outcomes).toEqual(["SENT", "SENT", "SENT", "THROTTLED"]);
     expect(box.sent).toHaveLength(3);
+  });
+
+  it("parallel requests cannot pass the limit together, and a mailed link does not end the admin's (barracuda on #219)", async () => {
+    const box = outbox();
+    const muchLater = new Date(Date.now() + 3 * 3600_000);
+    const outcomes = await Promise.all(Array.from({ length: 6 }, () => requestPasswordReset(withMail.loginId, { env: ENV, send: box.send }, muchLater)));
+    expect(outcomes.filter((o) => o === "SENT")).toHaveLength(3);
+    expect(outcomes.filter((o) => o === "THROTTLED")).toHaveLength(3);
+    const adminLink = (await createPasswordResetLink(f.admin, withMail.id, rid())).path.split("/").at(-1)!;
+    const evenLater = new Date(Date.now() + 5 * 3600_000);
+    expect(await requestPasswordReset(withMail.loginId, { env: ENV, send: box.send }, evenLater)).toBe("SENT");
+    // measured just after the mailed request's own moment: an ended link would have expired exactly then
+    expect(await resetLinkUsable(adminLink, new Date(evenLater.getTime() + 60_000))).toBe(true);
   });
 
   it("the route answers the same for an existing and an unknown account, and refuses another origin", async () => {

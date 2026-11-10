@@ -24,7 +24,12 @@ export async function issueResetToken(
   input: { userId: string; createdById: string | null; ttlMs: number },
   now = new Date(),
 ): Promise<{ token: string; expiresAt: Date }> {
-  await tx.passwordReset.updateMany({ where: { userId: input.userId, usedAt: null, expiresAt: { gt: now } }, data: { expiresAt: now } });
+  // an admin's link ends every earlier one; a mailed one ends only the earlier MAILED ones (barracuda on #219: anyone who knows
+  // a login id must not cancel the link an admin handed over)
+  await tx.passwordReset.updateMany({
+    where: { userId: input.userId, usedAt: null, expiresAt: { gt: now }, ...(input.createdById === null ? { createdById: null } : {}) },
+    data: { expiresAt: now },
+  });
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(now.getTime() + input.ttlMs);
   // createdAt from the same clock as expiresAt and usedAt, so the throttle and the lock's starting point read one clock

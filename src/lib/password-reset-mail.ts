@@ -61,11 +61,13 @@ export async function requestPasswordReset(identifier: string, deps: MailDeps = 
     console.warn(`password reset by e-mail: not sent, the mail or ${PUBLIC_URL_ENV} is not set up`);
     return "NOT_CONFIGURED";
   }
-  const recent = await prisma.passwordReset.count({
-    where: { userId: user.id, createdById: null, createdAt: { gt: new Date(now.getTime() - MAIL_REQUESTS.windowMs) } },
-  });
-  if (recent >= MAIL_REQUESTS.max) return "THROTTLED";
-  const { token, expiresAt } = await prisma.$transaction(async (tx) => {
+  const issued = await prisma.$transaction(async (tx) => {
+    // the count and the new row under one per-user lock, so parallel requests cannot pass the limit together (barracuda on #219)
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`password-reset:${user.id}`}))`;
+    const recent = await tx.passwordReset.count({
+      where: { userId: user.id, createdById: null, createdAt: { gt: new Date(now.getTime() - MAIL_REQUESTS.windowMs) } },
+    });
+    if (recent >= MAIL_REQUESTS.max) return null;
     const issued = await issueResetToken(tx, { userId: user.id, createdById: null, ttlMs: RESET_LINK_TTL_MS.mail }, now);
     await writeAudit(tx, {
       userId: user.id,
@@ -76,6 +78,8 @@ export async function requestPasswordReset(identifier: string, deps: MailDeps = 
     });
     return issued;
   });
+  if (!issued) return "THROTTLED";
+  const { token, expiresAt } = issued;
   const minutes = Math.round((expiresAt.getTime() - now.getTime()) / 60_000);
   try {
     await m.send({

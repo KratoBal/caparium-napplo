@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { errorResponse, parseJson } from "@/lib/api";
 import { sameOrigin } from "@/lib/auth";
 import { clientIp, FailureLimiter } from "@/lib/basic-auth";
@@ -19,10 +19,25 @@ export async function POST(req: Request) {
     if (addressLimiter.blocked(ip)) return NextResponse.json(SAME);
     addressLimiter.fail(ip);
     const { identifier } = await parseJson(req, requestResetSchema);
-    const outcome = await requestPasswordReset(identifier);
-    if (outcome !== "SENT" && outcome !== "NO_MATCH" && outcome !== "NO_ADDRESS") console.warn(`password reset request: ${outcome}`);
+    // THE ANSWER DOES NOT WAIT FOR THE WORK (barracuda on #219): an unknown id is one read, an account with an address a
+    // transaction and an SMTP round trip, so waiting would tell them apart by the time. The work runs after the answer.
+    inBackground(async () => {
+      const outcome = await requestPasswordReset(identifier);
+      if (outcome !== "SENT" && outcome !== "NO_MATCH" && outcome !== "NO_ADDRESS") console.warn(`password reset request: ${outcome}`);
+    });
     return NextResponse.json(SAME);
   } catch (e) {
     return errorResponse(e);
+  }
+}
+
+/** Next's `after` in a request; outside one (a test calling the route directly) a promise nobody waits for. Errors are logged. */
+function inBackground(work: () => Promise<void>) {
+  const run = () =>
+    work().catch((e: unknown) => console.error(`password reset request failed: ${e instanceof Error ? e.message : String(e)}`));
+  try {
+    after(run);
+  } catch {
+    void run();
   }
 }
