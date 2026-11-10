@@ -77,12 +77,27 @@ describe("a membership's dates corrected from the group card", () => {
     expect((await mine()).find((m) => m.animalId === animal)?.to).toBe(at("2026-06-01", "15:00").toISOString());
   });
 
+  it("refuses a moment that would swap the order of the animal's events (barracuda, #212): a date, not an order", async () => {
+    const current = (await mine()).find((m) => m.animalId === animal)!;
+    // the start (into the group) moved past the end (out of it): the order would swap
+    await expectCode(
+      correctGroupChangeTime(f.admin, current.start.id, { requestId: rid(), expectedVersion: current.start.version, occurredAtLocal: "2026-06-01T16:00", reason: "teszt" }, NOW),
+      "ORDER_CHANGE",
+    );
+    // the end moved before the start
+    await expectCode(
+      correctGroupChangeTime(f.admin, current.end!.id, { requestId: rid(), expectedVersion: current.end!.version, occurredAtLocal: "2026-05-29T11:00", reason: "teszt" }, NOW),
+      "ORDER_CHANGE",
+    );
+  });
+
   it("refuses an arrival's moment, a moment before the arrival, a stale version and an aquarist", async () => {
     await expectCode(correctGroupChangeTime(f.admin, arrival, { requestId: rid(), expectedVersion: 1, occurredAtLocal: "2026-05-29T08:00", reason: "teszt" }, NOW), "NOT_GROUP_CHANGE");
     const current = (await mine()).find((m) => m.animalId === animal)!;
     await expectCode(
       correctGroupChangeTime(f.admin, current.start.id, { requestId: rid(), expectedVersion: current.start.version, occurredAtLocal: "2026-05-28T08:00", reason: "teszt" }, NOW),
-      "LIFECYCLE_INVALID",
+      // before the arrival: the arrival is the neighbouring event, so the order guard stops it first
+      "ORDER_CHANGE",
     );
     await expectCode(
       correctGroupChangeTime(f.admin, current.start.id, { requestId: rid(), expectedVersion: current.start.version + 5, occurredAtLocal: "2026-05-30T08:00", reason: "teszt" }, NOW),

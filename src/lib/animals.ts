@@ -366,6 +366,19 @@ export async function correctGroupChangeTime(actor: Actor, id: string, raw: z.in
       if (cur.status !== "VALID") throw new AppError(409, "NOT_EDITABLE", "Ez az esemény már nem érvényes.");
       if (cur.version !== input.expectedVersion) throw new AppError(409, "VERSION_CONFLICT", "Az esemény időközben megváltozott.");
       if (cur.occurredAt.getTime() === occurredAt.getTime()) throw new AppError(422, "NO_CHANGE", "Ez már az esemény időpontja.");
+      // A DATE, NOT AN ORDER (barracuda on #212): the new moment stays between the animal's neighbouring valid events, or a
+      // "from-to" correction would silently swap two group changes (A->B moved after B->C is C, then B), a history nobody wanted
+      const others = (await tx.lifecycleEvent.findMany({ where: { animalId: cur.animalId, status: "VALID", id: { not: id } }, select: { occurredAt: true } }))
+        .map((e) => e.occurredAt.getTime())
+        .sort((x, y) => x - y);
+      const prev = others.filter((t) => t < cur.occurredAt.getTime()).at(-1);
+      const next = others.find((t) => t > cur.occurredAt.getTime());
+      if ((prev !== undefined && occurredAt.getTime() <= prev) || (next !== undefined && occurredAt.getTime() >= next))
+        throw new AppError(
+          422,
+          "ORDER_CHANGE",
+          "Ez a javítás megváltoztatná az állat eseményeinek sorrendjét. Előbb a szomszédos eseményt javítsd, vagy válassz a kettő közötti időpontot.",
+        );
       const day = businessDayOf(occurredAt);
       const d = canModify(level, { day: dateToDay(cur.businessDay), today: businessDayOf(serverNow), closed: false, isOwn: cur.createdById === actor.id });
       if (d.kind === "DENY") throw new AppError(403, d.code, d.message);
