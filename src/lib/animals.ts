@@ -257,6 +257,78 @@ async function createInTx(tx: Tx, actor: Actor, input: LifecycleInput, at: { occ
   return { eventId: e.id, animalId: animalId!, replayed: false, emptiedGroups };
 }
 
+/**
+ * A GROUP'S MEMBERS CHANGED IN ONE STEP (Lili 2026-11-10, card b98016a1 S1; acrobot 45584): several animals put into the group or taken
+ * out of it, all at one moment, in one transaction. Each animal gets its own GROUP_CHANGE event (`<request>:<animal>`), through the same
+ * path as a single group change (createInTx: the animal's lock, the derived rows again, the orphan rows refused, the closed days' fasting,
+ * the audit), so a member changed here is exactly as if it had been changed on its own. Who may: as for every lifecycle event
+ * (lifecycleAccessProblem: today the feeding admins); a past moment needs a reason as for any event. An animal put in must not be in the
+ * group at that moment, one taken out must be: anything else refuses the whole step, naming the animal.
+ */
+export const groupMembersSchema = z
+  .object({
+    requestId: z.string().min(8).max(60),
+    clientTimestamp: z.iso.datetime({ offset: true }).optional(),
+    add: z.array(z.uuid()).max(200).default([]),
+    remove: z.array(z.uuid()).max(200).default([]),
+    occurredAtLocal: z.string().optional(),
+    reason: reason.optional(),
+  })
+  .refine((v) => v.add.length + v.remove.length > 0, "Jelölj ki legalább egy állatot.")
+  .refine((v) => !v.add.some((id) => v.remove.includes(id)), "Egy állat nem kerülhet be és ki egyszerre.");
+
+export async function changeGroupMembers(actor: Actor, groupId: string, raw: z.input<typeof groupMembersSchema>, serverNow = new Date()) {
+  const input = groupMembersSchema.parse(raw);
+  if (await prisma.lifecycleEvent.findFirst({ where: { requestId: { startsWith: `${input.requestId}:` } } })) return { replayed: true, emptiedGroups: [] };
+  const level = await moduleLevel(prisma, actor.id, actor.role, "FEEDING");
+  const denied = lifecycleAccessProblem(level, "GROUP_CHANGE");
+  if (denied) throw new AppError(403, "ADMIN_ONLY", denied);
+  const clientTs = input.clientTimestamp ? new Date(input.clientTimestamp) : null;
+  const eff = effectiveNow(serverNow, clientTs, 30, 48);
+  const occurredAt = input.occurredAtLocal ? resolveLocalDateTime(input.occurredAtLocal)?.instant : eff.now;
+  if (!occurredAt) throw new AppError(422, "INVALID_TIME", "Az időpont érvénytelen.");
+  if (occurredAt.getTime() > serverNow.getTime() + 5 * 60_000) throw new AppError(422, "FUTURE_TIME", "Jövőbeli változást nem lehet rögzíteni.");
+  const day = businessDayOf(occurredAt);
+  await enforce(prisma, canCreate(level, { day, today: businessDayOf(eff.now), closed: false }), input.reason);
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        const emptied = new Map<string, string>();
+        const steps = [...input.add.map((id) => ({ id, into: true })), ...input.remove.map((id) => ({ id, into: false }))].sort((x, y) => x.id.localeCompare(y.id));
+        for (const step of steps) {
+          if (!(await lockAnimal(tx, step.id))) throw new AppError(404, "ANIMAL_NOT_FOUND", "Az állat nem található.");
+          const member = await tx.animalGroupMembership.findFirst({ where: { animalId: step.id, groupId, ...openNow(occurredAt) } });
+          if (step.into === !!member) {
+            const animal = await tx.animal.findUnique({ where: { id: step.id }, include: { names: true } });
+            const name = nameAt(animal?.names ?? [], occurredAt)?.name ?? "?";
+            throw new AppError(
+              422,
+              step.into ? "ALREADY_MEMBER" : "NOT_MEMBER",
+              step.into ? `${name} ekkor már a csoport tagja.` : `${name} ekkor nem a csoport tagja, nem vehető ki belőle.`,
+            );
+          }
+          const out = await createInTx(
+            tx,
+            actor,
+            { requestId: `${input.requestId}:${step.id}`, type: "GROUP_CHANGE", animalId: step.id, toGroupId: step.into ? groupId : null, reason: input.reason },
+            { occurredAt, day, clientTs },
+          );
+          for (const g of out.emptiedGroups) emptied.set(g.id, g.name);
+        }
+        // a group is empty only if it is still empty after EVERY step: taking one out before putting another in empties it for a moment
+        const stillEmpty: { id: string; name: string }[] = [];
+        for (const [id, name] of emptied)
+          if ((await tx.animalGroupMembership.count({ where: { groupId: id, ...openNow() } })) === 0) stillEmpty.push({ id, name });
+        return { replayed: false, emptiedGroups: stillEmpty };
+      },
+      { timeout: 60_000 },
+    );
+  } catch (e) {
+    if (isUniqueViolation(e, "occurredAt") || isUniqueViolation(e, "one_valid_per_instant")) throw new AppError(409, "SAME_INSTANT", SAME_INSTANT);
+    throw e;
+  }
+}
+
 export async function invalidateLifecycleEvent(
   actor: Actor,
   id: string,
