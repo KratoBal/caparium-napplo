@@ -62,6 +62,8 @@ services:
       CAPARIUM_SMTP_USER: ${CAPARIUM_SMTP_USER:-}
       CAPARIUM_SMTP_PASSWORD: ${CAPARIUM_SMTP_PASSWORD:-}
       CAPARIUM_MAIL_FROM: ${CAPARIUM_MAIL_FROM:-}
+      # the site's https root for the links in mails (the password reset, task e7f9e84d); never taken from a request's Host
+      CAPARIUM_PUBLIC_URL: ${CAPARIUM_PUBLIC_URL:-}
       CAPARIUM_MONTHLY_ZIMS_MAIL: ${CAPARIUM_MONTHLY_ZIMS_MAIL:-}
     ports:
       - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"

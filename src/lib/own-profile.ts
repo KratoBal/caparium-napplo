@@ -7,6 +7,7 @@ import { checkOwnPassword, hashPassword, sessionIdOf, type SessionUser } from ".
 import { prisma } from "./db";
 import { AppError, isUniqueViolation } from "./errors";
 import { EMAIL_TAKEN, emailOrNull, userEmailField } from "./user-email";
+import { notifyEmailChanged, type MailDeps } from "./password-reset-mail";
 
 export const ownProfileSchema = z
   .object({
@@ -37,7 +38,12 @@ export type OwnProfileInput = z.infer<typeof ownProfileSchema>;
  * Saves what the user changed of their own profile. A new password needs the current one, and ends every other session
  * of the user (this one stays, so the page does not log them out). Audited as the user's own change.
  */
-export async function updateOwnProfile(actor: SessionUser, input: OwnProfileInput, session: { token?: string; client: string | null }) {
+export async function updateOwnProfile(
+  actor: SessionUser,
+  input: OwnProfileInput,
+  session: { token?: string; client: string | null },
+  mail: MailDeps = {},
+) {
   if (actor.role === "SYSTEM") throw new AppError(403, "FORBIDDEN", "Nincs jogosultság.");
   if ((await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) !== null) return { replayed: true };
   const u = await prisma.user.findUnique({ where: { id: actor.id } });
@@ -82,5 +88,7 @@ export async function updateOwnProfile(actor: SessionUser, input: OwnProfileInpu
       if (isUniqueViolation(e, "email")) throw new AppError(409, "EMAIL_TAKEN", EMAIL_TAKEN);
       throw e;
     });
+  // the old address hears of a change to it (barracuda on #217), best effort, after the change stands
+  if (changes.email && u.email) await notifyEmailChanged({ fullName: u.fullName, oldEmail: u.email, newEmail: email ?? null }, mail);
   return { replayed: false };
 }

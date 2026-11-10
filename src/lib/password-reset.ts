@@ -27,7 +27,8 @@ export async function issueResetToken(
   await tx.passwordReset.updateMany({ where: { userId: input.userId, usedAt: null, expiresAt: { gt: now } }, data: { expiresAt: now } });
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(now.getTime() + input.ttlMs);
-  await tx.passwordReset.create({ data: { id: hashOf(token), userId: input.userId, createdById: input.createdById, expiresAt } });
+  // createdAt from the same clock as expiresAt and usedAt, so the throttle and the lock's starting point read one clock
+  await tx.passwordReset.create({ data: { id: hashOf(token), userId: input.userId, createdById: input.createdById, createdAt: now, expiresAt } });
   return { token, expiresAt };
 }
 
