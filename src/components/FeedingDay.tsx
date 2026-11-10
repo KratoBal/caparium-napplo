@@ -40,7 +40,7 @@ export function FeedingDay(props: {
   /** EGY-08: the reference valid that day, grams per feeding, by recipient key */
   references?: Record<string, number>;
   recipients: Recipient[];
-  /** the feeding sheet's own rows: today a group member has none of its own (src/lib/sheet-recipients.ts); the item form keeps `recipients` */
+  /** the feeding sheet's own rows: a group member has none of its own, on every day (src/lib/sheet-recipients.ts); the item form keeps `recipients` */
   sheetRecipients?: Recipient[];
   /** the day's lock, for the close action under the sheet's save button */
   lock?: DayLock;

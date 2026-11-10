@@ -1,6 +1,7 @@
 // Lili 2026-10-30 (msg 1565798789183447103 and 1565799264188371058, task caparium-csoport-sor; acrobot 38947): on TODAY's feeding sheet an animal that
 // is in a group has no row of its own, the group's row stands for it; an animal that already has an individual item keeps its row, with the note
-// "csoporttag, egyedi tétellel"; an animal outside every group is a row of its own; an earlier day is as it was. The rows' rule itself is
+// "csoporttag, egyedi tétellel"; an animal outside every group is a row of its own; since 2026-11-10 an earlier day's sheet follows the same
+// rule (Lili, msg 1569694421069471836). The rows' rule itself is
 // measured in tests/unit/sheet-recipients.test.ts; here it is the real page. Teszt Egy and Teszt Kettő are the seed's group members ("Teszt
 // csoport"), Teszt Három is outside every group. Other tests leave individual items of the group members behind, so the first half reads
 // each member's item state and asserts the matching side, and the second half makes sure Teszt Egy has an item and asserts the note.
@@ -94,11 +95,16 @@ test("today: a group member has no row of its own unless it has an individual it
   await expect(sheet.getByTestId("sheet-cell-Teszt Egy-Mysis")).toBeVisible();
 });
 
-test("an earlier day is as it was: the group member has its row, and the group its own", async ({ page }, info) => {
+test("an earlier day follows the same rule: the group's row stands for the member, an individual item keeps its row", async ({ page }, info) => {
+  // Lili 2026-11-10 12:45 UTC (msg 1569694421069471836): "konkrét csoportnál csak azt lássam", on an earlier day's sheet too
   const day = budapestDay(info.project.name === "tablet" ? -58 : -60);
   await login(page, "teszt.admin");
   await prepare(page, `/etetes?nap=${day}`, ["Teszt Egy"]);
-  await expect(sheetRow(page, "Teszt Egy"), "an earlier day keeps every selected animal's row").toHaveCount(1);
-  await expect(sheetRow(page, "Teszt Egy")).not.toContainText(NOTE);
   await expect(sheetRow(page, "Teszt csoport (csoport)")).toHaveCount(1);
+  if (await hasItem(page, "Teszt Egy")) {
+    await expect(sheetRow(page, "Teszt Egy"), "an individual item keeps its row on an earlier day too").toHaveCount(1);
+    await expect(sheetRow(page, "Teszt Egy")).toContainText(NOTE);
+  } else {
+    await expect(sheetRow(page, "Teszt Egy"), "an earlier day: the group's row stands for the member").toHaveCount(0);
+  }
 });
