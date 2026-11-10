@@ -5,7 +5,8 @@ import { z } from "zod";
 import { writeAudit } from "./audit";
 import { checkOwnPassword, hashPassword, sessionIdOf, type SessionUser } from "./auth";
 import { prisma } from "./db";
-import { AppError } from "./errors";
+import { AppError, isUniqueViolation } from "./errors";
+import { EMAIL_TAKEN, emailOrNull, userEmailField } from "./user-email";
 
 export const ownProfileSchema = z
   .object({
@@ -19,6 +20,8 @@ export const ownProfileSchema = z
       .optional(),
     /** point 17: the greeting's name; "" clears it (the given name then) */
     nickname: z.string().trim().max(40).optional(),
+    /** task e7f9e84d: the address a forgotten password's link goes to; "" clears it */
+    email: userEmailField.optional(),
     currentPassword: z.string().max(200).optional(),
     newPassword: z.string().min(10, "Az új jelszó legalább 10 karakter legyen.").max(200).optional(),
   })
@@ -38,6 +41,8 @@ export async function updateOwnProfile(actor: SessionUser, input: OwnProfileInpu
   if (input.fullName !== undefined && input.fullName !== u.fullName) changes.fullName = { before: u.fullName, after: input.fullName };
   const nickname = input.nickname === undefined ? undefined : input.nickname || null;
   if (nickname !== undefined && nickname !== u.nickname) changes.nickname = { before: u.nickname, after: nickname };
+  const email = emailOrNull(input.email);
+  if (email !== undefined && email !== u.email) changes.email = { before: u.email, after: email };
   let passwordHash: string | undefined;
   if (input.newPassword !== undefined) {
     const check = await checkOwnPassword(u.id, input.currentPassword ?? "", session.client);
@@ -50,14 +55,24 @@ export async function updateOwnProfile(actor: SessionUser, input: OwnProfileInpu
   }
   if (Object.keys(changes).length === 0) throw new AppError(422, "NO_CHANGE", "Nincs változás.");
   const keep = session.token ? sessionIdOf(session.token) : null;
-  await prisma.$transaction(async (tx) => {
+  await prisma
+    .$transaction(async (tx) => {
     await tx.user.update({
       where: { id: u.id },
-      data: { ...(changes.fullName ? { fullName: input.fullName } : {}), ...(changes.nickname ? { nickname } : {}), ...(passwordHash ? { passwordHash } : {}) },
+      data: {
+        ...(changes.fullName ? { fullName: input.fullName } : {}),
+        ...(changes.nickname ? { nickname } : {}),
+        ...(changes.email ? { email } : {}),
+        ...(passwordHash ? { passwordHash } : {}),
+      },
     });
     // the other devices log in again with the new password; this one stays
     if (passwordHash) await tx.session.deleteMany({ where: { userId: u.id, ...(keep ? { id: { not: keep } } : {}) } });
     await writeAudit(tx, { userId: u.id, action: "MASTER_CHANGE", entityType: "User", entityId: u.id, changes, requestId: input.requestId, client: session.client });
-  });
+    })
+    .catch((e: unknown) => {
+      if (isUniqueViolation(e, "email")) throw new AppError(409, "EMAIL_TAKEN", EMAIL_TAKEN);
+      throw e;
+    });
   return { replayed: false };
 }

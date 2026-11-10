@@ -109,6 +109,18 @@ describe("users (ÁLT-04, ÁLT-06, ÁLT-17)", () => {
     expect((await login("proba.dolgozo", "proba-jelszo-123", null)).ok).toBe(false);
   });
 
+  // task e7f9e84d
+  it("an admin sets and clears a user's e-mail; the address is unique across users, case ignored", async () => {
+    const u = await prisma.user.findUniqueOrThrow({ where: { loginId: "proba.dolgozo" } });
+    const addr = `proba.${Date.now()}@example.com`;
+    await updateUser(f.admin, u.id, { requestId: rid(), email: addr.toUpperCase() });
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: u.id } })).email).toBe(addr);
+    const r = await createUser(f.admin, { requestId: rid(), loginId: "proba.email2", monogram: "PE", ...base });
+    await expectCode(updateUser(f.admin, (r as { id: string }).id, { requestId: rid(), email: addr }), "EMAIL_TAKEN");
+    await updateUser(f.admin, u.id, { requestId: rid(), email: "" });
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: u.id } })).email).toBeNull();
+  });
+
   it("an admin cannot take away their own admin role or account", async () => {
     await expectCode(updateUser(f.admin, f.admin.id, { requestId: rid(), active: false }), "SELF_LOCKOUT");
     await expectCode(updateUser(f.admin, f.admin.id, { requestId: rid(), role: "AQUARIST" }), "SELF_LOCKOUT");
