@@ -45,6 +45,8 @@ model User {
   // Lili 2026-11-01 (point 17): what the helper calls the user in its greeting, set by the user; empty = the given name of fullName
   nickname      String?
   loginId       String    @unique
+  // task e7f9e84d: optional, the user's own (or set by an admin); trimmed and lower-case; the password reset's address
+  email         String?   @unique
   passwordHash  String?
   role          Role
   active        Boolean   @default(true)

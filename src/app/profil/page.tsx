@@ -1,4 +1,4 @@
-import { OwnNameForm, OwnNicknameForm, OwnPasswordForm } from "@/components/OwnProfileForms";
+import { OwnEmailForm, OwnNameForm, OwnNicknameForm, OwnPasswordForm } from "@/components/OwnProfileForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { greetingName } from "@/lib/helper-notice";
@@ -31,6 +31,12 @@ export default async function OwnProfilePage() {
       <div className="card">
         <h2>Jelszó</h2>
         <OwnPasswordForm />
+      </div>
+      {/* task e7f9e84d: the forgotten password's address */}
+      <div className="card">
+        <h2>E-mail cím</h2>
+        <p className="hint">Ha elfelejted a jelszavad, erre a címre küldjük a visszaállító linket. Nem kötelező; enélkül az adminisztrátor ad új jelszót.</p>
+        <OwnEmailForm email={u.email ?? ""} />
       </div>
       <div className="card" data-testid="own-admin-fields">
         <h2>Monogram és ZIMS-név</h2>
