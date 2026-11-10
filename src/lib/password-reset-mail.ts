@@ -65,7 +65,7 @@ export async function requestPasswordReset(identifier: string, deps: MailDeps = 
     // the count and the new row under one per-user lock, so parallel requests cannot pass the limit together (barracuda on #219)
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`password-reset:${user.id}`}))`;
     const recent = await tx.passwordReset.count({
-      where: { userId: user.id, createdById: null, createdAt: { gt: new Date(now.getTime() - MAIL_REQUESTS.windowMs) } },
+      where: { userId: user.id, createdById: null, createdAt: { gt: new Date(now.getTime() - MAIL_REQUESTS.windowMs), lte: now } },
     });
     if (recent >= MAIL_REQUESTS.max) return null;
     const issued = await issueResetToken(tx, { userId: user.id, createdById: null, ttlMs: RESET_LINK_TTL_MS.mail }, now);

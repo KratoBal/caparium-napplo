@@ -82,6 +82,8 @@ export async function updateOwnProfile(
     });
     // the other devices log in again with the new password; this one stays
     if (passwordHash) await tx.session.deleteMany({ where: { userId: u.id, ...(keep ? { id: { not: keep } } : {}) } });
+    // a user who changes their own password needs no reset link any more: the live ones end (barracuda on #219)
+    if (passwordHash) await tx.passwordReset.updateMany({ where: { userId: u.id, usedAt: null, expiresAt: { gt: new Date() } }, data: { expiresAt: new Date() } });
     await writeAudit(tx, { userId: u.id, action: "MASTER_CHANGE", entityType: "User", entityId: u.id, changes, requestId: input.requestId, client: session.client });
     })
     .catch((e: unknown) => {

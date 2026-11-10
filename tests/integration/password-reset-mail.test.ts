@@ -7,7 +7,7 @@ import { POST as requestRoute } from "@/app/api/password-reset/request/route";
 import { createPasswordResetLink, createUser, updateUser } from "@/lib/admin";
 import { prisma } from "@/lib/db";
 import type { MailSender } from "@/lib/mail";
-import { resetLinkUsable } from "@/lib/password-reset";
+import { resetLinkUsable, resetPassword } from "@/lib/password-reset";
 import { notifyEmailChanged, requestPasswordReset } from "@/lib/password-reset-mail";
 import { updateOwnProfile } from "@/lib/own-profile";
 import { fixtures, rid } from "./fixtures";
@@ -110,6 +110,25 @@ describe("the forgotten password by e-mail", () => {
     expect(await resetLinkUsable(adminLink, new Date(evenLater.getTime() + 60_000))).toBe(true);
   });
 
+  it("a reset through one link ends the user's other live links; an own password change ends them all (barracuda on #219)", async () => {
+    const box = outbox();
+    const adminLink = (await createPasswordResetLink(f.admin, withMail.id, rid())).path.split("/").at(-1)!;
+    expect(await requestPasswordReset(withMail.loginId, { env: ENV, send: box.send })).toBe("SENT");
+    const mailed = box.sent.at(-1)!.text.match(/jelszo-visszaallitas\/([A-Za-z0-9_-]+)/)![1]!;
+    expect(await resetLinkUsable(adminLink)).toBe(true);
+    await resetPassword({ token: mailed, newPassword: "levelbol-jelszo-1" }, null);
+    expect(await resetLinkUsable(adminLink)).toBe(false);
+    // an own password change ends a link handed over before it
+    const another = (await createPasswordResetLink(f.admin, withMail.id, rid())).path.split("/").at(-1)!;
+    const u = await prisma.user.findUniqueOrThrow({ where: { id: withMail.id } });
+    await updateOwnProfile(
+      { id: u.id, fullName: u.fullName, loginId: u.loginId, role: u.role },
+      { requestId: rid("own"), currentPassword: "levelbol-jelszo-1", newPassword: "sajat-uj-jelszo-1" },
+      { client: null },
+    );
+    expect(await resetLinkUsable(another)).toBe(false);
+  });
+
   it("the route answers the same for an existing and an unknown account, and refuses another origin", async () => {
     const call = (identifier: string, origin = "http://napplo.test") =>
       requestRoute(
@@ -131,7 +150,7 @@ describe("the forgotten password by e-mail", () => {
     const u = await prisma.user.findUniqueOrThrow({ where: { id: withMail.id } });
     const actor = { id: u.id, fullName: u.fullName, loginId: u.loginId, role: u.role };
     const newAddr = `uj.${n}@example.test`;
-    await updateOwnProfile(actor, { requestId: rid("own"), email: newAddr, currentPassword: "level-jelszo-123" }, { client: null }, { env: ENV, send: box.send });
+    await updateOwnProfile(actor, { requestId: rid("own"), email: newAddr, currentPassword: "sajat-uj-jelszo-1" }, { client: null }, { env: ENV, send: box.send });
     expect(box.sent.map((m) => m.to)).toEqual([withMail.email]);
     expect(box.sent[0]!.text).toContain("megváltoztatták");
     expect(await notifyEmailChanged({ fullName: "X", oldEmail: "a@example.test", newEmail: null }, { env: {}, send: box.send })).toBe("NOT_CONFIGURED");

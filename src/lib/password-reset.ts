@@ -72,6 +72,12 @@ export async function resetPassword(input: ResetPasswordInput, client: string | 
     if (!row || !row.user.active) throw new AppError(410, "RESET_LINK_GONE", GONE);
     const taken = await tx.passwordReset.updateMany({ where: { id: row.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } });
     if (taken.count !== 1) throw new AppError(410, "RESET_LINK_GONE", GONE);
+    // the password is new: every other live link of the user ends too (barracuda on #219: a mailed and an admin's link can live
+    // side by side, and the one handed over on paper must not outlive the reset)
+    await tx.passwordReset.updateMany({
+      where: { userId: row.userId, usedAt: null, expiresAt: { gt: now }, id: { not: row.id } },
+      data: { expiresAt: now },
+    });
     await tx.user.update({ where: { id: row.userId }, data: { passwordHash } });
     await tx.session.deleteMany({ where: { userId: row.userId } });
     await writeAudit(tx, {
