@@ -130,7 +130,7 @@ async function refuseInactiveGroupMembership(tx: Tx, animalId: string) {
 }
 
 /** R-1 (2): stop, with the list, if the change leaves manual rows on days the animal was not alive. */
-async function refuseOrphanRows(tx: Tx, animalId: string) {
+export async function refuseOrphanRows(tx: Tx, animalId: string) {
   const rows = await manualRowsOutsideLife(tx, animalId);
   if (rows.length) {
     throw new AppError(409, "MANUAL_ROWS_CONFLICT", "Az állatnak a módosítás után olyan napokon is maradna kiválasztása, etetési tétele vagy evési állapota, amikor nem élt. Előbb ezeket kell érvényteleníteni, vagy az esemény dátumát javítani.", { rows });
@@ -151,7 +151,7 @@ async function enforce(tx: Tx, decision: ReturnType<typeof canCreate>, reasonTex
 // not block the foreign-key checks (FOR KEY SHARE) of a feeding-day writer inserting a row for the same
 // animal. With FOR UPDATE a lifecycle change (animal, then day) and a day writer (day, then the
 // animal's key) would deadlock.
-async function lockAnimal(tx: Tx, animalId: string): Promise<boolean> {
+export async function lockAnimal(tx: Tx, animalId: string): Promise<boolean> {
   const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "animal" WHERE "id" = ${animalId}::uuid FOR NO KEY UPDATE`;
   return rows.length === 1;
 }
