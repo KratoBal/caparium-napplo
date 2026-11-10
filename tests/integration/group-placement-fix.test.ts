@@ -73,6 +73,11 @@ describe("the group placement moved to the arrival", () => {
     expect(plan.changes[0]!.to).toBe(new Date(at("2026-05-20", "09:00").getTime() + 1000).toISOString());
     expect(plan.skipped.map((s) => s.animalId).sort()).toEqual([animal.twice, animal.moved].sort());
     expect(plan.skipped.every((s) => /több csoportban is volt/.test(s.reason))).toBe(true);
+    // the closed days the run computes again, counted from the earliest arrival day (none closed in this test's May days)
+    expect(plan.closedDays.from).toBe("2026-05-20");
+    expect(plan.closedDays.count).toBe(
+      await prisma.feedingDay.count({ where: { businessDay: { gte: new Date("2026-05-20T00:00:00Z") }, listState: "FINALIZED", journalDay: { state: "CLOSED" } } }),
+    );
     expect(await prisma.lifecycleEvent.count()).toBe(events);
     expect(await prisma.auditEntry.count()).toBe(audits);
     await expectCode(fixGroupPlacements(f.aq1, { requestId: rid(), mode: "plan" }, NOW, mine), "ADMIN_ONLY");
@@ -86,8 +91,14 @@ describe("the group placement moved to the arrival", () => {
     };
     const old = await prisma.lifecycleEvent.findFirstOrThrow({ where: { animalId: animal.later, type: "GROUP_CHANGE", status: "VALID" } });
     const request = rid("fix");
-    const out = (await fixGroupPlacements(f.admin, { requestId: request, mode: "run", reason: "teszt" }, NOW, mine)) as { replayed: boolean };
+    const out = (await fixGroupPlacements(f.admin, { requestId: request, mode: "run", reason: "teszt" }, NOW, mine)) as {
+      replayed: boolean;
+      closedDaysChanged: { days: string[]; fastingAdded: number; fastingRemoved: number };
+    };
     expect(out.replayed).toBe(false);
+    // the summary is the audit of the run's fasting recompute, nothing else
+    const fasting = await prisma.auditEntry.findMany({ where: { requestId: request, entityType: "EatingStatus" } });
+    expect(out.closedDaysChanged.fastingAdded + out.closedDaysChanged.fastingRemoved).toBe(fasting.length);
     expect(await membershipFrom(animal.later)).toEqual([[g, new Date(at("2026-05-20", "09:00").getTime() + 1000).toISOString()]]);
     const invalidated = await prisma.lifecycleEvent.findUniqueOrThrow({ where: { id: old.id } });
     expect(invalidated.status).toBe("INVALIDATED");
@@ -96,7 +107,7 @@ describe("the group placement moved to the arrival", () => {
     expect(fresh.requestId).toBe(`${request}:${animal.later}`);
     expect(fresh.toGroupId).toBe(g);
     const audits = await prisma.auditEntry.findMany({ where: { requestId: request }, orderBy: { id: "asc" } });
-    expect(audits.map((a) => [a.action, a.entityId])).toEqual([
+    expect(audits.filter((a) => a.entityType === "LifecycleEvent").map((a) => [a.action, a.entityId])).toEqual([
       ["INVALIDATE", old.id],
       ["CREATE", fresh.id],
     ]);
