@@ -6,11 +6,11 @@ import { GroupPlacementFix } from "@/components/GroupPlacementFix";
 import { InactiveListFilter, InactiveRowShell } from "@/components/InactiveListFilter";
 import { Shell } from "@/components/Shell";
 import { withIcon } from "@/lib/icons";
-import { animalEvents, listAnimals, listGroupsAdmin, listGroupsWithNames } from "@/lib/animals";
+import { animalEvents, groupMemberships, listAnimals, listGroupsAdmin, listGroupsWithNames } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
-import { businessDayOf, formatDay, localDateTimeOf, localTimeOf } from "@/lib/time";
+import { businessDayOf, formatDateTime, formatDay, localDateTimeOf, localTimeOf } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +44,8 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
   const arrivalGroup = arrival?.toGroupId ? allGroups.find((g) => g.id === arrival.toGroupId) : undefined;
   const editGroups = arrivalGroup && !arrivalGroup.active ? [...groups, { id: arrivalGroup.id, name: `${arrivalGroup.name} (inaktív)`, sheetColor: null }] : groups;
   const isAdmin = user.role === "ADMIN";
+  // the group card's from-to list (card b98016a1): every membership, with the events at its ends; the admin's only
+  const memberships = isAdmin ? await groupMemberships(now) : {};
   // Lili 2026-10-27 20:44 UTC (acrobot 37043): the list, the open animal, a new animal, the starting list, the order last.
   return (
     <Shell title="Állatok" active="animals" user={user}>
@@ -120,11 +122,10 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
 
       {isAdmin && (
         <div className="card">
-          <h2>Új állat, faj, csoport</h2>
+          <h2>Új állat, faj</h2>
           <p className="hint">Az érkezés hozza létre az állatot. A tesztkörnyezetben csak kitalált adat szerepel.</p>
           <NewArrival species={species.map((s) => ({ id: s.id, name: s.hungarianName ? `${s.scientificName} (${s.hungarianName})` : s.scientificName }))} pools={poolOpts} groups={groups} />
           <SimpleCreate url="/api/admin/species" label="Új faj tudományos neve" field="scientificName" testId="new-species" />
-          <SimpleCreate url="/api/admin/animal-groups" label="Új csoport neve" field="name" testId="new-group" />
         </div>
       )}
 
@@ -142,6 +143,7 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
       {isAdmin && (
         <div className="card" data-testid="groups-card">
           <h2>Csoportok</h2>
+          <SimpleCreate url="/api/admin/animal-groups" label="Új csoport neve" field="name" testId="new-group" />
           <p className="hint">
             Egy csoport akkor inaktiválható, ha már nincs tagja (a tagokat a Csoportváltás veszi ki). Az inaktív csoport nem jelenik meg a választókban és a mai
             takarmánylapon; a régi napok tételei, naplói és exportjai változatlanok, a neve megmarad. Az inaktívak az „Inaktívak mutatása” kapcsolóval jönnek elő.
@@ -162,6 +164,16 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
                         <GroupMembers
                           group={g}
                           animals={animals.filter((a) => a.alive).map((a) => ({ id: a.id, name: a.name, groupId: a.groupId, groupName: a.groupName }))}
+                          memberships={(memberships[g.id] ?? []).map((m) => ({
+                            animalId: m.animalId,
+                            animalName: m.animalName,
+                            fromText: formatDateTime(m.from),
+                            fromLocal: localDateTimeOf(new Date(m.from)),
+                            toText: m.to ? formatDateTime(m.to) : null,
+                            toLocal: m.to ? localDateTimeOf(new Date(m.to)) : null,
+                            start: m.start,
+                            end: m.end,
+                          }))}
                         />
                       </td>
                     </InactiveRowShell>

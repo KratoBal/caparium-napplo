@@ -653,12 +653,68 @@ export function AnimalEditForm({ a, species, pools, groups }: { a: AnimalEditVie
 
 type MemberAnimal = { id: string; name: string; groupId: string | null; groupName: string | null };
 
+/** One membership of the group, its two ends and the events that made them (`groupMemberships` in animals.ts). */
+export type MembershipRow = {
+  animalId: string;
+  animalName: string;
+  /** the moments, as the page shows them (Budapest) and as the date field takes them */
+  fromText: string;
+  fromLocal: string;
+  toText: string | null;
+  toLocal: string | null;
+  start: { id: string; version: number; type: string };
+  end: { id: string; version: number; type: string } | null;
+};
+
+/**
+ * A membership's start or end moved (acrobot 45654): the moment of the group change that made it is corrected (an EVENT
+ * correction on the server: the old one invalidated, the same one at the new moment). Only a group change: an arrival's moment is
+ * the arrival's own, a death's or a release's is not changed here. A reason always.
+ */
+function MembershipTime({ event, local, label }: { event: { id: string; version: number }; local: string; label: string }) {
+  const [open, setOpen] = useState(false);
+  const [time, setTime] = useState(local);
+  const [reason, setReason] = useState("");
+  const { msg, busy, call } = useApi();
+  if (!open)
+    return (
+      <button className="btn btn-row" type="button" onClick={() => setOpen(true)} aria-label={label}>
+        Módosítás
+      </button>
+    );
+  return (
+    <span className="toolbar">
+      <input className="input" type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} aria-label={`${label}: új időpont`} />
+      <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} aria-label={`${label}: indoklás`} placeholder="Indoklás" />
+      <button
+        className="btn btn-row"
+        type="button"
+        disabled={busy || reason.trim().length < 3 || time === local}
+        onClick={() =>
+          void call(`/api/animals/events/${event.id}/correct-time`, "POST", { expectedVersion: event.version, occurredAtLocal: time, reason: reason.trim() }, "Időpont javítva.")
+        }
+      >
+        Mentés
+      </button>
+      <Msg msg={msg} />
+    </span>
+  );
+}
+
 /**
  * A group's members in one place (Lili 2026-11-10, card b98016a1 S1): who is in it now, and several animals put in or taken out at ONE
  * moment, in one step (the server writes one group change per animal, as if each had been done on its own). The moment may be in the
  * past: the feeding sheets follow it. Admins only today (the server checks it again).
  */
-export function GroupMembers({ group, animals }: { group: { id: string; name: string; active: boolean }; animals: MemberAnimal[] }) {
+export function GroupMembers({
+  group,
+  animals,
+  memberships = [],
+}: {
+  group: { id: string; name: string; active: boolean };
+  animals: MemberAnimal[];
+  memberships?: MembershipRow[];
+}) {
   const members = animals.filter((a) => a.groupId === group.id);
   const others = animals.filter((a) => a.groupId !== group.id);
   const [add, setAdd] = useState<Set<string>>(new Set());
@@ -680,6 +736,36 @@ export function GroupMembers({ group, animals }: { group: { id: string; name: st
       <summary>Tagok ({members.length})</summary>
       {open && (
         <>
+      <div className="table-scroll">
+        <table className="log-table" data-testid={`group-memberships-${group.id}`}>
+          <thead>
+            <tr><th>Állat</th><th>Tagja ettől</th><th></th><th>Eddig</th><th></th></tr>
+          </thead>
+          <tbody>
+            {memberships.map((m) => (
+              <tr key={`${m.animalId}-${m.start.id}`}>
+                <td>{m.animalName}</td>
+                <td>{m.fromText}</td>
+                <td className="keep">
+                  {m.start.type === "GROUP_CHANGE" ? (
+                    <MembershipTime event={m.start} local={m.fromLocal} label={`${m.animalName}: a tagság kezdete`} />
+                  ) : (
+                    <span className="hint">érkezéskor</span>
+                  )}
+                </td>
+                <td>{m.toText ?? "most is"}</td>
+                <td className="keep">
+                  {m.end && m.toLocal && m.end.type === "GROUP_CHANGE" ? (
+                    <MembershipTime event={m.end} local={m.toLocal} label={`${m.animalName}: a tagság vége`} />
+                  ) : m.end ? (
+                    <span className="hint">{m.end.type === "DEATH" ? "elhullás" : m.end.type === "RELEASE" ? "kiadás" : ""}</span>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <fieldset className="field">
         <legend>Most a csoportban (pipáld, akit kiveszel)</legend>
         {members.length === 0 && <span className="hint">Nincs tagja.</span>}
