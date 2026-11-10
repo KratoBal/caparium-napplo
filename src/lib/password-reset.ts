@@ -7,7 +7,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { writeAudit } from "./audit";
-import { hashPassword } from "./auth";
+import { hashPassword, passwordSlots } from "./auth";
 import { prisma, type Tx } from "./db";
 import { AppError } from "./errors";
 
@@ -45,12 +45,22 @@ export async function resetLinkUsable(token: string, now = new Date()): Promise<
   return !!row && row.usedAt === null && row.expiresAt > now && row.user.active;
 }
 
+/** The password hash, through the shared password slots (auth.ts): a reset wave must not take the thread pool from logins. */
+export type ResetHasher = (password: string) => Promise<{ ran: true; value: string } | { ran: false }>;
+const slottedHash: ResetHasher = (password) => passwordSlots.run(() => hashPassword(password));
+
 /**
- * Sets the new password through a link. The link is taken in the same write that checks it (usedAt from null), so two
- * submissions of one link set one password; every session of the user ends; the audit names the change, not the password.
+ * Sets the new password through a link. The route needs no session, so the CHEAP check comes first (barracuda on #218): a token
+ * that is unknown, used, expired or an inactive user's is a 410 before any scrypt runs, and the hash itself goes through the
+ * shared password slots (busy: 503, as a login). The link is then taken in the same write that checks it again (usedAt from
+ * null), so two submissions of one link set one password; every session of the user ends; the audit names the change, not the
+ * password. `hash` is a parameter so a test can count the scrypt runs.
  */
-export async function resetPassword(input: ResetPasswordInput, client: string | null, now = new Date()) {
-  const passwordHash = await hashPassword(input.newPassword);
+export async function resetPassword(input: ResetPasswordInput, client: string | null, now = new Date(), hash: ResetHasher = slottedHash) {
+  if (!(await resetLinkUsable(input.token, now))) throw new AppError(410, "RESET_LINK_GONE", GONE);
+  const hashed = await hash(input.newPassword);
+  if (!hashed.ran) throw new AppError(503, "BUSY", "A szerver most foglalt. Próbáld újra egy perc múlva.");
+  const passwordHash = hashed.value;
   await prisma.$transaction(async (tx) => {
     const row = await tx.passwordReset.findUnique({ where: { id: hashOf(input.token) }, include: { user: true } });
     if (!row || !row.user.active) throw new AppError(410, "RESET_LINK_GONE", GONE);

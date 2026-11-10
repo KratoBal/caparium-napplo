@@ -1,14 +1,15 @@
 // Task e7f9e84d, slice 3: an admin makes a one-time reset link, the user sets a new password through it without a session.
 // WHAT TURNS THIS RED: a link usable twice, after it expired, for an inactive user, or after a newer one was made; the old
 // password still working, or a session surviving the reset; the raw token or the password in the audit or the table; an
-// aquarist making a link; a reset from another origin.
+// aquarist making a link; a reset from another origin; a scrypt run for a token that is not a usable link (barracuda on #218).
 import { beforeAll, describe, expect, it } from "vitest";
 import { POST as resetRoute } from "@/app/api/password-reset/route";
 import { createPasswordResetLink, createUser, updateUser } from "@/lib/admin";
 import { login } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { resetLinkUsable } from "@/lib/password-reset";
+import { hashPassword } from "@/lib/auth";
+import { resetLinkUsable, resetPassword } from "@/lib/password-reset";
 import { fixtures, rid } from "./fixtures";
 
 let f: Awaited<ReturnType<typeof fixtures>>;
@@ -69,6 +70,26 @@ describe("a one-time reset link", () => {
     expect(text).not.toContain(token);
     expect(text).not.toContain(NEW);
     expect(text).toContain("visszaállító link");
+  });
+
+  it("a made-up, used or expired token is refused before any scrypt runs; a busy hasher is a 503, not a 500", async () => {
+    let runs = 0;
+    const counting = async (p: string) => {
+      runs += 1;
+      return { ran: true as const, value: await hashPassword(p) };
+    };
+    expect(await code(resetPassword({ token: "x".repeat(43), newPassword: "kitalalt-jelszo-1" }, null, new Date(), counting))).toBe("RESET_LINK_GONE");
+    const token = tokenOf((await createPasswordResetLink(f.admin, userId, rid())).path);
+    const later = new Date(Date.now() + 25 * 3600_000);
+    expect(await code(resetPassword({ token, newPassword: "lejart-jelszo-12" }, null, later, counting))).toBe("RESET_LINK_GONE");
+    expect(runs).toBe(0);
+    expect(await code(resetPassword({ token, newPassword: "foglalt-jelszo-1" }, null, new Date(), async () => ({ ran: false })))).toBe("BUSY");
+    // the busy try did not use the link up
+    expect(await resetLinkUsable(token)).toBe(true);
+    await resetPassword({ token, newPassword: "valodi-jelszo-12" }, null, new Date(), counting);
+    expect(runs).toBe(1);
+    expect(await code(resetPassword({ token, newPassword: "ujra-jelszo-1234" }, null, new Date(), counting))).toBe("RESET_LINK_GONE");
+    expect(runs).toBe(1);
   });
 
   it("a newer link ends the older one; an expired link and an inactive user's link do nothing", async () => {
