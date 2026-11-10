@@ -1,7 +1,8 @@
 // Lili 2026-10-30 (msg 1565798789183447103 and 1565799264188371058, task caparium-csoport-sor; acrobot 38947): on TODAY's feeding sheet an animal that
 // is in a group has no row of its own, the group's row stands for it; an animal that already has an individual item keeps its row, with the note
 // "csoporttag, egyedi tétellel"; an animal outside every group is a row of its own; since 2026-11-10 an earlier day's sheet follows the same
-// rule (Lili, msg 1569694421069471836). The rows' rule itself is
+// rule (Lili, msg 1569694421069471836), and the group's row stands only when EVERY member is selected, otherwise the selected members one
+// by one (Lili, msg 1569714193307799583). The rows' rule itself is
 // measured in tests/unit/sheet-recipients.test.ts; here it is the real page. Teszt Egy and Teszt Kettő are the seed's group members ("Teszt
 // csoport"), Teszt Három is outside every group. Other tests leave individual items of the group members behind, so the first half reads
 // each member's item state and asserts the matching side, and the second half makes sure Teszt Egy has an item and asserts the note.
@@ -95,16 +96,14 @@ test("today: a group member has no row of its own unless it has an individual it
   await expect(sheet.getByTestId("sheet-cell-Teszt Egy-Mysis")).toBeVisible();
 });
 
-test("an earlier day follows the same rule: the group's row stands for the member, an individual item keeps its row", async ({ page }, info) => {
-  // Lili 2026-11-10 12:45 UTC (msg 1569694421069471836): "konkrét csoportnál csak azt lássam", on an earlier day's sheet too
+test("only some members selected (an earlier day): no group row, the selected member in its own row, without the note", async ({ page }, info) => {
+  // Lili 2026-11-10 14:03 UTC (msg 1569714193307799583): the group's row only when EVERY member is on the day's list; otherwise the
+  // selected members one by one. On an earlier day too (msg 1569694421069471836). Only Teszt Egy is selected here, not Teszt Kettő.
   const day = budapestDay(info.project.name === "tablet" ? -58 : -60);
   await login(page, "teszt.admin");
   await prepare(page, `/etetes?nap=${day}`, ["Teszt Egy"]);
-  await expect(sheetRow(page, "Teszt csoport (csoport)")).toHaveCount(1);
-  if (await hasItem(page, "Teszt Egy")) {
-    await expect(sheetRow(page, "Teszt Egy"), "an individual item keeps its row on an earlier day too").toHaveCount(1);
-    await expect(sheetRow(page, "Teszt Egy")).toContainText(NOTE);
-  } else {
-    await expect(sheetRow(page, "Teszt Egy"), "an earlier day: the group's row stands for the member").toHaveCount(0);
-  }
+  await expect(page.getByLabel("Teszt Kettő a mai listán"), "the half of the group this test needs").not.toBeChecked();
+  await expect(sheetRow(page, "Teszt Egy"), "the selected member stands in its own row").toHaveCount(1);
+  await expect(sheetRow(page, "Teszt Egy")).not.toContainText(NOTE);
+  await expect(sheetRow(page, "Teszt csoport (csoport)"), "a group not whole has no row (no group item on this day)").toHaveCount(0);
 });

@@ -1,6 +1,7 @@
-// The feeding sheet's rows (src/lib/sheet-recipients.ts; Lili 2026-10-30, task caparium-csoport-sor): today a group member has no row of its
-// own unless it already has an individual item, on every day; an animal outside every group is a row of its own; the rule off is the item
-// form's list.
+// The feeding sheet's rows (src/lib/sheet-recipients.ts; Lili 2026-10-30, task caparium-csoport-sor; 2026-11-10 msg 1569714193307799583):
+// a group is one row only when every member is selected, and then a member has no row of its own unless it has an individual item; a
+// group with only some members selected has no row, its selected members stand one by one (a group item that day keeps the group's
+// row); on every day; an animal outside every group is a row of its own; the rule off is the item form's list.
 import { describe, expect, it } from "vitest";
 import { GROUP_MEMBER_NOTE, sheetRecipients } from "@/lib/sheet-recipients";
 
@@ -39,11 +40,28 @@ describe("the feeding sheet's rows", () => {
     expect(rows.every((r) => r.note === undefined)).toBe(true);
   });
 
-  it("the group's row needs at least one selected member, as before", () => {
+  it("no member selected: no group row", () => {
     const none = ANIMALS.map((a) => (a.groupId ? { ...a, selected: false } : a));
     expect(keys(sheetRecipients({ animals: none, items: [], groupRule: true }))).toEqual(["a3"]);
+  });
+
+  it("only some members selected: no group row, the selected members one by one, without the note (Lili 2026-11-10)", () => {
     const one = ANIMALS.map((a) => (a.id === "a2" ? { ...a, selected: false } : a));
-    expect(keys(sheetRecipients({ animals: one, items: [], groupRule: true }))).toEqual(["a3", "g:g1"]);
+    const rows = sheetRecipients({ animals: one, items: [], groupRule: true });
+    expect(keys(rows)).toEqual(["a1", "a3"]);
+    expect(rows.every((r) => r.note === undefined)).toBe(true);
+  });
+
+  it("only some members selected, but the group already has a group item that day: its row stays, beside the selected member's", () => {
+    const one = ANIMALS.map((a) => (a.id === "a2" ? { ...a, selected: false } : a));
+    const rows = sheetRecipients({ animals: one, items: [{ animalId: null, groupId: "g1" }], groupRule: true });
+    expect(keys(rows)).toEqual(["a1", "a3", "g:g1"]);
+  });
+
+  it("an unselected member that is not on the day's list still counts as a member: the group is not whole without it", () => {
+    // three members, two selected
+    const three = [...ANIMALS, animal("a5", "Galuska", "g1", false)];
+    expect(keys(sheetRecipients({ animals: three, items: [], groupRule: true }))).toEqual(["a1", "a2", "a3"]);
   });
 
   it("an animal that is not selected has no row, in a group or out of it", () => {

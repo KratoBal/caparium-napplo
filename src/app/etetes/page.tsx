@@ -51,9 +51,9 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
   }
   // the item form and the "Mai tételek" list: every selected animal and every group with a selected member, as ever
   const recipients: Recipient[] = sheetRecipients({ animals: view.animals, items: view.items, groupRule: false });
-  // the feeding sheet: a group member has no row of its own (the group's row stands for it) unless it already has an individual item
-  // (Lili 2026-10-30, task caparium-csoport-sor), on EVERY day, by that day's membership (Lili 2026-11-10 12:45 UTC, msg
-  // 1569694421069471836: "konkrét csoportnál csak azt lássam"; task caparium-csoport-erkezes)
+  // the feeding sheet: a group whose EVERY member is selected is one row, its members none of their own unless they already have an
+  // individual item; a group with only some members selected has no row, the selected members stand one by one (Lili 2026-11-10 14:03
+  // UTC, msg 1569714193307799583); on every day, by that day's membership (msg 1569694421069471836; src/lib/sheet-recipients.ts)
   const sheetRows: Recipient[] = sheetRecipients({ animals: view.animals, items: view.items, groupRule: true });
   const feeds: FeedOpt[] = types.flatMap((t) =>
     t.feeds
