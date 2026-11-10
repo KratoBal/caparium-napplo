@@ -329,6 +329,135 @@ export async function changeGroupMembers(actor: Actor, groupId: string, raw: z.i
   }
 }
 
+/**
+ * A GROUP CHANGE'S MOMENT CORRECTED (Lili 2026-11-10, card b98016a1: "tudom módosítani a tól-ig dátumokat"; acrobot 45654). The start
+ * or the end of a membership is the moment of the event that made it, so changing a date is an EVENT correction: the group change
+ * is invalidated and the same group change (same group, same note) is recorded at the new moment, in one transaction, both audited
+ * with `correctedFrom`. The memberships are derived again, so a moment before the arrival or after a death is refused as for any
+ * event (LIFECYCLE_INVALID), and so are manual rows left outside the animal's life. Only a GROUP_CHANGE: an arrival's moment is the
+ * arrival's own correction, a death's or a release's is not a group question. Who may: as for invalidating an event (admins
+ * today), a reason always (the moment of a recorded fact moves).
+ */
+export const groupChangeTimeSchema = z.object({
+  requestId: z.string().min(8).max(60),
+  expectedVersion: z.number().int().min(1),
+  occurredAtLocal: z.string(),
+  reason: reason.optional(),
+});
+
+export async function correctGroupChangeTime(actor: Actor, id: string, raw: z.input<typeof groupChangeTimeSchema>, serverNow = new Date()) {
+  const input = groupChangeTimeSchema.parse(raw);
+  if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true };
+  const level = await moduleLevel(prisma, actor.id, actor.role, "FEEDING");
+  const denied = lifecycleInvalidateProblem(level);
+  if (denied) throw new AppError(403, "ADMIN_ONLY", denied);
+  const occurredAt = resolveLocalDateTime(input.occurredAtLocal)?.instant;
+  if (!occurredAt) throw new AppError(422, "INVALID_TIME", "Az időpont érvénytelen.");
+  if (occurredAt.getTime() > serverNow.getTime() + 5 * 60_000) throw new AppError(422, "FUTURE_TIME", "Jövőbeli időpontot nem lehet megadni.");
+  await requireReason(prisma, true, input.reason, "Az időpont javításához indoklás kell.");
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const owner = await tx.lifecycleEvent.findUnique({ where: { id }, select: { animalId: true } });
+      if (!owner) throw new AppError(404, "NOT_FOUND", "Az esemény nem található.");
+      await lockAnimal(tx, owner.animalId);
+      const cur = await tx.lifecycleEvent.findUnique({ where: { id } });
+      if (!cur) throw new AppError(404, "NOT_FOUND", "Az esemény nem található.");
+      if (cur.type !== "GROUP_CHANGE") throw new AppError(422, "NOT_GROUP_CHANGE", "Csak csoportváltás időpontja javítható itt.");
+      if (cur.status !== "VALID") throw new AppError(409, "NOT_EDITABLE", "Ez az esemény már nem érvényes.");
+      if (cur.version !== input.expectedVersion) throw new AppError(409, "VERSION_CONFLICT", "Az esemény időközben megváltozott.");
+      if (cur.occurredAt.getTime() === occurredAt.getTime()) throw new AppError(422, "NO_CHANGE", "Ez már az esemény időpontja.");
+      const day = businessDayOf(occurredAt);
+      const d = canModify(level, { day: dateToDay(cur.businessDay), today: businessDayOf(serverNow), closed: false, isOwn: cur.createdById === actor.id });
+      if (d.kind === "DENY") throw new AppError(403, d.code, d.message);
+      const why = `időpont javítva: ${input.reason ?? ""}`.trim().slice(0, 500);
+      const res = await tx.lifecycleEvent.updateMany({
+        where: { id, version: input.expectedVersion, status: "VALID" },
+        data: { status: "INVALIDATED", invalidationReason: why, version: { increment: 1 }, updatedById: actor.id, updatedAt: serverNow },
+      });
+      if (res.count !== 1) throw new AppError(409, "VERSION_CONFLICT", "Az esemény időközben megváltozott.");
+      const created = await tx.lifecycleEvent.create({
+        data: {
+          animalId: cur.animalId,
+          type: "GROUP_CHANGE",
+          occurredAt,
+          businessDay: dayToDate(day),
+          toPoolId: null,
+          toGroupId: cur.toGroupId,
+          note: cur.note,
+          requestId: input.requestId,
+          createdById: actor.id,
+          updatedById: actor.id,
+        },
+      });
+      await rebuildAnimal(tx, cur.animalId);
+      await refuseInactiveGroupMembership(tx, cur.animalId);
+      await refuseOrphanRows(tx, cur.animalId);
+      const from = [dateToDay(cur.businessDay), day].sort()[0]!;
+      await recomputeClosedDaysFrom(tx, from, actor.id, input.requestId);
+      const fact = { correctedFrom: { before: cur.occurredAt.toISOString(), after: occurredAt.toISOString() } };
+      await writeAudit(tx, {
+        userId: actor.id,
+        action: "INVALIDATE",
+        entityType: "LifecycleEvent",
+        entityId: id,
+        changes: { status: { before: "VALID", after: "INVALIDATED" }, ...fact },
+        reason: input.reason ?? null,
+        requestId: input.requestId,
+      });
+      await writeAudit(tx, {
+        userId: actor.id,
+        action: "CREATE",
+        entityType: "LifecycleEvent",
+        entityId: created.id,
+        changes: { ...diffFields(null, { animalId: cur.animalId, ...eventSnapshot(created) }), ...fact },
+        reason: input.reason ?? null,
+        requestId: input.requestId,
+      });
+      return { replayed: false, eventId: created.id };
+    });
+  } catch (e) {
+    if (isUniqueViolation(e, "occurredAt") || isUniqueViolation(e, "one_valid_per_instant")) throw new AppError(409, "SAME_INSTANT", SAME_INSTANT);
+    throw e;
+  }
+}
+
+export type GroupMembershipRow = {
+  animalId: string;
+  animalName: string;
+  from: string;
+  to: string | null;
+  /** the event that started it, and whether its moment can be corrected here (a group change, not an arrival) */
+  start: { id: string; version: number; type: LifecycleType };
+  /** the event that ended it (a group change, a death, a release), or null while it lasts */
+  end: { id: string; version: number; type: LifecycleType } | null;
+};
+
+/**
+ * Every membership of every group, the ended ones too, with the events at its two ends (the group card's from-to list,
+ * acrobot 45654). The end event is the animal's valid event at the membership's end moment.
+ */
+export async function groupMemberships(at = new Date()): Promise<Record<string, GroupMembershipRow[]>> {
+  const rows = await prisma.animalGroupMembership.findMany({
+    include: { animal: { include: { names: true, events: { where: { status: "VALID" } } } } },
+    orderBy: [{ validFrom: "asc" }],
+  });
+  const out: Record<string, GroupMembershipRow[]> = {};
+  for (const m of rows) {
+    const start = m.animal.events.find((e) => e.id === m.eventId);
+    if (!start) continue;
+    const endEvent = m.validTo ? m.animal.events.find((e) => e.occurredAt.getTime() === m.validTo!.getTime() && e.id !== m.eventId) : undefined;
+    (out[m.groupId] ??= []).push({
+      animalId: m.animalId,
+      animalName: nameAt(m.animal.names, at)?.name ?? "?",
+      from: m.validFrom.toISOString(),
+      to: m.validTo?.toISOString() ?? null,
+      start: { id: start.id, version: start.version, type: start.type },
+      end: endEvent ? { id: endEvent.id, version: endEvent.version, type: endEvent.type } : null,
+    });
+  }
+  return out;
+}
+
 export async function invalidateLifecycleEvent(
   actor: Actor,
   id: string,
