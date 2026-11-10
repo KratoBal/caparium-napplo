@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { THEME_COLOR } from "@/lib/app-theme";
+import { EnterNext } from "@/components/EnterNext";
 
 export const metadata: Metadata = {
   title: "Cápárium nAPPló",
@@ -26,7 +27,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="hu">
-      <body>{children}</body>
+      <body>
+        <EnterNext />
+        {children}
+      </body>
     </html>
   );
 }
