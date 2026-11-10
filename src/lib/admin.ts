@@ -15,6 +15,7 @@ import { FIRST_NAME_FROM, moduleLevel, validAt } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { poolIsOn, switchPool } from "./pool-periods";
+import { issueResetToken, RESET_LINK_TTL_MS, RESET_PATH } from "./password-reset";
 import { businessDayOf, dayToDate } from "./time";
 
 const reason = z.string().trim().min(3, "Az indoklás legalább 3 karakter legyen.").max(500);
@@ -523,5 +524,29 @@ export async function updateUser(actor: Actor, id: string, input: UpdateUserInpu
       requestId: input.requestId,
     });
     return { replayed: false };
+  });
+}
+
+/**
+ * A ONE-TIME RESET LINK FOR A USER, made by an admin and handed over (task e7f9e84d, slice 3): it works without e-mail. The
+ * path is returned once (the page adds its own address); the token is stored hashed only, and the audit names the link, not it.
+ */
+export async function createPasswordResetLink(actor: Actor, id: string, requestId: string, now = new Date()) {
+  requireUserAdmin(actor);
+  await requireSettingsAdmin(actor);
+  return prisma.$transaction(async (tx) => {
+    const u = await tx.user.findUnique({ where: { id } });
+    if (!u || u.role === "SYSTEM") throw new AppError(404, "NOT_FOUND", "A felhasználó nem található.");
+    if (!u.active) throw new AppError(422, "INACTIVE", "Inaktív felhasználónak nem készül visszaállító link.");
+    const { token, expiresAt } = await issueResetToken(tx, { userId: id, createdById: actor.id, ttlMs: RESET_LINK_TTL_MS.admin }, now);
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: "MASTER_CHANGE",
+      entityType: "User",
+      entityId: id,
+      changes: { passwordResetLink: { before: null, after: `visszaállító link készült, lejár: ${expiresAt.toISOString()}` } },
+      requestId,
+    });
+    return { path: `${RESET_PATH}/${token}`, expiresAt: expiresAt.toISOString() };
   });
 }

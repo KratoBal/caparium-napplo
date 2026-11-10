@@ -388,6 +388,7 @@ export function UserRow(p: { id: string; loginId: string; fullName: string; role
             {p.active ? "Inaktiválás" : "Aktiválás"}
           </button>
         )}{" "}
+        {p.active && <ResetLinkButton id={p.id} loginId={p.loginId} />}{" "}
         <Msg msg={msg} />
       </td>
     </tr>
@@ -666,5 +667,52 @@ export function NewMeasurementForm({ units, groups, today }: { units: { id: stri
         <Msg msg={msg} />
       </div>
     </div>
+  );
+}
+
+/**
+ * A one-time reset link for a user who forgot their password (task e7f9e84d, slice 3): the admin hands it over; it works without
+ * e-mail, once, for a day. Shown once here; a new one ends the earlier.
+ */
+function ResetLinkButton({ id, loginId }: { id: string; loginId: string }) {
+  const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  return (
+    <span data-testid={`reset-link-${loginId}`}>
+      <button
+        className="btn btn-soft"
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setError(null);
+          try {
+            const res = await fetch(`/api/admin/users/${id}/reset-link`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ requestId: crypto.randomUUID() }),
+            });
+            const body = (await res.json().catch(() => null)) as { path?: string; expiresAt?: string; error?: { message?: string } } | null;
+            if (res.ok && body?.path && body.expiresAt) setLink({ url: `${window.location.origin}${body.path}`, expiresAt: body.expiresAt });
+            else setError(body?.error?.message ?? "A link nem készült el.");
+          } catch {
+            setError("Nincs kapcsolat a szerverrel.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        Visszaállító link
+      </button>
+      {link && (
+        <span className="hint">
+          {" "}
+          <input className="input" readOnly aria-label={`${loginId} visszaállító linkje`} value={link.url} onFocus={(e) => e.currentTarget.select()} /> Egyszer használható, lejár:{" "}
+          {new Date(link.expiresAt).toLocaleString("hu-HU", { timeZone: "Europe/Budapest" })}. Add át a dolgozónak.
+        </span>
+      )}
+      {error && <span role="alert"> {error}</span>}
+    </span>
   );
 }
