@@ -16,6 +16,7 @@ import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
 import { poolIsOn, switchPool } from "./pool-periods";
 import { issueResetToken, RESET_LINK_TTL_MS, RESET_PATH } from "./password-reset";
+import { EMAIL_TAKEN, emailOrNull, userEmailField } from "./user-email";
 import { businessDayOf, dayToDate } from "./time";
 
 const reason = z.string().trim().min(3, "Az indoklás legalább 3 karakter legyen.").max(500);
@@ -401,6 +402,8 @@ export const updateUserSchema = z.object({
    */
   zimsNameMode: z.enum(["CORRECTION", "RENAME"]).optional(),
   password: password.optional(),
+  /** task e7f9e84d: the user's address for a password reset; "" clears it */
+  email: userEmailField.optional(),
   reason: reason.optional(),
 });
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
@@ -463,25 +466,33 @@ export async function updateUser(actor: Actor, id: string, input: UpdateUserInpu
   }
   if (await replayed(input.requestId)) return { replayed: true };
   const passwordHash = input.password ? await hashPassword(input.password) : undefined;
+  const email = emailOrNull(input.email);
   return prisma.$transaction(async (tx) => {
     const u = await tx.user.findUnique({ where: { id }, include: { monograms: true, zimsNames: true } });
     if (!u || u.role === "SYSTEM") throw new AppError(404, "NOT_FOUND", "A felhasználó nem található.");
     const curMono = u.monograms.find((m) => m.validFrom <= now && (m.validTo === null || m.validTo > now));
     const curZims = u.zimsNames.find((m) => m.validFrom <= now && (m.validTo === null || m.validTo > now));
-    const before: Record<string, unknown> = { role: u.role, active: u.active, monogram: curMono?.monogram ?? null, zimsName: curZims?.zimsName ?? null };
+    const before: Record<string, unknown> = { role: u.role, active: u.active, monogram: curMono?.monogram ?? null, zimsName: curZims?.zimsName ?? null, email: u.email };
     const after: Record<string, unknown> = { ...before };
 
     if (input.role && input.role !== u.role) after.role = input.role;
     if (input.active !== undefined && input.active !== u.active) after.active = input.active;
-    await tx.user.update({
-      where: { id },
-      data: {
-        role: after.role as "AQUARIST" | "ADMIN",
-        active: after.active as boolean,
-        deactivatedAt: after.active === false && u.active ? now : after.active === true ? null : undefined,
-        ...(passwordHash ? { passwordHash } : {}),
-      },
-    });
+    if (email !== undefined && email !== u.email) after.email = email;
+    await tx.user
+      .update({
+        where: { id },
+        data: {
+          role: after.role as "AQUARIST" | "ADMIN",
+          active: after.active as boolean,
+          deactivatedAt: after.active === false && u.active ? now : after.active === true ? null : undefined,
+          ...(after.email !== u.email ? { email: after.email as string | null } : {}),
+          ...(passwordHash ? { passwordHash } : {}),
+        },
+      })
+      .catch((e: unknown) => {
+        if (isUniqueViolation(e, "email")) throw new AppError(409, "EMAIL_TAKEN", EMAIL_TAKEN);
+        throw e;
+      });
     if (input.monogram && input.monogram !== curMono?.monogram) {
       await assertUniqueMonogram(tx, id, input.monogram, now);
       if (curMono) await tx.userMonogram.update({ where: { id: curMono.id }, data: { validTo: now } });

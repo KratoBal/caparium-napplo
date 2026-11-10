@@ -332,8 +332,9 @@ export function NewPoolForm({ groups }: { groups: { id: string; name: string }[]
   );
 }
 
-export function UserRow(p: { id: string; loginId: string; fullName: string; role: "AQUARIST" | "ADMIN"; active: boolean; monogram: string; zimsName: string; self: boolean }) {
+export function UserRow(p: { id: string; loginId: string; fullName: string; role: "AQUARIST" | "ADMIN"; active: boolean; monogram: string; zimsName: string; email: string; self: boolean }) {
   const [role, setRole] = useState(p.role);
+  const [email, setEmail] = useState(p.email);
   const [monogram, setMonogram] = useState(p.monogram);
   const [zimsName, setZimsName] = useState(p.zimsName);
   const [zimsNameMode, setZimsNameMode] = useState<"" | "CORRECTION" | "RENAME">("");
@@ -348,6 +349,7 @@ export function UserRow(p: { id: string; loginId: string; fullName: string; role
   if (zimsChanged) body.zimsName = zimsName.trim();
   if (modeNeeded && zimsNameMode) body.zimsNameMode = zimsNameMode;
   if (password) body.password = password;
+  if (email.trim().toLowerCase() !== p.email) body.email = email.trim();
   return (
     <tr data-testid={`user-${p.loginId}`} className={p.active ? undefined : "invalid"}>
       <td className="keep"><b>{p.fullName}</b><div className="hint">{p.loginId}</div></td>
@@ -373,6 +375,7 @@ export function UserRow(p: { id: string; loginId: string; fullName: string; role
           </select>
         )}
       </td>
+      <td className="keep"><input className="input" type="email" aria-label={`${p.loginId} e-mail cím`} placeholder="nincs" value={email} onChange={(e) => setEmail(e.target.value)} /></td>
       <td className="keep"><input className="input" type="password" autoComplete="new-password" aria-label={`${p.loginId} új jelszó`} placeholder="új jelszó" value={password} onChange={(e) => setPassword(e.target.value)} /></td>
       <td className="keep">
         <button

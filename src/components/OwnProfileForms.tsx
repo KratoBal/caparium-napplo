@@ -146,3 +146,46 @@ export function OwnNicknameForm({ nickname }: { nickname: string }) {
     </div>
   );
 }
+
+/**
+ * The user's own e-mail address (task e7f9e84d): where the link of a forgotten password goes. Optional; empty removes it.
+ */
+export function OwnEmailForm({ email }: { email: string }) {
+  const router = useRouter();
+  const [value, setValue] = useState(email);
+  const [current, setCurrent] = useState("");
+  const [msg, setMsg] = useState<Msg>(null);
+  const [busy, setBusy] = useState(false);
+  const changed = value.trim().toLowerCase() !== email;
+  return (
+    <div className="toolbar" data-testid="own-email">
+      <label className="field">
+        <span>E-mail cím</span>
+        <input className="input" type="email" autoComplete="email" value={value} maxLength={254} onChange={(e) => setValue(e.target.value)} />
+      </label>
+      {/* the address is where a reset link goes, so it is guarded like the password (barracuda on #217) */}
+      <label className="field">
+        <span>Jelenlegi jelszó</span>
+        <input className="input" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+      </label>
+      <button
+        className="btn"
+        type="button"
+        disabled={busy || !changed || !current}
+        onClick={async () => {
+          setBusy(true);
+          const err = await patch({ email: value.trim(), currentPassword: current });
+          setBusy(false);
+          setMsg(err ? { ok: false, text: err } : { ok: true, text: value.trim() ? "E-mail cím mentve." : "E-mail cím törölve." });
+          if (!err) {
+            setCurrent("");
+            router.refresh();
+          }
+        }}
+      >
+        E-mail cím mentése
+      </button>
+      <Status msg={msg} />
+    </div>
+  );
+}

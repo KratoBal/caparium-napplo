@@ -212,7 +212,7 @@ export default async function SettingsPage() {
         <p className="hint">Törlés nincs, csak inaktiválás: a régi naplók és az auditnapló a felhasználóra hivatkoznak.</p>
         <div className="table-scroll">
           <table className="log-table" data-testid="users-table">
-            <thead><tr><th>Név</th><th>Szerep</th><th>Monogram</th><th>ZIMS-név</th><th>Jelszó</th><th></th></tr></thead>
+            <thead><tr><th>Név</th><th>Szerep</th><th>Monogram</th><th>ZIMS-név</th><th>E-mail</th><th>Jelszó</th><th></th></tr></thead>
             <tbody>
               {users.map((u) => (
                 <UserRow
@@ -224,6 +224,7 @@ export default async function SettingsPage() {
                   active={u.active}
                   monogram={pickValid(u.monograms, now)?.monogram ?? ""}
                   zimsName={pickValid(u.zimsNames, now)?.zimsName ?? ""}
+                  email={u.email ?? ""}
                   self={u.id === user.id}
                 />
               ))}
