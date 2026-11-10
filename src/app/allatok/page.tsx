@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AnimalOrder } from "@/components/AnimalOrder";
-import { AnimalActions, AnimalEditForm, GroupActive, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
+import { AnimalActions, AnimalEditForm, GroupActive, GroupMembers, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
 import { InactiveListFilter, InactiveRowShell } from "@/components/InactiveListFilter";
 import { Shell } from "@/components/Shell";
 import { withIcon } from "@/lib/icons";
@@ -149,7 +149,7 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
             <div className="table-scroll">
               <table className="log-table" data-testid="groups-table">
                 <thead>
-                  <tr><th>Csoport</th><th>Tagok most</th><th></th></tr>
+                  <tr><th>Csoport</th><th>Tagok most</th><th></th><th>Tagok kezelése</th></tr>
                 </thead>
                 <tbody>
                   {allGroups.map((g) => (
@@ -157,6 +157,12 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
                       <td>{g.name}</td>
                       <td>{g.members}</td>
                       <td className="keep"><GroupActive id={g.id} active={g.active} /></td>
+                      <td>
+                        <GroupMembers
+                          group={g}
+                          animals={animals.filter((a) => a.alive).map((a) => ({ id: a.id, name: a.name, groupId: a.groupId, groupName: a.groupName }))}
+                        />
+                      </td>
                     </InactiveRowShell>
                   ))}
                 </tbody>

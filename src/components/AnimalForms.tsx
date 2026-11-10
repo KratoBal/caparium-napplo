@@ -650,3 +650,82 @@ export function AnimalEditForm({ a, species, pools, groups }: { a: AnimalEditVie
     </div>
   );
 }
+
+type MemberAnimal = { id: string; name: string; groupId: string | null; groupName: string | null };
+
+/**
+ * A group's members in one place (Lili 2026-11-10, card b98016a1 S1): who is in it now, and several animals put in or taken out at ONE
+ * moment, in one step (the server writes one group change per animal, as if each had been done on its own). The moment may be in the
+ * past: the feeding sheets follow it. Admins only today (the server checks it again).
+ */
+export function GroupMembers({ group, animals }: { group: { id: string; name: string; active: boolean }; animals: MemberAnimal[] }) {
+  const members = animals.filter((a) => a.groupId === group.id);
+  const others = animals.filter((a) => a.groupId !== group.id);
+  const [add, setAdd] = useState<Set<string>>(new Set());
+  const [remove, setRemove] = useState<Set<string>>(new Set());
+  const [time, setTime] = useState(nowLocal());
+  const [reason, setReason] = useState("");
+  const { msg, busy, call } = useApi();
+  const reasonsOn = useReasonsOn();
+  const toggle = (set: Set<string>, setter: (s: Set<string>) => void, id: string) => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setter(next);
+  };
+  return (
+    <details data-testid={`group-members-${group.id}`}>
+      <summary>Tagok ({members.length})</summary>
+      <fieldset className="field">
+        <legend>Most a csoportban (pipáld, akit kiveszel)</legend>
+        {members.length === 0 && <span className="hint">Nincs tagja.</span>}
+        {members.map((a) => (
+          <label key={a.id} className="check">
+            <input type="checkbox" checked={remove.has(a.id)} onChange={() => toggle(remove, setRemove, a.id)} aria-label={`Kivesz: ${a.name}`} /> {a.name}
+          </label>
+        ))}
+      </fieldset>
+      {group.active && (
+        <fieldset className="field">
+          <legend>Betesz (élő állatok)</legend>
+          {others.map((a) => (
+            <label key={a.id} className="check">
+              <input type="checkbox" checked={add.has(a.id)} onChange={() => toggle(add, setAdd, a.id)} aria-label={`Betesz: ${a.name}`} /> {a.name}
+              {a.groupName ? <span className="hint"> (most: {a.groupName})</span> : null}
+            </label>
+          ))}
+        </fieldset>
+      )}
+      <label className="field">
+        Időpont
+        <input className="input" type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} aria-label={`${group.name}: a változás időpontja`} />
+      </label>
+      {reasonsOn && (
+        <label className="field">
+          Indoklás (korábbi napnál)
+          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} aria-label={`${group.name}: indoklás`} />
+        </label>
+      )}
+      <button
+        className="btn"
+        type="button"
+        disabled={busy || add.size + remove.size === 0}
+        onClick={() =>
+          void call(
+            `/api/admin/animal-groups/${group.id}/members`,
+            "POST",
+            { add: [...add], remove: [...remove], occurredAtLocal: time, ...(reason.trim() ? { reason: reason.trim() } : {}) },
+            `${add.size} állat be, ${remove.size} ki: rögzítve.`,
+            () => {
+              setAdd(new Set());
+              setRemove(new Set());
+            },
+          )
+        }
+      >
+        Tagok mentése
+      </button>
+      <Msg msg={msg} />
+    </details>
+  );
+}
