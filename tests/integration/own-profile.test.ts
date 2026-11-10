@@ -118,25 +118,38 @@ describe("own profile", () => {
     expect(res.status).toBe(401);
   });
 
-  // task e7f9e84d: the address of a forgotten password's link
-  it("sets, normalises, refuses an invalid or taken address, and clears the own e-mail; each change audited", async () => {
+  // task e7f9e84d: the address of a forgotten password's link; guarded like the password (barracuda on #217)
+  it("the own e-mail needs the current password: without it or with a wrong one nothing changes", async () => {
     // the test before this one changed the password
     const cookie = (await login(loginId, "uj-jelszo-12345"))!;
+    const addr = `orzott.${Date.now()}@example.com`;
+    expect((await patch(cookie, { email: addr })).status).toBe(400);
+    expect((await patch(cookie, { email: addr, currentPassword: "nem-ez-a-jelszo" })).status).toBe(422);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).email).toBeNull();
+    expect((await patch(cookie, { email: addr, currentPassword: "uj-jelszo-12345" })).status).toBe(200);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).email).toBe(addr);
+    // the wrong try is counted like any wrong password
+    expect(await prisma.auditEntry.count({ where: { action: "LOGIN_FAILED", entityType: "User", entityId: userId } })).toBeGreaterThan(0);
+  });
+
+  it("sets, normalises, refuses an invalid or taken address, and clears the own e-mail; each change audited", async () => {
+    const pw = "uj-jelszo-12345";
+    const cookie = (await login(loginId, pw))!;
     const mine = `  Sajat.${Date.now()}@Example.COM `;
-    expect((await patch(cookie, { email: mine })).status).toBe(200);
+    expect((await patch(cookie, { email: mine, currentPassword: pw })).status).toBe(200);
     const stored = (await prisma.user.findUniqueOrThrow({ where: { id: userId } })).email;
     expect(stored).toBe(mine.trim().toLowerCase());
-    expect((await patch(cookie, { email: "nem-email" })).status).toBe(400);
+    expect((await patch(cookie, { email: "nem-email", currentPassword: pw })).status).toBe(400);
     const other = await prisma.user.create({
       data: { loginId: `masik-${Date.now()}`, fullName: "Másik", role: "AQUARIST", email: `masik.${Date.now()}@example.com` },
     });
-    const taken = await patch(cookie, { email: other.email!.toUpperCase() });
+    const taken = await patch(cookie, { email: other.email!.toUpperCase(), currentPassword: pw });
     expect(taken.status).toBe(409);
     expect(JSON.stringify(await taken.json())).toContain("EMAIL_TAKEN");
     expect((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).email).toBe(stored);
-    expect((await patch(cookie, { email: "" })).status).toBe(200);
+    expect((await patch(cookie, { email: "", currentPassword: pw })).status).toBe(200);
     expect((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).email).toBeNull();
     const audits = await prisma.auditEntry.findMany({ where: { entityType: "User", entityId: userId }, orderBy: { id: "asc" } });
-    expect(audits.filter((a) => JSON.stringify(a.changes).includes('"email"')).length).toBe(2);
+    expect(audits.filter((a) => JSON.stringify(a.changes).includes('"email"')).length).toBe(3);
   });
 });

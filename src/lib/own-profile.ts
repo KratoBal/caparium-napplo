@@ -25,7 +25,12 @@ export const ownProfileSchema = z
     currentPassword: z.string().max(200).optional(),
     newPassword: z.string().min(10, "Az új jelszó legalább 10 karakter legyen.").max(200).optional(),
   })
-  .refine((v) => v.newPassword === undefined || !!v.currentPassword, { message: "Add meg a jelenlegi jelszavadat.", path: ["currentPassword"] });
+  // the e-mail address is where a reset link goes: changing it is as sensitive as the password (barracuda on #217: a session
+  // left open must not take the account over), so both need the current password
+  .refine((v) => (v.newPassword === undefined && v.email === undefined) || !!v.currentPassword, {
+    message: "Add meg a jelenlegi jelszavadat.",
+    path: ["currentPassword"],
+  });
 export type OwnProfileInput = z.infer<typeof ownProfileSchema>;
 
 /**
@@ -44,11 +49,14 @@ export async function updateOwnProfile(actor: SessionUser, input: OwnProfileInpu
   const email = emailOrNull(input.email);
   if (email !== undefined && email !== u.email) changes.email = { before: u.email, after: email };
   let passwordHash: string | undefined;
-  if (input.newPassword !== undefined) {
+  // the current password, once, for a new password or a new e-mail address (the same lock, slot and LOGIN_FAILED audit)
+  if (input.newPassword !== undefined || changes.email) {
     const check = await checkOwnPassword(u.id, input.currentPassword ?? "", session.client);
     if (check === "LOCKED") throw new AppError(429, "LOCKED", "Túl sok hibás jelszó. Próbáld újra 15 perc múlva.");
     if (check === "BUSY") throw new AppError(503, "BUSY", "A szerver most foglalt. Próbáld újra egy perc múlva.");
     if (check !== "OK") throw new AppError(422, "WRONG_PASSWORD", "A jelenlegi jelszó nem helyes.");
+  }
+  if (input.newPassword !== undefined) {
     if (input.newPassword === input.currentPassword) throw new AppError(422, "SAME_PASSWORD", "Az új jelszó ugyanaz, mint a régi.");
     passwordHash = await hashPassword(input.newPassword);
     changes.password = { before: null, after: "új jelszó beállítva (saját)" };
