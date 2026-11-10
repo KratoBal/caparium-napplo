@@ -62,6 +62,27 @@ function Msg({ msg }: { msg: { ok: boolean; text: string } | null }) {
   );
 }
 
+/**
+ * A group an event (or a members step) left without a member: the page asks whether to switch it off (Lili 2026-10-30, task
+ * caparium-csoport-inaktiv; acrobot 38970); never by itself, and a "no" leaves the switch on the Állatok page.
+ */
+async function askAboutEmptied(answer: Record<string, unknown>) {
+  const emptied = Array.isArray(answer.emptiedGroups) ? (answer.emptiedGroups as { id: string; name: string }[]) : [];
+  for (const g of emptied) {
+    if (window.confirm(`A(z) ${g.name} csoport kiürült. Inaktiválod?`)) {
+      const res = await fetch(`/api/admin/animal-groups/${g.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId: requestId(), active: false }),
+      }).catch(() => null);
+      if (!res?.ok) {
+        const b = (await res?.json().catch(() => ({}))) as { error?: { message?: string } } | undefined;
+        window.alert(b?.error?.message ?? `A(z) ${g.name} csoportot nem sikerült inaktiválni: az Állatok oldalon a Csoportok listában próbáld újra.`);
+      }
+    }
+  }
+}
+
 const ACTION_LABEL = { TRANSFER: "Áthelyezés", GROUP_CHANGE: "Csoportváltás", DEATH: "Elhullás", RELEASE: "Kiadás" } as const;
 
 /** One lifecycle event for an existing animal: transfer, group change, death, release. */
@@ -74,25 +95,6 @@ export function AnimalActions({ animalId, pools, groups }: { animalId: string; p
   const [note, setNote] = useState("");
   const { msg, busy, call } = useApi();
   const reasonsOn = useReasonsOn();
-  // Lili 2026-10-30 (task caparium-csoport-inaktiv; acrobot 38970): when an event takes the last member out of a group, the page asks whether to
-  // switch the group off; never by itself (a group emptied for a while can still be filled again from the selectors), and a "no" leaves the
-  // switch on the Állatok page.
-  async function askAboutEmptied(answer: Record<string, unknown>) {
-    const emptied = Array.isArray(answer.emptiedGroups) ? (answer.emptiedGroups as { id: string; name: string }[]) : [];
-    for (const g of emptied) {
-      if (window.confirm(`A(z) ${g.name} csoport kiürült. Inaktiválod?`)) {
-        const res = await fetch(`/api/admin/animal-groups/${g.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ requestId: requestId(), active: false }),
-        }).catch(() => null);
-        if (!res?.ok) {
-          const b = (await res?.json().catch(() => ({}))) as { error?: { message?: string } } | undefined;
-          window.alert(b?.error?.message ?? `A(z) ${g.name} csoportot nem sikerült inaktiválni: az Állatok oldalon a Csoportok listában próbáld újra.`);
-        }
-      }
-    }
-  }
   return (
     <div className="toolbar" data-testid="animal-actions">
       <label className="field">
@@ -806,9 +808,11 @@ export function GroupMembers({
             "POST",
             { add: [...add], remove: [...remove], occurredAtLocal: time, ...(reason.trim() ? { reason: reason.trim() } : {}) },
             `${add.size} állat be, ${remove.size} ki: rögzítve.`,
-            () => {
+            async (answer) => {
               setAdd(new Set());
               setRemove(new Set());
+              // the group card asks about an emptied group as the single group change does (card b98016a1)
+              await askAboutEmptied(answer);
             },
           )
         }
