@@ -21,7 +21,7 @@ import { recomputeClosedDaysFrom } from "./feeding";
 import { moduleLevel, nameAt } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
-import { businessDayOf, dayToDate } from "./time";
+import { businessDayOf, dateToDay, dayToDate } from "./time";
 
 export const groupPlacementFixSchema = z.object({
   requestId: z.string().min(8).max(60),
@@ -53,7 +53,16 @@ export interface PlacementSkip {
   reason: string;
 }
 
-type Plan = { changes: PlacementChange[]; skipped: PlacementSkip[] };
+type Plan = {
+  changes: PlacementChange[];
+  skipped: PlacementSkip[];
+  /**
+   * The CLOSED, finalized feeding days whose fasting the run computes again (from the earliest arrival day on; barracuda on #209):
+   * a member's own rows on those days can then count as the group's. Said before the run, so Lili knows what may move on the old
+   * sheets; after the run the audit under its request names the days that did change.
+   */
+  closedDays: { from: string | null; count: number };
+};
 
 async function requireFeedingAdmin(actor: Actor) {
   if ((await moduleLevel(prisma, actor.id, actor.role, "FEEDING")) !== "ADMIN") {
@@ -70,7 +79,7 @@ export async function planGroupPlacementFix(tx: Tx, now = new Date(), only?: rea
   });
   const byAnimal = new Map<string, string[]>();
   for (const m of open) byAnimal.set(m.animalId, [...(byAnimal.get(m.animalId) ?? []), m.groupId]);
-  const plan: Plan = { changes: [], skipped: [] };
+  const plan: Plan = { changes: [], skipped: [], closedDays: { from: null, count: 0 } };
   for (const [animalId, groupIds] of byAnimal) {
     const animal = await tx.animal.findUniqueOrThrow({ where: { id: animalId }, include: { names: true } });
     const animalName = nameAt(animal.names, now)?.name ?? "?";
@@ -131,10 +140,34 @@ export async function planGroupPlacementFix(tx: Tx, now = new Date(), only?: rea
   }
   plan.changes.sort((x, y) => x.groupName.localeCompare(y.groupName, "hu") || x.animalName.localeCompare(y.animalName, "hu"));
   plan.skipped.sort((x, y) => x.animalName.localeCompare(y.animalName, "hu"));
+  const from = plan.changes.map((c) => c.toDay).sort()[0] ?? null;
+  if (from)
+    plan.closedDays = {
+      from,
+      count: await tx.feedingDay.count({ where: { businessDay: { gte: dayToDate(from) }, listState: "FINALIZED", journalDay: { state: "CLOSED" } } }),
+    };
   return plan;
 }
 
 /** `only`: the test's own animals (the test database is shared by the files); the route never passes it. */
+/**
+ * What the run's fasting recompute changed on the closed days, from the audit under its request: the days, and the automatic fasting
+ * days added and taken off (barracuda on #209: what moved on the old sheets is said after the run, not guessed).
+ */
+export async function closedDayChanges(tx: Tx, requestId: string) {
+  const audits = await tx.auditEntry.findMany({ where: { requestId, entityType: "EatingStatus" }, select: { action: true, entityId: true } });
+  const rows = await tx.eatingStatus.findMany({
+    where: { id: { in: audits.map((a) => a.entityId) } },
+    select: { id: true, feedingDay: { select: { businessDay: true } } },
+  });
+  const dayOf = new Map(rows.map((r) => [r.id, dateToDay(r.feedingDay.businessDay)]));
+  return {
+    days: [...new Set(audits.map((a) => dayOf.get(a.entityId)).filter((d): d is string => !!d))].sort(),
+    fastingAdded: audits.filter((a) => a.action === "CREATE").length,
+    fastingRemoved: audits.filter((a) => a.action === "INVALIDATE").length,
+  };
+}
+
 export async function fixGroupPlacements(actor: Actor, raw: z.input<typeof groupPlacementFixSchema>, now = new Date(), only?: readonly string[]) {
   const input = groupPlacementFixSchema.parse(raw);
   await requireFeedingAdmin(actor);
@@ -147,8 +180,13 @@ export async function fixGroupPlacements(actor: Actor, raw: z.input<typeof group
       // the animals' locks in id order (two runs, or a run and a lifecycle change, wait for each other), then planned again under them:
       // the run follows the events as they are, not as the dry run saw them
       const first = await planGroupPlacementFix(tx, now, only);
-      for (const id of [...new Set(first.changes.map((c) => c.animalId))].sort()) await lockAnimal(tx, id);
+      const locked = new Set(first.changes.map((c) => c.animalId));
+      for (const id of [...locked].sort()) await lockAnimal(tx, id);
       const p = await planGroupPlacementFix(tx, now, only);
+      // an animal the plan under the locks brings and the first one did not (a lifecycle change committed meanwhile) is not locked:
+      // stop rather than write it unlocked (barracuda on #209); a run again plans afresh
+      if (p.changes.some((c) => !locked.has(c.animalId)))
+        throw new AppError(409, "PLAN_CHANGED", "Az állatok eseményei a futás közben megváltoztak. Futtasd újra a javítást.");
       if (!p.changes.length) throw new AppError(422, "NO_CHANGE", "Nincs javítandó csoportba helyezés.");
       const why = `csoportba helyezés az érkezés napjára (Lili kérése, 2026-11-10)${input.reason ? `: ${input.reason}` : ""}`.slice(0, 500);
       for (const c of p.changes) {
@@ -197,7 +235,7 @@ export async function fixGroupPlacements(actor: Actor, raw: z.input<typeof group
       // the closed days' fasting from the earliest day the memberships changed on, once (the arrival day of the earliest animal)
       const earliest = p.changes.map((c) => c.toDay).sort()[0]!;
       await recomputeClosedDaysFrom(tx, earliest, actor.id, input.requestId);
-      return { replayed: false, fixed: p };
+      return { replayed: false, fixed: p, closedDaysChanged: await closedDayChanges(tx, input.requestId) };
     },
     { timeout: 120_000 },
   );
