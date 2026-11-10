@@ -58,6 +58,7 @@ model User {
   modulePermissions ModulePermission[]
   dosingsPerformed  Dosing[]
   sessions          Session[]
+  passwordResets    PasswordReset[]
 
   @@map("app_user")
 }
@@ -99,6 +100,22 @@ model ModulePermission {
 
   @@unique([userId, module])
   @@map("module_permission")
+}
+
+// A one-time password reset link (task e7f9e84d). Like a session, only the sha256 of the random token is stored; the raw token
+// is in the link and nowhere else. Used once (usedAt), and only before expiresAt.
+model PasswordReset {
+  id          String    @id
+  userId      String    @db.Uuid
+  /** the admin who made the link; null for a link the user asked for by e-mail */
+  createdById String?   @db.Uuid
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  expiresAt   DateTime  @db.Timestamptz(3)
+  usedAt      DateTime? @db.Timestamptz(3)
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("password_reset")
 }
 
 model Session {
