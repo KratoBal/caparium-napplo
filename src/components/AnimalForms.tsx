@@ -667,6 +667,8 @@ export function GroupMembers({ group, animals }: { group: { id: string; name: st
   const [reason, setReason] = useState("");
   const { msg, busy, call } = useApi();
   const reasonsOn = useReasonsOn();
+  // the panel's content only while it is open: closed, the row reads as before (its text is the group's, not every animal's)
+  const [open, setOpen] = useState(false);
   const toggle = (set: Set<string>, setter: (s: Set<string>) => void, id: string) => {
     const next = new Set(set);
     if (next.has(id)) next.delete(id);
@@ -674,8 +676,10 @@ export function GroupMembers({ group, animals }: { group: { id: string; name: st
     setter(next);
   };
   return (
-    <details data-testid={`group-members-${group.id}`}>
+    <details data-testid={`group-members-${group.id}`} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
       <summary>Tagok ({members.length})</summary>
+      {open && (
+        <>
       <fieldset className="field">
         <legend>Most a csoportban (pipáld, akit kiveszel)</legend>
         {members.length === 0 && <span className="hint">Nincs tagja.</span>}
@@ -725,6 +729,8 @@ export function GroupMembers({ group, animals }: { group: { id: string; name: st
       >
         Tagok mentése
       </button>
+        </>
+      )}
       <Msg msg={msg} />
     </details>
   );
