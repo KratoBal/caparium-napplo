@@ -1,11 +1,12 @@
 // The feeding sheet's rows (Lili 2026-10-30, msg 1565798789183447103 and 1565799264188371058, task caparium-csoport-sor; acrobot 38947).
 //
 // Every selected animal is a row of its own, and a group with at least one selected member is a row of its own (the group's one item,
-// R-8). TODAY's sheet adds a rule: an animal that is in a group gets no row of its own, the group's row stands for it, so a group is
-// fed as a group and not twice. Two exceptions keep the rule from hiding anything:
-//  - an animal that already has an individual item today keeps its row (it can still be corrected or invalidated there) with a short
-//    note, so the server's double-feeding refusal (feeding.ts, DOUBLE_FEEDING) never comes from a row that cannot be seen;
-//  - an earlier day is as it was: the rule is today's, a past day's sheet keeps every selected animal's row.
+// R-8). The sheet adds a rule: an animal that is in a group (by that day's membership) gets no row of its own, the group's row stands
+// for it, so a group is fed as a group and not twice. Since 2026-11-10 (Lili, msg 1569694421069471836: "konkrét csoportnál csak azt
+// lássam") the rule holds on an earlier day's sheet too, not only today's. One exception keeps it from hiding anything:
+//  - an animal that already has an individual item that day keeps its row (it can still be corrected or invalidated there) with a short
+//    note, so the server's double-feeding refusal (feeding.ts, DOUBLE_FEEDING) never comes from a row that cannot be seen.
+// The rule off is what the item form and the "Mai tételek" list use: every selected animal is a recipient there.
 // An animal outside every group is a row of its own, as ever. The eating list is not built here: it stays per animal.
 
 export const GROUP_MEMBER_NOTE = "csoporttag, egyedi tétellel";
@@ -34,7 +35,7 @@ export function sheetRecipients(input: {
   animals: DayAnimalLike[];
   /** the day's valid items: those of an animal (animalId set) keep a group member on the sheet */
   items: { animalId: string | null }[];
-  /** today's rule on: group members have no row of their own; off (a past day, or the item form's list): every selected animal has one */
+  /** the sheet's rule on: group members have no row of their own; off (the item form's list): every selected animal has one */
   groupRule: boolean;
 }): SheetRecipient[] {
   const hasOwnItem = new Set(input.items.flatMap((i) => (i.animalId ? [i.animalId] : [])));

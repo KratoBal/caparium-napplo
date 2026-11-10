@@ -25,7 +25,8 @@ test.beforeAll(() => {
   if (!PASSWORD) throw new Error("SEED_TEST_PASSWORD must be set for the e2e run");
 });
 
-// the day's list: Teszt Egy on it, the Mysis feed ticked, the list finalized so the sheet is there; idempotent for a retry
+// the day's list: Teszt Három on it (outside every group: a group member has no row of its own on any day's sheet since 2026-11-10), the
+// Mysis feed ticked, the list finalized so the sheet is there; idempotent for a retry
 async function prepareSheet(page: Page, day: string) {
   page.on("dialog", (d) => void d.accept());
   await login(page, "teszt.admin");
@@ -34,8 +35,8 @@ async function prepareSheet(page: Page, day: string) {
   const ready = dayFeeds.getByRole("button", { name: "Takarmánylap kész" });
   const sheet = page.getByTestId("feeding-sheet");
   if (!(await sheet.getByRole("columnheader", { name: /^Mysis/ }).count()) && (await ready.count())) {
-    await page.getByLabel("Teszt Egy a mai listán").check();
-    await expect(page.getByLabel("Teszt Egy a mai listán")).toBeChecked();
+    await page.getByLabel("Teszt Három a mai listán").check();
+    await expect(page.getByLabel("Teszt Három a mai listán")).toBeChecked();
     await dayFeeds.getByLabel("A nap takarmánya: Mysis").check();
     await ready.click();
     await expect(dayFeeds.getByTestId("list-state")).toHaveText("Takarmánylap kész");
@@ -49,8 +50,8 @@ test.describe("phone, 390 px", () => {
   test("a collapsed card per row: a tap on the name opens it, a second closes it, an unsaved value shows as a dot", async ({ page }, info) => {
     await prepareSheet(page, budapestDay(info.project.name === "tablet" ? -50 : -52));
     const sheet = page.getByTestId("feeding-sheet");
-    const toggle = sheet.getByTestId("sheet-toggle-Teszt Egy");
-    const field = sheet.getByLabel("Teszt Egy: Mysis (g)");
+    const toggle = sheet.getByTestId("sheet-toggle-Teszt Három");
+    const field = sheet.getByLabel("Teszt Három: Mysis (g)");
     // the hint speaks of a tap on a name here (on a tablet and a desktop of a click on a row)
     await expect(sheet.locator(".hint").first()).toContainText("Koppints egy névre");
     // closed: the name is a button with aria-expanded, no field, no header row, nothing scrolls sideways
@@ -80,7 +81,7 @@ test.describe("phone, 390 px", () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(field).toBeHidden();
-    await expect(sheet.getByTestId("sheet-mark-Teszt Egy")).toHaveAttribute("aria-label", "Nem mentett érték");
+    await expect(sheet.getByTestId("sheet-mark-Teszt Három")).toHaveAttribute("aria-label", "Nem mentett érték");
     await expect(toggle).toContainText("12 g");
     await toggle.click();
     await expect(field).toHaveValue("12");

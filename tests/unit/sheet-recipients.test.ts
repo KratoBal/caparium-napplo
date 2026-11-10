@@ -1,5 +1,6 @@
 // The feeding sheet's rows (src/lib/sheet-recipients.ts; Lili 2026-10-30, task caparium-csoport-sor): today a group member has no row of its
-// own unless it already has an individual item; an animal outside every group is a row of its own; an earlier day is as it was.
+// own unless it already has an individual item, on every day; an animal outside every group is a row of its own; the rule off is the item
+// form's list.
 import { describe, expect, it } from "vitest";
 import { GROUP_MEMBER_NOTE, sheetRecipients } from "@/lib/sheet-recipients";
 
@@ -32,7 +33,7 @@ describe("the feeding sheet's rows", () => {
     expect(rows[1]!.note).toBeUndefined();
   });
 
-  it("an earlier day (the rule off) is as it was: every selected animal has its row, and the group's row after them", () => {
+  it("the rule off (the item form's list) has every selected animal, and the group's row after them", () => {
     const rows = sheetRecipients({ animals: ANIMALS, items: [{ animalId: "a2" }], groupRule: false });
     expect(keys(rows)).toEqual(["a1", "a2", "a3", "g:g1"]);
     expect(rows.every((r) => r.note === undefined)).toBe(true);
