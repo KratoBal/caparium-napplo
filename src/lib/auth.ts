@@ -82,15 +82,24 @@ export class Slots {
 
 export const passwordSlots = new Slots(4, 32);
 
+/**
+ * THE FAILED TRIES THAT COUNT TOWARD THE LOCK: those of the last FAILURE_WINDOW_MIN minutes, and only those after the user's
+ * last password reset through a link (task e7f9e84d, acrobot 46018: a successful reset lifts the lock; the audit rows stay, the
+ * reset is the line the count starts from).
+ */
+async function failuresSince(userId: string): Promise<number> {
+  const window = new Date(Date.now() - FAILURE_WINDOW_MIN * 60_000);
+  const reset = await prisma.passwordReset.findFirst({ where: { userId, usedAt: { not: null } }, orderBy: { usedAt: "desc" }, select: { usedAt: true } });
+  const since = reset?.usedAt && reset.usedAt > window ? reset.usedAt : window;
+  return prisma.auditEntry.count({ where: { action: "LOGIN_FAILED", entityType: "User", entityId: userId, at: { gte: since } } });
+}
+
 /** Checks the password, writes the LOGIN or LOGIN_FAILED audit entry, and opens a session. */
 export async function login(loginId: string, password: string, client: string | null): Promise<LoginResult> {
   const id = loginId.trim().toLowerCase();
   const user = await prisma.user.findUnique({ where: { loginId: id } });
-  const since = new Date(Date.now() - FAILURE_WINDOW_MIN * 60_000);
   if (user) {
-    const failures = await prisma.auditEntry.count({
-      where: { action: "LOGIN_FAILED", entityType: "User", entityId: user.id, at: { gte: since } },
-    });
+    const failures = await failuresSince(user.id);
     if (failures >= MAX_FAILURES) {
       // the same work as a wrong password, so the time of the answer does not tell either
       const r = await passwordSlots.run(() => verifyPassword(password, DUMMY_HASH));
@@ -131,9 +140,7 @@ export async function login(loginId: string, password: string, client: string | 
 export async function checkOwnPassword(userId: string, password: string, client: string | null): Promise<"OK" | "INVALID" | "LOCKED" | "BUSY"> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user?.passwordHash) return "INVALID";
-  const since = new Date(Date.now() - FAILURE_WINDOW_MIN * 60_000);
-  const failures = await prisma.auditEntry.count({ where: { action: "LOGIN_FAILED", entityType: "User", entityId: user.id, at: { gte: since } } });
-  if (failures >= MAX_FAILURES) return "LOCKED";
+  if ((await failuresSince(user.id)) >= MAX_FAILURES) return "LOCKED";
   const checked = await passwordSlots.run(() => verifyPassword(password, user.passwordHash!));
   if (!checked.ran) return "BUSY";
   if (checked.value) return "OK";

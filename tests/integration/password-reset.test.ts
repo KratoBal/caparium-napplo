@@ -92,6 +92,19 @@ describe("a one-time reset link", () => {
     expect(runs).toBe(1);
   });
 
+  it("a successful reset lifts the login lock: the new password logs in at once (acrobot 46018)", async () => {
+    const pw = "zarolas-elotti-1";
+    const t1 = tokenOf((await createPasswordResetLink(f.admin, userId, rid())).path);
+    await resetPassword({ token: t1, newPassword: pw }, null);
+    for (let i = 0; i < 10; i++) await login(loginId, "rossz-jelszo-123", null);
+    expect((await login(loginId, pw, null)).ok).toBe(false);
+    const t2 = tokenOf((await createPasswordResetLink(f.admin, userId, rid())).path);
+    expect((await post({ token: t2, newPassword: "zarolas-utani-12" })).status).toBe(200);
+    expect((await login(loginId, "zarolas-utani-12", null)).ok).toBe(true);
+    // the failures stay in the audit; they only stop counting
+    expect(await prisma.auditEntry.count({ where: { action: "LOGIN_FAILED", entityType: "User", entityId: userId } })).toBeGreaterThanOrEqual(10);
+  });
+
   it("a newer link ends the older one; an expired link and an inactive user's link do nothing", async () => {
     const first = tokenOf((await createPasswordResetLink(f.admin, userId, rid())).path);
     const second = tokenOf((await createPasswordResetLink(f.admin, userId, rid())).path);
