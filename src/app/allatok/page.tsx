@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AnimalOrder } from "@/components/AnimalOrder";
 import { AnimalActions, AnimalEditForm, GroupActive, GroupMembers, InvalidateEvent, NewArrival, SimpleCreate } from "@/components/AnimalForms";
+import { GroupPlacementFix } from "@/components/GroupPlacementFix";
 import { InactiveListFilter, InactiveRowShell } from "@/components/InactiveListFilter";
 import { Shell } from "@/components/Shell";
 import { withIcon } from "@/lib/icons";
@@ -171,6 +172,7 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
           </InactiveListFilter>
         </div>
       )}
+      {isAdmin && <GroupPlacementFix />}
     </Shell>
   );
 }
