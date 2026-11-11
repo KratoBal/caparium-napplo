@@ -6,6 +6,7 @@
 import { DayControls, type DayLock } from "./DayControls";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { allAteTargets } from "@/lib/eating-all-ate";
 import { EAT_LABEL } from "@/lib/eating-labels";
 import { stockHint, type StockInfo } from "@/lib/stock-hint";
 import { formatDay } from "@/lib/time";
@@ -845,13 +846,13 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
     if (changedRows.length) setDrafts((d) => ({ ...d, ...Object.fromEntries(changedRows.map((r) => [r.animalId, initial(r)])) }));
   }, [rows]);
   const set = (id: string, patch: Partial<RowDraft>) => setDrafts((d) => ({ ...d, [id]: { ...d[id]!, ...patch } }));
-  const changed = (r: EatingRowView) => {
-    const d = drafts[r.animalId];
+  const changed = (r: EatingRowView, ds: Record<string, RowDraft> = drafts) => {
+    const d = ds[r.animalId];
     if (!d || !d.state) return false;
     const i = initial(r);
     return !i.state || d.state !== i.state || d.vitamin !== i.vitamin || d.medicine !== i.medicine || (d.medicine && d.note.trim() !== i.note);
   };
-  const toSave = rows.filter(changed);
+  const toSave = rows.filter((r) => changed(r));
   // Lili (acrobot 34629, 2026-10-21): the fasting rows invited a click on every row, although the close makes them
   // fasting days by itself. There a row shows its state only; the recording controls open per row on request
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
@@ -859,7 +860,22 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
   // left, as the feeding sheet and the measurement page do; the browser's back button is neither, so it is not asked
   useLeaveWarning(editable ? toSave.length : 0, EATING_LEAVE_WARNING);
 
-  async function saveAll() {
+  // "Mindenki evett" (Lili 2026-11-11 09:14 UTC, msg 1570003887203688529): the empty rows of the list become EATEN and are
+  // saved at once with every other filled-in row; a filled row (saved or only picked) is never overwritten. Not on a
+  // closed day, even for an admin (who could otherwise edit it with a reason).
+  const allAte = allAteTargets(
+    rows.map((r) => ({ animalId: r.animalId, selected: r.selected, manualStatus: r.status?.source === "MANUAL" })),
+    drafts,
+  );
+  const dayClosed = lock?.status.state === "CLOSED";
+  function markAllAte() {
+    const next = { ...drafts };
+    for (const id of allAte) next[id] = { ...(next[id] ?? { vitamin: false, medicine: false, note: "" }), state: "EATEN" };
+    setDrafts(next);
+    void saveAll(rows.filter((r) => changed(r, next)), next);
+  }
+
+  async function saveAll(list: EatingRowView[] = toSave, ds: Record<string, RowDraft> = drafts) {
     setBusy(true);
     setMsg(null);
     let reason: string | undefined;
@@ -867,9 +883,9 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
     const failed: string[] = [];
     let saved = 0;
     try {
-      for (const r of toSave) {
+      for (const r of list) {
         if (stopped) break;
-        const d = drafts[r.animalId]!;
+        const d = ds[r.animalId]!;
         const manual = r.status?.source === "MANUAL" ? r.status : null;
         const body = {
           day,
@@ -1022,6 +1038,16 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
         <div className="toolbar" style={{ marginTop: 12 }}>
           <button className="btn" type="button" disabled={busy || toSave.length === 0} onClick={() => void saveAll()} data-testid="eating-save-all">
             {toSave.length ? `Mentés (${toSave.length} sor)` : "Mentés"}
+          </button>
+          <button
+            className="btn btn-soft"
+            type="button"
+            disabled={busy || dayClosed || allAte.length === 0}
+            title={dayClosed ? "Lezárt napon nem használható." : undefined}
+            onClick={markAllAte}
+            data-testid="eating-all-ate"
+          >
+            {allAte.length && !dayClosed ? `Mindenki evett (${allAte.length} sor)` : "Mindenki evett"}
           </button>
           {msg && (
             <span className={msg.ok ? "hint" : "err"} role="status" data-testid="eating-save-result">
