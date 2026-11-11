@@ -247,6 +247,9 @@ export type FeedingModeValue = keyof typeof FEEDING_MODE_LABEL;
  */
 export function FeedingModeChoice({ day, mode, editable }: { day: string; mode: FeedingModeValue | null; editable: boolean }) {
   const { msg, busy, run } = useSend();
+  // the choice shows at once; the saved one comes back with the refresh, and a failed save puts the saved one back
+  const [picked, setPicked] = useState<FeedingModeValue | null>(mode);
+  useEffect(() => setPicked(mode), [mode]);
   return (
     <fieldset className="toolbar" data-testid="feeding-mode">
       <legend className="section-title">A nap etetése</legend>
@@ -255,14 +258,17 @@ export function FeedingModeChoice({ day, mode, editable }: { day: string; mode: 
           <input
             type="radio"
             name={`feeding-mode-${day}`}
-            checked={mode === m}
+            checked={picked === m}
             disabled={!editable || busy}
-            onChange={() => void run("/api/feeding/feeding-mode", { day, mode: m }, "A nap etetése mentve.")}
+            onChange={async () => {
+              setPicked(m);
+              if (!(await run("/api/feeding/feeding-mode", { day, mode: m }, "A nap etetése mentve."))) setPicked(mode);
+            }}
           />
           {FEEDING_MODE_LABEL[m]}
         </label>
       ))}
-      {!mode && <span className="hint">Még nincs kiválasztva.</span>}
+      {!picked && <span className="hint">Még nincs kiválasztva.</span>}
       <Msg msg={msg} />
     </fieldset>
   );

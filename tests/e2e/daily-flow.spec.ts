@@ -2518,13 +2518,22 @@ test("the helper figure: dragged inside the screen, its place kept after a reloa
 test("eating log: the day's feeding mode is one choice, saved at once, kept after a reload", async ({ page }) => {
   await login(page, "teszt.akvarista1");
   await page.goto("/evesi-naplo");
-  const box = page.getByTestId("feeding-mode");
-  await box.getByLabel("Felszíni etetés (F)").check();
-  await expect(box).toContainText("A nap etetése mentve.");
+  // each choice waits for its own save (a retry finds the day's choice of the earlier attempt, so the text alone proves nothing)
+  const choose = async (label: string) => {
+    await page.waitForLoadState("networkidle"); // hydrated, and the previous save's refresh is over
+    const saved = page.waitForResponse((r) => r.url().endsWith("/api/feeding/feeding-mode") && r.request().method() === "POST");
+    await page.getByTestId("feeding-mode").getByLabel(label).check();
+    expect((await saved).ok()).toBe(true);
+    await expect(page.getByTestId("feeding-mode")).toContainText("A nap etetése mentve.");
+  };
+  // the first choice differs from whatever an earlier attempt left on the day, so it is a change and sends a save
+  await page.waitForLoadState("networkidle");
+  const diving = page.getByTestId("feeding-mode").getByLabel("Merüléses etetés (M)");
+  await choose((await diving.isChecked()) ? "Egyik sem (K)" : "Merüléses etetés (M)");
+  await choose("Felszíni etetés (F)");
   await page.reload();
   await expect(page.getByTestId("feeding-mode").getByLabel("Felszíni etetés (F)")).toBeChecked();
-  await page.getByTestId("feeding-mode").getByLabel("Egyik sem (K)").check();
-  await expect(page.getByTestId("feeding-mode")).toContainText("A nap etetése mentve.");
+  await choose("Egyik sem (K)");
   await page.reload();
   const after = page.getByTestId("feeding-mode");
   await expect(after.getByLabel("Egyik sem (K)")).toBeChecked();
