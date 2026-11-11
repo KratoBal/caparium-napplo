@@ -7,6 +7,11 @@ import { pdfFont } from "../pdf-font";
 const BG_SECTION = "#C9DDE5";
 const BG_HEADER = "#E6F0F3";
 const BG_TOTAL = "#FFF2CC";
+// Lili 2026-11-11 (task caparium-kimutatas-pdf-formazas): pale lines between the rows, a stronger one over a total row, and a
+// pale band a table can ask for (the days of the report, every other one)
+const ROW_LINE = "#D9D9D9";
+const TOTAL_LINE = "#7F7F7F";
+const BG_BAND = "#EEF4FA";
 
 export type PdfPage = {
   doc: PDFKit.PDFDocument;
@@ -15,7 +20,11 @@ export type PdfPage = {
   left: number;
   band(text: string): void;
   /** a table: the widths add up to at most `width`; `total` rows stand out like the exports' total rows */
-  table(widths: number[], head: string[], rows: { cells: string[]; total?: boolean; align?: ("left" | "right")[]; colors?: (string | null)[] }[]): void;
+  table(
+    widths: number[],
+    head: string[],
+    rows: { cells: string[]; total?: boolean; band?: boolean; align?: ("left" | "right")[]; colors?: (string | null)[] }[],
+  ): void;
   note(text: string): void;
   done(): Promise<Buffer>;
 };
@@ -53,7 +62,7 @@ export function pdfPage(opts: { title: string; subtitle: string; landscape?: boo
     table(widths, head, rows) {
       const xs = widths.map((_, i) => left + widths.slice(0, i).reduce((a, b) => a + b, 0));
       const total = widths.reduce((a, b) => a + b, 0);
-      const line = (cells: string[], o: { header?: boolean; total?: boolean; align?: ("left" | "right")[]; colors?: (string | null)[] }) => {
+      const line = (cells: string[], o: { header?: boolean; total?: boolean; band?: boolean; align?: ("left" | "right")[]; colors?: (string | null)[] }) => {
         doc.fontSize(8.5);
         const h = Math.max(...cells.map((c, i) => doc.heightOfString(c, { width: widths[i] - 6 }))) + 4;
         if (doc.y + h > bottom()) {
@@ -61,7 +70,10 @@ export function pdfPage(opts: { title: string; subtitle: string; landscape?: boo
           if (!o.header) line(head, { header: true }); // the header again on a new page
         }
         const y = doc.y;
-        if (o.header || o.total) doc.save().rect(left, y - 2, total, h).fill(o.header ? BG_HEADER : BG_TOTAL).restore();
+        if (o.header || o.total || o.band) doc.save().rect(left, y - 2, total, h).fill(o.header ? BG_HEADER : o.total ? BG_TOTAL : BG_BAND).restore();
+        // a total closes the rows above it with a stronger line; every row ends in a pale one
+        if (o.total) doc.save().moveTo(left, y - 2).lineTo(left + total, y - 2).lineWidth(1).strokeColor(TOTAL_LINE).stroke().restore();
+        if (!o.header) doc.save().moveTo(left, y - 2 + h).lineTo(left + total, y - 2 + h).lineWidth(0.4).strokeColor(ROW_LINE).stroke().restore();
         doc.fontSize(8.5).fillColor(o.header ? "#333" : "#000");
         // a cell's own colour (an out-of-range reading in red), back to the row's colour after it
         cells.forEach((c, i) => {
@@ -74,7 +86,7 @@ export function pdfPage(opts: { title: string; subtitle: string; landscape?: boo
         doc.y = y + h;
       };
       line(head, { header: true });
-      for (const r of rows) line(r.cells, { total: r.total, align: r.align, colors: r.colors });
+      for (const r of rows) line(r.cells, { total: r.total, band: r.band, align: r.align, colors: r.colors });
       doc.fillColor("#000").moveDown(0.6);
     },
     note(text) {
