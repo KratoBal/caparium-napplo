@@ -1,6 +1,6 @@
 // Lili 2026-11-01 (point 8): the Kimutatások PDF's tables, one a feed group, a group too wide for the page cut into parts
 import { describe, expect, it } from "vitest";
-import { groupTables } from "@/lib/exports/report-pdf";
+import { grouped, groupTables } from "@/lib/exports/report-pdf";
 import type { Column } from "@/lib/reports";
 
 const col = (feed: string, type: string, group = false): Column => ({ key: `${feed}|g`, feed, unit: "g", group, type });
@@ -22,5 +22,22 @@ describe("groupTables", () => {
     expect(t[0].label).toBe("Halak (1. rész)");
     // each part fits: the label column, its feed columns and one total column at the narrowest width
     for (const x of t) expect(120 + (x.columns.length + 1) * 58).toBeLessThanOrEqual(762);
+  });
+});
+
+// Lili 2026-11-11 (task caparium-kimutatas-pdf-formazas): thousands in groups with a no-break space, the comma and the unit kept
+describe("grouped", () => {
+  it("groups the integer part only, and leaves a short number, a fraction and a unit as they are", () => {
+    const nb = "\u00a0";
+    expect(["25619", "1362,5", "999", "1000", "7,67 kg", "1234567,25 kg", "-12000", "0"].map(grouped)).toEqual([
+      `25${nb}619`,
+      `1${nb}362,5`,
+      "999",
+      `1${nb}000`,
+      "7,67 kg",
+      `1${nb}234${nb}567,25 kg`,
+      `-12${nb}000`,
+      "0",
+    ]);
   });
 });
