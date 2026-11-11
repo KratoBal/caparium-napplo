@@ -141,6 +141,43 @@ export async function setDayFeeds(actor: Actor, input: z.infer<typeof dayFeedsSc
 }
 
 // ---------------------------------------------------------------------------
+// The day's feeding mode (f0552bd4, Lili 2026-11-11 08:47-08:50 UTC): merüléses, felszíni, or neither; ONE choice for
+// the day (the two exclude each other, Lili 08:50). The eating export prints it as M, F or K under the note row.
+// ---------------------------------------------------------------------------
+
+export const FEEDING_MODES = ["DIVING", "SURFACE", "NONE"] as const;
+
+export const feedingModeSchema = z.object({
+  requestId,
+  clientTimestamp: z.iso.datetime({ offset: true }).optional(),
+  day,
+  mode: z.enum(FEEDING_MODES),
+  reason: reason.optional(),
+});
+
+/** Sets the day's feeding mode. The day rules are the list's (today and open; an admin with a reason otherwise), audited. */
+export async function setFeedingMode(actor: Actor, input: z.infer<typeof feedingModeSchema>, serverNow = new Date()) {
+  if (await prisma.auditEntry.findFirst({ where: { requestId: input.requestId } })) return { replayed: true };
+  const clientTs = input.clientTimestamp ? new Date(input.clientTimestamp) : null;
+  return prisma.$transaction(async (tx) => {
+    const { f, fd } = await facts(tx, actor, input.day, serverNow, clientTs);
+    await enforce(tx, canCreate(f.level, { day: f.d, today: f.today, closed: f.closed }), input.reason);
+    if (fd.feedingMode === input.mode) return { changed: false };
+    await tx.feedingDay.update({ where: { id: fd.id }, data: { feedingMode: input.mode } });
+    await writeAudit(tx, {
+      userId: actor.id,
+      action: "UPDATE",
+      entityType: "FeedingDay",
+      entityId: fd.id,
+      changes: { feedingMode: { before: fd.feedingMode, after: input.mode }, day: { before: input.day, after: input.day } },
+      reason: input.reason ?? null,
+      requestId: input.requestId,
+    });
+    return { changed: true };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // The daily list (EGY-01, T-01, R-3, R-7)
 // ---------------------------------------------------------------------------
 

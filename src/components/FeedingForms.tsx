@@ -233,6 +233,41 @@ export function DayFeeds({
 const scrollToSheet = () =>
   document.querySelector("[data-testid=feeding-sheet]")?.scrollIntoView({ behavior: "smooth", block: "start" });
 
+/** f0552bd4: the labels of the day's feeding mode; the letter is the export's cell (M, F, K). */
+export const FEEDING_MODE_LABEL = {
+  DIVING: "Merüléses etetés (M)",
+  SURFACE: "Felszíni etetés (F)",
+  NONE: "Egyik sem (K)",
+} as const;
+export type FeedingModeValue = keyof typeof FEEDING_MODE_LABEL;
+
+/**
+ * THE DAY'S FEEDING MODE (f0552bd4, Lili 2026-11-11 08:47-08:50 UTC): one choice for the day, at the top of the eating
+ * log. Choosing saves at once (the day rules are the list's; a closed day asks a reason of an admin, as everywhere).
+ */
+export function FeedingModeChoice({ day, mode, editable }: { day: string; mode: FeedingModeValue | null; editable: boolean }) {
+  const { msg, busy, run } = useSend();
+  return (
+    <fieldset className="toolbar" data-testid="feeding-mode">
+      <legend className="section-title">A nap etetése</legend>
+      {(Object.keys(FEEDING_MODE_LABEL) as FeedingModeValue[]).map((m) => (
+        <label key={m} className="check">
+          <input
+            type="radio"
+            name={`feeding-mode-${day}`}
+            checked={mode === m}
+            disabled={!editable || busy}
+            onChange={() => void run("/api/feeding/feeding-mode", { day, mode: m }, "A nap etetése mentve.")}
+          />
+          {FEEDING_MODE_LABEL[m]}
+        </label>
+      ))}
+      {!mode && <span className="hint">Még nincs kiválasztva.</span>}
+      <Msg msg={msg} />
+    </fieldset>
+  );
+}
+
 /**
  * Lili 2026-10-27 12:18 and 12:23 UTC (item 5): one button at the bottom of the day's choice. Ticked animals and feeds, then
  * "Takarmánylap kész" finalizes the list and brings the feeding sheet into view. Once finalized, the same place shows the

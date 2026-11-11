@@ -40,6 +40,8 @@ const GONE = FILL.dark;
 // Lili 2026-11-01 (point 2): the feeding log's rows change colour day by day, and its totals (the SUM row and the SUM/Állat
 // columns) stand out
 export const DAY_BAND = "FFE9F2FB";
+/** f0552bd4: the day's feeding mode in the eating export's "Etetés" row (Lili 2026-11-11 08:50: M, F or K). */
+export const FEEDING_MODE_LETTER = { DIVING: "M", SURFACE: "F", NONE: "K" } as const;
 export const TOTAL_FILL = "FFFFE699";
 
 /**
@@ -321,14 +323,19 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
   const start = dayBounds(f.from).start;
   const end = dayBounds(f.to).end;
   const today = businessDayOf(new Date());
-  const [events, statuses, selected] = await Promise.all([
+  const [events, statuses, selected, modes] = await Promise.all([
     prisma.lifecycleEvent.findMany({ where: { status: "VALID" }, select: { animalId: true, type: true, occurredAt: true } }),
     prisma.eatingStatus.findMany({
       where: { status: "VALID", feedingDay: { businessDay: { gte: dayToDate(f.from), lte: dayToDate(f.to) } } },
       include: { feedingDay: true },
     }),
     listFacts(f.from, f.to),
+    prisma.feedingDay.findMany({
+      where: { businessDay: { gte: dayToDate(f.from), lte: dayToDate(f.to) }, feedingMode: { not: null } },
+      select: { businessDay: true, feedingMode: true },
+    }),
   ]);
+  const modeByDay = new Map(modes.map((m) => [dateToDay(m.businessDay), m.feedingMode]));
   const life = new Map<string, { arrived?: Date; ended?: Date }>();
   for (const e of events) {
     const r = life.get(e.animalId) ?? {};
@@ -427,6 +434,21 @@ export async function buildEatingWorkbook(f: FeedingExcelFilter): Promise<{ buff
     noteRow.getCell(c).alignment = { wrapText: true, vertical: "top" };
     noteRow.getCell(c).font = { bold: false };
   }
+  // f0552bd4 (Lili 2026-11-11): the day's feeding mode, one cell a day, under the note row: M (merüléses), F (felszíni),
+  // K (neither: for the divers a fasting day); empty when the day has no choice
+  const modeRow = ws.getRow(noteRow.number + 1);
+  modeRow.getCell(1).value = "Etetés";
+  ws.mergeCells(modeRow.number, 1, modeRow.number, 4);
+  for (let c = 1; c <= 4; c++) fill(modeRow.getCell(c), FILL.head);
+  modeRow.font = { bold: true };
+  days.forEach((d, i) => {
+    const m = modeByDay.get(d);
+    if (!m) return;
+    const cell = modeRow.getCell(FIRST + i);
+    cell.value = FEEDING_MODE_LETTER[m];
+    cell.alignment = { horizontal: "center" };
+    cell.font = { bold: false };
+  });
   ws.columns.forEach((c, i) => (c.width = i < 4 ? [22, 18, 16, 8][i] : 11.5));
   ws.views = [{ state: "frozen", xSplit: 4, ySplit: 2 }];
   return { buffer: Buffer.from(await wb.xlsx.writeBuffer()), rows: list.length };

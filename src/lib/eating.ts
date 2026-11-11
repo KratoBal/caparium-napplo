@@ -148,7 +148,15 @@ export type EatingRow = {
 };
 
 /** The eating log of one day: the stored statuses and, on an open day, the fasting days to come. */
-export async function eatingDayView(d: string): Promise<{ day: string; listState: string; lock: string; reopened: boolean; rows: EatingRow[] }> {
+export async function eatingDayView(d: string): Promise<{
+  day: string;
+  listState: string;
+  lock: string;
+  reopened: boolean;
+  /** f0552bd4: the day's feeding mode, null when not chosen */
+  feedingMode: "DIVING" | "SURFACE" | "NONE" | null;
+  rows: EatingRow[];
+}> {
   const fd = await prisma.feedingDay.findUnique({
     where: { businessDay: dayToDate(d) },
     include: { journalDay: { include: { reopenings: { where: { reclosedAt: null } } } } },
@@ -173,6 +181,7 @@ export async function eatingDayView(d: string): Promise<{ day: string; listState
     listState: fd?.listState ?? "NOT_FINALIZED",
     lock: fd?.journalDay.state ?? "OPEN",
     reopened: (fd?.journalDay.reopenings.length ?? 0) > 0,
+    feedingMode: fd?.feedingMode ?? null,
     rows,
   };
 }

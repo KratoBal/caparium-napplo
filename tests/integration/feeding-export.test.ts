@@ -6,7 +6,7 @@ import { createLifecycleEvent } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { setEatingStatus } from "@/lib/eating";
 import { buildEatingWorkbook, buildFeedingWorkbook, buildWithdrawalWorkbook, DAY_BAND, DAY_ROW_FILLS, TOTAL_FILL } from "@/lib/exports/feeding-excel";
-import { finalizeList, saveFeedingItem, setSelection } from "@/lib/feeding";
+import { finalizeList, saveFeedingItem, setFeedingMode, setSelection } from "@/lib/feeding";
 import { feedingLog } from "@/lib/feeding-log";
 import { otherLabel } from "@/lib/other-name";
 import { recloseDay } from "@/lib/journal";
@@ -278,10 +278,51 @@ describe("the eating Excel (EVE-07)", () => {
     expect([egy.getCell("G").border?.right?.style, egy.getCell(1).border?.left?.style, egy.getCell(4).border?.right?.style]).toEqual(["thin", "thin", "thin"]);
     expect(() => rowOf(ws, 2, "Április Régi")).toThrow();
     expect(comes).toBeTruthy();
-    // EVE-05, EVE-09: the note row is the last, the medicine note under its day
-    const note = ws.getRow(ws.rowCount);
+    // EVE-05, EVE-09: the note row under the animals, the medicine note under its day; f0552bd4: the "Etetés" row under it,
+    // the last, empty for days without a chosen feeding mode
+    const note = ws.getRow(ws.rowCount - 1);
     expect(note.getCell(1).value).toBe("Megjegyzés");
     expect(note.getCell("E").value).toBe("Teszt Kettő: fél tabletta");
+    const mode = ws.getRow(ws.rowCount);
+    expect([mode.getCell(1).value, mode.getCell("E").value, mode.getCell("F").value]).toEqual(["Etetés", null, null]);
+  });
+
+  /*
+    f0552bd4 (Lili 2026-11-11 08:47-08:50 UTC): ONE feeding mode a day, M (merüléses), F (felszíni) or K (neither), in the
+    "Etetés" row under the note row. WHAT TURNS THIS RED: the row missing or above the note row; a wrong letter; a day without
+    a choice printed as K (a guess); the choice not written by the day's rules, or not audited; an unchanged choice audited.
+  */
+  it("the Etetés row: M, F or K under its day, empty without a choice; set by the day's rules and audited", async () => {
+    const days = ["2026-04-14", "2026-04-15", "2026-04-16", "2026-04-17"];
+    const [m, fs, k] = days;
+    await setFeedingMode(f.aq1, { requestId: rid(), day: m, mode: "DIVING" }, at(m, "09:00"));
+    await setFeedingMode(f.aq1, { requestId: rid(), day: fs, mode: "SURFACE" }, at(fs, "09:00"));
+    await setFeedingMode(f.aq1, { requestId: rid(), day: k, mode: "SURFACE" }, at(k, "09:00"));
+    // a change of mind the same day: the last one stands, both audited
+    const changed = await setFeedingMode(f.aq1, { requestId: rid(), day: k, mode: "NONE" }, at(k, "10:00"));
+    expect(changed).toEqual({ changed: true });
+    // the same choice again: no change, no audit
+    expect(await setFeedingMode(f.aq1, { requestId: rid(), day: k, mode: "NONE" }, at(k, "10:05"))).toEqual({ changed: false });
+    const fd = await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: new Date(`${k}T00:00:00Z`) } });
+    const audits = await prisma.auditEntry.findMany({ where: { entityType: "FeedingDay", entityId: fd.id }, orderBy: { at: "asc" } });
+    expect(audits.map((x) => (x.changes as { feedingMode?: unknown }).feedingMode).filter(Boolean)).toEqual([
+      { before: null, after: "SURFACE" },
+      { before: "SURFACE", after: "NONE" },
+    ]);
+    // an aquarist may not set a past day (the list's rules)
+    await expect(setFeedingMode(f.aq1, { requestId: rid(), day: m, mode: "NONE" }, at(fs, "09:00"))).rejects.toMatchObject({ status: 403 });
+
+    const ws = await sheet((await buildEatingWorkbook({ from: m, to: days[3] })).buffer);
+    const note = ws.getRow(ws.rowCount - 1);
+    const row = ws.getRow(ws.rowCount);
+    expect(note.getCell(1).value).toBe("Megjegyzés");
+    expect([row.getCell(1).value, row.getCell("E").value, row.getCell("F").value, row.getCell("G").value, row.getCell("H").value]).toEqual([
+      "Etetés",
+      "M",
+      "F",
+      "K",
+      null,
+    ]);
   });
 
   // Lili 2026-10-26 (card f67b1a06, item 4): the export follows the admin's order of the animals
@@ -292,7 +333,8 @@ describe("the eating Excel (EVE-07)", () => {
       const out: string[] = [];
       ws.eachRow((r, n) => {
         const name = r.getCell(2).value;
-        if (n > 2 && r.getCell(1).value !== "Megjegyzés" && typeof name === "string" && name) out.push(name);
+        // the two closing rows (the note row, and the feeding mode row of f0552bd4) are not animals
+        if (n > 2 && !["Megjegyzés", "Etetés"].includes(String(r.getCell(1).value)) && typeof name === "string" && name) out.push(name);
       });
       return out;
     };

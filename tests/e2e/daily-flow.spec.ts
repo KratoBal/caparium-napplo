@@ -2512,3 +2512,22 @@ test("the helper figure: dragged inside the screen, its place kept after a reloa
   await page.reload();
   await expect(helper).not.toHaveAttribute("data-placed", "1");
 });
+
+// f0552bd4 (Lili 2026-11-11 08:47-08:50 UTC): ONE feeding mode for the day at the top of the eating log; choosing saves at once,
+// and the choice stands after a reload. WHAT TURNS THIS RED: the choice missing from the page, not saved, two at once, or lost.
+test("eating log: the day's feeding mode is one choice, saved at once, kept after a reload", async ({ page }) => {
+  await login(page, "teszt.akvarista1");
+  await page.goto("/evesi-naplo");
+  const box = page.getByTestId("feeding-mode");
+  await box.getByLabel("Felszíni etetés (F)").check();
+  await expect(box).toContainText("A nap etetése mentve.");
+  await page.reload();
+  await expect(page.getByTestId("feeding-mode").getByLabel("Felszíni etetés (F)")).toBeChecked();
+  await page.getByTestId("feeding-mode").getByLabel("Egyik sem (K)").check();
+  await expect(page.getByTestId("feeding-mode")).toContainText("A nap etetése mentve.");
+  await page.reload();
+  const after = page.getByTestId("feeding-mode");
+  await expect(after.getByLabel("Egyik sem (K)")).toBeChecked();
+  await expect(after.getByLabel("Felszíni etetés (F)")).not.toBeChecked();
+  await expect(after.getByLabel("Merüléses etetés (M)")).not.toBeChecked();
+});
