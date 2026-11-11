@@ -177,6 +177,27 @@ export async function setFeedingMode(actor: Actor, input: z.infer<typeof feeding
   });
 }
 
+/**
+ * Lili 2026-11-11 10:40 UTC (via acrobot 46861): a day whose feeding mode is still empty gets K (NONE) when it is CLOSED,
+ * the automatic close and an admin's close alike; K stays a choice of its own. Only an empty mode is written (the
+ * condition is in the update, so a choice made in the same moment wins), and the write is audited as the system's or the
+ * closing admin's. Days closed before this rule are not back-filled: only a close sets it.
+ */
+export async function defaultFeedingModeAtClose(tx: Tx, feedingDayId: string, actorId: string, requestId: string | null) {
+  const res = await tx.feedingDay.updateMany({ where: { id: feedingDayId, feedingMode: null }, data: { feedingMode: "NONE" } });
+  if (res.count !== 1) return false;
+  await writeAudit(tx, {
+    userId: actorId,
+    action: "UPDATE",
+    entityType: "FeedingDay",
+    entityId: feedingDayId,
+    changes: { feedingMode: { before: null, after: "NONE" } },
+    reason: "Üres etetési mód a nap lezárásakor: K.",
+    requestId,
+  });
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // The daily list (EGY-01, T-01, R-3, R-7)
 // ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { writeAudit } from "./audit";
 import { prisma, SYSTEM_USER_ID } from "./db";
 import { AppError } from "./errors";
-import { ensureFeedingDay, recomputeFasting } from "./feeding";
+import { defaultFeedingModeAtClose, ensureFeedingDay, recomputeFasting } from "./feeding";
 import { BACKFILL_REASON, ensureJournalDay, moduleLevel } from "./master";
 import { requireReason } from "./reasons";
 import type { Actor } from "./measurements";
@@ -60,6 +60,7 @@ export async function runJournalJob(now = new Date()): Promise<JobResult> {
         // the automatic fasting days are born at the close, and only for a finalized list (T-01/2, /4)
         const fd = await ensureFeedingDay(tx, day);
         await recomputeFasting(tx, fd.fd.id, SYSTEM_USER_ID, null, now);
+        await defaultFeedingModeAtClose(tx, fd.fd.id, SYSTEM_USER_ID, null);
       }
       await writeAudit(tx, {
         userId: SYSTEM_USER_ID,
@@ -155,7 +156,10 @@ export async function recloseDay(actor: Actor, input: DayActionInput, now = new 
     // R-2: at the reclose the automatic fasting days are recomputed (they stayed valid while open)
     if (j.kind === "FEEDING") {
       const fd = await tx.feedingDay.findUnique({ where: { journalDayId: j.id } });
-      if (fd) await recomputeFasting(tx, fd.id, actor.id, input.requestId, now);
+      if (fd) {
+        await recomputeFasting(tx, fd.id, actor.id, input.requestId, now);
+        await defaultFeedingModeAtClose(tx, fd.id, actor.id, input.requestId);
+      }
     }
     await writeAudit(tx, {
       userId: actor.id,

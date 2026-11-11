@@ -11,3 +11,11 @@ export type AllAteRow = { animalId: string; selected: boolean; manualStatus: boo
 export function allAteTargets(rows: readonly AllAteRow[], drafts: Readonly<Record<string, { state: string } | undefined>>): string[] {
   return rows.filter((r) => r.selected && !r.manualStatus && !drafts[r.animalId]?.state).map((r) => r.animalId);
 }
+
+/**
+ * Where the button stands (Lili 2026-11-11 10:38 UTC, via acrobot 46859): at the TOP, next to the day picker, because she
+ * presses it first and then corrects the exceptions; the Save button stays at the bottom. The day picker is in the page's
+ * server-rendered toolbar, the button's state in the eating table, so the page leaves an empty slot with this id and the
+ * table renders the button into it. Here, not in the client module: the page cannot import a value from a client module.
+ */
+export const EATING_TOP_ACTIONS_ID = "eating-top-actions";
