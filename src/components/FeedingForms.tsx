@@ -235,11 +235,14 @@ export function DayFeeds({
 const scrollToSheet = () =>
   document.querySelector("[data-testid=feeding-sheet]")?.scrollIntoView({ behavior: "smooth", block: "start" });
 
-/** f0552bd4: the labels of the day's feeding mode; the letter is the export's cell (M, F, K). */
+/**
+ * f0552bd4: the labels of the day's feeding mode; the letter is the export's cell (M, F, K). NONE reads "Koplalónap"
+ * (Lili 2026-11-11 12:07 UTC, via acrobot 47044): for the divers a day with neither is a fasting day; its cell stays K.
+ */
 export const FEEDING_MODE_LABEL = {
   DIVING: "Merüléses etetés (M)",
   SURFACE: "Felszíni etetés (F)",
-  NONE: "Egyik sem (K)",
+  NONE: "Koplalónap (K)",
 } as const;
 export type FeedingModeValue = keyof typeof FEEDING_MODE_LABEL;
 

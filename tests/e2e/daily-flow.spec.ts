@@ -2529,14 +2529,14 @@ test("eating log: the day's feeding mode is one choice, saved at once, kept afte
   // the first choice differs from whatever an earlier attempt left on the day, so it is a change and sends a save
   await page.waitForLoadState("networkidle");
   const diving = page.getByTestId("feeding-mode").getByLabel("Merüléses etetés (M)");
-  await choose((await diving.isChecked()) ? "Egyik sem (K)" : "Merüléses etetés (M)");
+  await choose((await diving.isChecked()) ? "Koplalónap (K)" : "Merüléses etetés (M)");
   await choose("Felszíni etetés (F)");
   await page.reload();
   await expect(page.getByTestId("feeding-mode").getByLabel("Felszíni etetés (F)")).toBeChecked();
-  await choose("Egyik sem (K)");
+  await choose("Koplalónap (K)");
   await page.reload();
   const after = page.getByTestId("feeding-mode");
-  await expect(after.getByLabel("Egyik sem (K)")).toBeChecked();
+  await expect(after.getByLabel("Koplalónap (K)")).toBeChecked();
   await expect(after.getByLabel("Felszíni etetés (F)")).not.toBeChecked();
   await expect(after.getByLabel("Merüléses etetés (M)")).not.toBeChecked();
 });
