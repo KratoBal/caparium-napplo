@@ -2512,3 +2512,73 @@ test("the helper figure: dragged inside the screen, its place kept after a reloa
   await page.reload();
   await expect(helper).not.toHaveAttribute("data-placed", "1");
 });
+
+// f0552bd4 (Lili 2026-11-11 08:47-08:50 UTC): ONE feeding mode for the day at the top of the eating log; choosing saves at once,
+// and the choice stands after a reload. WHAT TURNS THIS RED: the choice missing from the page, not saved, two at once, or lost.
+test("eating log: the day's feeding mode is one choice, saved at once, kept after a reload", async ({ page }) => {
+  await login(page, "teszt.akvarista1");
+  await page.goto("/evesi-naplo");
+  // each choice waits for its own save (a retry finds the day's choice of the earlier attempt, so the text alone proves nothing)
+  const choose = async (label: string) => {
+    await page.waitForLoadState("networkidle"); // hydrated, and the previous save's refresh is over
+    const saved = page.waitForResponse((r) => r.url().endsWith("/api/feeding/feeding-mode") && r.request().method() === "POST");
+    await page.getByTestId("feeding-mode").getByLabel(label).check();
+    expect((await saved).ok()).toBe(true);
+    await expect(page.getByTestId("feeding-mode")).toContainText("A nap etetése mentve.");
+  };
+  // the first choice differs from whatever an earlier attempt left on the day, so it is a change and sends a save
+  await page.waitForLoadState("networkidle");
+  const diving = page.getByTestId("feeding-mode").getByLabel("Merüléses etetés (M)");
+  await choose((await diving.isChecked()) ? "Egyik sem (K)" : "Merüléses etetés (M)");
+  await choose("Felszíni etetés (F)");
+  await page.reload();
+  await expect(page.getByTestId("feeding-mode").getByLabel("Felszíni etetés (F)")).toBeChecked();
+  await choose("Egyik sem (K)");
+  await page.reload();
+  const after = page.getByTestId("feeding-mode");
+  await expect(after.getByLabel("Egyik sem (K)")).toBeChecked();
+  await expect(after.getByLabel("Felszíni etetés (F)")).not.toBeChecked();
+  await expect(after.getByLabel("Merüléses etetés (M)")).not.toBeChecked();
+});
+
+// Lili 2026-11-11 09:14 UTC (msg 1570003887203688529, acrobot 46722): "Mindenki evett" marks the list's empty rows EATEN in one save;
+// a filled row (here one only picked, not saved) keeps its state; on a closed day the button is off. A past day, by an admin:
+// the back-dated case. Its own day per project and per attempt, as the test closes and fills it. WHAT TURNS THIS RED: the picked row
+// overwritten, an empty row left out, nothing saved (lost after the reload), or the button usable on the closed day.
+test("eating log: \"Mindenki evett\" fills the empty rows of the list in one save, keeps a filled one, off on a closed day", async ({ page }, info) => {
+  const day = info.project.name === "tablet" ? (info.retry ? "2026-02-03" : "2026-02-02") : info.retry ? "2026-02-05" : "2026-02-04";
+  page.on("dialog", (dialog) => void (dialog.type() === "prompt" ? dialog.accept("e2e mindenki evett") : dialog.accept()));
+  await login(page, "teszt.admin");
+  await page.goto(`/etetes?nap=${day}`);
+  const sw = page.getByRole("switch", { name: "Nagymedence: mind kijelölve" });
+  await page.waitForLoadState("networkidle");
+  // the selection must be saved before the page is left (CI 0979a3c: a goto right after the click cut it off, an empty list)
+  const selected = page.waitForResponse((r) => r.url().includes("/api/feeding/selection") && r.request().method() === "POST");
+  await sw.check();
+  expect((await selected).ok()).toBe(true);
+  await expect(sw).toBeChecked();
+  await page.goto(`/evesi-naplo?nap=${day}`);
+  await page.waitForLoadState("networkidle");
+  const names = (await page.getByTestId("eating-table").locator("td.eat-name").allTextContents()).map((n) => n.trim());
+  expect(names.length, "the big pool's animals are on the day's list").toBeGreaterThan(1);
+  const [picked, ...rest] = names as [string, ...string[]];
+  const all = page.getByTestId("eating-all-ate");
+  await expect(all).toHaveText(`Mindenki evett (${names.length} sor)`);
+  // closed, with every row still empty: the button is off even for the admin
+  await page.getByTestId("day-status-bottom").getByRole("button", { name: "Nap lezárása" }).click();
+  await expect(page.getByTestId("day-status")).toContainText("Lezárva");
+  await expect(all).toBeDisabled();
+  await expect(all).toHaveText("Mindenki evett");
+  // reopened, it works again
+  await page.getByRole("button", { name: "Nap újranyitása" }).first().click();
+  await expect(page.getByTestId("day-status")).not.toContainText("Lezárva");
+  await page.waitForLoadState("networkidle");
+  await page.getByTestId(`eating-${picked}`).getByLabel(`${picked} evési állapota`).selectOption({ label: "nem evett meg mindent" });
+  await expect(all).toHaveText(`Mindenki evett (${rest.length} sor)`);
+  await all.click();
+  await expect(page.getByTestId("eating-save-result")).toHaveText(`${names.length} sor mentve.`);
+  await page.reload();
+  await expect(page.getByTestId(`state-${picked}`)).toHaveText("nem evett meg mindent");
+  for (const n of rest) await expect(page.getByTestId(`state-${n}`)).toHaveText("evett");
+  await expect(page.getByTestId("eating-all-ate"), "nothing left to fill").toBeDisabled();
+});

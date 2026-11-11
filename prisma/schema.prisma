@@ -1021,6 +1021,14 @@ enum ListState {
   FINALIZED
 }
 
+/// f0552bd4 (Lili 2026-11-11): how the day was fed, one choice for the day. DIVING = merüléses (M), SURFACE = felszíni (F),
+/// NONE = egyik sem (K: for the divers a fasting day).
+enum FeedingMode {
+  DIVING
+  SURFACE
+  NONE
+}
+
 // T-01, R-4: the list state of a day; its lock is the FEEDING JournalDay (one per day, NY-06 default:
 // one common list for the whole Cápárium)
 model FeedingDay {
@@ -1032,6 +1040,8 @@ model FeedingDay {
   finalizedAt   DateTime?  @db.Timestamptz(3)
   /// 6fe63c9b: the day's feeds (the list's second step); empty = not chosen, every active feed is offered
   feedIds       String[]   @default([]) @db.Uuid
+  /// f0552bd4: the day's feeding mode; null = not chosen yet
+  feedingMode   FeedingMode?
   journalDay    JournalDay @relation(fields: [journalDayId], references: [id])
 
   selections FeedingSelection[]

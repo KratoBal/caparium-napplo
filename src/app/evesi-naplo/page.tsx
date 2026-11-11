@@ -1,6 +1,6 @@
 import { DayControls } from "@/components/DayControls";
 import { DayJump, DayNav } from "@/components/DayNav";
-import { EatingTable } from "@/components/FeedingForms";
+import { EatingTable, FeedingModeChoice } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
 import { feedingHelper } from "@/lib/helpers";
 import { helperStockAccess } from "@/lib/helper-access";
@@ -37,6 +37,10 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
         <DayControls kind="FEEDING" day={day} status={lock} isAdmin={isAdmin} />
       </div>
       {eat.reopened && <div className="banner banner-warn">Újranyitva: a koplalónapok a nap újbóli lezárásakor számolódnak újra.</div>}
+      {/* f0552bd4 (Lili 2026-11-11): the day's feeding mode, at the top of the eating log; M, F or K in the export */}
+      <div className="card">
+        <FeedingModeChoice key={day} day={day} mode={eat.feedingMode} editable={editable} />
+      </div>
       <div className="card">
         <h2>Evési állapotok</h2>
         <p className="hint">
