@@ -55,6 +55,13 @@ export function kindOf(entityType: string): ActivityKindKey | null {
 /** Not data entry: who logged in or out. */
 export const EXCLUDED_ACTIONS: readonly AuditAction[] = ["LOGIN", "LOGIN_FAILED", "LOGOUT"];
 
+/**
+ * THE ACTIVE TIME'S GAP (Lili 2026-11-11, task caparium-aktivitas-idosav): a pause between two saves longer than this is not
+ * counted as data entry. One place to change it; the page's and the CSV's header say it.
+ */
+export const ACTIVE_GAP_MINUTES = 30;
+export const ACTIVE_LABEL = `Aktív idő (${ACTIVE_GAP_MINUTES} percnél hosszabb szünet nélkül)`;
+
 /** The longest period the page reads at once (days, both ends counted). */
 export const MAX_ACTIVITY_DAYS = 31;
 
@@ -117,26 +124,57 @@ export type ActivitySummaryRow = {
   last: Date;
   /** The audit rows behind the saves: a save can write several. */
   rows: number;
+  /** The time spent on the saves: each save's own span and the pauses between them up to ACTIVE_GAP_MINUTES (ms). */
+  activeMs: number;
 };
+
+/**
+ * The active time of one person's saves on one day: the saves in time order, each one's span counted once (overlaps
+ * merged), and a pause between two saves only when it is at most ACTIVE_GAP_MINUTES. One lone save is its own span.
+ */
+export function activeMs(spans: readonly { start: Date; end: Date }[]): number {
+  const gap = ACTIVE_GAP_MINUTES * 60_000;
+  let total = 0;
+  let cursor: number | null = null;
+  for (const { start, end } of [...spans].sort((a, b) => a.start.getTime() - b.start.getTime())) {
+    const s = start.getTime();
+    const e = Math.max(end.getTime(), s);
+    if (cursor !== null && s > cursor && s - cursor <= gap) total += s - cursor;
+    const from = cursor === null ? s : Math.max(s, cursor);
+    if (e > from) total += e - from;
+    cursor = cursor === null ? e : Math.max(cursor, e);
+  }
+  return total;
+}
+
+/** "1:05": hours and minutes of a duration, for the page and the CSV. */
+export function formatDuration(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
+}
 
 /** One row per day and user that has a save, newest day first; the cells count saves. */
 export function summarize(saves: readonly ActivitySave[]): ActivitySummaryRow[] {
   const byKey = new Map<string, ActivitySummaryRow>();
+  const spans = new Map<string, { start: Date; end: Date }[]>();
   for (const s of saves) {
     const key = `${s.day}|${s.userId}`;
     // a save's own span: its first and its last row (the rows of one save are in id order)
     const end = s.rows[s.rows.length - 1].at;
     let row = byKey.get(key);
     if (!row) {
-      row = { day: s.day, userId: s.userId, counts: {}, total: 0, first: s.at, last: end, rows: 0 };
+      row = { day: s.day, userId: s.userId, counts: {}, total: 0, first: s.at, last: end, rows: 0, activeMs: 0 };
       byKey.set(key, row);
+      spans.set(key, []);
     }
+    spans.get(key)!.push({ start: s.at, end });
     row.counts[s.kind] = (row.counts[s.kind] ?? 0) + 1;
     row.total += 1;
     row.rows += s.rows.length;
     if (s.at < row.first) row.first = s.at;
     if (end > row.last) row.last = end;
   }
+  for (const [key, row] of byKey) row.activeMs = activeMs(spans.get(key)!);
   return [...byKey.values()].sort((a, b) => (a.day === b.day ? a.userId.localeCompare(b.userId) : a.day < b.day ? 1 : -1));
 }
 
@@ -284,9 +322,9 @@ function csvCell(value: string | number): string {
 export function activityCsv(rows: readonly ActivitySummaryRow[], nameOf: (userId: string) => string): string {
   const kinds = [...ACTIVITY_KINDS.map((k) => ({ key: k.key as ActivityKindKey | "other", label: k.label }))];
   if (rows.some((r) => r.counts.other)) kinds.push({ key: "other", label: "Egyéb" });
-  const head = ["Nap", "Felhasználó", "Első mentés", "Utolsó mentés", "Mentések", "Sorok", ...kinds.map((k) => k.label)];
+  const head = ["Nap", "Felhasználó", "Első mentés", "Utolsó mentés", ACTIVE_LABEL, "Mentések", "Sorok", ...kinds.map((k) => k.label)];
   const lines = rows.map((r) =>
-    [r.day, nameOf(r.userId), localTimeOf(r.first), localTimeOf(r.last), r.total, r.rows, ...kinds.map((k) => r.counts[k.key] ?? 0)]
+    [r.day, nameOf(r.userId), localTimeOf(r.first), localTimeOf(r.last), formatDuration(r.activeMs), r.total, r.rows, ...kinds.map((k) => r.counts[k.key] ?? 0)]
       .map(csvCell)
       .join(";"),
   );

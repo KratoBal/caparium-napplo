@@ -32,11 +32,12 @@ test("an admin sees the day's saves per person and opens one cell", async ({ pag
   // the day's first and last save (task caparium-aktivitas-idosav), and the same summary as a CSV
   await expect(page.getByTestId(`activity-first-${today}-teszt.admin`)).toHaveText(/^\d\d:\d\d$/);
   await expect(page.getByTestId(`activity-last-${today}-teszt.admin`)).toHaveText(/^\d\d:\d\d$/);
+  await expect(page.getByTestId(`activity-active-${today}-teszt.admin`)).toHaveText(/^\d+:\d\d$/);
   const csv = await page.request.get((await page.getByTestId("activity-csv").getAttribute("href"))!);
   expect(csv.status()).toBe(200);
   expect(csv.headers()["content-type"]).toContain("text/csv");
   const text = await csv.text();
-  expect(text).toContain("Nap;Felhasználó;Első mentés;Utolsó mentés;Mentések;Sorok");
+  expect(text).toContain("Nap;Felhasználó;Első mentés;Utolsó mentés;Aktív idő (30 percnél hosszabb szünet nélkül);Mentések;Sorok");
   expect(text).toContain(`${today};Teszt Admin;`);
   await cell.getByRole("link").click();
 
