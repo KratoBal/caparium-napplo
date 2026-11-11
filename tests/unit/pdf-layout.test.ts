@@ -20,7 +20,7 @@ describe("pdfPage().table", () => {
     const colours = strokes.mock.calls.map((c) => c[0]);
     expect(colours.filter((c) => c === "#D9D9D9")).toHaveLength(3); // under each of the three rows, not under the header
     expect(colours.filter((c) => c === "#7F7F7F")).toHaveLength(1); // over the total only
-    const filled = fills.mock.calls.map((c) => c[0]);
+    const filled = fills.mock.calls.map((c) => String(c[0]));
     expect(filled).toContain("#EEF4FA"); // the band
     expect(filled).toContain("#FFF2CC"); // the total, as before
     expect(filled.filter((c) => c === "#EEF4FA")).toHaveLength(1);
