@@ -3,10 +3,13 @@ import { redirect } from "next/navigation";
 import { Shell } from "@/components/Shell";
 import {
   ACTIVITY_KINDS,
+  ACTIVE_LABEL,
+  activityCsvHref,
   activityHref,
   type ActivityKindKey,
   clampPeriod,
   describeSave,
+  formatDuration,
   groupSaves,
   loadActivityRows,
   MAX_ACTIVITY_DAYS,
@@ -99,8 +102,17 @@ export default async function ActivityPage({
         <p className="hint">
           Egy szám egy mentés: ha egy mentés több sort ír (például egy etetés a koplalási napokat is), az egyszer számít, abban
           a fajtában, amire a mentés szólt. A rendszer automatikus lépései és a belépések nem számítanak. Egyszerre legfeljebb{" "}
-          {MAX_ACTIVITY_DAYS} nap látszik. Egy számra kattintva a mentések listája nyílik meg.
+          {MAX_ACTIVITY_DAYS} nap látszik. Egy számra kattintva a mentések listája nyílik meg. Az első és az utolsó mentés a
+          nap első és utolsó rögzítésének ideje; az aktív idő a mentések ideje, a köztük lévő szünetekkel együtt, de a hosszabb szünetek
+          nélkül; a sorok a mentések mögötti naplósorok száma.
         </p>
+        {rows.length > 0 ? (
+          <p>
+            <a className="btn btn-soft" href={activityCsvHref(view)} data-testid="activity-csv" download>
+              Letöltés CSV-ben
+            </a>
+          </p>
+        ) : null}
         {rows.length === 0 ? (
           <p className="hint" data-testid="activity-empty">
             Ebben az időszakban nincs rögzítés.
@@ -112,10 +124,14 @@ export default async function ActivityPage({
                 <tr>
                   <th>Nap</th>
                   <th>Felhasználó</th>
+                  <th>Első mentés</th>
+                  <th>Utolsó mentés</th>
+                  <th>{ACTIVE_LABEL}</th>
                   {columns.map((c) => (
                     <th key={c.key}>{c.label}</th>
                   ))}
                   <th>Összesen</th>
+                  <th>Sorok</th>
                 </tr>
               </thead>
               <tbody>
@@ -125,6 +141,9 @@ export default async function ActivityPage({
                       {formatDay(r.day)} <span className="hint">{weekdayLetter(r.day)}</span>
                     </td>
                     <td>{name(r.userId)}</td>
+                    <td data-testid={`activity-first-${r.day}-${loginOf(r.userId)}`}>{localTimeOf(r.first)}</td>
+                    <td data-testid={`activity-last-${r.day}-${loginOf(r.userId)}`}>{localTimeOf(r.last)}</td>
+                    <td data-testid={`activity-active-${r.day}-${loginOf(r.userId)}`}>{formatDuration(r.activeMs)}</td>
                     {columns.map((c) => {
                       const n = r.counts[c.key];
                       return (
@@ -136,6 +155,7 @@ export default async function ActivityPage({
                     <td>
                       <strong>{r.total}</strong>
                     </td>
+                    <td>{r.rows}</td>
                   </tr>
                 ))}
               </tbody>
