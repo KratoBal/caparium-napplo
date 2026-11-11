@@ -12,7 +12,7 @@
 
 import type { AuditAction } from "@prisma/client";
 import { prisma, SYSTEM_USER_ID } from "./db";
-import { addDays, businessDayOf, resolveLocalDateTime } from "./time";
+import { addDays, businessDayOf, localTimeOf, resolveLocalDateTime } from "./time";
 
 export type ActivityKindKey = "water" | "fridges" | "feeding" | "withdrawal" | "dosing" | "animals" | "settings" | "export" | "eating";
 
@@ -107,20 +107,35 @@ export function groupSaves(rows: readonly ActivityRow[]): ActivitySave[] {
   return saves.sort((a, b) => b.at.getTime() - a.at.getTime());
 }
 
-export type ActivitySummaryRow = { day: string; userId: string; counts: Partial<Record<ActivityKindKey | "other", number>>; total: number };
+export type ActivitySummaryRow = {
+  day: string;
+  userId: string;
+  counts: Partial<Record<ActivityKindKey | "other", number>>;
+  total: number;
+  /** The day's first and last save of the person (Lili 2026-11-11, task caparium-aktivitas-idosav): the span it took. */
+  first: Date;
+  last: Date;
+  /** The audit rows behind the saves: a save can write several. */
+  rows: number;
+};
 
 /** One row per day and user that has a save, newest day first; the cells count saves. */
 export function summarize(saves: readonly ActivitySave[]): ActivitySummaryRow[] {
   const byKey = new Map<string, ActivitySummaryRow>();
   for (const s of saves) {
     const key = `${s.day}|${s.userId}`;
+    // a save's own span: its first and its last row (the rows of one save are in id order)
+    const end = s.rows[s.rows.length - 1].at;
     let row = byKey.get(key);
     if (!row) {
-      row = { day: s.day, userId: s.userId, counts: {}, total: 0 };
+      row = { day: s.day, userId: s.userId, counts: {}, total: 0, first: s.at, last: end, rows: 0 };
       byKey.set(key, row);
     }
     row.counts[s.kind] = (row.counts[s.kind] ?? 0) + 1;
     row.total += 1;
+    row.rows += s.rows.length;
+    if (s.at < row.first) row.first = s.at;
+    if (end > row.last) row.last = end;
   }
   return [...byKey.values()].sort((a, b) => (a.day === b.day ? a.userId.localeCompare(b.userId) : a.day < b.day ? 1 : -1));
 }
@@ -254,4 +269,33 @@ export function activityHref(view: { from: string; to: string; filter?: string }
     if (open.page && open.page > 1) q.set("oldal", String(open.page));
   }
   return `/aktivitas?${q.toString()}${open ? "#reszlet" : ""}`;
+}
+
+/** One CSV cell: quoted when it holds the separator, a quote or a line break. */
+function csvCell(value: string | number): string {
+  const text = String(value);
+  return /[;"\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+/**
+ * The summary as a CSV (task caparium-aktivitas-idosav, Lili 2026-11-11): the same rows and numbers as the page, with the
+ * first and last save's local time. Semicolon-separated with a BOM, so a Hungarian Excel opens it in columns.
+ */
+export function activityCsv(rows: readonly ActivitySummaryRow[], nameOf: (userId: string) => string): string {
+  const kinds = [...ACTIVITY_KINDS.map((k) => ({ key: k.key as ActivityKindKey | "other", label: k.label }))];
+  if (rows.some((r) => r.counts.other)) kinds.push({ key: "other", label: "Egyéb" });
+  const head = ["Nap", "Felhasználó", "Első mentés", "Utolsó mentés", "Mentések", "Sorok", ...kinds.map((k) => k.label)];
+  const lines = rows.map((r) =>
+    [r.day, nameOf(r.userId), localTimeOf(r.first), localTimeOf(r.last), r.total, r.rows, ...kinds.map((k) => r.counts[k.key] ?? 0)]
+      .map(csvCell)
+      .join(";"),
+  );
+  return `\uFEFF${[head.map(csvCell).join(";"), ...lines].join("\r\n")}\r\n`;
+}
+
+/** The CSV download of a view: the same period and filter as the page. */
+export function activityCsvHref(view: { from: string; to: string; filter?: string }): string {
+  const q = new URLSearchParams({ tol: view.from, ig: view.to });
+  if (view.filter) q.set("ember", view.filter);
+  return `/api/aktivitas/csv?${q.toString()}`;
 }
