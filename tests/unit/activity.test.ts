@@ -221,6 +221,12 @@ describe("the CSV of the summary (task caparium-aktivitas-idosav)", () => {
     expect(rest).toBe("");
   });
 
+  it("a name that starts like a formula stays text (an apostrophe in front), a plain one and the numbers are untouched", () => {
+    const saves = groupSaves([row({ requestId: "a", at: new Date("2026-10-29T06:05:00Z") })]);
+    const lines = ["=HYPERLINK(1)", "+36 1 234", "-Lili", "@admin", "Kovács Lili"].map((name) => activityCsv(summarize(saves), () => name).slice(1).split("\r\n")[1].split(";")[1]);
+    expect(lines).toEqual(["'=HYPERLINK(1)", "'+36 1 234", "'-Lili", "'@admin", "Kovács Lili"]);
+  });
+
   it("downloads the view's period and filter", () => {
     expect(activityCsvHref({ from: "2026-10-01", to: "2026-10-31", filter: U2 })).toBe(`/api/aktivitas/csv?tol=2026-10-01&ig=2026-10-31&ember=${U2}`);
     expect(activityCsvHref({ from: "2026-10-01", to: "2026-10-31" })).toBe("/api/aktivitas/csv?tol=2026-10-01&ig=2026-10-31");

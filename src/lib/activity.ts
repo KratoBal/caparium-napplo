@@ -311,7 +311,9 @@ export function activityHref(view: { from: string; to: string; filter?: string }
 
 /** One CSV cell: quoted when it holds the separator, a quote or a line break. */
 function csvCell(value: string | number): string {
-  const text = String(value);
+  // a text that starts like a formula opens as one in Excel (barracuda on #223): an apostrophe keeps it text; numbers are
+  // left as they are, a negative number is no formula
+  const text = typeof value === "string" && /^[=+\-@\t\r]/.test(value) ? `'${value}` : String(value);
   return /[;"\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
