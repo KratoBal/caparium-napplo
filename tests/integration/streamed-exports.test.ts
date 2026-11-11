@@ -52,9 +52,10 @@ describe("the streamed exports' route", () => {
     const rows = ((await lastRun()).changes as { export: { after: { kind: string; rows: number } } }).export.after;
     expect(rows.kind).toBe("EXCEL_FEEDING");
     expect(rows.rows).toBeGreaterThan(0);
-    // three header rows, the data, the SUM row
-    expect(ws.rowCount).toBe(3 + rows.rows + 1);
-    expect(ws.getRow(ws.rowCount).getCell(1).value).toBe("SUM/Takarmány");
+    // three header rows, the data, the SUM row and its kilograms (Lili 2026-11-11)
+    expect(ws.rowCount).toBe(3 + rows.rows + 2);
+    expect(ws.getRow(ws.rowCount - 1).getCell(1).value).toBe("SUM/Takarmány");
+    expect(ws.getRow(ws.rowCount).getCell(1).value).toBe("SUM/Takarmány (kg)");
     expect(ws.views[0]).toMatchObject({ state: "frozen", xSplit: 4, ySplit: 3 });
   });
 
