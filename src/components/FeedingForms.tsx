@@ -6,7 +6,8 @@
 import { DayControls, type DayLock } from "./DayControls";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { allAteTargets } from "@/lib/eating-all-ate";
+import { createPortal } from "react-dom";
+import { EATING_TOP_ACTIONS_ID, allAteTargets } from "@/lib/eating-all-ate";
 import { EAT_LABEL } from "@/lib/eating-labels";
 import { stockHint, type StockInfo } from "@/lib/stock-hint";
 import { formatDay } from "@/lib/time";
@@ -838,6 +839,12 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
   const seen = useRef<Record<string, string>>(Object.fromEntries(rows.map((r) => [r.animalId, serverKey(r)])));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // the result shows where the click was: "Mindenki evett" is at the top, the Save at the bottom
+  const [msgAtTop, setMsgAtTop] = useState(false);
+  // the page's slot next to the day picker; found after mounting (it is the server's markup), so the button appears there
+  // after hydration, and at the top of the table if a page has no slot
+  const [topSlot, setTopSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => setTopSlot(document.getElementById(EATING_TOP_ACTIONS_ID)), []);
   // after a refresh only the rows whose server state changed start again; every other filled-in row keeps its draft
   // (review of #31: a refresh from an invalidation or a partly refused save must not drop the rest)
   useEffect(() => {
@@ -872,6 +879,7 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
     const next = { ...drafts };
     for (const id of allAte) next[id] = { ...(next[id] ?? { vitamin: false, medicine: false, note: "" }), state: "EATEN" };
     setDrafts(next);
+    setMsgAtTop(true);
     void saveAll(rows.filter((r) => changed(r, next)), next);
   }
 
@@ -1012,8 +1020,32 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
   // caparium-hibak-5 (Balázs 2026-10-20 11:32 UTC, msg 1562065965305298957): the log is about who was fed (today's
   // list); everyone else gets the automatic fasting day at the close, nothing to fill in. They stay one click away,
   // folded, for a vitamin or medicine mark on a fasting day.
+  const result = msg && (
+    <span className={msg.ok ? "hint" : "err"} role="status" data-testid="eating-save-result">
+      {msg.text}
+    </span>
+  );
+  const allAteButton = (
+    <button
+      className="btn btn-soft"
+      type="button"
+      disabled={busy || dayClosed || allAte.length === 0}
+      title={dayClosed ? "Lezárt napon nem használható." : undefined}
+      onClick={markAllAte}
+      data-testid="eating-all-ate"
+    >
+      {allAte.length && !dayClosed ? `Mindenki evett (${allAte.length} sor)` : "Mindenki evett"}
+    </button>
+  );
+  const topActions = (
+    <>
+      {allAteButton}
+      {msgAtTop && result}
+    </>
+  );
   return (
     <>
+      {editable && (topSlot ? createPortal(topActions, topSlot) : <div className="toolbar">{topActions}</div>)}
       <div className="table-scroll">
         <table className="log-table eating-log" data-testid="eating-table">
           {head}
@@ -1036,24 +1068,19 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
       )}
       {editable && (
         <div className="toolbar" style={{ marginTop: 12 }}>
-          <button className="btn" type="button" disabled={busy || toSave.length === 0} onClick={() => void saveAll()} data-testid="eating-save-all">
+          <button
+            className="btn"
+            type="button"
+            disabled={busy || toSave.length === 0}
+            onClick={() => {
+              setMsgAtTop(false);
+              void saveAll();
+            }}
+            data-testid="eating-save-all"
+          >
             {toSave.length ? `Mentés (${toSave.length} sor)` : "Mentés"}
           </button>
-          <button
-            className="btn btn-soft"
-            type="button"
-            disabled={busy || dayClosed || allAte.length === 0}
-            title={dayClosed ? "Lezárt napon nem használható." : undefined}
-            onClick={markAllAte}
-            data-testid="eating-all-ate"
-          >
-            {allAte.length && !dayClosed ? `Mindenki evett (${allAte.length} sor)` : "Mindenki evett"}
-          </button>
-          {msg && (
-            <span className={msg.ok ? "hint" : "err"} role="status" data-testid="eating-save-result">
-              {msg.text}
-            </span>
-          )}
+          {!msgAtTop && result}
         </div>
       )}
       {lock && <DayControls {...lock} bottom unsaved={editable ? toSave.length : 0} />}

@@ -5,6 +5,7 @@ import { Shell } from "@/components/Shell";
 import { feedingHelper } from "@/lib/helpers";
 import { helperStockAccess } from "@/lib/helper-access";
 import { eatingDayView } from "@/lib/eating";
+import { EATING_TOP_ACTIONS_ID } from "@/lib/eating-all-ate";
 import { feedingDayView } from "@/lib/feeding";
 import { dayStatus } from "@/lib/journal";
 import { requireModuleRead } from "@/lib/session";
@@ -30,6 +31,8 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
         {/* Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 4): the jump calendar, as on the water measurement
             and withdrawal pages: the chosen day opens, and jumping back to today opens today's */}
         <DayJump path="/evesi-naplo" day={day} today={today} />
+        {/* Lili 2026-11-11 (acrobot 46859): "Mindenki evett" next to the day picker; the eating table renders into this slot */}
+        <span id={EATING_TOP_ACTIONS_ID} style={{ display: "contents" }} />
         <span className="spacer" />
         <span className={`badge ${eat.listState === "FINALIZED" ? "badge-valid" : "badge-pending"}`}>
           {eat.listState === "FINALIZED" ? "Lista kész" : "Lista nincs kész"}

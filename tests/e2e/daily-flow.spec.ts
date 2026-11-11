@@ -2564,6 +2564,12 @@ test("eating log: \"Mindenki evett\" fills the empty rows of the list in one sav
   const [picked, ...rest] = names as [string, ...string[]];
   const all = page.getByTestId("eating-all-ate");
   await expect(all).toHaveText(`Mindenki evett (${names.length} sor)`);
+  // Lili 2026-11-11 10:38 UTC (acrobot 46859): the button is at the top, next to the day picker (she presses it first, then
+  // corrects the exceptions); the Save button stays at the bottom, under the list
+  await expect(page.locator("#eating-top-actions").getByTestId("eating-all-ate")).toBeVisible();
+  const tableTop = (await page.getByTestId("eating-table").boundingBox())!.y;
+  expect((await all.boundingBox())!.y).toBeLessThan(tableTop);
+  expect((await page.getByTestId("eating-save-all").boundingBox())!.y).toBeGreaterThan(tableTop);
   // closed, with every row still empty: the button is off even for the admin
   await page.getByTestId("day-status-bottom").getByRole("button", { name: "Nap lezárása" }).click();
   await expect(page.getByTestId("day-status")).toContainText("Lezárva");

@@ -3,13 +3,13 @@
 import ExcelJS from "exceljs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createLifecycleEvent } from "@/lib/animals";
-import { prisma } from "@/lib/db";
+import { prisma, SYSTEM_USER_ID } from "@/lib/db";
 import { setEatingStatus } from "@/lib/eating";
 import { buildEatingWorkbook, buildFeedingWorkbook, buildWithdrawalWorkbook, DAY_BAND, DAY_ROW_FILLS, TOTAL_FILL } from "@/lib/exports/feeding-excel";
 import { finalizeList, saveFeedingItem, setFeedingMode, setSelection } from "@/lib/feeding";
 import { feedingLog } from "@/lib/feeding-log";
 import { otherLabel } from "@/lib/other-name";
-import { recloseDay } from "@/lib/journal";
+import { recloseDay, runJournalJob } from "@/lib/journal";
 import { EXCEL_DATE_FORMAT } from "@/lib/time";
 import { fixtures, rid } from "./fixtures";
 
@@ -279,12 +279,12 @@ describe("the eating Excel (EVE-07)", () => {
     expect(() => rowOf(ws, 2, "Április Régi")).toThrow();
     expect(comes).toBeTruthy();
     // EVE-05, EVE-09: the note row under the animals, the medicine note under its day; f0552bd4: the "Etetés" row under it,
-    // the last, empty for days without a chosen feeding mode
+    // the last. 04-07 was closed with no choice, so it got K at the close (Lili 2026-11-11 10:40); the open 04-08 is empty
     const note = ws.getRow(ws.rowCount - 1);
     expect(note.getCell(1).value).toBe("Megjegyzés");
     expect(note.getCell("E").value).toBe("Teszt Kettő: fél tabletta");
     const mode = ws.getRow(ws.rowCount);
-    expect([mode.getCell(1).value, mode.getCell("E").value, mode.getCell("F").value]).toEqual(["Etetés", null, null]);
+    expect([mode.getCell(1).value, mode.getCell("E").value, mode.getCell("F").value]).toEqual(["Etetés", "K", null]);
   });
 
   /*
@@ -323,6 +323,47 @@ describe("the eating Excel (EVE-07)", () => {
       "K",
       null,
     ]);
+  });
+
+  /*
+    Lili 2026-11-11 10:40 UTC (acrobot 46861): a day whose feeding mode is empty gets K when it is closed, by the automatic
+    close or by an admin; K stays a choice. WHAT TURNS THIS RED: a chosen mode overwritten at the close; an empty day left
+    empty after its close; the K written without an audit row or under another author; a day closed BEFORE the rule
+    back-filled by a later run of the job. The days are in 2018: the job closes every open day before its "today", and no
+    other spec of this file has one there.
+  */
+  it("an empty feeding mode becomes K at the close (automatic and by hand), a chosen one stays, an earlier closed day is not back-filled", async () => {
+    const [d0, d1, d2, d3, d4] = ["2018-03-01", "2018-03-02", "2018-03-03", "2018-03-04", "2018-03-05"];
+    const modeOf = async (d: string) =>
+      (await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: new Date(`${d}T00:00:00Z`) } })).feedingMode;
+
+    // d0: a day closed before the rule existed (its lock set closed directly), its mode empty
+    await runJournalJob(at(d0, "09:00"));
+    await prisma.journalDay.updateMany({ where: { kind: "FEEDING", businessDay: new Date(`${d0}T00:00:00Z`) }, data: { state: "CLOSED" } });
+
+    await runJournalJob(at(d1, "09:00"));
+    await runJournalJob(at(d2, "09:00")); // closes d1, empty
+    await setFeedingMode(f.aq1, { requestId: rid(), day: d2, mode: "SURFACE" }, at(d2, "10:00"));
+    await runJournalJob(at(d3, "09:00")); // closes d2, chosen
+    expect([await modeOf(d0), await modeOf(d1), await modeOf(d2)]).toEqual([null, "NONE", "SURFACE"]);
+
+    const fd1 = await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: new Date(`${d1}T00:00:00Z`) } });
+    const auto = await prisma.auditEntry.findMany({ where: { entityType: "FeedingDay", entityId: fd1.id } });
+    expect(auto.map((x) => [x.userId, (x.changes as { feedingMode?: unknown }).feedingMode])).toEqual([
+      [SYSTEM_USER_ID, { before: null, after: "NONE" }],
+    ]);
+
+    // an admin's close of an open day with no choice: K, audited as the admin
+    const closeBy = rid();
+    await recloseDay(f.admin, { requestId: closeBy, kind: "FEEDING", day: d3 }, at(d3, "20:00"));
+    expect(await modeOf(d3)).toBe("NONE");
+    const fd3 = await prisma.feedingDay.findUniqueOrThrow({ where: { businessDay: new Date(`${d3}T00:00:00Z`) } });
+    const byHand = await prisma.auditEntry.findMany({ where: { entityType: "FeedingDay", entityId: fd3.id } });
+    expect(byHand.map((x) => [x.userId, x.requestId])).toEqual([[f.admin.id, closeBy]]);
+
+    // a later run: the day closed before the rule stays empty
+    await runJournalJob(at(d4, "09:00"));
+    expect(await modeOf(d0)).toBe(null);
   });
 
   // Lili 2026-10-26 (card f67b1a06, item 4): the export follows the admin's order of the animals
