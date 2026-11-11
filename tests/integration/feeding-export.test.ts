@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createLifecycleEvent } from "@/lib/animals";
 import { prisma, SYSTEM_USER_ID } from "@/lib/db";
 import { setEatingStatus } from "@/lib/eating";
-import { buildEatingWorkbook, buildFeedingWorkbook, buildWithdrawalWorkbook, DAY_BAND, DAY_ROW_FILLS, TOTAL_FILL } from "@/lib/exports/feeding-excel";
+import { buildEatingWorkbook, buildFeedingWorkbook, buildWithdrawalWorkbook, DAY_BAND, DAY_ROW_FILLS, KG_FMT, TOTAL_FILL } from "@/lib/exports/feeding-excel";
 import { finalizeList, saveFeedingItem, setFeedingMode, setSelection } from "@/lib/feeding";
 import { feedingLog } from "@/lib/feeding-log";
 import { otherLabel } from "@/lib/other-name";
@@ -112,8 +112,8 @@ describe("the feeding Excel (EGY-10, D-30)", () => {
     expect([fillOf(egy.getCell(colOf(ws, 1, "Teszt hal"))), fillOf(egy.getCell(lit))]).toEqual(["FFF2F2F2", null]);
     const group = rowOf(ws, 4, "Teszt csoport (csoport)");
     expect(val(group.getCell(colOf(ws, 1, "Teszt kagyló")))).toBe(300);
-    // EGY-11: the SUM row is the last one
-    const last = ws.getRow(ws.rowCount);
+    // EGY-11: the SUM row under every recipient; under it only its kilograms (Lili 2026-11-11)
+    const last = ws.getRow(ws.rowCount - 1);
     expect(last.getCell(1).value).toBe("SUM/Takarmány");
     expect(val(last.getCell(lit))).toBe(6);
     expect(val(last.getCell(gSum))).toBe(62.5 + 1000 + 300);
@@ -122,6 +122,25 @@ describe("the feeding Excel (EGY-10, D-30)", () => {
     expect([fillOf(egy.getCell(gSum)), fillOf(ws.getRow(1).getCell(gSum)), egy.getCell(gSum).font?.bold]).toEqual([TOTAL_FILL, TOTAL_FILL, true]);
     // one day: no band
     expect(fillOf(egy.getCell(4))).toBeNull();
+
+    // task caparium-kimutatas-excel-formazas (Lili 2026-11-11): the SUM row closed off by a line above; the grams in kilograms
+    // under it (2 decimals), only on the gram columns, the pieces' column empty; a SUM/Állat kg column on the right
+    expect(last.getCell(lit).border?.top?.style).toBe("medium");
+    const kg = ws.getRow(ws.rowCount);
+    expect(kg.getCell(1).value).toBe("SUM/Takarmány (kg)");
+    expect(val(kg.getCell(gSum))).toBe(1.36); // 1362.5 g
+    expect(val(kg.getCell(colOf(ws, 1, "Teszt hal")))).toBe(1); // 1000 g
+    expect([kg.getCell(lit).value, kg.getCell(gSum).numFmt]).toEqual([null, KG_FMT]);
+    // the kg column: the SUM/Állat whose unit row says kg (one SUM/Állat per unit before it)
+    let kgCol = 0;
+    ws.getRow(1).eachCell((c, n) => {
+      if (c.value === "SUM/Állat" && ws.getRow(2).getCell(n).value === "kg") kgCol = n;
+    });
+    expect(kgCol).toBe(ws.columnCount);
+    expect(val(egy.getCell(kgCol))).toBe(0.06); // 62.5 g
+    // thousands grouped, a fraction kept, and a zero shown empty
+    expect(rowOf(ws, 4, "Teszt Három").getCell(colOf(ws, 1, "Teszt hal")).numFmt).toBe("#,##0;-#,##0;");
+    expect(egy.getCell(lit + 1).numFmt).toBe("#,##0.0##;-#,##0.0##;");
   });
 
   it("the rows change colour day by day (point 2): every other day's rows in the pale band, an empty feed cell keeps its grey", async () => {

@@ -2,7 +2,7 @@
 import ExcelJS from "exceljs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
-import { buildEatingWorkbook, buildReportWorkbook, WEEK_FILLS } from "@/lib/exports/feeding-excel";
+import { buildEatingWorkbook, buildReportWorkbook, DAY_BAND, KG_FMT, TOTAL_FILL, WEEK_FILLS } from "@/lib/exports/feeding-excel";
 import { saveFeedingItem, setSelection } from "@/lib/feeding";
 import { EXCEL_DATE_FORMAT } from "@/lib/time";
 import { fixtures, rid } from "./fixtures";
@@ -46,7 +46,28 @@ describe("the report Excel (EGY-13)", () => {
     const who = wb.getWorksheet("Kinek")!;
     const labels: unknown[] = [];
     who.eachRow((r, n) => n > 1 && labels.push(r.getCell(1).value));
-    expect(labels).toEqual(["Teszt csoport (csoport)", "Teszt Egy", "Összesen"]);
+    expect(labels).toEqual(["Teszt csoport (csoport)", "Teszt Egy", "Összesen", "Összesen (kg)"]);
+  });
+
+  // task caparium-kimutatas-excel-formazas (Lili 2026-11-11): the total stands out with a line above it, its grams in kilograms
+  // under it (the pieces' columns empty), thousands grouped, and on the days' sheet every other day in the pale band
+  it("the total stands out, its grams also in kilograms, the days alternate", async () => {
+    const wb = await load((await buildReportWorkbook({ from: "2026-11-02", to: "2026-11-03", poolId: null, animalId: null })).buffer);
+    const day = wb.getWorksheet("Napokra bontva")!;
+    const total = day.getRow(4);
+    const fillOf = (c: ExcelJS.Cell) => (c.fill as ExcelJS.FillPattern | undefined)?.fgColor?.argb ?? null;
+    expect([fillOf(total.getCell(1)), total.getCell(2).border?.top?.style, total.font?.bold]).toEqual([TOTAL_FILL, "medium", true]);
+    const kg = day.getRow(5);
+    expect(kg.getCell(1).value).toBe("Összesen (kg)");
+    const cell = (c: number) => {
+      const v = kg.getCell(c).value;
+      return v && typeof v === "object" && "result" in v ? v.result : v;
+    };
+    // Litopenaeus (db), Litopenaeus (g), Teszt hal (g), Összesen (db), Összesen (g)
+    expect([2, 3, 4, 5, 6].map(cell)).toEqual([null, 0.04, 0.3, null, 0.34]);
+    expect(kg.getCell(6).numFmt).toBe(KG_FMT);
+    expect([fillOf(day.getRow(2).getCell(1)), fillOf(day.getRow(3).getCell(1))]).toEqual([null, DAY_BAND]);
+    expect(day.getRow(2).getCell(4).numFmt).toBe("#,##0;-#,##0;");
   });
 
   it("filtered by animal: its group's item comes, but apart, never in the animal's own total (R-8, review of #17)", async () => {

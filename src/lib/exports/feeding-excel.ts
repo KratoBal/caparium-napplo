@@ -44,6 +44,20 @@ export const DAY_BAND = "FFE9F2FB";
 export const FEEDING_MODE_LETTER = { DIVING: "M", SURFACE: "F", NONE: "K" } as const;
 export const TOTAL_FILL = "FFFFE699";
 
+/*
+  Lili 2026-11-11 (task caparium-kimutatas-excel-formazas, card 63a11e0a): the reports' Excel readable. Numbers in thousands
+  groups; a zero shows empty, as an empty cell does (the format's third section is empty); the SUM row closed off by a line
+  above it, and the grams also in kilograms (2 decimals), under the SUM row and in a SUM/Állat kg column.
+*/
+export function numFmtOf(value: number): string {
+  return Number.isInteger(value) ? "#,##0;-#,##0;" : "#,##0.0##;-#,##0.0##;";
+}
+export const KG_FMT = "#,##0.00;-#,##0.00;";
+const TOTAL_LINE = { style: "medium" as const, color: { argb: "FF7F6000" } };
+const round2 = (x: number) => Math.round(x * 100) / 100;
+/** The unit the kilograms are counted from: only grams are converted (pieces and millilitres are not). */
+export const GRAM = "g";
+
 /**
  * EVE-08: the fill of a day's header cell, alternating by calendar week (Monday to Sunday). Lili 2026-11-01 (point 3): the two
  * weeks were too alike (pale blue, pale grey); now a clear blue and a clear peach, and the day-letter row under them the same
@@ -215,7 +229,13 @@ export async function feedingWorkbook(f: FeedingExcelFilter): Promise<StreamedWo
   // SUM/Állat per unit
   const FIRST = 6;
   const sumCol = (k: number) => FIRST + cols.length + k;
-  const last = sumCol(sumUnits.length - 1);
+  // the row's grams also in kilograms, right of the per-unit totals (Lili 2026-11-11)
+  const gramSum = sumUnits.indexOf(GRAM);
+  const kgCol = gramSum >= 0 ? sumCol(sumUnits.length) : 0;
+  const last = kgCol || sumCol(sumUnits.length - 1);
+  /** The columns counted in grams (a feed's g column and the g SUM/Állat): the kg row converts these. */
+  const isGram = (c: number) =>
+    c >= FIRST && (c < FIRST + cols.length ? cols[c - FIRST].unit === GRAM : c === sumCol(gramSum) && gramSum >= 0);
 
   const dayIndex = new Map(days.map((d, i) => [d, i]));
   const write = async (out: Writable) => {
@@ -244,6 +264,10 @@ export async function feedingWorkbook(f: FeedingExcelFilter): Promise<StreamedWo
       r1.getCell(sumCol(k)).value = "SUM/Állat";
       r2.getCell(sumCol(k)).value = u;
     });
+    if (kgCol) {
+      r1.getCell(kgCol).value = "SUM/Állat";
+      r2.getCell(kgCol).value = "kg";
+    }
     r3.getCell(1).value = "Dátum";
     r3.getCell(2).value = "Nap";
     r3.getCell(3).value = "Állatfaj";
@@ -255,6 +279,7 @@ export async function feedingWorkbook(f: FeedingExcelFilter): Promise<StreamedWo
     }
     // the totals' heads stand out like their cells
     sumUnits.forEach((_, k) => [r1, r2].forEach((r) => fill(r.getCell(sumCol(k)), TOTAL_FILL)));
+    if (kgCol) [r1, r2].forEach((r) => fill(r.getCell(kgCol), TOTAL_FILL));
     r1.font = { bold: true };
     r3.font = { bold: true };
     r3.commit();
@@ -269,7 +294,10 @@ export async function feedingWorkbook(f: FeedingExcelFilter): Promise<StreamedWo
       r.getCell(2).value = weekdayName(row.day);
       r.getCell(3).value = row.species;
       r.getCell(4).value = row.name;
-      for (const [i, v] of row.values) r.getCell(FIRST + i).value = v;
+      for (const [i, v] of row.values) {
+        r.getCell(FIRST + i).value = v;
+        r.getCell(FIRST + i).numFmt = numFmtOf(v);
+      }
       for (const i of row.ticks) if (!row.values.has(i)) r.getCell(FIRST + i).value = GIVEN;
       // EGY-05: what the animal did not get that day stays empty and coloured
       for (let c = FIRST; c < FIRST + cols.length; c++) {
@@ -280,9 +308,17 @@ export async function feedingWorkbook(f: FeedingExcelFilter): Promise<StreamedWo
         const members = cols.map((c, i) => (c.unit === u ? FIRST + i : 0)).filter(Boolean);
         const result = members.reduce((s, c) => s + (typeof r.getCell(c).value === "number" ? (r.getCell(c).value as number) : 0), 0);
         r.getCell(sumCol(k)).value = { formula: `SUM(${members.map((c) => `${colLetter(c)}${r.number}`).join(",")})`, result };
+        r.getCell(sumCol(k)).numFmt = numFmtOf(result);
         fill(r.getCell(sumCol(k)), TOTAL_FILL);
         r.getCell(sumCol(k)).font = { bold: true };
       });
+      if (kgCol) {
+        const grams = r.getCell(sumCol(gramSum)).value as { result: number };
+        r.getCell(kgCol).value = { formula: `${colLetter(sumCol(gramSum))}${r.number}/1000`, result: round2(grams.result / 1000) };
+        r.getCell(kgCol).numFmt = KG_FMT;
+        fill(r.getCell(kgCol), TOTAL_FILL);
+        r.getCell(kgCol).font = { bold: true };
+      }
       // point 2: every other day's rows in a pale band (an empty feed cell keeps its own grey, EGY-05)
       if ((dayIndex.get(row.day) ?? 0) % 2 === 1) {
         for (let c = 1; c < FIRST + cols.length; c++) if (!r.getCell(c).fill || c < FIRST) fill(r.getCell(c), DAY_BAND);
@@ -296,15 +332,36 @@ export async function feedingWorkbook(f: FeedingExcelFilter): Promise<StreamedWo
       if ((n + 1) % PACE_ROWS === 0) await pace(out, ws);
     }
 
-    // EGY-11: the SUM row is always the last, under every recipient
+    // EGY-11: the SUM row under every recipient, closed off by a line above it (Lili 2026-11-11); its grams in kilograms
+    // in the one row under it, the last of the sheet
     const sumRow = ws.getRow(firstData + sorted.length);
     sumRow.getCell(1).value = "SUM/Takarmány";
     ws.mergeCells(sumRow.number, 1, sumRow.number, 4);
-    for (let c = 1; c <= last; c++) fill(sumRow.getCell(c), TOTAL_FILL);
+    for (let c = 1; c <= last; c++) {
+      fill(sumRow.getCell(c), TOTAL_FILL);
+      sumRow.getCell(c).border = { top: TOTAL_LINE };
+    }
     sumRow.font = { bold: true };
     for (let c = FIRST; c <= last; c++) {
       const result = totals.get(c) ?? 0;
       sumRow.getCell(c).value = sorted.length ? { formula: `SUM(${colLetter(c)}${firstData}:${colLetter(c)}${sumRow.number - 1})`, result } : 0;
+      sumRow.getCell(c).numFmt = c === kgCol ? KG_FMT : numFmtOf(result);
+    }
+    sumRow.commit();
+    if (gramSum >= 0) {
+      const kgRow = ws.getRow(sumRow.number + 1);
+      kgRow.getCell(1).value = "SUM/Takarmány (kg)";
+      ws.mergeCells(kgRow.number, 1, kgRow.number, 4);
+      for (let c = 1; c <= last; c++) fill(kgRow.getCell(c), TOTAL_FILL);
+      kgRow.font = { bold: true, italic: true };
+      // only the gram columns: a piece is not a kilogram, and the kg column is one already
+      for (let c = FIRST; c <= last; c++) {
+        if (!isGram(c)) continue;
+        const grams = totals.get(c) ?? 0;
+        if (!grams) continue;
+        kgRow.getCell(c).value = { formula: `${colLetter(c)}${sumRow.number}/1000`, result: round2(grams / 1000) };
+        kgRow.getCell(c).numFmt = KG_FMT;
+      }
     }
     ws.commit();
     await finish(wb, out);
@@ -537,10 +594,12 @@ export async function buildWithdrawalWorkbook(f: FeedingExcelFilter): Promise<{ 
       const r = sw.getRow(at + 2 + i);
       r.getCell(1).value = name;
       r.getCell(2).value = round3(s.g);
+      r.getCell(2).numFmt = numFmtOf(round3(s.g));
       // ExcelJS drops a formula's 0 result from the file, and a viewer that does not recalculate shows an empty cell: a plain 0 then
       r.getCell(3).value = s.g ? { formula: `B${r.number}/1000`, result: round3(s.g / 1000) } : 0;
       r.getCell(3).numFmt = "0.000";
       if (anyPieces) r.getCell(4).value = s.db || null;
+      if (anyPieces && s.db) r.getCell(4).numFmt = numFmtOf(s.db);
     });
     const first = at + 2;
     const lastFeed = first + feeds.length - 1;
@@ -552,7 +611,12 @@ export async function buildWithdrawalWorkbook(f: FeedingExcelFilter): Promise<{ 
     total.getCell(3).numFmt = "0.000";
     const pieces = feeds.reduce((a, [, s]) => a + s.db, 0);
     if (anyPieces) total.getCell(4).value = pieces ? { formula: `SUM(D${first}:D${lastFeed})`, result: pieces } : 0;
-    for (let c = 1; c <= heads.length; c++) fill(total.getCell(c), TOTAL_FILL);
+    for (let c = 1; c <= heads.length; c++) {
+      fill(total.getCell(c), TOTAL_FILL);
+      total.getCell(c).border = { top: TOTAL_LINE };
+    }
+    total.getCell(2).numFmt = numFmtOf(round3(g));
+    if (anyPieces) total.getCell(4).numFmt = numFmtOf(pieces);
     total.font = { bold: true };
     if (g > 0) {
       pies.push({
@@ -591,7 +655,7 @@ export async function buildReportWorkbook(f: { from: string; to: string; poolId:
   const wb = new ExcelJS.Workbook();
   wb.creator = "Cápárium nAPPló";
   wb.created = new Date();
-  const sheet = (name: string, first: string, lines: ReportLine[]) => {
+  const sheet = (name: string, first: string, lines: ReportLine[], byDay = false) => {
     const ws = wb.addWorksheet(name);
     const header = ws.addRow([
       first,
@@ -601,14 +665,44 @@ export async function buildReportWorkbook(f: { from: string; to: string; poolId:
     ]);
     header.font = { bold: true };
     header.eachCell((c) => fill(c, FILL.head));
-    for (const l of [...lines, r.total]) {
-      ws.addRow([l.label, ...r.columns.map((c) => l.cells[c.key] ?? null), ...units.map((u) => l.totals[u] ?? null), ...groupUnits.map((u) => l.groupTotals[u] ?? null)]);
+    // the unit of every value column, as its header names it: the kg row converts the gram ones
+    const unitOf = [...r.columns.map((c) => c.unit), ...units, ...groupUnits];
+    const width = 1 + unitOf.length;
+    const numbers = (row: ExcelJS.Row) => {
+      for (let c = 2; c <= width; c++) {
+        const v = row.getCell(c).value;
+        if (typeof v === "number") row.getCell(c).numFmt = numFmtOf(v);
+      }
+    };
+    for (const [n, l] of lines.entries()) {
+      const row = ws.addRow([l.label, ...r.columns.map((c) => l.cells[c.key] ?? null), ...units.map((u) => l.totals[u] ?? null), ...groupUnits.map((u) => l.groupTotals[u] ?? null)]);
+      numbers(row);
+      // one day a row: every other day in the pale band, so the change of day shows (the recipients' sheet has no days)
+      if (byDay && n % 2 === 1) for (let c = 1; c <= width; c++) fill(row.getCell(c), DAY_BAND);
     }
-    ws.getRow(ws.rowCount).font = { bold: true };
+    // the total: filled, bold, a line above it; its grams in kilograms in the row under it
+    const total = ws.addRow([r.total.label, ...r.columns.map((c) => r.total.cells[c.key] ?? null), ...units.map((u) => r.total.totals[u] ?? null), ...groupUnits.map((u) => r.total.groupTotals[u] ?? null)]);
+    numbers(total);
+    total.font = { bold: true };
+    for (let c = 1; c <= width; c++) {
+      fill(total.getCell(c), TOTAL_FILL);
+      total.getCell(c).border = { top: TOTAL_LINE };
+    }
+    if (unitOf.includes(GRAM)) {
+      const kg = ws.addRow([`${r.total.label} (kg)`]);
+      kg.font = { bold: true, italic: true };
+      for (let c = 1; c <= width; c++) fill(kg.getCell(c), TOTAL_FILL);
+      unitOf.forEach((u, i) => {
+        const grams = total.getCell(i + 2).value;
+        if (u !== GRAM || typeof grams !== "number" || !grams) return;
+        kg.getCell(i + 2).value = { formula: `${colLetter(i + 2)}${total.number}/1000`, result: round2(grams / 1000) };
+        kg.getCell(i + 2).numFmt = KG_FMT;
+      });
+    }
     ws.columns.forEach((c, i) => (c.width = i === 0 ? 24 : 16));
     ws.views = [{ state: "frozen", xSplit: 1, ySplit: 1 }];
   };
-  sheet("Napokra bontva", "Nap", r.byDay);
+  sheet("Napokra bontva", "Nap", r.byDay, true);
   sheet("Kinek", "Állat vagy csoport", r.byRecipient);
   return { buffer: Buffer.from(await wb.xlsx.writeBuffer()), rows: r.byDay.length };
 }
