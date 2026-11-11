@@ -2551,7 +2551,11 @@ test("eating log: \"Mindenki evett\" fills the empty rows of the list in one sav
   await login(page, "teszt.admin");
   await page.goto(`/etetes?nap=${day}`);
   const sw = page.getByRole("switch", { name: "Nagymedence: mind kijelölve" });
+  await page.waitForLoadState("networkidle");
+  // the selection must be saved before the page is left (CI 0979a3c: a goto right after the click cut it off, an empty list)
+  const selected = page.waitForResponse((r) => r.url().includes("/api/feeding/selection") && r.request().method() === "POST");
   await sw.check();
+  expect((await selected).ok()).toBe(true);
   await expect(sw).toBeChecked();
   await page.goto(`/evesi-naplo?nap=${day}`);
   await page.waitForLoadState("networkidle");
