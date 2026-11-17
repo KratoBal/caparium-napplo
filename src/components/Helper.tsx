@@ -276,31 +276,33 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
       )}
       {open && (
         <div className="helper-bubble" role="dialog" aria-label={`${figure.name} segítő`}>
-          {answer && (
-            <p className="helper-answer" data-testid="helper-answer">
-              {answer}
-            </p>
-          )}
-          <div className="helper-qs">
-            {data.questions.map((x) => (
-              <button key={x.q} className="btn btn-soft" type="button" onClick={() => setAnswer(x.a)}>
-                {x.q}
-              </button>
-            ))}
-            {data.perAnimal && data.perAnimal.length > 0 && (
-              <span className="helper-animal">
-                <select className="input" value={animal} onChange={(e) => setAnimal(e.target.value)} aria-label="Melyik állat?">
-                  {data.perAnimal.map((p) => (
-                    <option key={p.name} value={p.name}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-                <button className="btn btn-soft" type="button" onClick={() => setAnswer(data.perAnimal!.find((p) => p.name === animal)?.a ?? null)}>
-                  Mit kapott ma?
-                </button>
-              </span>
+          <div className="helper-scroll">
+            {answer && (
+              <p className="helper-answer" data-testid="helper-answer">
+                {answer}
+              </p>
             )}
+            <div className="helper-qs">
+              {data.questions.map((x) => (
+                <button key={x.q} className="btn btn-soft" type="button" onClick={() => setAnswer(x.a)}>
+                  {x.q}
+                </button>
+              ))}
+              {data.perAnimal && data.perAnimal.length > 0 && (
+                <span className="helper-animal">
+                  <select className="input" value={animal} onChange={(e) => setAnimal(e.target.value)} aria-label="Melyik állat?">
+                    {data.perAnimal.map((p) => (
+                      <option key={p.name} value={p.name}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button className="btn btn-soft" type="button" onClick={() => setAnswer(data.perAnimal!.find((p) => p.name === animal)?.a ?? null)}>
+                    Mit kapott ma?
+                  </button>
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}
