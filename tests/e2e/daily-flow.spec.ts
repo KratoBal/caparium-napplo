@@ -2745,6 +2745,7 @@ test("a page whose scripts never run says so; a page that hydrated shows no such
   await page.reload();
   await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
   await expect(page.getByTestId("hydration-failed")).toHaveCount(0);
+});
 
 // MERES (card 51426546, acrobot 55167), NOT TO BE MERGED: the start of the 655 test twenty times, no retry, each on a day of its own,
 // with the page's console (DayFeeds mount, unmount, the pick's reset, the tick's onChange) and the RSC requests in the test's output.
