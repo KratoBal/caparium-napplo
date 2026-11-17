@@ -34,7 +34,8 @@ async function login(page: Page, loginId: string) {
 /**
  * Opens a page and waits until it answers clicks (card 51426546): the markup shows before React has taken it over, and a
  * tick on a controlled box in that moment was lost on the tablet (WebKit), or a <details> opened there was closed again.
- * The marker is written by LangProvider's effect, after every component's mount effects.
+ * The marker is written by LangProvider's effect, after every component's mount effects, and taken away when the page goes.
+ * Only a page with the Shell has it: on a page without one (Belépés) this waits in vain.
  */
 async function gotoReady(page: Page, url: string) {
   await page.goto(url);
@@ -2644,4 +2645,25 @@ test("eating log: \"Mindenki evett\" fills the empty rows of the list in one sav
   await expect(page.getByTestId(`state-${picked}`)).toHaveText("nem evett meg mindent");
   for (const n of rest) await expect(page.getByTestId(`state-${n}`)).toHaveText("evett");
   await expect(page.getByTestId("eating-all-ate"), "nothing left to fill").toBeDisabled();
+});
+
+// card 51426546 (barracuda on #242): the marker belongs to the page on show. A menu link (a client-side navigation, the <html>
+// element stays) takes the old page's marker away, and the new page writes its own after its mount effects; without that the
+// previous page's "1" would let a test through before the new page took over. WHAT TURNS THIS RED: the marker left in place when
+// the page goes. The observer keeps each record's OLD value (read at callback time, the attribute is already the new page's "1"):
+// with the cleanup a removal (old "1") then an add (old absent); without it one write over the old "1" (calibrated in CI, red).
+test("the hydration marker: a menu link takes the old page's marker away, the new page writes its own", async ({ page }) => {
+  await login(page, "teszt.akvarista1");
+  await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    (window as unknown as { __marks: string[] }).__marks = seen;
+    new MutationObserver((records) => {
+      for (const r of records) if (r.attributeName === "data-hydrated") seen.push(r.oldValue ?? "absent");
+    }).observe(document.documentElement, { attributes: true, attributeOldValue: true, attributeFilter: ["data-hydrated"] });
+  });
+  await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Napi etetés", exact: true }).click();
+  await expect(page).toHaveURL(/\/etetes/);
+  await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __marks: string[] }).__marks)).toEqual(["1", "absent"]);
 });
