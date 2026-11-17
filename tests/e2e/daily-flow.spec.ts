@@ -2667,3 +2667,35 @@ test("the hydration marker: a menu link takes the old page's marker away, the ne
   await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => (window as unknown as { __marks: string[] }).__marks)).toEqual(["1", "absent"]);
 });
+
+// card 51426546, the product suspicion left open on #242 (acrobot 55118). On a slow tablet the markup shows before React has taken the
+// page over, and a person can tick a feed in that second: the box shows the tick, but DayFeeds' state never heard of it, so the list
+// finalized afterwards would save the day's feeds WITHOUT it. This holds the page's scripts back to make that second deterministic.
+// WHAT TURNS THIS RED: a tick given before hydration that is not saved with the list (or that hydration takes off the box).
+test("a day's feed ticked before the page took over is saved with the list, not lost", async ({ page }, info) => {
+  const day = info.project.name === "tablet" ? "2026-03-10" : "2026-03-11";
+  page.on("dialog", (d) => void d.accept());
+  await login(page, "teszt.admin");
+  // routing turns the HTTP cache off, so no chunk of the Start page slips past the hold
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/_next/static/**/*.js", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.goto(`/etetes?nap=${day}`, { waitUntil: "domcontentloaded" });
+  const dayFeeds = page.getByTestId("day-feeds");
+  const tick = dayFeeds.getByLabel("A nap takarmánya: Mysis");
+  await tick.click({ noWaitAfter: true });
+  await expect(tick, "the box shows the tick before the page took over").toBeChecked();
+  release();
+  await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
+  await page.unroute("**/_next/static/**/*.js");
+  await expect(tick, "the tick still shows after hydration").toBeChecked();
+  await page.getByLabel("Teszt Egy a mai listán").check();
+  await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).click();
+  await expect(dayFeeds.getByTestId("list-state")).toHaveText("Takarmánylap kész");
+  await page.reload();
+  await expect(page.getByTestId("day-feeds").getByLabel("A nap takarmánya: Mysis"), "the tick given before hydration was saved with the list").toBeChecked();
+});
+
