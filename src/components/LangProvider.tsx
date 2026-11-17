@@ -13,9 +13,13 @@ const LangContext = createContext<Lang>("hu");
 export function LangProvider({ lang, children }: { lang: Lang; children: React.ReactNode }) {
   // The page answers clicks from here on (card 51426546): effects run children first, so when this one runs every component
   // of the page has hydrated and run its mount effects. An end-to-end test that clicks right after a page load waits for it;
-  // before it, a click can land on markup React has not taken over yet, or be undone by a mount effect.
+  // before it, a click can land on markup React has not taken over yet, or be undone by a mount effect. It goes with its page
+  // (barracuda on #242): on a client-side navigation <html> stays, and the previous page's mark would let a test through early.
   useEffect(() => {
     document.documentElement.dataset.hydrated = "1";
+    return () => {
+      delete document.documentElement.dataset.hydrated;
+    };
   }, []);
   return <LangContext.Provider value={lang}>{children}</LangContext.Provider>;
 }
