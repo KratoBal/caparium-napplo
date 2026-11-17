@@ -8,6 +8,7 @@ import { translate } from "@/lib/i18n/translate";
 import { navChildren, navFor, phoneGroups, type NavKey } from "@/lib/nav";
 import { Helper } from "./Helper";
 import { HelperToggle } from "./HelperToggle";
+import { HydratedMain } from "./HydratedMain";
 import { LangProvider } from "./LangProvider";
 import { LangSwitch } from "./LangSwitch";
 import { NavGroup } from "./NavGroup";
@@ -70,9 +71,9 @@ export function ShellView({
         {user && <NavLinks items={navFor(user.role).map((n) => ({ ...n, label: tr(n.label) }))} active={active} tr={tr} />}
         <div className="nav-foot">{tr("CÁPASULI • TESZTKÖRNYEZET")}</div>
       </nav>
-      <main className="main">
+      <HydratedMain className="main">
         <ReasonProvider on={reasons}>{children}</ReasonProvider>
-      </main>
+      </HydratedMain>
       {helper && <Helper data={helper} userName={user ? greetingName(user) : undefined} loginAt={user?.sessionStartedAt} userKey={user?.id} />}
     </div>
     </LangProvider>
