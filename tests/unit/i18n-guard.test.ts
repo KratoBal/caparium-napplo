@@ -9,6 +9,8 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
+  "src/components/Helper.tsx": { allowed: ["Zebracápa"], why: "the figure's name" },
+  "src/lib/helpers.ts": { allowed: [], why: "" },
   "src/app/etetes/page.tsx": { allowed: [], why: "" },
   "src/app/etetes/rend/page.tsx": { allowed: [], why: "" },
   "src/app/evesi-naplo/page.tsx": { allowed: [], why: "" },

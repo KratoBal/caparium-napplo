@@ -87,7 +87,7 @@ function waterTabs({
                 <img src={look.image} alt="" width={look.width} height={look.height} />
               </span>
             )}
-            <span className="tab-label">{tr(look?.label ?? g.name)}</span>
+            <span className="tab-label">{look?.label ? tr(look.label) : g.name}</span>
           </Link>
         );
       })}
@@ -176,7 +176,7 @@ export async function MeasurementPage({
   const dayPicker = dayPickerFor(tr, basePath, day, today, group.code);
 
   return (
-    <Shell title={tr(title)} active={active} user={user} helper={await waterHelper(await helperStockAccess(user))}>
+    <Shell title={tr(title)} active={active} user={user} helper={await waterHelper(await helperStockAccess(user), new Date(), tr)}>
       <div className="water-head" data-testid="water-head">
         <p className="hint" style={{ fontSize: 20, margin: 0 }}>
           {formatDay(day)} · {tr(weekdayName(day))}
@@ -224,7 +224,7 @@ export async function FridgePage({ sp }: { sp: { nap?: string } }) {
   const groups = (await listGroups()).filter((g) => g.frequency === "DAILY");
   const data = await fridgeDay(day);
   return (
-    <Shell title={tr(FRIDGE_TILE.label)} active="daily" user={user} helper={await waterHelper(await helperStockAccess(user))}>
+    <Shell title={tr(FRIDGE_TILE.label)} active="daily" user={user} helper={await waterHelper(await helperStockAccess(user), new Date(), tr)}>
       <div className="water-head" data-testid="water-head">
         <p className="hint" style={{ fontSize: 20, margin: 0 }}>
           {formatDay(day)} · {tr(weekdayName(day))}

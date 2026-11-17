@@ -52,7 +52,7 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
   const canRecord = level === "RECORD" || level === "ADMIN";
   const isAdmin = level === "ADMIN";
   return (
-    <Shell title={tr("Vegyszeradagolás")} active="dosing" user={user} helper={(await moduleLevel(prisma, user.id, user.role, "WATER")) !== "NONE" ? await waterHelper(true) : null}>
+    <Shell title={tr("Vegyszeradagolás")} active="dosing" user={user} helper={(await moduleLevel(prisma, user.id, user.role, "WATER")) !== "NONE" ? await waterHelper(true, new Date(), tr) : null}>
       {canRecord && (
         <div className="card no-print">
           <h2>{tr("Adagolás")}</h2>

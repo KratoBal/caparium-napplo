@@ -27,7 +27,7 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
   const editable = canRecord && (isAdmin || (day === today && lock.state === "OPEN"));
   const rows = new Map(eat.rows.map((r) => [r.animalId, r]));
   return (
-    <Shell title={tr("Evési napló")} active="eating" user={user} helper={await feedingHelper(await helperStockAccess(user))}>
+    <Shell title={tr("Evési napló")} active="eating" user={user} helper={await feedingHelper(await helperStockAccess(user), new Date(), tr)}>
       <div className="toolbar toolbar-end">
         <DayNav path="/evesi-naplo" day={day} today={today} />
         {/* Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 4): the jump calendar, as on the water measurement
