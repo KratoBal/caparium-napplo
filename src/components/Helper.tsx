@@ -21,6 +21,7 @@ import { anchorOf, isDoubleTap, isDrag, KEY_STEP, placeKey, placeToPx, pxToPlace
 import { readOff, SWITCH_EVENT } from "@/lib/helper-switch";
 import { REMINDER_EVENT, REMINDER_TEXT } from "@/lib/save-reminder";
 import { businessDayOf } from "@/lib/time";
+import { useTr } from "./LangProvider";
 
 const SEEN_KEY = "caparium-segito-latta";
 const GREETED_KEY = "caparium-segito-koszont";
@@ -30,6 +31,7 @@ const ALERT_PICTURE = { measurement: "feladatok", stock: "vegyszer", feed: "taka
 const ALERT_AFTER_GREETING_MS = 600;
 
 export function Helper({ data, userName, loginAt, userKey }: { data: HelperData; userName?: string; loginAt?: number; userKey?: string }) {
+  const tr = useTr();
   const [off, setOff] = useState(false);
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -84,7 +86,7 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
       return false; // without storage it would greet on every page: it does not greet
     }
     setGreeter(greetingFigure(businessDayOf(new Date())));
-    setNotice({ kind: "greeting", text: userName ? `Üdv a fedélzeten ${userName}!` : "Üdv a fedélzeten!" });
+    setNotice({ kind: "greeting", text: userName ? tr("Üdv a fedélzeten {name}!", { name: userName }) : tr("Üdv a fedélzeten!") });
     return true;
   }
   // the hello goes with the FIRST click (or key) anywhere, and the click goes on to its target: the listeners only watch
@@ -117,11 +119,11 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
   useEffect(() => {
     const onReminder = (e: Event) => {
       const on = (e as CustomEvent<boolean>).detail;
-      setNotice((n) => (on ? { kind: "reminder", text: REMINDER_TEXT } : n?.kind === "reminder" ? null : n));
+      setNotice((n) => (on ? { kind: "reminder", text: tr(REMINDER_TEXT) } : n?.kind === "reminder" ? null : n));
     };
     window.addEventListener(REMINDER_EVENT, onReminder);
     return () => window.removeEventListener(REMINDER_EVENT, onReminder);
-  }, []);
+  }, [tr]);
   useEffect(() => {
     if (notice?.kind !== "reminder") return;
     const remove = () => {
@@ -275,7 +277,7 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
         </p>
       )}
       {open && (
-        <div className="helper-bubble" role="dialog" aria-label={`${figure.name} segítő`}>
+        <div className="helper-bubble" role="dialog" aria-label={tr("{name} segítő", { name: figure.name })}>
           <div className="helper-scroll">
             {answer && (
               <p className="helper-answer" data-testid="helper-answer">
@@ -290,7 +292,7 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
               ))}
               {data.perAnimal && data.perAnimal.length > 0 && (
                 <span className="helper-animal">
-                  <select className="input" value={animal} onChange={(e) => setAnimal(e.target.value)} aria-label="Melyik állat?">
+                  <select className="input" value={animal} onChange={(e) => setAnimal(e.target.value)} aria-label={tr("Melyik állat?")}>
                     {data.perAnimal.map((p) => (
                       <option key={p.name} value={p.name}>
                         {p.name}
@@ -298,7 +300,7 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
                     ))}
                   </select>
                   <button className="btn btn-soft" type="button" onClick={() => setAnswer(data.perAnimal!.find((p) => p.name === animal)?.a ?? null)}>
-                    Mit kapott ma?
+                    {tr("Mit kapott ma?")}
                   </button>
                 </span>
               )}
@@ -330,7 +332,7 @@ export function Helper({ data, userName, loginAt, userKey }: { data: HelperData;
           setOpen(!open);
         }}
         aria-expanded={open}
-        aria-label={`${figure.name}${data.alert ? ", figyelmeztetés" : ""}`}
+        aria-label={data.alert ? tr("{name}, figyelmeztetés", { name: figure.name }) : figure.name}
         data-testid="helper-button"
       >
         <img className="helper-face" src={`/segito/${figure.slug}-${picture}.webp`} alt="" height={80} data-picture={picture} />

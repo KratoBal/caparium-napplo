@@ -58,7 +58,7 @@ export default async function OverviewPage() {
         })
       : [];
   return (
-    <Shell active="overview" user={user} helper={water ? await waterHelper(await helperStockAccess(user)) : feeding ? await feedingHelper(await helperStockAccess(user)) : null}>
+    <Shell active="overview" user={user} helper={water ? await waterHelper(await helperStockAccess(user), new Date(), tr) : feeding ? await feedingHelper(await helperStockAccess(user), new Date(), tr) : null}>
       <h2 style={{ fontSize: 40 }}>{tr("Jó munkát!")}</h2>
       <p className="hint" style={{ fontSize: 17 }}>{tr("A mai feladatok és a naplók állapota egy helyen.")}</p>
       {/* the daily count the old tile carried */}
