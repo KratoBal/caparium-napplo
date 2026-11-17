@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { intakeDefaultUnit } from "@/lib/intake-unit";
 import { formatDay } from "@/lib/time";
+import { useTr } from "./LangProvider";
 import { DIM, EditBar, EditButton, InvalidateButton, Msg, OtherNames, editFields, showForm, useSend, type EditItem, type FeedOpt } from "./FeedingForms";
 
 export type IntakeRow = {
@@ -24,6 +25,7 @@ type IntakeEdit = EditItem & { note: string | null; returned: boolean };
 
 /** One intake item: feed, amounts, a note, "Visszaküldve", then "Mentés". */
 export function IntakeForm({ day, feeds, otherNames, editing, onEditDone }: { day: string; feeds: FeedOpt[]; otherNames?: string[]; editing?: IntakeEdit | null; onEditDone?: () => void }) {
+  const tr = useTr();
   const [feedId, setFeedId] = useState(feeds[0]?.id ?? "");
   const [other, setOther] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
@@ -64,7 +66,7 @@ export function IntakeForm({ day, feeds, otherNames, editing, onEditDone }: { da
         ...(feed.isOther ? { otherName: other.trim() } : {}),
         ...(editing ? { itemId: editing.id, expectedVersion: editing.version } : {}),
       },
-      editing ? "Tétel módosítva." : "Tétel mentve.",
+      editing ? tr("Tétel módosítva.") : tr("Tétel mentve."),
     );
     if (ok) {
       clear();
@@ -74,8 +76,8 @@ export function IntakeForm({ day, feeds, otherNames, editing, onEditDone }: { da
   return (
     <div className="toolbar" data-testid="intake-form">
       <label className="field">
-        Takarmány
-        <select className="input" value={feedId} onChange={(e) => setFeedId(e.target.value)} aria-label="Takarmány">
+        {tr("Takarmány")}
+        <select className="input" value={feedId} onChange={(e) => setFeedId(e.target.value)} aria-label={tr("Takarmány")}>
           {feeds.map((x) => (
             <option key={x.id} value={x.id}>
               {x.name}
@@ -85,14 +87,14 @@ export function IntakeForm({ day, feeds, otherNames, editing, onEditDone }: { da
       </label>
       {feed?.isOther && (
         <label className="field">
-          Az egyéb takarmány neve
-          <input className="input" list="egyeb-nevek-huto" value={other} onChange={(e) => setOther(e.target.value)} aria-label="Az egyéb takarmány neve" />
+          {tr("Az egyéb takarmány neve")}
+          <input className="input" list="egyeb-nevek-huto" value={other} onChange={(e) => setOther(e.target.value)} aria-label={tr("Az egyéb takarmány neve")} />
           <OtherNames id="egyeb-nevek-huto" names={otherNames} />
         </label>
       )}
       {feed?.dims.map((d) => (
         <label className="field" key={d.dimension}>
-          Mennyiség ({DIM[d.dimension] ?? d.dimension})
+          {tr("Mennyiség ({x})", { x: tr(DIM[d.dimension] ?? d.dimension) })}
           <span style={{ display: "flex", gap: 6 }}>
             <input
               className="input"
@@ -100,9 +102,9 @@ export function IntakeForm({ day, feeds, otherNames, editing, onEditDone }: { da
               style={{ width: 110 }}
               value={values[d.dimension] ?? ""}
               onChange={(e) => setValues({ ...values, [d.dimension]: e.target.value })}
-              aria-label={`Mennyiség (${DIM[d.dimension] ?? d.dimension})`}
+              aria-label={tr("Mennyiség ({x})", { x: tr(DIM[d.dimension] ?? d.dimension) })}
             />
-            <select className="input" value={units[d.dimension] ?? intakeDefaultUnit(d.units)} onChange={(e) => setUnits({ ...units, [d.dimension]: e.target.value })} aria-label={`Egység (${DIM[d.dimension] ?? d.dimension})`}>
+            <select className="input" value={units[d.dimension] ?? intakeDefaultUnit(d.units)} onChange={(e) => setUnits({ ...units, [d.dimension]: e.target.value })} aria-label={tr("Egység ({x})", { x: tr(DIM[d.dimension] ?? d.dimension) })}>
               {d.units.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.symbol}
@@ -113,15 +115,15 @@ export function IntakeForm({ day, feeds, otherNames, editing, onEditDone }: { da
         </label>
       ))}
       <label className="field">
-        Megjegyzés
-        <input className="input" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} aria-label="Megjegyzés" />
+        {tr("Megjegyzés")}
+        <input className="input" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} aria-label={tr("Megjegyzés")} />
       </label>
       <label className="field">
-        Visszaküldve
-        <input type="checkbox" checked={returned} onChange={(e) => setReturned(e.target.checked)} aria-label="Visszaküldve" />
+        {tr("Visszaküldve")}
+        <input type="checkbox" checked={returned} onChange={(e) => setReturned(e.target.checked)} aria-label={tr("Visszaküldve")} />
       </label>
       <button className="btn" type="button" disabled={busy} onClick={() => void save()}>
-        {editing ? "Módosítás mentése" : "Mentés"}
+        {editing ? tr("Módosítás mentése") : tr("Mentés")}
       </button>
       {editing && (
         <EditBar
@@ -139,13 +141,14 @@ export function IntakeForm({ day, feeds, otherNames, editing, onEditDone }: { da
 
 /** The day's intake items and the form under them. A returned one shows, marked, and does not count in the stock. */
 export function IntakeItems({ day, feeds, otherNames, items, editable }: { day: string; feeds: FeedOpt[]; otherNames?: string[]; items: IntakeRow[]; editable: boolean }) {
+  const tr = useTr();
   const [editing, setEditing] = useState<IntakeEdit | null>(null);
   return (
     <>
       <div className="table-scroll">
         <table className="log-table" data-testid="intake-list">
           <thead>
-            <tr><th>Típus</th><th>Takarmány</th><th>Mennyiség</th><th>Megjegyzés</th><th>Visszaküldve</th><th></th></tr>
+            <tr><th>{tr("Típus")}</th><th>{tr("Takarmány")}</th><th>{tr("Mennyiség")}</th><th>{tr("Megjegyzés")}</th><th>{tr("Visszaküldve")}</th><th></th></tr>
           </thead>
           <tbody>
             {items.map((i) => {
@@ -156,7 +159,7 @@ export function IntakeItems({ day, feeds, otherNames, items, editable }: { day: 
                   <td>{name}</td>
                   <td>{i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")}</td>
                   <td>{i.note ?? ""}</td>
-                  <td>{i.returned ? "igen" : ""}</td>
+                  <td>{i.returned ? tr("igen") : ""}</td>
                   <td className="keep">
                     {editable && (
                       <span className="row-actions">
@@ -184,23 +187,24 @@ export function IntakeItems({ day, feeds, otherNames, items, editable }: { day: 
  * touching the stock, and nothing has to be deleted. Everyone sees the day; only an admin sets it.
  */
 export function StockStart({ start, today, canSet }: { start: string | null; today: string; canSet: boolean }) {
+  const tr = useTr();
   const [value, setValue] = useState(start ?? "");
   const { msg, busy, run } = useSend();
   return (
     <div data-testid="stock-start">
       <p className="hint">
         {start
-          ? `A készlet kezdete: ${formatDay(start)}. Ami ennél korábbi, az archívum: a naplóban, a kimutatásokban és az exportban teljes értékű, a készletbe nem számít.`
-          : "A készlet kezdete: takarmányonként az első be nem küldött bevételezés napja. Egy kifejezett kezdőnapot adminisztrátor állíthat."}
+          ? tr("A készlet kezdete: {formatDay}. Ami ennél korábbi, az archívum: a naplóban, a kimutatásokban és az exportban teljes értékű, a készletbe nem számít.", { formatDay: formatDay(start) })
+          : tr("A készlet kezdete: takarmányonként az első be nem küldött bevételezés napja. Egy kifejezett kezdőnapot adminisztrátor állíthat.")}
       </p>
       {canSet && (
         <div className="toolbar">
           <label className="field">
-            A készlet kezdőnapja
-            <input className="input" type="date" max={today} value={value} onChange={(e) => setValue(e.target.value)} aria-label="A készlet kezdőnapja" />
+            {tr("A készlet kezdőnapja")}
+            <input className="input" type="date" max={today} value={value} onChange={(e) => setValue(e.target.value)} aria-label={tr("A készlet kezdőnapja")} />
           </label>
-          <button className="btn" type="button" disabled={busy || !value} onClick={() => void run("/api/feed-intake/stock-start", { start: value }, "A készlet kezdete beállítva.")}>
-            Kezdőnap mentése
+          <button className="btn" type="button" disabled={busy || !value} onClick={() => void run("/api/feed-intake/stock-start", { start: value }, tr("A készlet kezdete beállítva."))}>
+            {tr("Kezdőnap mentése")}
           </button>
           <button
             className="btn btn-soft"
@@ -208,10 +212,10 @@ export function StockStart({ start, today, canSet }: { start: string | null; tod
             disabled={busy || !start}
             onClick={() => {
               setValue("");
-              void run("/api/feed-intake/stock-start", { start: "" }, "A kezdőnap törölve: az első bevételezéstől számít.");
+              void run("/api/feed-intake/stock-start", { start: "" }, tr("A kezdőnap törölve: az első bevételezéstől számít."));
             }}
           >
-            Alaphelyzet
+            {tr("Alaphelyzet")}
           </button>
           <Msg msg={msg} />
         </div>

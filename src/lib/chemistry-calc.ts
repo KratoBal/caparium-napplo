@@ -6,11 +6,15 @@ import { prisma } from "./db";
 import { canonicalDecimal } from "./decimal";
 import { pickValid, validAt } from "./master";
 import { businessDayOf, dateToDay } from "./time";
+import { translate, type TrVars } from "./i18n/translate";
 import { poolInUse } from "./pool-periods";
 
 const CODES = ["CA", "MG", "KH"] as const;
 
-export async function chemistryCalcPools(now = new Date()): Promise<CalcPool[]> {
+/** The page hands in its translator; a caller without one (a test, a job) reads Hungarian. */
+const hungarian = (text: string, vars?: TrVars) => translate("hu", text, vars);
+
+export async function chemistryCalcPools(now = new Date(), tr: (text: string, vars?: TrVars) => string = hungarian): Promise<CalcPool[]> {
   const [pools, params] = await Promise.all([
     prisma.pool.findMany({ where: poolInUse(businessDayOf(now)), include: { names: true }, orderBy: { code: "asc" } }),
     prisma.parameter.findMany({ where: { code: { in: [...CODES] } }, include: { successor: { select: { id: true } } } }),
@@ -18,7 +22,7 @@ export async function chemistryCalcPools(now = new Date()): Promise<CalcPool[]> 
   // barracuda on #188: after a unit change the built-in measurement is closed and its successor goes on in another unit; the
   // calculator works in ppm and dKH, so it stops loudly instead of computing from the closed measurement's last value
   const stopped = Object.fromEntries(
-    params.filter((p) => p.successor).map((p) => [p.code, "A mérés mértékegysége megváltozott, ezért a kalkulátor ehhez nem számol."]),
+    params.filter((p) => p.successor).map((p) => [p.code, tr("A mérés mértékegysége megváltozott, ezért a kalkulátor ehhez nem számol.")]),
   ) as NonNullable<CalcPool["stopped"]>;
   const codeOf = new Map(params.map((p) => [p.id, p.code as (typeof CODES)[number]]));
   const [latest, ranges] = await Promise.all([
