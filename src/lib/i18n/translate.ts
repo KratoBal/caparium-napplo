@@ -9,12 +9,16 @@ export type TrVars = Record<string, string | number>;
 
 function fill(text: string, vars?: TrVars): string {
   if (!vars) return text;
-  return text.replace(/\{(\w+)\}/g, (whole, name: string) => (name in vars ? String(vars[name]) : whole));
+  return text.replace(/\{(\w+)\}/g, (whole, name: string) => (Object.hasOwn(vars, name) ? String(vars[name]) : whole));
 }
 
-/** The text in the language, its {name} places filled; Hungarian when there is no English for it. */
+/**
+ * The text in the language, its {name} places filled; Hungarian when there is no English for it. Only the dictionary's
+ * OWN keys count (barracuda on #232): a text such as "toString" must not find the object's prototype member, which would
+ * throw in the middle of an error response (errorResponse translates there).
+ */
 export function translate(lang: Lang, text: string, vars?: TrVars): string {
-  const english = lang === "en" ? EN[text] : undefined;
+  const english = lang === "en" && Object.hasOwn(EN, text) ? EN[text] : undefined;
   return fill(english && english.trim() ? english : text, vars);
 }
 
