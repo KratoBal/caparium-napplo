@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { gridKey } from "@/lib/grid-key";
 import { DayControls } from "@/components/DayControls";
 import { FridgeCard } from "@/components/FridgeCard";
 import { MeasurementGrid } from "@/components/MeasurementGrid";
@@ -177,10 +178,8 @@ export async function MeasurementPage({
       </div>
       {grid && (
         <MeasurementGrid
-          // "no round yet" keys like the first round (card 7fdbf78f, 2026-11-17): the day's first save creates round 1, and with
-          // `?? 0` the refresh after it changed the key, remounted the grid and took its "Minden érték mentve." banner (and the
-          // rest of its state) away a moment after it showed. A real change of round (Új kör, 1 -> 2) still remounts it.
-          key={`${group.id}:${day}:${grid.selectedRound?.seq ?? 1}`}
+          // lib/grid-key.ts: "no round yet" keys like round 1, so the day's first save keeps its banner (card 7fdbf78f)
+          key={gridKey(group.id, day, grid.selectedRound?.seq)}
           initial={grid}
           groupCode={group.code}
           today={today}
