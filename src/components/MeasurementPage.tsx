@@ -12,6 +12,8 @@ import { fridgeAlert, fridgeAlertText, type FridgeAlert } from "@/lib/fridge-ale
 import { fridgeDay } from "@/lib/fridges";
 import { monogramResolver, responsiblePeople } from "@/lib/master";
 import { getGrid, listGroups } from "@/lib/queries";
+import { pageTr } from "@/lib/i18n/server";
+import type { TrVars } from "@/lib/i18n/translate";
 import { saveReminderOn } from "@/lib/save-reminder-setting";
 import { requireModuleRead } from "@/lib/session";
 import { businessDayOf, formatDay, isValidDay, localDateTimeOf, weekdayName } from "@/lib/time";
@@ -45,6 +47,7 @@ const FRIDGE_TILE = {
 export type MeasurementSearch = { csoport?: string; nap?: string; kor?: string };
 
 type TabGroup = { id: string; code: string; name: string };
+type Tr = (text: string, vars?: TrVars) => string;
 
 /**
  * The daily page's tiles: the water groups, then (daily only) the fridges' tile with its corner mark. `activeGroupId` is
@@ -57,6 +60,7 @@ function waterTabs({
   basePath,
   daily,
   fridge,
+  tr,
 }: {
   groups: TabGroup[];
   activeGroupId: string | null;
@@ -64,9 +68,10 @@ function waterTabs({
   basePath: string;
   daily: boolean;
   fridge?: { active: boolean; alert: FridgeAlert | null };
+  tr: Tr;
 }) {
   return (
-    <div className="tabs" role="tablist" aria-label="Mérési csoport">
+    <div className="tabs" role="tablist" aria-label={tr("Mérési csoport")}>
       {groups.map((g) => {
         const look = daily ? TAB_LOOK[g.code] : undefined;
         return (
@@ -82,7 +87,7 @@ function waterTabs({
                 <img src={look.image} alt="" width={look.width} height={look.height} />
               </span>
             )}
-            <span className="tab-label">{look?.label ?? g.name}</span>
+            <span className="tab-label">{tr(look?.label ?? g.name)}</span>
           </Link>
         );
       })}
@@ -95,14 +100,14 @@ function waterTabs({
           data-testid="fridge-tile"
         >
           {fridge.alert && (
-            <span className="tab-alert" role="img" aria-label={fridgeAlertText(fridge.alert)} title={fridgeAlertText(fridge.alert)} data-testid="fridge-alert">
+            <span className="tab-alert" role="img" aria-label={fridgeAlertText(fridge.alert, tr)} title={fridgeAlertText(fridge.alert, tr)} data-testid="fridge-alert">
               !
             </span>
           )}
           <span className="tab-picture-box tab-picture-box-wide">
             <img src={FRIDGE_TILE.image} alt="" width={FRIDGE_TILE.width} height={FRIDGE_TILE.height} />
           </span>
-          <span className="tab-label">{FRIDGE_TILE.label}</span>
+          <span className="tab-label">{tr(FRIDGE_TILE.label)}</span>
         </Link>
       )}
     </div>
@@ -110,15 +115,15 @@ function waterTabs({
 }
 
 /** The day picker of the water pages; `group` is left out on the fridges' page. */
-function dayPickerFor(basePath: string, day: string, today: string, groupCode?: string) {
+function dayPickerFor(tr: Tr, basePath: string, day: string, today: string, groupCode?: string) {
   return (
     <form method="get" action={basePath} style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
       {groupCode && <input type="hidden" name="csoport" value={groupCode} />}
       <label className="field">
-        Nap
+        {tr("Nap")}
         <input className="input" type="date" name="nap" defaultValue={day} max={today} />
       </label>
-      <button className="btn btn-soft" type="submit">Ugrás</button>
+      <button className="btn btn-soft" type="submit">{tr("Ugrás")}</button>
     </form>
   );
 }
@@ -138,14 +143,15 @@ export async function MeasurementPage({
   active: "daily" | "weekly";
 }) {
   const { user, level } = await requireModuleRead("WATER");
+  const { tr } = await pageTr(user);
   const today = businessDayOf(new Date());
   const day = sp.nap && isValidDay(sp.nap) ? sp.nap : today;
   const groups = (await listGroups()).filter((g) => g.frequency === frequency);
   const group = groups.find((g) => g.code === sp.csoport) ?? groups[0];
   if (!group) {
     return (
-      <Shell title={title} active={active} user={user}>
-        <div className="card">Nincs aktív mérési csoport. Az adminisztrátor a beállításokban veheti fel.</div>
+      <Shell title={tr(title)} active={active} user={user}>
+        <div className="card">{tr("Nincs aktív mérési csoport. Az adminisztrátor a beállításokban veheti fel.")}</div>
       </Shell>
     );
   }
@@ -165,14 +171,15 @@ export async function MeasurementPage({
     basePath,
     daily,
     fridge: fridges ? { active: false, alert: fridgeAlert(fridges.fridges, fridges.readings) } : undefined,
+    tr,
   });
-  const dayPicker = dayPickerFor(basePath, day, today, group.code);
+  const dayPicker = dayPickerFor(tr, basePath, day, today, group.code);
 
   return (
-    <Shell title={title} active={active} user={user} helper={await waterHelper(await helperStockAccess(user))}>
+    <Shell title={tr(title)} active={active} user={user} helper={await waterHelper(await helperStockAccess(user))}>
       <div className="water-head" data-testid="water-head">
         <p className="hint" style={{ fontSize: 20, margin: 0 }}>
-          {formatDay(day)} · {weekdayName(day)}
+          {formatDay(day)} · {tr(weekdayName(day))}
         </p>
         <DayControls groupId={group.id} day={day} status={status} isAdmin={level === "ADMIN"} />
       </div>
@@ -213,13 +220,14 @@ export async function FridgePage({ sp }: { sp: { nap?: string } }) {
   const { user, level } = await requireModuleRead("WATER");
   const today = businessDayOf(new Date());
   const day = sp.nap && isValidDay(sp.nap) ? sp.nap : today;
+  const { tr } = await pageTr(user);
   const groups = (await listGroups()).filter((g) => g.frequency === "DAILY");
   const data = await fridgeDay(day);
   return (
-    <Shell title="Fagyasztók hőmérséklete" active="daily" user={user} helper={await waterHelper(await helperStockAccess(user))}>
+    <Shell title={tr(FRIDGE_TILE.label)} active="daily" user={user} helper={await waterHelper(await helperStockAccess(user))}>
       <div className="water-head" data-testid="water-head">
         <p className="hint" style={{ fontSize: 20, margin: 0 }}>
-          {formatDay(day)} · {weekdayName(day)}
+          {formatDay(day)} · {tr(weekdayName(day))}
         </p>
       </div>
       {/* the water pages' head row (the same classes as MeasurementGrid's), so the phone rules apply here too */}
@@ -231,8 +239,9 @@ export async function FridgePage({ sp }: { sp: { nap?: string } }) {
           basePath: "/vizmeres",
           daily: true,
           fridge: { active: true, alert: fridgeAlert(data.fridges, data.readings) },
+          tr,
         })}
-        <div className="water-head-actions">{dayPickerFor(FRIDGE_TILE.href, day, today)}</div>
+        <div className="water-head-actions">{dayPickerFor(tr, FRIDGE_TILE.href, day, today)}</div>
       </div>
       {await fridgeSection(data, day, today, level)}
     </Shell>
