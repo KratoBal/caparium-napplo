@@ -70,6 +70,16 @@ describe("the report Excel (EGY-13)", () => {
     expect(day.getRow(2).getCell(4).numFmt).toBe("#,##0;-#,##0;");
   });
 
+  // Lili 2026-11-17: a value column's header over its numbers, a long one wrapped in its column; the label column's to the left
+  it("the value columns' headers align to the right like their numbers, and wrap", async () => {
+    const wb = await load((await buildReportWorkbook({ from: "2026-11-02", to: "2026-11-03", poolId: null, animalId: null })).buffer);
+    for (const name of ["Napokra bontva", "Kinek"]) {
+      const head = wb.getWorksheet(name)!.getRow(1);
+      expect(head.getCell(1).alignment?.horizontal).toBeUndefined();
+      for (let c = 2; c <= 6; c++) expect([head.getCell(c).alignment?.horizontal, head.getCell(c).alignment?.wrapText]).toEqual(["right", true]);
+    }
+  });
+
   it("filtered by animal: its group's item comes, but apart, never in the animal's own total (R-8, review of #17)", async () => {
     const wb = await load((await buildReportWorkbook({ from: "2026-11-02", to: "2026-11-02", poolId: null, animalId: a["Teszt Kettő"] })).buffer);
     const who = wb.getWorksheet("Kinek")!;

@@ -665,6 +665,9 @@ export async function buildReportWorkbook(f: { from: string; to: string; poolId:
     ]);
     header.font = { bold: true };
     header.eachCell((c) => fill(c, FILL.head));
+    // Lili 2026-11-17: a value column's header over its numbers (Excel puts a number to the right and a text to the left), a
+    // long one wrapped in its column instead of running over the next
+    header.eachCell((c, n) => (c.alignment = n === 1 ? { vertical: "bottom" } : { horizontal: "right", vertical: "bottom", wrapText: true }));
     // the unit of every value column, as its header names it: the kg row converts the gram ones
     const unitOf = [...r.columns.map((c) => c.unit), ...units, ...groupUnits];
     const width = 1 + unitOf.length;

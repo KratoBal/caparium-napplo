@@ -26,4 +26,34 @@ describe("pdfPage().table", () => {
     expect(filled.filter((c) => c === "#EEF4FA")).toHaveLength(1);
     await page.done();
   });
+
+  // Lili 2026-11-17: the columns ran into each other (numbers right, headers left)
+  it("draws a pale line between every two columns on every row, the header included, and aligns each header like its column", async () => {
+    const page = pdfPage({ title: "Teszt", subtitle: "teszt", landscape: true });
+    const strokes = vi.spyOn(page.doc, "strokeColor");
+    const texts = vi.spyOn(page.doc, "text");
+    page.table(
+      [120, 80, 80],
+      ["Állat vagy csoport", "Scomber scombrus (g)", "Összesen (g)"],
+      [
+        { cells: ["Philleas", "709", "2,67 kg"], align: ["left", "right", "right"] },
+        { cells: ["Összesen", "8,04 kg", "29,91 kg"], total: true, align: ["left", "right", "right"] },
+      ],
+    );
+    // two inner borders a row, three rows (header, a line, the total); none on the outer edges
+    expect(strokes.mock.calls.filter((c) => c[0] === "#DDDDDD")).toHaveLength(6);
+    // text(string, x, y, options): the spy is typed on the two-argument overload, so the call is read as a plain list
+    const alignOf = (text: string) => ((texts.mock.calls as unknown[][]).find((c) => c[0] === text)?.[3] as { align?: string } | undefined)?.align;
+    expect([alignOf("Állat vagy csoport"), alignOf("Scomber scombrus (g)"), alignOf("Összesen (g)")]).toEqual(["left", "right", "right"]);
+    await page.done();
+  });
+
+  it("a table whose rows say nothing about alignment keeps its headers to the left", async () => {
+    const page = pdfPage({ title: "Teszt", subtitle: "teszt" });
+    const texts = vi.spyOn(page.doc, "text");
+    page.table([100, 100], ["Nap", "Megjegyzés"], [{ cells: ["2029.01.10.", "rendben"] }]);
+    const header = (texts.mock.calls as unknown[][]).find((c) => c[0] === "Megjegyzés")?.[3] as { align?: string } | undefined;
+    expect(header?.align).toBe("left");
+    await page.done();
+  });
 });

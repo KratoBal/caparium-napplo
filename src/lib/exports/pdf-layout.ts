@@ -10,6 +10,9 @@ const BG_TOTAL = "#FFF2CC";
 // Lili 2026-11-11 (task caparium-kimutatas-pdf-formazas): pale lines between the rows, a stronger one over a total row, and a
 // pale band a table can ask for (the days of the report, every other one)
 const ROW_LINE = "#D9D9D9";
+// Lili 2026-11-17: the columns ran into each other (numbers to the right, headers to the left, so a header sat over the
+// next column's number): a pale vertical line between the columns, and every header aligned like its column. Not dark.
+const COL_LINE = "#DDDDDD";
 const TOTAL_LINE = "#7F7F7F";
 const BG_BAND = "#EEF4FA";
 
@@ -62,18 +65,21 @@ export function pdfPage(opts: { title: string; subtitle: string; landscape?: boo
     table(widths, head, rows) {
       const xs = widths.map((_, i) => left + widths.slice(0, i).reduce((a, b) => a + b, 0));
       const total = widths.reduce((a, b) => a + b, 0);
+      // a header sits where its column's values sit: a number column's header to the right
+      const headAlign = rows.find((r) => r.align)?.align;
       const line = (cells: string[], o: { header?: boolean; total?: boolean; band?: boolean; align?: ("left" | "right")[]; colors?: (string | null)[] }) => {
         doc.fontSize(8.5);
         const h = Math.max(...cells.map((c, i) => doc.heightOfString(c, { width: widths[i] - 6 }))) + 4;
         if (doc.y + h > bottom()) {
           doc.addPage();
-          if (!o.header) line(head, { header: true }); // the header again on a new page
+          if (!o.header) line(head, { header: true, align: headAlign }); // the header again on a new page
         }
         const y = doc.y;
         if (o.header || o.total || o.band) doc.save().rect(left, y - 2, total, h).fill(o.header ? BG_HEADER : o.total ? BG_TOTAL : BG_BAND).restore();
         // a total closes the rows above it with a stronger line; every row ends in a pale one
         if (o.total) doc.save().moveTo(left, y - 2).lineTo(left + total, y - 2).lineWidth(1).strokeColor(TOTAL_LINE).stroke().restore();
         if (!o.header) doc.save().moveTo(left, y - 2 + h).lineTo(left + total, y - 2 + h).lineWidth(0.4).strokeColor(ROW_LINE).stroke().restore();
+        for (let i = 1; i < xs.length; i++) doc.save().moveTo(xs[i], y - 2).lineTo(xs[i], y - 2 + h).lineWidth(0.4).strokeColor(COL_LINE).stroke().restore();
         doc.fontSize(8.5).fillColor(o.header ? "#333" : "#000");
         // a cell's own colour (an out-of-range reading in red), back to the row's colour after it
         cells.forEach((c, i) => {
@@ -85,7 +91,7 @@ export function pdfPage(opts: { title: string; subtitle: string; landscape?: boo
         doc.x = left;
         doc.y = y + h;
       };
-      line(head, { header: true });
+      line(head, { header: true, align: headAlign });
       for (const r of rows) line(r.cells, { total: r.total, band: r.band, align: r.align, colors: r.colors });
       doc.fillColor("#000").moveDown(0.6);
     },
