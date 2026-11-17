@@ -2698,3 +2698,33 @@ test("a day's feed cannot be ticked before the page took over, and a tick after 
   await expect(page.getByTestId("day-feeds").getByLabel("A nap takarmánya: Mysis"), "the tick was saved with the list").toBeChecked();
 });
 
+// card 51426546, barracuda's question on #245: does a TYPED value go the same way as the tick? A water cell is a controlled number field;
+// typed into the markup before React took the page over, the field shows the value, the grid's drafts may not have it, and "Mentés"
+// would then save nothing (and say all is saved). The page's scripts are held back to make that second deterministic. A past day of
+// its own per project, as an admin (who may write there), in the project's own group.
+// WHAT TURNS THIS RED: a value typed before hydration that is not saved by the Mentés after it.
+test("a water value typed before the page took over is saved by the Mentés after it, not lost", async ({ page }, info) => {
+  const tablet = info.project.name === "tablet";
+  const day = tablet ? "2026-03-12" : "2026-03-13";
+  page.on("dialog", (d) => void (d.type() === "prompt" ? d.accept("e2e proba") : d.accept()));
+  await login(page, "teszt.admin");
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/_next/static/**/*.js", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.goto(`/vizmeres?csoport=${tablet ? "NAPI_KIS" : "NAPI_NAGY"}&nap=${day}`, { waitUntil: "domcontentloaded" });
+  const cell = page.locator('input[data-testid^="cell-"]').first();
+  const id = await cell.getAttribute("data-testid");
+  await cell.fill("7,9");
+  await expect(cell, "the field shows the value before the page took over").toHaveValue("7,9");
+  release();
+  await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
+  await page.unroute("**/_next/static/**/*.js");
+  await page.getByTestId("save-all").click();
+  await expect(page.getByTestId("banner")).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId(id!), "the value typed before hydration was saved").toHaveValue("7,9");
+});
+
