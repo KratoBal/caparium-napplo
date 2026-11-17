@@ -97,6 +97,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .lang-switch button { border: 0; background: var(--c-white); color: var(--c-muted); font: inherit; font-size: 12px; font-weight: 700; padding: 4px 10px; min-height: 30px; cursor: pointer; }
 .lang-switch button.lang-on { background: var(--c-primary); color: var(--c-white); }
 .lang-switch button:disabled { opacity: 0.6; cursor: progress; }
+.profile-panel .lang-switch { margin-left: 0; }
 
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
@@ -123,7 +124,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .head .pill { margin-left: auto; padding: 6px 10px; font-size: 13px; }
   .head > .topbar > .pill + span[aria-hidden="true"] { display: none; }
   /* before the page is hydrated the old box is still in the markup: hidden at once, so the row does not jump from two lines to one when the button comes */
-  .topbar > .userbox, .topbar > .helper-toggle { display: none; }
+  .topbar > .userbox, .topbar > .helper-toggle, .topbar > .lang-switch-header { display: none; }
   .nav { grid-row: 2; position: sticky; top: 0; z-index: 30; }
   .nav-group { display: flex; flex: none; }
   .nav > a.nav-in-group { display: none; }

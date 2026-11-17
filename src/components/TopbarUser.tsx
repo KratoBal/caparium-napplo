@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { HelperToggle } from "./HelperToggle";
 import { useTr } from "./LangProvider";
+import { LangSwitch } from "./LangSwitch";
 import { useIsPhone } from "./useIsPhone";
 
 export function TopbarUser({ name, roleLabel, monogram, helper }: { name: string; roleLabel: string; monogram: string; helper: boolean }) {
@@ -70,6 +71,8 @@ export function TopbarUser({ name, roleLabel, monogram, helper }: { name: string
             {name} · {roleLabel}
           </span>
           {helper && <HelperToggle />}
+          {/* on a phone the HU/EN switch is here, not in the one-row header (the header's own is hidden, globals.css) */}
+          <LangSwitch />
           <Link href="/profil" onClick={() => setOpen(false)}>
             {tr("Saját beállítások")}
           </Link>

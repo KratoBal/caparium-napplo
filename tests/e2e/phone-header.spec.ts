@@ -50,6 +50,9 @@ test.describe("phone, 390 px", () => {
     // the start page has a helper, so its switch is in the panel (and only there: the header's own is gone on a phone)
     await expect(panel.getByTestId("helper-toggle")).toBeVisible();
     await expect(page.getByTestId("helper-toggle")).toHaveCount(1);
+    // t-20261117-caparium-angol-alap: the HU/EN switch moves into the panel too; the one-row header keeps none of its own in view
+    await expect(panel.getByTestId("lang-switch")).toBeVisible();
+    await expect(page.locator(".topbar > .lang-switch")).toBeHidden();
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
     // a tap elsewhere closes it too

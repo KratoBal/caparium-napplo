@@ -57,7 +57,7 @@ export function ShellView({
           {title && <h1>{title}</h1>}
           <span className="pill" data-testid="today">{today}</span>
           {!title && <span style={{ flex: 1 }} aria-hidden="true" />}
-          <LangSwitch />
+          <LangSwitch inHeader={!!user} />
           {user ? (
             <TopbarUser name={user.fullName} roleLabel={tr(user.role === "ADMIN" ? "adminisztrátor" : "akvarista")} monogram={monogram} helper={!!helper} />
           ) : (

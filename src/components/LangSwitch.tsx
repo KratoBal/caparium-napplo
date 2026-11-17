@@ -10,7 +10,7 @@ import { useLang, useTr } from "./LangProvider";
  * in turn, so the language is the device's, switched in one tap and remembered in a cookie; the page reloads its server
  * text in the new language.
  */
-export function LangSwitch() {
+export function LangSwitch({ inHeader = false }: { inHeader?: boolean }) {
   const lang = useLang();
   const tr = useTr();
   const router = useRouter();
@@ -21,7 +21,8 @@ export function LangSwitch() {
     start(() => router.refresh());
   }
   return (
-    <span className="lang-switch" role="group" aria-label={tr("Nyelv")} data-testid="lang-switch">
+    // in a logged-in header the switch is one of the things a phone moves into the profile panel (globals.css), as the helper's switch
+    <span className={inHeader ? "lang-switch lang-switch-header" : "lang-switch"} role="group" aria-label={tr("Nyelv")} data-testid="lang-switch">
       {LANGS.map((l) => (
         <button
           key={l}
