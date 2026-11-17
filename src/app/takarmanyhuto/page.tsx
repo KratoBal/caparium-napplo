@@ -7,6 +7,7 @@ import { feedStock, getStockStart, intakeDayView, stockStatus } from "@/lib/feed
 import { knownOtherNames, listFeeds } from "@/lib/feeds";
 import { plainNumber as num, rowForDisplay } from "@/lib/mass-display";
 import { moduleLevel } from "@/lib/master";
+import { pageTr } from "@/lib/i18n/server";
 import { requireModuleRead } from "@/lib/session";
 import { businessDayOf, isValidDay } from "@/lib/time";
 
@@ -17,6 +18,7 @@ export const dynamic = "force-dynamic";
 // does not count. The stock counts from the first intake of a feed: a feed with none has no starting stock and is not listed.
 export default async function IntakePage({ searchParams }: { searchParams: Promise<{ nap?: string }> }) {
   const { user, level } = await requireModuleRead("WITHDRAWAL");
+  const { tr } = await pageTr(user);
   const now = new Date();
   const today = businessDayOf(now);
   const sp = await searchParams;
@@ -49,25 +51,25 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
   );
   const tracked = stock.filter((r) => r.tracked && r.active);
   return (
-    <Shell title="Fagyasztó" active="intake" user={user}>
+    <Shell title={tr("Fagyasztó")} active="intake" user={user}>
       <div className="toolbar toolbar-end">
         <DayNav path="/takarmanyhuto" day={day} today={today} />
         <DayJump path="/takarmanyhuto" day={day} today={today} />
       </div>
       <div className="card">
-        <h2>Beérkezett takarmány</h2>
-        <p className="hint">A fagyasztóba érkezett készlet. Ha a szállítmányt visszaküldik, pipáld be a „Visszaküldve” jelölőt: látszik a listán, de nem kerül a készletre.</p>
+        <h2>{tr("Beérkezett takarmány")}</h2>
+        <p className="hint">{tr("A fagyasztóba érkezett készlet. Ha a szállítmányt visszaküldik, pipáld be a „Visszaküldve” jelölőt: látszik a listán, de nem kerül a készletre.")}</p>
         <IntakeItems day={day} feeds={feeds} otherNames={otherNames} items={items} editable={editable} />
       </div>
 
       <div className="card">
-        <h2>Készlet</h2>
-        <p className="hint">A bevételezett mínusz a kivett takarmány, a kezdőnaptól számítva. Amelyik takarmányhoz még nincs be nem küldött bevétel, az nem szerepel itt, és a kivezetett (inaktív) takarmány sem. A becsült napok az elmúlt 30 nap átlagos kivétele szerint értendők, és 0-ra állnak, ha a készlet elfogyott.</p>
+        <h2>{tr("Készlet")}</h2>
+        <p className="hint">{tr("A bevételezett mínusz a kivett takarmány, a kezdőnaptól számítva. Amelyik takarmányhoz még nincs be nem küldött bevétel, az nem szerepel itt, és a kivezetett (inaktív) takarmány sem. A becsült napok az elmúlt 30 nap átlagos kivétele szerint értendők, és 0-ra állnak, ha a készlet elfogyott.")}</p>
         <StockStart start={stockStart} today={today} canSet={level === "ADMIN"} />
         <div className="table-scroll">
           <table className="log-table" data-testid="feed-stock">
             <thead>
-              <tr><th>Takarmány</th><th>Egység</th><th>Készlet</th><th>Becsült napok</th><th></th></tr>
+              <tr><th>{tr("Takarmány")}</th><th>{tr("Egység")}</th><th>{tr("Készlet")}</th><th>{tr("Becsült napok")}</th><th></th></tr>
             </thead>
             <tbody>
               {tracked.map((r) => {
@@ -79,7 +81,7 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
                     <td>{shown.unit}</td>
                     <td>{shown.values[0]}</td>
                     <td>{status.daysLeft === null ? "–" : num(status.daysLeft)}</td>
-                    <td>{r.negative ? "negatív készlet" : status.low ? "fogyóban" : ""}</td>
+                    <td>{r.negative ? tr("negatív készlet") : status.low ? tr("fogyóban") : ""}</td>
                   </tr>
                 );
               })}
@@ -89,20 +91,20 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
       </div>
       {exportLevel !== "NONE" && (
         <div className="card">
-          <h2>Kimutatás</h2>
-          <p className="hint">Az időszak bevételei (a visszaküldött szállítmány pirossal), a kivételek takarmányonként összesítve és a záró készlet. Nyomtatható PDF vagy Excel.</p>
+          <h2>{tr("Kimutatás")}</h2>
+          <p className="hint">{tr("Az időszak bevételei (a visszaküldött szállítmány pirossal), a kivételek takarmányonként összesítve és a záró készlet. Nyomtatható PDF vagy Excel.")}</p>
           <form method="post" action="/api/exports/feeding" className="filters" data-testid="intake-export">
             <input type="hidden" name="kind" value="huto" />
             <label className="field">
-              Naptól
+              {tr("Naptól")}
               <input className="input" type="date" name="from" defaultValue={`${today.slice(0, 8)}01`} max={today} required />
             </label>
             <label className="field">
-              Napig
+              {tr("Napig")}
               <input className="input" type="date" name="to" defaultValue={today} max={today} required />
             </label>
-            <button className="btn" type="submit" name="format" value="pdf" data-testid="intake-pdf">PDF</button>
-            <button className="btn btn-soft" type="submit" name="format" value="xlsx" data-testid="intake-excel">Excel</button>
+            <button className="btn" type="submit" name="format" value="pdf" data-testid="intake-pdf">{tr("PDF")}</button>
+            <button className="btn btn-soft" type="submit" name="format" value="xlsx" data-testid="intake-excel">{tr("Excel")}</button>
           </form>
         </div>
       )}
