@@ -2698,3 +2698,37 @@ test("a day's feed cannot be ticked before the page took over, and a tick after 
   await expect(page.getByTestId("day-feeds").getByLabel("A nap takarmánya: Mysis"), "the tick was saved with the list").toBeChecked();
 });
 
+// card 51426546, barracuda's question on #245, MEASURED on #246: a value typed into a water cell before React took the page over showed
+// in the field, and the Mentés after it said "Minden érték mentve." with nothing saved (both projects). The main area is now inert
+// until then (HydratedMain). The page's scripts are held back to make that second deterministic. A past day of its own per project,
+// as an admin (who may write there), in the project's own group.
+// WHAT TURNS THIS RED: a main area that takes input before the page took over (the old code), or a value typed after it not saved.
+test("nothing can be typed before the page took over, and a water value typed after it is saved", async ({ page }, info) => {
+  const tablet = info.project.name === "tablet";
+  const day = tablet ? "2026-03-12" : "2026-03-13";
+  page.on("dialog", (d) => void (d.type() === "prompt" ? d.accept("e2e proba") : d.accept()));
+  await login(page, "teszt.admin");
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/_next/static/**/*.js", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.goto(`/vizmeres?csoport=${tablet ? "NAPI_KIS" : "NAPI_NAGY"}&nap=${day}`, { waitUntil: "domcontentloaded" });
+  // the active row's density: a plausible value, so a refusal by the server cannot pass for a lost input
+  const cell = page.locator('input[data-testid^="cell-"][data-testid$="-Sűrűség"]').first();
+  const id = await cell.getAttribute("data-testid");
+  await expect(page.getByTestId("main"), "before the page took over its main area takes no input").toHaveAttribute("inert", "");
+  release();
+  await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
+  await page.unroute("**/_next/static/**/*.js");
+  await expect(page.getByTestId("main")).not.toHaveAttribute("inert");
+  await cell.fill("1,025");
+  await page.getByTestId("save-all").click();
+  await expect(page.getByTestId("banner")).toBeVisible();
+  // what the save said: "Minden érték mentve." with nothing sent means the draft never had the value
+  const said = await page.getByTestId("banner").textContent();
+  await page.reload();
+  await expect(page.getByTestId(id!), `the value was saved (the save said: ${said})`).toHaveValue("1,025");
+});
+
