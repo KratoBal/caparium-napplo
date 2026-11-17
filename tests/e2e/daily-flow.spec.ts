@@ -2715,16 +2715,19 @@ test("a water value typed before the page took over is saved by the Mentés afte
     await route.continue();
   });
   await page.goto(`/vizmeres?csoport=${tablet ? "NAPI_KIS" : "NAPI_NAGY"}&nap=${day}`, { waitUntil: "domcontentloaded" });
-  const cell = page.locator('input[data-testid^="cell-"]').first();
+  // the active row's density: a plausible value, so a refusal by the server cannot pass for a lost input
+  const cell = page.locator('input[data-testid^="cell-"][data-testid$="-Sűrűség"]').first();
   const id = await cell.getAttribute("data-testid");
-  await cell.fill("7,9");
-  await expect(cell, "the field shows the value before the page took over").toHaveValue("7,9");
+  await cell.fill("1,025");
+  await expect(cell, "the field shows the value before the page took over").toHaveValue("1,025");
   release();
   await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
   await page.unroute("**/_next/static/**/*.js");
   await page.getByTestId("save-all").click();
   await expect(page.getByTestId("banner")).toBeVisible();
+  // what the save said: "Minden érték mentve." with nothing sent means the draft never had the value
+  const said = await page.getByTestId("banner").textContent();
   await page.reload();
-  await expect(page.getByTestId(id!), "the value typed before hydration was saved").toHaveValue("7,9");
+  await expect(page.getByTestId(id!), `the value typed before hydration was saved (the save said: ${said})`).toHaveValue("1,025");
 });
 
