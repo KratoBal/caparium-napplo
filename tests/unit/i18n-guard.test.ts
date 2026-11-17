@@ -62,10 +62,22 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
 
 const ACCENT = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;
 // Hungarian words without an accent that the screens use: a text holding one is Hungarian too
-const WORDS = new Set(["sor", "mentve", "evett", "mindenki", "nap", "napi", "heti", "medence", "csoport", "igen", "nem", "vissza", "rendben", "hiba", "nincs", "van", "kell", "csak", "egy", "lista", "kilepes"]);
-// a path, a query or an identifier ("/heti", "heti", "nap=...") is code, not a text a person reads
-const codeLike = (text: string) => /^[`/]/.test(text.trim()) || /^[a-z0-9_.:-]+$/.test(text.trim());
+// (murena, 2026-11-17: "Szer", "mind", "Napig" slipped through; the list grows as the modules come in)
+const WORDS = new Set(["sor", "mentve", "evett", "mindenki", "nap", "napi", "heti", "medence", "csoport", "igen", "nem", "vissza", "rendben", "hiba", "nincs", "van", "kell", "csak", "egy", "lista", "kilepes", "szer", "mind", "napig", "korallos", "halas", "adag", "napra", "napon", "minden", "egyik", "kesz", "uj", "mentes", "mentese"]);
+// a path, a link or an identifier ("/heti", "{x}?csoport={x}&nap={x}", "napplo-queue-v1-{x}") is code, not a text a person
+// reads. A bare lowercase word is NOT code (murena, 2026-11-17: "igen" passed as one): it needs a character only code has.
+const codeLike = (text: string) => /^[`/]/.test(text.trim()) || /^(?=.*[_.:=?&{}/0-9-])[a-z0-9_.:=?&{}/-]+$/.test(text.trim());
 const hungarian = (text: string) => !codeLike(text) && (ACCENT.test(text) || text.toLowerCase().split(/[^a-z]+/).some((w) => WORDS.has(w)));
+
+// a value under one of these names is an identifier, a path or a test hook, never a text a person reads ({ id: "heti" },
+// name="nap"): a bare lowercase word there is code since a bare word counts as Hungarian
+const CODE_NAMES = new Set(["id", "key", "href", "module", "kind", "code", "name", "type", "value", "role", "method", "action", "inputMode", "autoComplete", "className", "data-testid"]);
+function codeSlot(node: ts.Node): boolean {
+  const p = node.parent;
+  if (p && ts.isPropertyAssignment(p) && p.initializer === node) return CODE_NAMES.has(p.name.getText().replace(/["']/g, ""));
+  if (p && ts.isJsxAttribute(p)) return CODE_NAMES.has(p.name.getText());
+  return false;
+}
 
 function inTr(node: ts.Node): boolean {
   // the text's nearest call takes it as its first argument, and that call is tr() or translate()
@@ -79,8 +91,13 @@ function inTr(node: ts.Node): boolean {
   return false;
 }
 
-function leftOut(file: string): string[] {
-  const src = readFileSync(join(process.cwd(), file), "utf8");
+/** A template's literal parts, its ${...} places as {x}: what a person reads of it. */
+function templateText(node: ts.TemplateExpression): string {
+  return node.head.text + node.templateSpans.map((s) => "{x}" + s.literal.text).join("");
+}
+
+/** The Hungarian texts of a source outside tr() (the source passed in, so the rule itself is testable). */
+function scan(file: string, src: string): string[] {
   const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const out: string[] = [];
   const visit = (node: ts.Node) => {
@@ -91,15 +108,39 @@ function leftOut(file: string): string[] {
     } else if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
       const p = node.parent;
       const isKey = p && ts.isPropertyAssignment(p) && p.name === node;
-      if (!isKey && hungarian(node.text) && !inTr(node)) out.push(node.text);
-    } else if (ts.isTemplateExpression(node) && hungarian(node.getText()) && !inTr(node)) {
-      out.push(node.getText());
+      if (!isKey && !(codeSlot(node) && /^[a-z0-9_.:-]+$/.test(node.text)) && hungarian(node.text) && !inTr(node)) out.push(node.text);
+    } else if (ts.isTemplateExpression(node) && /[/?=&]/.test(templateText(node)) && codeLike(templateText(node))) {
+      // a path or a link built from parts (`/${weekly ? "heti" : "vizmeres"}?nap=${day}`): its parts are code too. Only with
+      // a path or query character: `${name}${alert ? ", figyelmeztetés" : ""}` reads "{x}{x}", and its parts are text
+      return;
+    } else if (ts.isTemplateExpression(node) && hungarian(templateText(node)) && !inTr(node)) {
+      // the template's own text, not its source: the source starts with a backtick, and that read as code, so no template was ever
+      // checked (murena, 2026-11-17)
+      out.push(templateText(node));
     }
     ts.forEachChild(node, visit);
   };
   visit(sf);
-  return out.filter((t) => !TRANSLATED[file]!.allowed.includes(t));
+  return out;
 }
+
+function leftOut(file: string): string[] {
+  const src = readFileSync(join(process.cwd(), file), "utf8");
+  return scan(file, src).filter((t) => !TRANSLATED[file]!.allowed.includes(t));
+}
+
+describe("the guard's own rule", () => {
+  it("counts a bare Hungarian word, accented or not, and a template's text", () => {
+    expect(["igen", "nap", "Mentés", "{x} sor mentve.", "Napi mérés: {x}"].filter((t) => !hungarian(t))).toEqual([]);
+  });
+  it("reads into a template made only of places, and not into a path built from parts", () => {
+    expect(scan("x.tsx", 'const a = <b aria-label={`${n}${on ? ", figyelmeztetés" : ""}`} />;')).toEqual([", figyelmeztetés"]);
+    expect(scan("x.tsx", 'const h = `/${weekly ? "heti" : "vizmeres"}?nap=${day}`;')).toEqual([]);
+  });
+  it("leaves code alone: a path, a link with a query, an identifier", () => {
+    expect(["/heti", "{x}?csoport={x}&nap={x}", "{x}?nap={x}", "napplo-queue-v1-{x}", "nap=2026-11-17", "save-all", "hu-HU"].filter(hungarian)).toEqual([]);
+  });
+});
 
 describe("the translated files hold no Hungarian text outside tr()", () => {
   for (const file of Object.keys(TRANSLATED)) {
