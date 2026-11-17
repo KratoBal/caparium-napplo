@@ -1753,6 +1753,9 @@ test("the helper: it speaks unasked without taking a click, the quick questions 
   await page.reload();
   // a login not greeted yet: the hello comes first and goes with the first click; the alert speaks after it (Lili 2026-10-29)
   await expect(page.getByTestId("helper-notice")).toHaveAttribute("data-kind", "greeting");
+  // Lili 2026-11-17: a scrollbar beside the one-line greeting. The bubble scrolled, and its own tail made it taller inside
+  // than out; a bubble that speaks never scrolls, and its tail is not cut off
+  expect(await page.getByTestId("helper-notice").evaluate((n) => getComputedStyle(n).overflowY)).toBe("visible");
   await page.getByTestId("current-user").click();
   const shown = page.getByTestId("helper-notice");
   await expect(shown).toContainText("Teszt só");
