@@ -2599,10 +2599,12 @@ test("eating log: \"Mindenki evett\" fills the empty rows of the list in one sav
   await sw.check();
   expect((await selected).ok()).toBe(true);
   await expect(sw).toBeChecked();
-  // card 7fdbf78f (2026-11-17): the save's router.refresh() runs after its response; a goto sent before it lands was cut off
-  // ("interrupted by another navigation to /etetes"). The refresh's request is waited out first
-  await page.waitForLoadState("networkidle");
-  await page.goto(`/evesi-naplo?nap=${day}`);
+  // card 7fdbf78f (2026-11-17): the save's router.refresh() runs after its response and is itself a navigation to /etetes; a goto
+  // sent before it lands is cut off ("interrupted by another navigation"). Waiting for network quiet was not enough (on a loaded
+  // runner the refresh can start after the quiet already held, #235's first run): the goto is retried until it lands
+  await expect(async () => {
+    await page.goto(`/evesi-naplo?nap=${day}`);
+  }).toPass({ timeout: 15_000 });
   await page.waitForLoadState("networkidle");
   const names = (await page.getByTestId("eating-table").locator("td.eat-name").allTextContents()).map((n) => n.trim());
   expect(names.length, "the big pool's animals are on the day's list").toBeGreaterThan(1);
