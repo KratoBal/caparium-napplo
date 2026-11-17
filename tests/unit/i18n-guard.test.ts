@@ -39,6 +39,22 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
     why: "translated where shown (EatingTable: tr(note.trim()))",
   },
   "src/lib/stock-hint.ts": { allowed: [], why: "" },
+  "src/components/MeasurementPage.tsx": {
+    allowed: ["Kis Akváriumok", "Fagyasztók hőmérséklete"],
+    why: "the tiles' captions, translated where shown (tr(look.label), tr(FRIDGE_TILE.label))",
+  },
+  "src/components/MeasurementGrid.tsx": {
+    allowed: ["Visszamosás", "Rátöltés", "Vízcsere", "Van még nem mentett mérési érték. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?"],
+    why: "the tick names and the leave warning, translated where shown (tr(TICK_TEXT[kind]), tr(LEAVE_WARNING))",
+  },
+  "src/components/FridgeCard.tsx": { allowed: ["hűtő", "fagyasztó"], why: "the kind names, translated where shown (tr(KIND[kind]))" },
+  "src/components/DayControls.tsx": { allowed: [], why: "" },
+  "src/components/ReasonSwitch.tsx": { allowed: [], why: "" },
+  "src/components/ClearX.tsx": { allowed: [], why: "" },
+  "src/components/SignButton.tsx": { allowed: [], why: "" },
+  "src/lib/fridge-alert.ts": { allowed: [], why: "" },
+  "src/app/vizmeres/page.tsx": { allowed: ["Napi vízmérések"], why: "the title, translated where shown (MeasurementPage: tr(title))" },
+  "src/app/heti/page.tsx": { allowed: ["Heti vízmérések"], why: "the title, translated where shown (MeasurementPage: tr(title))" },
   "src/components/ShellView.tsx": { allowed: ["CÁPÁRIUM", "nAPPló"], why: "the app's name" },
   "src/components/TopbarUser.tsx": { allowed: [], why: "" },
   "src/components/NavSub.tsx": { allowed: [], why: "" },
@@ -56,6 +72,15 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
     allowed: ["NAPI VÍZMÉRÉS", "Nagy medencék", "Kis Akváriumok", "HETI VÍZMÉRÉS", "Vegyszeradagolás", "Fagyasztó", "Takarmány kalkulátor", "Takarmánykivétel", "Napi etetés", "Evési napló"],
     why: "the cards' captions, a data table translated where it is shown (tr(line))",
   },
+  // murena: Vegyszeradagolás, Takarmánykalkulátor
+  "src/app/adagolas/page.tsx": { allowed: [], why: "" },
+  "src/components/DosingForms.tsx": { allowed: [], why: "" },
+  "src/components/ChemistryCalculator.tsx": { allowed: [], why: "" },
+  "src/lib/chemistry-calc.ts": { allowed: [], why: "" },
+  "src/lib/exports/dosing-pdf.ts": { allowed: [], why: "" },
+  "src/app/kalkulator/page.tsx": { allowed: [], why: "" },
+  "src/components/CalculatorForms.tsx": { allowed: [], why: "" },
+  "src/app/api/exports/dosing/route.ts": { allowed: [], why: "" },
 };
 
 const ACCENT = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;

@@ -6,6 +6,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { calculate, FR_STEP } from "@/lib/calc-math";
+import { useTr } from "./LangProvider";
 
 function requestId(): string {
   const b = new Uint8Array(16);
@@ -17,6 +18,7 @@ const num = (v: number) => String(v).replace(".", ",");
 
 function useSend() {
   const router = useRouter();
+  const tr = useTr();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   async function run(url: string, body: Record<string, unknown>, okText: string) {
@@ -26,14 +28,14 @@ function useSend() {
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId: requestId(), ...body }) });
       const b = (await res.json().catch(() => ({}))) as { error?: { message?: string; issues?: { message: string }[] } };
       if (!res.ok) {
-        setMsg({ ok: false, text: b.error?.issues?.[0]?.message ?? b.error?.message ?? "Nem sikerült." });
+        setMsg({ ok: false, text: b.error?.issues?.[0]?.message ?? b.error?.message ?? tr("Nem sikerült.") });
         return false;
       }
       setMsg({ ok: true, text: okText });
       router.refresh();
       return true;
     } catch {
-      setMsg({ ok: false, text: "Nincs kapcsolat a szerverrel." });
+      setMsg({ ok: false, text: tr("Nincs kapcsolat a szerverrel.") });
       return false;
     } finally {
       setBusy(false);
@@ -72,6 +74,7 @@ export function Calculator({
   initialAnimalId?: string;
   defaultBwKg?: string | null;
 }) {
+  const tr = useTr();
   const [bw, setBw] = useState(defaultBwKg ?? "");
   const [fr, setFr] = useState(2);
   const [n, setN] = useState(3);
@@ -85,19 +88,20 @@ export function Calculator({
     result = null;
   }
   const save = () =>
-    run("/api/calculator", { animalId, bwKg: bw.replace(",", "."), frWeekPct: fr, nWeek: n, saveAsReference: true }, "Mentve referenciaként.");
-  const pools = [...new Set(animals.map((a) => a.poolName ?? "Medence nélkül"))];
+    run("/api/calculator", { animalId, bwKg: bw.replace(",", "."), frWeekPct: fr, nWeek: n, saveAsReference: true }, tr("Mentve referenciaként."));
+  const noPool = tr("Medence nélkül");
+  const pools = [...new Set(animals.map((a) => a.poolName ?? noPool))];
   const current = animalId ? references[animalId] : undefined;
   return (
     <div data-testid="calculator">
       <div className="toolbar">
         <label className="field">
-          BW (kg)
-          <input className="input" inputMode="decimal" style={{ width: 120 }} value={bw} onChange={(e) => setBw(e.target.value)} aria-label="Testtömeg (kg)" />
+          {tr("BW (kg)")}
+          <input className="input" inputMode="decimal" style={{ width: 120 }} value={bw} onChange={(e) => setBw(e.target.value)} aria-label={tr("Testtömeg (kg)")} />
         </label>
         <label className="field">
-          Heti FR (%)
-          <select className="input" value={fr} onChange={(e) => setFr(Number(e.target.value))} aria-label="Heti FR (%)">
+          {tr("Heti FR (%)")}
+          <select className="input" value={fr} onChange={(e) => setFr(Number(e.target.value))} aria-label={tr("Heti FR (%)")}>
             {FR_OPTIONS.map((v) => (
               <option key={v} value={v}>
                 {num(v)}
@@ -106,8 +110,8 @@ export function Calculator({
           </select>
         </label>
         <label className="field">
-          Heti etetésszám (N)
-          <select className="input" value={n} onChange={(e) => setN(Number(e.target.value))} aria-label="Heti etetésszám (N)">
+          {tr("Heti etetésszám (N)")}
+          <select className="input" value={n} onChange={(e) => setN(Number(e.target.value))} aria-label={tr("Heti etetésszám (N)")}>
             {[1, 2, 3, 4, 5, 6, 7].map((v) => (
               <option key={v} value={v}>
                 {v}
@@ -118,20 +122,20 @@ export function Calculator({
       </div>
       <table className="log-table" data-testid="calc-result">
         <tbody>
-          <tr><th>FR napi</th><td>{result ? `${num(result.frDayPct)} %` : "–"}</td></tr>
-          <tr><th>F etetésenként</th><td>{result ? `${num(result.fKg)} kg = ${num(result.fG)} g` : "–"}</td></tr>
-          <tr><th>Fw hetente</th><td>{result ? `${num(result.fwG)} g` : "–"}</td></tr>
+          <tr><th>{tr("FR napi")}</th><td>{result ? `${num(result.frDayPct)} %` : "–"}</td></tr>
+          <tr><th>{tr("F etetésenként")}</th><td>{result ? `${num(result.fKg)} kg = ${num(result.fG)} g` : "–"}</td></tr>
+          <tr><th>{tr("Fw hetente")}</th><td>{result ? `${num(result.fwG)} g` : "–"}</td></tr>
         </tbody>
       </table>
       <div className="toolbar">
         <label className="field">
-          Állat
-          <select className="input" value={animalId} onChange={(e) => setAnimalId(e.target.value)} aria-label="Állat">
-            <option value="">Válassz állatot</option>
+          {tr("Állat")}
+          <select className="input" value={animalId} onChange={(e) => setAnimalId(e.target.value)} aria-label={tr("Állat")}>
+            <option value="">{tr("Válassz állatot")}</option>
             {pools.map((pool) => (
               <optgroup key={pool} label={pool}>
                 {animals
-                  .filter((a) => (a.poolName ?? "Medence nélkül") === pool)
+                  .filter((a) => (a.poolName ?? noPool) === pool)
                   .map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.name}
@@ -142,13 +146,13 @@ export function Calculator({
           </select>
         </label>
         <button className="btn" type="button" disabled={busy || !result || !animalId} onClick={() => void save()}>
-          Mentés referenciaként
+          {tr("Mentés referenciaként")}
         </button>
         <Msg msg={msg} />
       </div>
       {animalId && (
         <p className="pill" data-testid="current-reference">
-          Mai referencia: {current !== undefined ? `${num(current)} g etetésenként` : "nincs"}
+          {tr("Mai referencia: {value}", { value: current !== undefined ? tr("{amount} g etetésenként", { amount: num(current) }) : tr("nincs") })}
         </p>
       )}
     </div>
@@ -156,21 +160,22 @@ export function Calculator({
 }
 
 export function BodyWeightForm({ animalId }: { animalId: string }) {
+  const tr = useTr();
   const [w, setW] = useState("");
   const { msg, busy, run } = useSend();
   return (
     <div className="toolbar" data-testid="body-weight-form">
       <label className="field">
-        Mért testtömeg (kg)
-        <input className="input" inputMode="decimal" style={{ width: 120 }} value={w} onChange={(e) => setW(e.target.value)} aria-label="Mért testtömeg (kg)" />
+        {tr("Mért testtömeg (kg)")}
+        <input className="input" inputMode="decimal" style={{ width: 120 }} value={w} onChange={(e) => setW(e.target.value)} aria-label={tr("Mért testtömeg (kg)")} />
       </label>
       <button
         className="btn btn-soft"
         type="button"
         disabled={busy}
-        onClick={() => void run("/api/body-weights", { animalId, weightKg: w.replace(",", "."), clientTimestamp: new Date().toISOString() }, "Testtömeg mentve.").then((ok) => ok && setW(""))}
+        onClick={() => void run("/api/body-weights", { animalId, weightKg: w.replace(",", "."), clientTimestamp: new Date().toISOString() }, tr("Testtömeg mentve.")).then((ok) => ok && setW(""))}
       >
-        Testtömeg mentése
+        {tr("Testtömeg mentése")}
       </button>
       <Msg msg={msg} />
     </div>
