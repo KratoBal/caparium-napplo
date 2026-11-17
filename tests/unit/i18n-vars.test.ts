@@ -17,6 +17,7 @@ const FILES = [
   "src/lib/exports/dosing-pdf.ts",
   "src/app/kalkulator/page.tsx",
   "src/components/CalculatorForms.tsx",
+  "src/app/api/exports/dosing/route.ts",
 ];
 
 type Call = { text: string; keys: string[]; line: number };

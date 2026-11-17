@@ -34,6 +34,7 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
   "src/lib/exports/dosing-pdf.ts": { allowed: [], why: "" },
   "src/app/kalkulator/page.tsx": { allowed: [], why: "" },
   "src/components/CalculatorForms.tsx": { allowed: [], why: "" },
+  "src/app/api/exports/dosing/route.ts": { allowed: [], why: "" },
 };
 
 const ACCENT = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;
