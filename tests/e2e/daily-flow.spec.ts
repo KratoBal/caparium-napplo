@@ -2650,7 +2650,8 @@ test("eating log: \"Mindenki evett\" fills the empty rows of the list in one sav
 // card 51426546 (barracuda on #242): the marker belongs to the page on show. A menu link (a client-side navigation, the <html>
 // element stays) takes the old page's marker away, and the new page writes its own after its mount effects; without that the
 // previous page's "1" would let a test through before the new page took over. WHAT TURNS THIS RED: the marker left in place when
-// the page goes (the observer then sees only the new page's write, "1", never "removed").
+// the page goes. The observer keeps each record's OLD value (read at callback time, the attribute is already the new page's "1"):
+// with the cleanup a removal (old "1") then an add (old absent); without it one write over the old "1" (calibrated in CI, red).
 test("the hydration marker: a menu link takes the old page's marker away, the new page writes its own", async ({ page }) => {
   await login(page, "teszt.akvarista1");
   await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
@@ -2658,11 +2659,11 @@ test("the hydration marker: a menu link takes the old page's marker away, the ne
     const seen: string[] = [];
     (window as unknown as { __marks: string[] }).__marks = seen;
     new MutationObserver((records) => {
-      for (const r of records) if (r.attributeName === "data-hydrated") seen.push(document.documentElement.dataset.hydrated ?? "removed");
-    }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-hydrated"] });
+      for (const r of records) if (r.attributeName === "data-hydrated") seen.push(r.oldValue ?? "absent");
+    }).observe(document.documentElement, { attributes: true, attributeOldValue: true, attributeFilter: ["data-hydrated"] });
   });
   await page.getByRole("navigation", { name: "Fő navigáció" }).getByRole("link", { name: "Napi etetés", exact: true }).click();
   await expect(page).toHaveURL(/\/etetes/);
   await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
-  await expect.poll(() => page.evaluate(() => (window as unknown as { __marks: string[] }).__marks)).toEqual(["removed", "1"]);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __marks: string[] }).__marks)).toEqual(["1", "absent"]);
 });
