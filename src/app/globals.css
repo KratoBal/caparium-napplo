@@ -222,6 +222,9 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
 .banner-ok { background: var(--c-primary-soft); color: var(--c-primary); }
 .banner-error { background: var(--c-error-soft); color: var(--c-error); }
 .banner-warn { background: var(--c-warn-soft); color: var(--c-warn-ink); }
+/* a page whose scripts never ran (HydratedMain): the message waits a few seconds, a normal hydration removes it before that */
+.hydration-failed { position: fixed; top: 16px; left: 16px; right: 16px; z-index: 50; margin: 0; visibility: hidden; animation: hydration-failed-show 0s 4s forwards; }
+@keyframes hydration-failed-show { to { visibility: visible; } }
 .status-row { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 18px; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: currentColor; margin-right: 8px; }
 
