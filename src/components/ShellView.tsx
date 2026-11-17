@@ -71,7 +71,8 @@ export function ShellView({
         {user && <NavLinks items={navFor(user.role).map((n) => ({ ...n, label: tr(n.label) }))} active={active} tr={tr} />}
         <div className="nav-foot">{tr("CÁPASULI • TESZTKÖRNYEZET")}</div>
       </nav>
-      <HydratedMain className="main">
+      {/* no user: the login and password pages, native forms that must work even when the scripts fail */}
+      <HydratedMain className="main" guard={user !== null}>
         <ReasonProvider on={reasons}>{children}</ReasonProvider>
       </HydratedMain>
       {helper && <Helper data={helper} userName={user ? greetingName(user) : undefined} loginAt={user?.sessionStartedAt} userKey={user?.id} />}

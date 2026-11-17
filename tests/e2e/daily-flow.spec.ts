@@ -2747,3 +2747,16 @@ test("a page whose scripts never run says so; a page that hydrated shows no such
   await expect(page.getByTestId("hydration-failed")).toHaveCount(0);
 });
 
+// #246 made the Shell's main area inert until the page hydrated, and the login page is in the Shell too: with its scripts failing, the
+// NATIVE login form took no click (measured on the next dev here, where pages do not hydrate). The pages without a user are native
+// forms with nothing in React state, so they are not guarded. WHAT TURNS THIS RED: a login that does not work without the scripts.
+test("the login works without the page's scripts (a native form, not guarded by the inert main area)", async ({ page }) => {
+  await page.route("**/_next/static/**/*.js", (route) => route.abort());
+  await page.goto("/belepes", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("main")).not.toHaveAttribute("inert");
+  await page.getByLabel("Felhasználónév").fill("teszt.akvarista1");
+  await page.getByLabel("Jelszó").fill(PASSWORD);
+  await page.getByRole("button", { name: "Bejelentkezés" }).click();
+  await expect(page.getByRole("heading", { name: "Jó munkát!" })).toBeVisible();
+});
+
