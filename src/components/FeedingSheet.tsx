@@ -18,9 +18,10 @@
 // someone else is a conflict on that cell, never silently overwritten (barracuda #45). Unsaved drafts ask before the
 // page is left, as the measurement page does (#38). A cell keeps one request id per change until it is saved (#42).
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { sheetColorBg } from "@/lib/sheet-color-palette";
 import { vanishedDrafts } from "@/lib/sheet-drafts";
+import { isPlainTab, nextRowKey } from "@/lib/sheet-tab";
 import { formatDay } from "@/lib/time";
 import { ClearX } from "./ClearX";
 import { DayControls, type DayLock } from "./DayControls";
@@ -109,6 +110,30 @@ export function FeedingSheet({
   // a second tap closes it. One card is open at a time. Tablet and desktop keep the table; there this stays null and no button is rendered.
   const phone = useIsPhone();
   const [openKey, setOpenKey] = useState<string | null>(null);
+  // Tab moves to the next animal (lib/sheet-tab.ts): the row it went to, until that row is drawn with its fields
+  const tabTo = useRef<string | null>(null);
+  const body = useRef<HTMLTableSectionElement>(null);
+  useEffect(() => {
+    if (!tabTo.current || tabTo.current !== active) return;
+    const first = body.current?.querySelector<HTMLInputElement>(`tr[data-sheet-row="${CSS.escape(active)}"] input`);
+    if (!first) return;
+    tabTo.current = null;
+    first.focus();
+    // ready to type: what the field holds is selected, so the next number replaces it
+    if (first.type !== "checkbox") first.select();
+  }, [active, openKey]);
+  function onRowKey(e: KeyboardEvent<HTMLTableRowElement>, key: string) {
+    if (!isPlainTab(e)) return;
+    const next = nextRowKey(
+      recipients.map((x) => x.key),
+      key,
+    );
+    if (!next) return;
+    e.preventDefault();
+    tabTo.current = next;
+    onActive(next);
+    if (phone) setOpenKey(next);
+  }
   const keyOf = (i: SheetItem) => i.animalId ?? `g:${i.groupId}`;
   const cellKey = (rec: string, feedId: string) => `${rec}|${feedId}`;
   const cellItems = (rec: string, feedId: string) => items.filter((i) => keyOf(i) === rec && i.feedId === feedId);
@@ -356,7 +381,7 @@ export function FeedingSheet({
                   <th>Összesen</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody ref={body}>
                 {recipients.map((r) => {
                   // on a phone a row's fields show only while its card is open (it opened by being made the active one)
                   const open = phone && openKey === r.key;
@@ -370,7 +395,9 @@ export function FeedingSheet({
                       data-color={bg ? r.color ?? undefined : undefined}
                       aria-selected={isActive}
                       data-open={open ? "1" : undefined}
+                      data-sheet-row={r.key}
                       onClick={editable ? () => onActive(r.key) : undefined}
+                      onKeyDown={isActive ? (e) => onRowKey(e, r.key) : undefined}
                     >
                       <td className="sheet-name" title={r.note}>
                         {phone ? (
