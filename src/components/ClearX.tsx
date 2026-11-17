@@ -4,14 +4,17 @@
 // deleting the value by hand; shown only while the field holds something. The feeding sheet and the daily and weekly
 // water measurements use it (wrap the field in <span className="clearable">). Not in the tab order, not printed.
 // The label must not be the field's own label with a word added: a lookup by the field's label would find both.
+import { useTr } from "./LangProvider";
+
 export function ClearX({ shown, label, onClear }: { shown: boolean; label: string; onClear: () => void }) {
+  const tr = useTr();
   if (!shown) return null;
   return (
     <button
       type="button"
       className="clear-x no-print"
       tabIndex={-1}
-      title="Kiürítés"
+      title={tr("Kiürítés")}
       aria-label={label}
       onClick={(e) => {
         e.stopPropagation();
