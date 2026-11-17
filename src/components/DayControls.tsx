@@ -4,6 +4,7 @@
 // A feeding day can also be closed by hand before midnight (T-01/3), a water day only after a reopen.
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTr } from "./LangProvider";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 
 type Status = { state: "OPEN" | "CLOSED"; closeMode: "MANUAL" | "AUTOMATIC" | null; reopened: boolean; backfill?: boolean };
@@ -41,23 +42,26 @@ export function DayControls({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const reasonsOn = useReasonsOn();
+  const tr = useTr();
   // an old day keyed in afterwards stays open until it is closed once, by hand (src/lib/master.ts, ensureJournalDayForEntry)
-  const label = status.backfill
-    ? "Nyitott (visszamenőleges bevitel)"
-    : status.reopened
-      ? "Újranyitva"
-      : status.state === "CLOSED"
-        ? status.closeMode === "AUTOMATIC"
-          ? "Lezárva (automatikusan, éjfélkor)"
-          : "Lezárva"
-        : "Nyitott";
+  const label = tr(
+    status.backfill
+      ? "Nyitott (visszamenőleges bevitel)"
+      : status.reopened
+        ? "Újranyitva"
+        : status.state === "CLOSED"
+          ? status.closeMode === "AUTOMATIC"
+            ? "Lezárva (automatikusan, éjfélkor)"
+            : "Lezárva"
+          : "Nyitott",
+  );
 
   async function act(path: "reopen" | "close") {
     setError(null);
-    if (path === "close" && unsaved > 0 && !window.confirm(`${unsaved} mentetlen változás van ezen a lapon. Előbb mentsd el, mert a lezárás után csak újranyitással írható. Lezárod most, mentés nélkül?`)) return;
+    if (path === "close" && unsaved > 0 && !window.confirm(tr("{n} mentetlen változás van ezen a lapon. Előbb mentsd el, mert a lezárás után csak újranyitással írható. Lezárod most, mentés nélkül?", { n: unsaved }))) return;
     let reason: string | undefined;
     if (path === "reopen") {
-      const asked = askReason(reasonsOn, "A nap újranyitásának oka:", "Újranyitod ezt a napot?");
+      const asked = askReason(reasonsOn, tr("A nap újranyitásának oka:"), tr("Újranyitod ezt a napot?"));
       if (!asked) return;
       reason = asked.reason;
     }
@@ -68,7 +72,7 @@ export function DayControls({
     });
     if (!res.ok) {
       const b = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-      setError(b.error?.message ?? "A művelet nem sikerült.");
+      setError(b.error?.message ?? tr("A művelet nem sikerült."));
       return;
     }
     router.refresh();
@@ -79,7 +83,7 @@ export function DayControls({
     return closable ? (
       <div className="day-controls no-print" data-testid="day-status-bottom">
         <button className="btn btn-soft" type="button" onClick={() => void act("close")}>
-          Nap lezárása
+          {tr("Nap lezárása")}
         </button>
         {error && <span className="err">{error}</span>}
       </div>
@@ -89,12 +93,12 @@ export function DayControls({
       <span className={`badge ${status.state === "CLOSED" && !status.reopened ? "badge-invalid" : "badge-valid"}`}>{label}</span>
       {isAdmin && status.state === "CLOSED" && (
         <button className="btn btn-soft" type="button" onClick={() => void act("reopen")}>
-          Nap újranyitása
+          {tr("Nap újranyitása")}
         </button>
       )}
       {closable && (
         <button className="btn btn-soft" type="button" onClick={() => void act("close")}>
-          Nap lezárása
+          {tr("Nap lezárása")}
         </button>
       )}
       {error && <span className="err">{error}</span>}
