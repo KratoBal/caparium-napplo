@@ -3,6 +3,8 @@
  * active fridge has no reading yet, or a reading is out of its range. Pure, so the page and the tests share one rule.
  * A closed fridge never counts as missing; its old readings still count when out of range (the day's book shows them).
  */
+import { translate, type TrVars } from "./i18n/translate";
+
 export type FridgeAlert = { missing: number; out: number };
 
 export function fridgeAlert(
@@ -15,10 +17,10 @@ export function fridgeAlert(
   return missing || out ? { missing, out } : null;
 }
 
-/** The mark's text for a screen reader and the tooltip: what is wrong, in one line. */
-export function fridgeAlertText(alert: FridgeAlert): string {
+/** The mark's text for a screen reader and the tooltip: what is wrong, in one line, in the page's language. */
+export function fridgeAlertText(alert: FridgeAlert, tr: (text: string, vars?: TrVars) => string = (t, v) => translate("hu", t, v)): string {
   const parts: string[] = [];
-  if (alert.out) parts.push(`${alert.out} tartományon kívüli érték`);
-  if (alert.missing) parts.push(`${alert.missing} még nincs beírva`);
+  if (alert.out) parts.push(tr("{n} tartományon kívüli érték", { n: alert.out }));
+  if (alert.missing) parts.push(tr("{n} még nincs beírva", { n: alert.missing }));
   return parts.join(", ");
 }

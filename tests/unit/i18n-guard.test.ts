@@ -9,6 +9,22 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
+  "src/components/MeasurementPage.tsx": {
+    allowed: ["Kis Akváriumok", "Fagyasztók hőmérséklete"],
+    why: "the tiles' captions, translated where shown (tr(look.label), tr(FRIDGE_TILE.label))",
+  },
+  "src/components/MeasurementGrid.tsx": {
+    allowed: ["Visszamosás", "Rátöltés", "Vízcsere", "Van még nem mentett mérési érték. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?"],
+    why: "the tick names and the leave warning, translated where shown (tr(TICK_TEXT[kind]), tr(LEAVE_WARNING))",
+  },
+  "src/components/FridgeCard.tsx": { allowed: ["hűtő", "fagyasztó"], why: "the kind names, translated where shown (tr(KIND[kind]))" },
+  "src/components/DayControls.tsx": { allowed: [], why: "" },
+  "src/components/ReasonSwitch.tsx": { allowed: [], why: "" },
+  "src/components/ClearX.tsx": { allowed: [], why: "" },
+  "src/components/SignButton.tsx": { allowed: [], why: "" },
+  "src/lib/fridge-alert.ts": { allowed: [], why: "" },
+  "src/app/vizmeres/page.tsx": { allowed: ["Napi vízmérések"], why: "the title, translated where shown (MeasurementPage: tr(title))" },
+  "src/app/heti/page.tsx": { allowed: ["Heti vízmérések"], why: "the title, translated where shown (MeasurementPage: tr(title))" },
   "src/components/ShellView.tsx": { allowed: ["CÁPÁRIUM", "nAPPló"], why: "the app's name" },
   "src/components/TopbarUser.tsx": { allowed: [], why: "" },
   "src/components/NavSub.tsx": { allowed: [], why: "" },
