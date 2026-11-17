@@ -2763,19 +2763,22 @@ test("the login works without the page's scripts (a native form, not guarded by 
 // barracuda on #249: the guard came off every page without a user, but Elfelejtett jelszó holds a React-state form, where a value typed
 // before hydration would be lost again. It asks for the guard (Shell guard); the login stays native. WHAT TURNS THIS RED: the forgotten
 // password page taking input before the page took over, or staying inert after it.
-test("the forgotten-password page is inert until it hydrated; the login page is not", async ({ page }) => {
-  let release!: () => void;
-  const held = new Promise<void>((resolve) => (release = resolve));
-  await page.route("**/_next/static/**/*.js", async (route) => {
-    await held;
-    await route.continue();
-  });
-  await page.goto("/elfelejtett-jelszo", { waitUntil: "domcontentloaded" });
-  await expect(page.getByTestId("main")).toHaveAttribute("inert", "");
-  release();
-  await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
-  await expect(page.getByTestId("main")).not.toHaveAttribute("inert");
-  await page.unroute("**/_next/static/**/*.js");
+test("the password pages are inert until they hydrated; the login page is not", async ({ page }) => {
+  // the forgotten-password page, and the reset link's page (any token: the Shell is the same, a link no longer usable included)
+  for (const url of ["/elfelejtett-jelszo", "/jelszo-visszaallitas/e2e-nem-letezo-token"]) {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route("**/_next/static/**/*.js", async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto(url, { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("main"), url).toHaveAttribute("inert", "");
+    release();
+    await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
+    await expect(page.getByTestId("main"), url).not.toHaveAttribute("inert");
+    await page.unroute("**/_next/static/**/*.js");
+  }
   await page.route("**/_next/static/**/*.js", (route) => route.abort());
   await page.goto("/belepes", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("main")).not.toHaveAttribute("inert");

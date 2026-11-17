@@ -18,7 +18,7 @@ export async function Shell({
 }: {
   /**
    * Whether the main area is inert until hydration (HydratedMain). By default only with a user: the login is a native form. A page
-   * without a user that holds a React-state form (Elfelejtett jelszó) asks for it (barracuda on #249).
+   * without a user that holds a React-state form (Elfelejtett jelszó, the reset link's Új jelszó) asks for it (barracuda on #249).
    */
   guard?: boolean;
   /** none on the start page (Lili 2026-10-27 13:02 UTC): the bar keeps the day and the user */
