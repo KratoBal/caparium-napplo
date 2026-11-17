@@ -5,13 +5,15 @@ import { prisma } from "../db";
 import { dosingLog, type DosingFilter } from "../dosing";
 import { pickValid } from "../master";
 import { formatDay, formatPeriod, localTimeOf } from "../time";
+import { translate, type TrVars } from "../i18n/translate";
 import { pdfPage } from "./pdf-layout";
 
-export const DOSING_PDF_TITLE = "Cápasuli vegyszeradagolás";
+/** The request's translator; a caller without one (a test) gets the Hungarian PDF. */
+const hungarian = (text: string, vars?: TrVars) => translate("hu", text, vars);
 
 const num = (v: string) => v.replace(".", ",");
 
-export async function buildDosingPdf(f: DosingFilter): Promise<{ buffer: Buffer; rows: number }> {
+export async function buildDosingPdf(f: DosingFilter, tr: (text: string, vars?: TrVars) => string = hungarian): Promise<{ buffer: Buffer; rows: number }> {
   const log = await dosingLog(f);
   const valid = log.filter((r) => r.status === "VALID");
   const skipped = log.length - valid.length;
@@ -21,21 +23,21 @@ export async function buildDosingPdf(f: DosingFilter): Promise<{ buffer: Buffer;
     f.chemicalId ? prisma.chemical.findUnique({ where: { id: f.chemicalId }, include: { names: true } }) : null,
   ]);
   const filters = [
-    pool ? `medence: ${pickValid(pool.names, at)?.displayName ?? pool.code}` : null,
-    chemical ? `szer: ${pickValid(chemical.names, at)?.name ?? chemical.names.at(-1)?.name ?? "?"}` : null,
+    pool ? tr("medence: {name}", { name: pickValid(pool.names, at)?.displayName ?? pool.code }) : null,
+    chemical ? tr("szer: {name}", { name: pickValid(chemical.names, at)?.name ?? chemical.names.at(-1)?.name ?? "?" }) : null,
   ].filter(Boolean);
-  const title = `${DOSING_PDF_TITLE}: ${formatPeriod(f.from, f.to)}`;
+  const title = `${tr("Cápasuli vegyszeradagolás")}: ${formatPeriod(f.from, f.to)}`;
   const page = pdfPage({
     title,
     // the period ends in its own dot (2029.01.09.): nothing more after it unless a filter or a note follows
-    subtitle: `Időszak: ${formatPeriod(f.from, f.to)}${filters.length ? ` (${filters.join(", ")})` : ""}${skipped ? `; ${skipped} érvénytelenített tétel nem szerepel.` : ""}`,
+    subtitle: `${tr("Időszak: {period}", { period: formatPeriod(f.from, f.to) })}${filters.length ? ` (${filters.join(", ")})` : ""}${skipped ? `; ${tr("{n} érvénytelenített tétel nem szerepel.", { n: skipped })}` : ""}`,
   });
-  page.band("Napló");
-  if (valid.length === 0) page.note("Az időszakban nem volt vegyszeradagolás.");
+  page.band(tr("Napló"));
+  if (valid.length === 0) page.note(tr("Az időszakban nem volt vegyszeradagolás."));
   else
     page.table(
       [72, 44, 110, 135, 82, 72],
-      ["Nap", "Idő", "Medence", "Szer", "Mennyiség", "Végezte"],
+      [tr("Nap"), tr("Idő"), tr("Medence"), tr("Szer"), tr("Mennyiség"), tr("Végezte")],
       valid.map((r) => ({ cells: [formatDay(r.day), localTimeOf(r.at), r.pool, r.chemical, `${num(r.quantity)} ${r.unit}`, r.by] })),
     );
   // the period's total per chemical and the unit it was dosed in
@@ -47,10 +49,10 @@ export async function buildDosingPdf(f: DosingFilter): Promise<{ buffer: Buffer;
     sums.set(key, s);
   }
   if (sums.size) {
-    page.band("Összesen szerenként");
+    page.band(tr("Összesen szerenként"));
     page.table(
       [327, 188],
-      ["Szer", "Összesen"],
+      [tr("Szer"), tr("Összesen")],
       [...sums.values()]
         .sort((a, b) => a.chemical.localeCompare(b.chemical, "hu") || a.unit.localeCompare(b.unit))
         .map((s) => ({ cells: [s.chemical, `${num(String(Math.round(s.sum * 10000) / 10000))} ${s.unit}`], total: true })),

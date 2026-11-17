@@ -26,6 +26,14 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
     allowed: ["NAPI VÍZMÉRÉS", "Nagy medencék", "Kis Akváriumok", "HETI VÍZMÉRÉS", "Vegyszeradagolás", "Fagyasztó", "Takarmány kalkulátor", "Takarmánykivétel", "Napi etetés", "Evési napló"],
     why: "the cards' captions, a data table translated where it is shown (tr(line))",
   },
+  // murena: Vegyszeradagolás, Takarmánykalkulátor
+  "src/app/adagolas/page.tsx": { allowed: [], why: "" },
+  "src/components/DosingForms.tsx": { allowed: [], why: "" },
+  "src/components/ChemistryCalculator.tsx": { allowed: [], why: "" },
+  "src/lib/chemistry-calc.ts": { allowed: [], why: "" },
+  "src/lib/exports/dosing-pdf.ts": { allowed: [], why: "" },
+  "src/app/kalkulator/page.tsx": { allowed: [], why: "" },
+  "src/components/CalculatorForms.tsx": { allowed: [], why: "" },
 };
 
 const ACCENT = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;
