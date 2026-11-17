@@ -2784,3 +2784,19 @@ test("the password pages are inert until they hydrated; the login page is not", 
   await expect(page.getByTestId("main")).not.toHaveAttribute("inert");
 });
 
+// card 51426546, measured on #248: on a past day the first selection turns the badge into "Nyitott (visszamenőleges bevitel)", and the
+// tablet's toolbar re-wrapped (131 -> 193 px), moving everything under it while a tap was on its way (three flaky tests). The toolbar's
+// day controls now have one size whatever the state. WHAT TURNS THIS RED: the toolbar or the day's feeds moving with the first selection.
+test("the first selection of a past day does not move the page under the toolbar", async ({ page }, info) => {
+  const day = info.project.name === "tablet" ? "2026-03-14" : "2026-03-15";
+  await login(page, "teszt.admin");
+  await gotoReady(page, `/etetes?nap=${day}`);
+  const toolbar = page.locator(".toolbar").first();
+  const feeds = page.getByTestId("day-feeds");
+  const before = { bar: (await toolbar.boundingBox())!.height, feeds: (await feeds.boundingBox())!.y };
+  await page.getByLabel("Teszt Egy a mai listán").check();
+  await expect(page.getByTestId("day-status").locator(".badge")).toHaveText("Nyitott (visszamenőleges bevitel)");
+  const after = { bar: (await toolbar.boundingBox())!.height, feeds: (await feeds.boundingBox())!.y };
+  expect(after, "the toolbar's height and the day's feeds stay where they were").toEqual(before);
+});
+
