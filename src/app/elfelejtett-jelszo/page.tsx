@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function ForgotPasswordPage() {
   if (await currentUser()) redirect("/");
   return (
-    <Shell title="Elfelejtett jelszó" user={null} guard>
+    <Shell title="Elfelejtett jelszó" user={null}>
       <div className="login-wrap">
         <div className="card login-card">
           <h2>Elfelejtett jelszó</h2>
