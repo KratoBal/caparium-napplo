@@ -2732,3 +2732,42 @@ test("nothing can be typed before the page took over, and a water value typed af
   await expect(page.getByTestId(id!), `the value was saved (the save said: ${said})`).toHaveValue("1,025");
 });
 
+// MERES (card 51426546, acrobot 55167), NOT TO BE MERGED: the start of the 655 test twenty times, no retry, each on a day of its own,
+// with the page's console (DayFeeds mount, unmount, the pick's reset, the tick's onChange) and the RSC requests in the test's output.
+test.describe("meres 655", () => {
+  test.describe.configure({ retries: 0 });
+  for (let i = 0; i < 20; i++) {
+    test(`meres 655 #${i}`, async ({ page }, info) => {
+      const day = budapestDay(info.project.name === "tablet" ? -100 - i : -200 - i);
+      const t0 = Date.now();
+      const log: string[] = [];
+      page.on("console", (m) => { if (m.text().startsWith("[meres]")) log.push(`${Date.now() - t0}ms ${m.text()}`); });
+      page.on("request", (r) => { if (r.url().includes("_rsc") || r.url().includes("/api/feeding/")) log.push(`${Date.now() - t0}ms REQ ${r.method()} ${r.url().replace(/^https?:[/][/][^/]+/, "")}`); });
+      page.on("response", (r) => { if (r.url().includes("_rsc") || r.url().includes("/api/feeding/")) log.push(`${Date.now() - t0}ms RES ${r.status()} ${r.url().replace(/^https?:[/][/][^/]+/, "")}`); });
+      page.on("dialog", (d) => void d.accept());
+      // the hydration time of each page load, from the navigation's start (barracuda on #247: is 4 s long enough on the tablet?)
+      await page.addInitScript(() => {
+        new MutationObserver(() => {
+          if (document.documentElement.dataset.hydrated && !(window as unknown as { __hydratedAt?: number }).__hydratedAt)
+            (window as unknown as { __hydratedAt?: number }).__hydratedAt = Math.round(performance.now());
+        }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-hydrated"] });
+      });
+      await login(page, "teszt.admin");
+      await gotoReady(page, `/etetes?nap=${day}`);
+      log.push(`${Date.now() - t0}ms ready, HYDRATED_AT ${await page.evaluate(() => (window as unknown as { __hydratedAt?: number }).__hydratedAt)}ms after the navigation started`);
+      await page.getByLabel("Teszt Egy a mai listán").check();
+      log.push(`${Date.now() - t0}ms Teszt Egy checked`);
+      const tick = page.getByTestId("day-feeds").getByLabel("A nap takarmánya: Mysis");
+      try {
+        await tick.check({ timeout: 5000 });
+        log.push(`${Date.now() - t0}ms Mysis check done`);
+        await page.waitForTimeout(1500);
+        log.push(`${Date.now() - t0}ms after 1.5 s: ${await tick.isChecked()}`);
+      } finally {
+        console.log(`MERES655 ${info.project.name} #${i}\n  ${log.join("\n  ")}`);
+      }
+      await expect(tick).toBeChecked();
+    });
+  }
+});
+

@@ -176,7 +176,15 @@ export function DayFeeds({
   // reset only when the SAVED choice changes: a refresh after another action brings a new array with the same
   // content, and resetting on it dropped a tick not saved yet (measured in the e2e)
   const chosenKey = [...chosen].sort().join();
-  useEffect(() => setPicked(chosenKey ? chosenKey.split(",") : []), [chosenKey]);
+  // MERES (card 51426546), not to be merged: when DayFeeds mounts, unmounts and resets its pick
+  useEffect(() => {
+    console.log("[meres] DayFeeds mount");
+    return () => console.log("[meres] DayFeeds unmount");
+  }, []);
+  useEffect(() => {
+    console.log(`[meres] chosenKey effect "${chosenKey}"`);
+    setPicked(chosenKey ? chosenKey.split(",") : []);
+  }, [chosenKey]);
   const { msg, busy, run } = useSend();
   const tr = useTr();
   const hydrated = useHydrated();
@@ -200,6 +208,7 @@ export function DayFeeds({
                 onChange={(e) => {
                   // functional: two quick ticks before a re-render must not overwrite each other (seen in the e2e)
                   const on = e.target.checked;
+                  console.log(`[meres] DayFeeds onChange ${f.name} ${on}`);
                   setPicked((cur) => (on ? [...new Set([...cur, f.id])] : cur.filter((x) => x !== f.id)));
                 }}
               />
