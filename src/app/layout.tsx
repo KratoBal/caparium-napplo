@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { THEME_COLOR } from "@/lib/app-theme";
 import { EnterNext } from "@/components/EnterNext";
+import { pageLang } from "@/lib/i18n/server";
 
 export const metadata: Metadata = {
   title: "Cápárium nAPPló",
@@ -24,9 +25,10 @@ export const viewport: Viewport = {
   themeColor: THEME_COLOR,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // the device's language (lib/i18n/lang.ts): a screen reader and the browser's own words follow it
   return (
-    <html lang="hu">
+    <html lang={await pageLang()}>
       <body>
         <EnterNext />
         {children}

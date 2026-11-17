@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { NavItem, NavKey } from "@/lib/nav";
+import { useTr } from "./LangProvider";
 
 const NARROW = "(max-width: 900px)";
 
@@ -18,7 +19,8 @@ export function NavSub({ parent, items, active }: { parent: NavItem; items: NavI
   const [top, setTop] = useState(0);
   const box = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
-  const label = `${parent.label} almenü`;
+  const tr = useTr();
+  const label = tr("{label} almenü", { label: parent.label });
   const here = active === parent.key || items.some((n) => n.key === active);
   const rowBottom = useCallback(() => Math.round((box.current?.closest(".nav") ?? box.current)?.getBoundingClientRect().bottom ?? 0), []);
   useEffect(() => {

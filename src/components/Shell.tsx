@@ -3,6 +3,7 @@ import type { HelperData } from "@/lib/helpers";
 import { prisma } from "@/lib/db";
 import { monogramResolver } from "@/lib/master";
 import type { NavKey } from "@/lib/nav";
+import { pageLang } from "@/lib/i18n/server";
 import { reasonsRequired } from "@/lib/reasons";
 import { businessDayOf, formatDay } from "@/lib/time";
 import { ShellView } from "./ShellView";
@@ -23,12 +24,13 @@ export async function Shell({
   children: React.ReactNode;
 }) {
   const today = formatDay(businessDayOf(new Date()));
+  const lang = await pageLang(user);
   const reasons = await reasonsRequired(prisma);
   // the monogram of the phone's profile button (R-13: the one source); a user with none reads as the initials of the name
   const raw = user ? (await monogramResolver([user.id])).monogram(user.id, new Date()) : "";
   const monogram = user && (raw === user.fullName || raw.length > 4) ? user.fullName.split(/\s+/).map((w) => w.charAt(0).toLocaleUpperCase("hu")).join("") : raw;
   return (
-    <ShellView title={title} active={active} user={user} helper={helper} today={today} reasons={reasons} monogram={monogram}>
+    <ShellView title={title} active={active} user={user} helper={helper} today={today} reasons={reasons} monogram={monogram} lang={lang}>
       {children}
     </ShellView>
   );
