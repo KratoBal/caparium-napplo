@@ -21,6 +21,9 @@ describe("translate", () => {
     expect(translate("en", "{n} sor mentve.", { n: 3 })).toBe("3 sor mentve.");
     expect(translate("en", "{a} és {b}", { a: 1 })).toBe("1 és {b}");
   });
+  it("a text named like an object's member (toString, constructor) is a plain text, in the dictionary and in the data places", () => {
+    expect([translate("en", "toString"), translate("en", "constructor"), translate("en", "{toString}", {})]).toEqual(["toString", "constructor", "{toString}"]);
+  });
   it("every English text keeps its Hungarian's data places (a {name} lost or added would hide data or show a brace)", () => {
     const broken = Object.entries(EN).filter(([hu, en]) => placeholdersOf(hu).join() !== placeholdersOf(en).join());
     expect(broken).toEqual([]);
