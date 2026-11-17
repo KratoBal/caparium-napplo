@@ -501,6 +501,12 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
   .water-head-actions form .input { width: 100%; min-width: 0; }
 }
 .day-controls .badge { font-size: 13px; padding: 6px 12px; }
+/* card 51426546 (measured on #248): in a page's toolbar the day badge has one width and the controls one height whatever the state, so
+   the first entry of a past day ("Nyitott" -> "Nyitott (visszamenőleges bevitel)") does not re-wrap the toolbar on the tablet and move
+   everything under it (131 -> 193 px, a tap landed on the wrong place). The long text wraps inside the badge; none of it is shortened.
+   Only in the toolbar: the water head (.water-head) keeps its tight row. */
+.toolbar > .day-controls { min-height: calc(3 * 1.25 * 13px + 14px); }
+.toolbar > .day-controls .badge { width: 12em; white-space: normal; text-align: center; line-height: 1.25; }
 .err { color: var(--c-error); font-weight: 600; }
 
 .input.small { width: 110px; }
