@@ -2667,3 +2667,34 @@ test("the hydration marker: a menu link takes the old page's marker away, the ne
   await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => (window as unknown as { __marks: string[] }).__marks)).toEqual(["1", "absent"]);
 });
+
+// card 51426546, the product suspicion left open on #242 (acrobot 55118), MEASURED on #245: on a slow tablet the markup shows before
+// React has taken the page over, a feed ticked in that second showed the tick, and hydration took it off again (both projects). The
+// boxes are now disabled until then (useHydrated). This holds the page's scripts back to make that second deterministic.
+// WHAT TURNS THIS RED: a box that can be ticked before the page took over (the old code), or a tick after it that is not saved.
+test("a day's feed cannot be ticked before the page took over, and a tick after it is saved with the list", async ({ page }, info) => {
+  const day = info.project.name === "tablet" ? "2026-03-10" : "2026-03-11";
+  page.on("dialog", (d) => void d.accept());
+  await login(page, "teszt.admin");
+  // routing turns the HTTP cache off, so no chunk of the Start page slips past the hold
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/_next/static/**/*.js", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.goto(`/etetes?nap=${day}`, { waitUntil: "domcontentloaded" });
+  const dayFeeds = page.getByTestId("day-feeds");
+  const tick = dayFeeds.getByLabel("A nap takarmánya: Mysis");
+  await expect(tick, "before the page took over the box cannot be ticked in vain").toBeDisabled();
+  release();
+  await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
+  await page.unroute("**/_next/static/**/*.js");
+  await tick.check();
+  await page.getByLabel("Teszt Egy a mai listán").check();
+  await dayFeeds.getByRole("button", { name: "Takarmánylap kész" }).click();
+  await expect(dayFeeds.getByTestId("list-state")).toHaveText("Takarmánylap kész");
+  await page.reload();
+  await expect(page.getByTestId("day-feeds").getByLabel("A nap takarmánya: Mysis"), "the tick was saved with the list").toBeChecked();
+});
+

@@ -14,6 +14,7 @@ import { stockHint, type StockInfo } from "@/lib/stock-hint";
 import { formatDay } from "@/lib/time";
 import { useTr } from "./LangProvider";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
+import { useHydrated } from "./useHydrated";
 import { useLeaveWarning } from "./useLeaveWarning";
 
 function requestId(): string {
@@ -90,6 +91,7 @@ export function Msg({ msg }: { msg: { ok: boolean; text: string } | null }) {
 export function SelectBox({ day, animalId, name, selected, disabled }: { day: string; animalId: string; name: string; selected: boolean; disabled: boolean }) {
   const { msg, busy, run } = useSend();
   const tr = useTr();
+  const hydrated = useHydrated();
   // shown at once, rolled back when the server refuses (the refresh brings the stored state)
   const [shown, setShown] = useState(selected);
   useEffect(() => setShown(selected), [selected]);
@@ -98,7 +100,7 @@ export function SelectBox({ day, animalId, name, selected, disabled }: { day: st
       <input
         type="checkbox"
         checked={shown}
-        disabled={disabled || busy}
+        disabled={!hydrated || disabled || busy}
         aria-label={tr("{name} a mai listán", { name })}
         onChange={(e) => {
           const next = e.target.checked;
@@ -123,6 +125,7 @@ export function SelectBox({ day, animalId, name, selected, disabled }: { day: st
 export function GroupSwitch({ day, name, memberIds, selectedCount }: { day: string; name: string; memberIds: string[]; selectedCount: number }) {
   const { msg, busy, run } = useSend();
   const tr = useTr();
+  const hydrated = useHydrated();
   const allOn = memberIds.length > 0 && selectedCount === memberIds.length;
   // shown at once, rolled back when the server refuses (the refresh brings the stored state), as the animal's tick
   const [shown, setShown] = useState(allOn);
@@ -134,7 +137,7 @@ export function GroupSwitch({ day, name, memberIds, selectedCount }: { day: stri
         type="checkbox"
         role="switch"
         checked={shown}
-        disabled={busy}
+        disabled={!hydrated || busy}
         aria-label={tr("{name}: mind kijelölve", { name })}
         title={tr(shown ? "Mind kijelölve: kikapcsolva egyik sem" : "Bekapcsolva mind kijelölve")}
         onChange={(e) => {
@@ -176,6 +179,7 @@ export function DayFeeds({
   useEffect(() => setPicked(chosenKey ? chosenKey.split(",") : []), [chosenKey]);
   const { msg, busy, run } = useSend();
   const tr = useTr();
+  const hydrated = useHydrated();
   const changed = [...picked].sort().join() !== [...chosen].sort().join();
   return (
     <div data-testid="day-feeds">
@@ -191,7 +195,7 @@ export function DayFeeds({
               <input
                 type="checkbox"
                 checked={picked.includes(f.id)}
-                disabled={!editable || busy}
+                disabled={!hydrated || !editable || busy}
                 aria-label={tr("A nap takarmánya: {name}", { name: f.name })}
                 onChange={(e) => {
                   // functional: two quick ticks before a re-render must not overwrite each other (seen in the e2e)
@@ -260,6 +264,7 @@ export type FeedingModeValue = keyof typeof FEEDING_MODE_LABEL;
 export function FeedingModeChoice({ day, mode, editable }: { day: string; mode: FeedingModeValue | null; editable: boolean }) {
   const { msg, busy, run } = useSend();
   const tr = useTr();
+  const hydrated = useHydrated();
   // the choice shows at once; the saved one comes back with the refresh, and a failed save puts the saved one back
   const [picked, setPicked] = useState<FeedingModeValue | null>(mode);
   useEffect(() => setPicked(mode), [mode]);
@@ -272,7 +277,7 @@ export function FeedingModeChoice({ day, mode, editable }: { day: string; mode: 
             type="radio"
             name={`feeding-mode-${day}`}
             checked={picked === m}
-            disabled={!editable || busy}
+            disabled={!hydrated || !editable || busy}
             onChange={async () => {
               setPicked(m);
               if (!(await run("/api/feeding/feeding-mode", { day, mode: m }, tr("A nap etetése mentve.")))) setPicked(mode);
