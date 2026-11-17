@@ -64,8 +64,8 @@ function templateText(node: ts.TemplateExpression): string {
   return node.head.text + node.templateSpans.map((s) => "{x}" + s.literal.text).join("");
 }
 
-function leftOut(file: string): string[] {
-  const src = readFileSync(join(process.cwd(), file), "utf8");
+/** The Hungarian texts of a source outside tr() (the source passed in, so the rule itself is testable). */
+function scan(file: string, src: string): string[] {
   const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const out: string[] = [];
   const visit = (node: ts.Node) => {
@@ -77,8 +77,9 @@ function leftOut(file: string): string[] {
       const p = node.parent;
       const isKey = p && ts.isPropertyAssignment(p) && p.name === node;
       if (!isKey && !(codeSlot(node) && /^[a-z0-9_.:-]+$/.test(node.text)) && hungarian(node.text) && !inTr(node)) out.push(node.text);
-    } else if (ts.isTemplateExpression(node) && codeLike(templateText(node))) {
-      // a path built from parts (`/${weekly ? "heti" : "vizmeres"}?nap=${day}`): its parts are code too
+    } else if (ts.isTemplateExpression(node) && /[/?=&]/.test(templateText(node)) && codeLike(templateText(node))) {
+      // a path or a link built from parts (`/${weekly ? "heti" : "vizmeres"}?nap=${day}`): its parts are code too. Only with
+      // a path or query character: `${name}${alert ? ", figyelmeztetés" : ""}` reads "{x}{x}", and its parts are text
       return;
     } else if (ts.isTemplateExpression(node) && hungarian(templateText(node)) && !inTr(node)) {
       // the template's own text, not its source: the source starts with a backtick, and that read as code, so no template was ever
@@ -88,12 +89,21 @@ function leftOut(file: string): string[] {
     ts.forEachChild(node, visit);
   };
   visit(sf);
-  return out.filter((t) => !TRANSLATED[file]!.allowed.includes(t));
+  return out;
+}
+
+function leftOut(file: string): string[] {
+  const src = readFileSync(join(process.cwd(), file), "utf8");
+  return scan(file, src).filter((t) => !TRANSLATED[file]!.allowed.includes(t));
 }
 
 describe("the guard's own rule", () => {
   it("counts a bare Hungarian word, accented or not, and a template's text", () => {
     expect(["igen", "nap", "Mentés", "{x} sor mentve.", "Napi mérés: {x}"].filter((t) => !hungarian(t))).toEqual([]);
+  });
+  it("reads into a template made only of places, and not into a path built from parts", () => {
+    expect(scan("x.tsx", 'const a = <b aria-label={`${n}${on ? ", figyelmeztetés" : ""}`} />;')).toEqual([", figyelmeztetés"]);
+    expect(scan("x.tsx", 'const h = `/${weekly ? "heti" : "vizmeres"}?nap=${day}`;')).toEqual([]);
   });
   it("leaves code alone: a path, a link with a query, an identifier", () => {
     expect(["/heti", "{x}?csoport={x}&nap={x}", "{x}?nap={x}", "napplo-queue-v1-{x}", "nap=2026-11-17", "save-all", "hu-HU"].filter(hungarian)).toEqual([]);
