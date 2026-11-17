@@ -785,6 +785,20 @@ test("feeding sheet: a group selected from its header, the day's feeds, drafts k
   await row.getByRole("cell", { name, exact: true }).click();
   await expect(mysis).toHaveValue("12,5");
   await mysis.fill("15");
+  // Lili 2026-11-17 (numeric keypad, no Shift): Tab from the active row goes to the NEXT animal's first field, focused and
+  // its content selected; from the last animal it goes on to the save, as before
+  const rows = sheet.locator("tbody tr");
+  const count = await rows.count();
+  expect(count, "the sheet has two animals at least").toBeGreaterThan(1);
+  await rows.nth(0).getByRole("cell").first().click();
+  await rows.nth(0).locator("input").last().press("Tab");
+  const firstOfNext = rows.nth(1).locator("input").first();
+  await expect(firstOfNext).toBeFocused();
+  expect(await firstOfNext.evaluate((el) => (el as HTMLInputElement).type === "checkbox" || (el as HTMLInputElement).selectionEnd === (el as HTMLInputElement).value.length)).toBe(true);
+  await rows.nth(count - 1).getByRole("cell").first().click();
+  await rows.nth(count - 1).locator("input").last().press("Tab");
+  await expect(sheet.getByRole("button", { name: /Takarmánylap mentése/ })).toBeFocused();
+  await row.getByRole("cell", { name, exact: true }).click();
   // (c): an empty cell is 0. The other animal's Litopenaeus cell is empty in both runs: on the tablet run nothing was
   // recorded for it yet, and on the desktop run the tablet run emptied it (its item invalidated, below)
   await expect(sheet.getByTestId(`sheet-cell-${other}-Litopenaeus vannamei`)).toHaveText("0");
