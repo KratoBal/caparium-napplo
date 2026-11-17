@@ -20,10 +20,12 @@ import { announceReminder, formComplete, reminderTimer, reminderWanted } from "@
 import type { CellView, RangeView } from "@/lib/queries";
 import { convertReading, type ReadingConversion } from "@/lib/reading";
 import { canonicalDecimal, multiplyDecimal, parseDecimalInput } from "@/lib/decimal";
+import { useTr } from "./LangProvider";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 import { useLeaveWarning } from "./useLeaveWarning";
 
 type TickKind = "BACKWASH" | "BACKWASH_2" | "BACKWASH_3" | "TOPUP" | "WATER_CHANGE";
+// translated where shown (tr(TICK_TEXT[kind]))
 const TICK_TEXT: Record<TickKind, string> = { BACKWASH: "Visszamosás", BACKWASH_2: "Visszamosás", BACKWASH_3: "Visszamosás", TOPUP: "Rátöltés", WATER_CHANGE: "Vízcsere" };
 // Lili 2026-11-01 23:32 UTC: the Nagymedence's three sand filters, one tick each, a number beside it (HSZ1-3 in the Excel)
 const FILTER_TICKS: TickKind[] = ["BACKWASH", "BACKWASH_2", "BACKWASH_3"];
@@ -75,6 +77,7 @@ function nowTime(): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+// translated where used (tr(LEAVE_WARNING))
 const LEAVE_WARNING = "Van még nem mentett mérési érték. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?";
 
 function huNumber(v: string): string {
@@ -131,6 +134,7 @@ export function MeasurementGrid({
   people: { id: string; fullName: string }[];
 }) {
   const router = useRouter();
+  const tr = useTr();
   const [grid, setGrid] = useState<Grid>(initial);
   // Lili 2026-10-29 (caparium-finomitas-1, item 4): the header row and the pool column stay put, like the feeding
   // sheet's, but ONLY when the table is wider than its place (a phone); where it fits (tablet, desktop) it looks as
@@ -184,7 +188,7 @@ export function MeasurementGrid({
   // would be a silently lost measurement)
   // the save reminder's timer (card 0d617f0c, src/lib/save-reminder.ts); leaving with drafts makes it speak at once
   const reminder = useRef<ReturnType<typeof reminderTimer> | null>(null);
-  const unsavedRef = useLeaveWarning(new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)]).size, LEAVE_WARNING, () =>
+  const unsavedRef = useLeaveWarning(new Set([...Object.keys(drafts), ...Object.keys(metaDrafts)]).size, tr(LEAVE_WARNING), () =>
     reminder.current?.leaving(),
   );
   const chains = useRef(new Map<string, Promise<void>>());
@@ -259,10 +263,10 @@ export function MeasurementGrid({
         if (res.ok) return;
         const payload = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
         put(!done);
-        setBanner({ kind: "error", text: payload.error?.message ?? "A jelölő mentése nem sikerült." });
+        setBanner({ kind: "error", text: payload.error?.message ?? tr("A jelölő mentése nem sikerült.") });
       } catch {
         put(!done);
-        setBanner({ kind: "error", text: "Nincs kapcsolat: a jelölő nem mentődött. Próbáld újra." });
+        setBanner({ kind: "error", text: tr("Nincs kapcsolat: a jelölő nem mentődött. Próbáld újra.") });
       } finally {
         setTickBusy((b) => {
           const next = { ...b };
@@ -271,7 +275,7 @@ export function MeasurementGrid({
         });
       }
     },
-    [],
+    [tr],
   );
 
   type SendOutcome = "ok" | "queued" | "failed";
@@ -288,7 +292,7 @@ export function MeasurementGrid({
         });
       } catch {
         if (!fromQueue) writeQueue([...readQueue(), item]);
-        setCellState((s) => ({ ...s, [item.key]: { state: "queued", message: "Nincs kapcsolat, a mentés várakozik" } }));
+        setCellState((s) => ({ ...s, [item.key]: { state: "queued", message: tr("Nincs kapcsolat, a mentés várakozik") } }));
         return "queued";
       }
       if (res.ok) {
@@ -306,22 +310,22 @@ export function MeasurementGrid({
       const err = payload.error ?? {};
       if (res.status === 401) {
         if (!fromQueue) writeQueue([...readQueue(), item]);
-        setBanner({ kind: "error", text: "A munkamenet lejárt. Jelentkezz be újra: a be nem küldött értékek megmaradnak ezen az eszközön." });
-        setCellState((s) => ({ ...s, [item.key]: { state: "queued", message: "Belépésre vár" } }));
+        setBanner({ kind: "error", text: tr("A munkamenet lejárt. Jelentkezz be újra: a be nem küldött értékek megmaradnak ezen az eszközön.") });
+        setCellState((s) => ({ ...s, [item.key]: { state: "queued", message: tr("Belépésre vár") } }));
         return "queued";
       }
       if (res.status >= 500) {
         if (!fromQueue) writeQueue([...readQueue(), item]);
-        setCellState((s) => ({ ...s, [item.key]: { state: "queued", message: "Szerverhiba, újrapróbáljuk" } }));
+        setCellState((s) => ({ ...s, [item.key]: { state: "queued", message: tr("Szerverhiba, újrapróbáljuk") } }));
         return "queued";
       }
       if (err.code === "IMPLAUSIBLE_VALUE" && !item.body.confirmPlausibility) {
-        if (window.confirm(`${err.message}\n\nBeírt érték: ${String(item.body.value)}`)) {
+        if (window.confirm(`${err.message}\n\n${tr("Beírt érték: {value}", { value: String(item.body.value) })}`)) {
           return send({ ...item, body: { ...item.body, confirmPlausibility: true } }, fromQueue);
         }
       }
       if (err.code === "REASON_REQUIRED" && !item.body.reason) {
-        const reason = window.prompt("Korábbi vagy lezárt nap módosítása. Indoklás:");
+        const reason = window.prompt(tr("Korábbi vagy lezárt nap módosítása. Indoklás:"));
         if (reason && reason.trim().length >= 3) return send({ ...item, body: { ...item.body, reason } }, fromQueue);
       }
       if (err.code === "CELL_TAKEN" || err.code === "VERSION_CONFLICT") {
@@ -329,10 +333,10 @@ export function MeasurementGrid({
         setConflict({ key: item.key, draft: String(item.body.value ?? ""), server: { value: server?.value ?? "?" } });
         await refresh();
       }
-      setCellState((s) => ({ ...s, [item.key]: { state: "error", message: err.message ?? "A mentés nem sikerült." } }));
+      setCellState((s) => ({ ...s, [item.key]: { state: "error", message: err.message ?? tr("A mentés nem sikerült.") } }));
       return "failed";
     },
-    [readQueue, writeQueue, refresh],
+    [readQueue, writeQueue, refresh, tr],
   );
 
   const flushQueue = useCallback(async () => {
@@ -505,7 +509,7 @@ export function MeasurementGrid({
     const emptied = Object.keys(drafts).filter((k) => drafts[k]!.trim() === "" && gridRef.current.cells[k]);
     let emptying: { reason?: string } | null = {};
     if (emptied.length) {
-      emptying = askReason(reasonsOn, "A kiürített mérések érvénytelenítési oka:", `${emptied.length} kiürített mérés érvénytelenítődik. Folytatod?`);
+      emptying = askReason(reasonsOn, tr("A kiürített mérések érvénytelenítési oka:"), tr("{n} kiürített mérés érvénytelenítődik. Folytatod?", { n: emptied.length }));
       if (!emptying) return;
     }
     let failed = 0;
@@ -517,20 +521,20 @@ export function MeasurementGrid({
     const left = readQueue().length;
     setBanner(
       failed
-        ? { kind: "error", text: `${failed} érték nem lett mentve: az ok a cellánál látszik.` }
+        ? { kind: "error", text: tr("{n} érték nem lett mentve: az ok a cellánál látszik.", { n: failed }) }
         : left
-          ? { kind: "warn", text: `${left} mentés várakozik a kapcsolatra.` }
-          : { kind: "ok", text: "Minden érték mentve." },
+          ? { kind: "warn", text: tr("{n} mentés várakozik a kapcsolatra.", { n: left }) }
+          : { kind: "ok", text: tr("Minden érték mentve.") },
     );
     // the page around the table is the server's: a save can change the day's state (an old day keyed in is born open for the
     // backfill), and the header must say what the server holds, or it offers what the server then refuses (Lili 2026-11-02;
     // e2e old-day.spec.ts). The table keeps its own state: `initial` only seeds it.
     router.refresh();
-  }, [drafts, metaDrafts, saveCell, flushQueue, readQueue, reasonsOn, router]);
+  }, [drafts, metaDrafts, saveCell, flushQueue, readQueue, reasonsOn, router, tr]);
 
   const openNewRound = useCallback(async () => {
     if (unsavedRef.current > 0) reminder.current?.leaving();
-    if (unsavedRef.current > 0 && !window.confirm(LEAVE_WARNING)) return;
+    if (unsavedRef.current > 0 && !window.confirm(tr(LEAVE_WARNING))) return;
     const res = await fetch("/api/rounds", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -538,12 +542,12 @@ export function MeasurementGrid({
     });
     const body = (await res.json().catch(() => ({}))) as { round?: { seq: number }; error?: { message?: string } };
     if (!res.ok || !body.round) {
-      setBanner({ kind: "error", text: body.error?.message ?? "Új mérési kör nem nyitható." });
+      setBanner({ kind: "error", text: body.error?.message ?? tr("Új mérési kör nem nyitható.") });
       return;
     }
     router.push(`${basePath}?csoport=${groupCode}&nap=${grid.day}&kor=${body.round.seq}`);
     router.refresh();
-  }, [grid.group.id, grid.day, groupCode, router, basePath]);
+  }, [grid.group.id, grid.day, groupCode, router, basePath, tr]);
 
   const keepDraft = useCallback(async () => {
     if (!conflict) return;
@@ -619,26 +623,26 @@ export function MeasurementGrid({
           {dayPicker}
           {!readOnly && (
             <button className="btn" type="button" onClick={saveAll} data-testid="save-all">
-              Mentés
+              {tr("Mentés")}
             </button>
           )}
         </div>
       </div>
       {grid.rounds.length > 0 && (
         <div className="toolbar water-rounds-row">
-          <div className="tabs" aria-label="Mérési körök">
+          <div className="tabs" aria-label={tr("Mérési körök")}>
             {grid.rounds.map((r) => (
               <a
                 key={r.id}
                 className={`tab${grid.selectedRound?.id === r.id ? " active" : ""}`}
                 href={`${basePath}?csoport=${groupCode}&nap=${grid.day}&kor=${r.seq}`}
               >
-                {r.seq}. mérés
+                {tr("{n}. mérés", { n: r.seq })}
               </a>
             ))}
             {!readOnly && (
               <button className="btn btn-soft" type="button" onClick={openNewRound} data-testid="new-round">
-                Új mérés ma
+                {tr("Új mérés ma")}
               </button>
             )}
           </div>
@@ -647,32 +651,34 @@ export function MeasurementGrid({
 
       {!canWrite && (
         <div className="banner banner-warn" style={{ marginBottom: 16 }}>
-          Ebben a modulban csak olvasási jogod van.
+          {tr("Ebben a modulban csak olvasási jogod van.")}
         </div>
       )}
       {canWrite && isPastDay && (
         <div className="banner banner-warn" style={{ marginBottom: 16 }}>
-          {isAdmin
-            ? reasonsOn
-              ? "Korábbi nap: minden módosításhoz indoklás kell, és bekerül a módosítási naplóba."
-              : "Korábbi nap: minden módosítás bekerül a módosítási naplóba."
-            : "Korábbi nap: csak megtekintés. Módosítani adminisztrátor tud."}
+          {tr(
+            isAdmin
+              ? reasonsOn
+                ? "Korábbi nap: minden módosításhoz indoklás kell, és bekerül a módosítási naplóba."
+                : "Korábbi nap: minden módosítás bekerül a módosítási naplóba."
+              : "Korábbi nap: csak megtekintés. Módosítani adminisztrátor tud.",
+          )}
         </div>
       )}
 
       <div className="card">
         <h2>
           {/* Lili 2026-10-30 18:58 UTC (msg 1565802152033521714): the weekly page said "Napi paraméterek" */}
-          {weekly ? "Heti paraméterek" : "Napi paraméterek"}
-          {grid.selectedRound ? ` · ${grid.selectedRound.seq}. mérés` : ""}
+          {tr(weekly ? "Heti paraméterek" : "Napi paraméterek")}
+          {grid.selectedRound ? ` · ${tr("{n}. mérés", { n: grid.selectedRound.seq })}` : ""}
         </h2>
         <p className="hint">
-          A beírt értékek a Mentés gombbal rögzülnek, addig szabadon javíthatók. Egy új mérés nem írja felül a korábbit.
+          {tr("A beírt értékek a Mentés gombbal rögzülnek, addig szabadon javíthatók. Egy új mérés nem írja felül a korábbit.")}
         </p>
         {!readOnly && (
           <div className="toolbar">
             <label className="field">
-              Mérés időpontja
+              {tr("Mérés időpontja")}
               <input
                 className="input"
                 type="time"
@@ -685,7 +691,7 @@ export function MeasurementGrid({
               />
             </label>
             <label className="field">
-              Mérést végezte
+              {tr("Mérést végezte")}
               <select className="input" value={responsibleId} onChange={(e) => setResponsibleId(e.target.value)}>
                 {people.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -696,7 +702,7 @@ export function MeasurementGrid({
             </label>
             <label className="check">
               <input type="checkbox" checked={trainee} onChange={(e) => setTrainee(e.target.checked)} />
-              Gyakornok végezte
+              {tr("Gyakornok végezte")}
             </label>
           </div>
         )}
@@ -704,7 +710,7 @@ export function MeasurementGrid({
           <table ref={tableRef} className="grid-table">
             <thead>
               <tr>
-                <th>Medence</th>
+                <th>{tr("Medence")}</th>
                 {grid.layout.parameters.map((p) => (
                   <th key={p.id}>
                     {p.name}
@@ -722,7 +728,7 @@ export function MeasurementGrid({
                     <td className="pool-cell">
                       <button type="button" onClick={() => pool.active && setActivePool(pool.id)} aria-pressed={active} disabled={!pool.active}>
                         {pool.name}
-                        {!pool.active && <span className="hint"> (inaktív)</span>}
+                        {!pool.active && <span className="hint"> ({tr("inaktív")})</span>}
                       </button>
                       {(grid.tickKinds[pool.id] ?? []).length > 0 && (
                         <div className="pool-ticks">
@@ -745,13 +751,13 @@ export function MeasurementGrid({
                             return kinds.map((kind) =>
                               filters && FILTER_TICKS.includes(kind) ? (
                                 kind === "BACKWASH" ? (
-                                  <span key="filters" className="pool-tick pool-tick-filters" role="group" aria-label="Visszamosás, homokszűrők">
-                                    {TICK_TEXT.BACKWASH}
-                                    {FILTER_TICKS.map((k, i) => box(k, String(i + 1), `Visszamosás, ${i + 1}. homokszűrő`))}
+                                  <span key="filters" className="pool-tick pool-tick-filters" role="group" aria-label={tr("Visszamosás, homokszűrők")}>
+                                    {tr(TICK_TEXT.BACKWASH)}
+                                    {FILTER_TICKS.map((k, i) => box(k, String(i + 1), tr("Visszamosás, {n}. homokszűrő", { n: i + 1 })))}
                                   </span>
                                 ) : null
                               ) : (
-                                box(kind, TICK_TEXT[kind])
+                                box(kind, tr(TICK_TEXT[kind]))
                               ),
                             );
                           })()}
@@ -780,7 +786,7 @@ export function MeasurementGrid({
                       if (param.pools && !param.pools.includes(pool.id) && !cell) {
                         return (
                           <td key={param.id} className="cell-na" data-label={`${param.name}${param.unit.symbol !== param.name ? ` · ${param.unit.symbol}` : ""}`}>
-                            <div className="cell-value empty" data-testid={`na-${pool.name}-${param.name}`} title="Ebben a medencében ezt nem mérik">
+                            <div className="cell-value empty" data-testid={`na-${pool.name}-${param.name}`} title={tr("Ebben a medencében ezt nem mérik")}>
                               –
                             </div>
                           </td>
@@ -794,8 +800,8 @@ export function MeasurementGrid({
                           <span
                             className="conv-dot"
                             data-testid={`conv-${pool.name}-${param.name}`}
-                            title={`Átváltott érték${convLabel ? ` (${convLabel})` : ""}, leolvasva: ${huNumber(rawShown)}`}
-                            aria-label={`átváltott érték, leolvasva ${huNumber(rawShown)}`}
+                            title={convLabel ? tr("Átváltott érték ({label}), leolvasva: {raw}", { label: convLabel, raw: huNumber(rawShown) }) : tr("Átváltott érték, leolvasva: {raw}", { raw: huNumber(rawShown) })}
+                            aria-label={tr("átváltott érték, leolvasva {raw}", { raw: huNumber(rawShown) })}
                           />
                         ) : null;
                       return (
@@ -834,7 +840,7 @@ export function MeasurementGrid({
                                 }}
                               />
                               {dot}
-                              <ClearX shown={inputShown !== ""} label={`Kiürítés, ${pool.name}, ${param.name}`} onClear={() => {
+                              <ClearX shown={inputShown !== ""} label={tr("Kiürítés, {pool}, {param}", { pool: pool.name, param: param.name })} onClear={() => {
                                   setDrafts((d) => ({ ...d, [key]: "" }));
                                   setRawDrafts((d) => {
                                     if (!(key in d)) return d;
@@ -870,7 +876,7 @@ export function MeasurementGrid({
                             />
                           )}
                           <div className="cell-meta">
-                            {st?.state === "saving" && <span>Mentés…</span>}
+                            {st?.state === "saving" && <span>{tr("Mentés…")}</span>}
                             {st?.state === "queued" && <span className="wait">{st.message}</span>}
                             {st?.state === "error" && <span className="err">{st.message}</span>}
                             {(!st || st.state === "saved") && cell && (
@@ -898,46 +904,46 @@ export function MeasurementGrid({
       </div>
 
       {conflict && (
-        <div className="card conflict" role="alertdialog" aria-label="Mentési ütközés" data-testid="conflict">
-          <h2>Figyelem: a mérés időközben megváltozott</h2>
+        <div className="card conflict" role="alertdialog" aria-label={tr("Mentési ütközés")} data-testid="conflict">
+          <h2>{tr("Figyelem: a mérés időközben megváltozott")}</h2>
           <p>
-            Más már mentett ide értéket: <b>{huNumber(conflict.server.value)}</b>. A te még nem mentett értéked:{" "}
-            <b>{conflict.draft.trim() === "" ? "üres (érvénytelenítés)" : huNumber(conflict.draft)}</b>. Egyik változatot sem írjuk felül automatikusan.
+            {tr("Más már mentett ide értéket:")} <b>{huNumber(conflict.server.value)}</b>. {tr("A te még nem mentett értéked:")}{" "}
+            <b>{conflict.draft.trim() === "" ? tr("üres (érvénytelenítés)") : huNumber(conflict.draft)}</b>. {tr("Egyik változatot sem írjuk felül automatikusan.")}
           </p>
           <div className="versions">
             <div className="field">
-              Szerveren mentve
+              {tr("Szerveren mentve")}
               <span className="pill">{huNumber(conflict.server.value)}</span>
             </div>
             <div className="field">
-              Saját piszkozat
-              <span className="pill">{conflict.draft.trim() === "" ? "üres (érvénytelenítés)" : huNumber(conflict.draft)}</span>
+              {tr("Saját piszkozat")}
+              <span className="pill">{conflict.draft.trim() === "" ? tr("üres (érvénytelenítés)") : huNumber(conflict.draft)}</span>
             </div>
           </div>
           <div className="actions">
             <button className="btn btn-dark" type="button" onClick={keepDraft}>
-              Piszkozat megtartása
+              {tr("Piszkozat megtartása")}
             </button>
             <button className="btn" type="button" onClick={loadFresh}>
-              Friss adat betöltése
+              {tr("Friss adat betöltése")}
             </button>
           </div>
-          <p className="hint">A döntésig az eredeti bejegyzés változatlan.</p>
+          <p className="hint">{tr("A döntésig az eredeti bejegyzés változatlan.")}</p>
         </div>
       )}
 
       <div className="status-row">
         {queueSize > 0 ? (
           <div className="banner banner-warn" data-testid="queue">
-            {queueSize} mentés várakozik a kapcsolatra, nem veszett el
+            {tr("{n} mentés várakozik a kapcsolatra, nem veszett el", { n: queueSize })}
           </div>
         ) : (
           <div className="banner banner-ok">
             <span className="dot" />
-            {unsaved > 0 ? `${unsaved} érték még nincs mentve: a Mentés gombbal rögzül` : "Nincs mentetlen érték"}
+            {unsaved > 0 ? tr("{n} érték még nincs mentve: a Mentés gombbal rögzül", { n: unsaved }) : tr("Nincs mentetlen érték")}
           </div>
         )}
-        {anyOut && <div className="banner banner-error">↗ Eltérés a referenciaértéktől</div>}
+        {anyOut && <div className="banner banner-error">↗ {tr("Eltérés a referenciaértéktől")}</div>}
         {banner && (
           <div className={`banner banner-${banner.kind}`} role="status" data-testid="banner">
             {banner.text}
@@ -961,6 +967,7 @@ function WeeklyMeta({
   editable: boolean;
   onChange: (m: Meta) => void;
 }) {
+  const tr = useTr();
   if (!editable) {
     const parts = [meta.dilution ? `1:${meta.dilution}` : null, meta.diluentWater].filter(Boolean);
     return <div className="cell-meta" data-testid={`meta-${testId}`}>{parts.length ? parts.join(" · ") : " "}</div>;
@@ -969,12 +976,12 @@ function WeeklyMeta({
     <div className="meta-row">
       <select
         className="meta-select"
-        aria-label={`${label} hígítás`}
+        aria-label={tr("{label} hígítás", { label })}
         data-testid={`dilution-${testId}`}
         value={meta.dilution ?? ""}
         onChange={(e) => onChange({ ...meta, dilution: e.target.value ? Number(e.target.value) : null })}
       >
-        <option value="">hígítás</option>
+        <option value="">{tr("hígítás")}</option>
         {DILUTIONS.map((d) => (
           <option key={d} value={d}>
             1:{d}
@@ -983,7 +990,7 @@ function WeeklyMeta({
       </select>
       <select
         className="meta-select"
-        aria-label={`${label} hígító víz`}
+        aria-label={tr("{label} hígító víz", { label })}
         data-testid={`diluent-${testId}`}
         value={meta.diluentWater ?? ""}
         onChange={(e) => onChange({ ...meta, diluentWater: (e.target.value || null) as Meta["diluentWater"] })}

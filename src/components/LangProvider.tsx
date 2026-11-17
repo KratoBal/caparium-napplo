@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useCallback, useContext } from "react";
 import type { Lang } from "@/lib/i18n/lang";
 import { translate, type TrVars } from "@/lib/i18n/translate";
 
@@ -18,8 +18,11 @@ export function useLang(): Lang {
   return useContext(LangContext);
 }
 
-/** The translator of the page's language: tr("Mentés"), tr("{n} sor mentve.", { n }). */
+/**
+ * The translator of the page's language: tr("Mentés"), tr("{n} sor mentve.", { n }). The same function while the language
+ * stays, so a useCallback or useEffect may list it without running again on every render.
+ */
 export function useTr(): (text: string, vars?: TrVars) => string {
   const lang = useContext(LangContext);
-  return (text, vars) => translate(lang, text, vars);
+  return useCallback((text: string, vars?: TrVars) => translate(lang, text, vars), [lang]);
 }
