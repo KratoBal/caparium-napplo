@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EATING_TOP_ACTIONS_ID, allAteTargets } from "@/lib/eating-all-ate";
+import { refusedNote, rowsToReset } from "@/lib/eating-drafts";
 import { EAT_LABEL } from "@/lib/eating-labels";
 import { stockHint, type StockInfo } from "@/lib/stock-hint";
 import { formatDay } from "@/lib/time";
@@ -840,6 +841,8 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
   const serverKey = (r: EatingRowView) => `${r.selected}|${r.status?.id ?? ""}|${r.status?.version ?? ""}|${r.status?.source ?? ""}`;
   const [drafts, setDrafts] = useState<Record<string, RowDraft>>(() => Object.fromEntries(rows.map((r) => [r.animalId, initial(r)])));
   const seen = useRef<Record<string, string>>(Object.fromEntries(rows.map((r) => [r.animalId, serverKey(r)])));
+  // the rows whose save was just refused: their typed values survive the refresh that follows (lib/eating-drafts.ts)
+  const refused = useRef<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // the result shows where the click was: "Mindenki evett" is at the top, the Save at the bottom
@@ -851,9 +854,11 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
   // after a refresh only the rows whose server state changed start again; every other filled-in row keeps its draft
   // (review of #31: a refresh from an invalidation or a partly refused save must not drop the rest)
   useEffect(() => {
-    const changedRows = rows.filter((r) => seen.current[r.animalId] !== serverKey(r));
+    const changedIds = rows.filter((r) => seen.current[r.animalId] !== serverKey(r)).map((r) => r.animalId);
     seen.current = Object.fromEntries(rows.map((r) => [r.animalId, serverKey(r)]));
-    if (changedRows.length) setDrafts((d) => ({ ...d, ...Object.fromEntries(changedRows.map((r) => [r.animalId, initial(r)])) }));
+    const reset = new Set(rowsToReset(changedIds, refused.current));
+    for (const id of changedIds) refused.current.delete(id);
+    if (reset.size) setDrafts((d) => ({ ...d, ...Object.fromEntries(rows.filter((r) => reset.has(r.animalId)).map((r) => [r.animalId, initial(r)])) }));
   }, [rows]);
   const set = (id: string, patch: Partial<RowDraft>) => setDrafts((d) => ({ ...d, [id]: { ...d[id]!, ...patch } }));
   const changed = (r: EatingRowView, ds: Record<string, RowDraft> = drafts) => {
@@ -893,6 +898,7 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
     let stopped = false;
     const failed: string[] = [];
     let saved = 0;
+    refused.current = new Set();
     try {
       for (const r of list) {
         if (stopped) break;
@@ -930,6 +936,7 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
             stopped = true;
           }
           failed.push(`${r.name}: ${message}`);
+          refused.current.add(r.animalId);
           break;
         }
       }
@@ -940,10 +947,11 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
     }
     setMsg(
       failed.length
-        ? { ok: false, text: `${saved} sor mentve, ${failed.length} nem: ${failed.join("; ")}${stopped ? " (a mentés indoklás nélkül megállt)" : ""}` }
+        ? { ok: false, text: `${saved} sor mentve, ${failed.length} nem: ${failed.join("; ")}${stopped ? " (a mentés indoklás nélkül megállt)" : ""}${refusedNote(failed.length) ?? ""}` }
         : { ok: true, text: `${saved} sor mentve.` },
     );
-    if (saved) router.refresh();
+    // always: a save whose every row was refused left the stale versions on the page, and every retry failed the same way
+    if (saved || failed.length) router.refresh();
   }
 
   const fed = rows.filter((r) => r.selected);

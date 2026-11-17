@@ -531,6 +531,26 @@ test("feeding: the daily list, an item in pieces and grams, the list finalized; 
   await page.reload();
   await expect(page.getByTestId(`state-${name}`)).toHaveText("nem evett meg mindent");
   await expect(page.getByTestId("eating-table").getByRole("row").filter({ hasText: name })).toContainText("V");
+  // Lili 2026-11-17 09:13 UTC: "0 sor mentve, 4 nem: … Az állapot időközben megváltozott." A save whose every row was
+  // refused left the stale version on the page, and every retry was refused the same way until a manual reload. A
+  // second page saves the row first; this page's save is refused, keeps what was typed, and the next save goes up
+  const second = await page.context().newPage();
+  await second.goto(page.url());
+  await second.getByTestId(`eating-${name}`).getByLabel(`${name} evési állapota`).selectOption("EATEN");
+  await second.getByTestId("eating-save-all").click();
+  await expect(second.getByTestId("eating-save-result")).toHaveText("1 sor mentve.");
+  await second.close();
+  await eat.getByLabel(`${name} evési állapota`).selectOption("NOT_EATEN");
+  await page.getByTestId("eating-save-all").click();
+  await expect(page.getByTestId("eating-save-result")).toContainText("0 sor mentve, 1 nem");
+  await expect(eat.getByLabel(`${name} evési állapota`), "what was typed stays after the refresh").toHaveValue("NOT_EATEN");
+  await page.getByTestId("eating-save-all").click();
+  await expect(page.getByTestId("eating-save-result")).toHaveText("1 sor mentve.");
+  await expect(page.getByTestId(`state-${name}`)).toHaveText("nem evett");
+  // back to what the rest of this test expects
+  await eat.getByLabel(`${name} evési állapota`).selectOption({ label: "nem evett meg mindent" });
+  await page.getByTestId("eating-save-all").click();
+  await expect(page.getByTestId("eating-save-result")).toHaveText("1 sor mentve.");
   // barracuda on #50 (the #45 lesson): an unsaved eating draft belongs to its day. The day navigation stays on the
   // same route; after going to another day and back, the row shows what is saved, not the draft
   // a row whose server state is the same on both days (Teszt Négy: not on the list, nothing recorded) is the one
