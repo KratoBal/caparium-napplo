@@ -30,6 +30,7 @@ export function ShellView({
   reasons,
   monogram,
   lang = "hu",
+  guard = true,
   children,
 }: {
   title?: string;
@@ -43,6 +44,8 @@ export function ShellView({
   monogram: string;
   /** the device's language (lib/i18n/lang.ts) */
   lang?: Lang;
+  /** the main area inert until hydration (Shell decides: a user, or a page's own React-state form) */
+  guard?: boolean;
   children: React.ReactNode;
 }) {
   const tr = (text: string) => translate(lang, text);
@@ -71,8 +74,8 @@ export function ShellView({
         {user && <NavLinks items={navFor(user.role).map((n) => ({ ...n, label: tr(n.label) }))} active={active} tr={tr} />}
         <div className="nav-foot">{tr("CÁPASULI • TESZTKÖRNYEZET")}</div>
       </nav>
-      {/* no user: the login and password pages, native forms that must work even when the scripts fail */}
-      <HydratedMain className="main" guard={user !== null}>
+      {/* not guarded: the login, a native form that must work even when the scripts fail (Shell's guard) */}
+      <HydratedMain className="main" guard={guard}>
         <ReasonProvider on={reasons}>{children}</ReasonProvider>
       </HydratedMain>
       {helper && <Helper data={helper} userName={user ? greetingName(user) : undefined} loginAt={user?.sessionStartedAt} userKey={user?.id} />}

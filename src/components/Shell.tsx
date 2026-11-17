@@ -13,8 +13,14 @@ export async function Shell({
   active,
   user,
   helper,
+  guard,
   children,
 }: {
+  /**
+   * Whether the main area is inert until hydration (HydratedMain). By default only with a user: the login is a native form. A page
+   * without a user that holds a React-state form (Elfelejtett jelszó, the reset link's Új jelszó) asks for it (barracuda on #249).
+   */
+  guard?: boolean;
   /** none on the start page (Lili 2026-10-27 13:02 UTC): the bar keeps the day and the user */
   title?: string;
   active?: NavKey;
@@ -30,7 +36,7 @@ export async function Shell({
   const raw = user ? (await monogramResolver([user.id])).monogram(user.id, new Date()) : "";
   const monogram = user && (raw === user.fullName || raw.length > 4) ? user.fullName.split(/\s+/).map((w) => w.charAt(0).toLocaleUpperCase("hu")).join("") : raw;
   return (
-    <ShellView title={title} active={active} user={user} helper={helper} today={today} reasons={reasons} monogram={monogram} lang={lang}>
+    <ShellView title={title} active={active} user={user} helper={helper} guard={guard ?? user !== null} today={today} reasons={reasons} monogram={monogram} lang={lang}>
       {children}
     </ShellView>
   );
