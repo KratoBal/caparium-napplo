@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext } from "react";
+import { createContext, useCallback, useContext, useEffect } from "react";
 import type { Lang } from "@/lib/i18n/lang";
 import { translate, type TrVars } from "@/lib/i18n/translate";
 
@@ -11,6 +11,12 @@ import { translate, type TrVars } from "@/lib/i18n/translate";
 const LangContext = createContext<Lang>("hu");
 
 export function LangProvider({ lang, children }: { lang: Lang; children: React.ReactNode }) {
+  // The page answers clicks from here on (card 51426546): effects run children first, so when this one runs every component
+  // of the page has hydrated and run its mount effects. An end-to-end test that clicks right after a page load waits for it;
+  // before it, a click can land on markup React has not taken over yet, or be undone by a mount effect.
+  useEffect(() => {
+    document.documentElement.dataset.hydrated = "1";
+  }, []);
   return <LangContext.Provider value={lang}>{children}</LangContext.Provider>;
 }
 

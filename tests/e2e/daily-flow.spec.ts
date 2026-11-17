@@ -31,6 +31,16 @@ async function login(page: Page, loginId: string) {
   await expect(page.getByRole("heading", { name: "Jó munkát!" })).toBeVisible();
 }
 
+/**
+ * Opens a page and waits until it answers clicks (card 51426546): the markup shows before React has taken it over, and a
+ * tick on a controlled box in that moment was lost on the tablet (WebKit), or a <details> opened there was closed again.
+ * The marker is written by LangProvider's effect, after every component's mount effects.
+ */
+async function gotoReady(page: Page, url: string) {
+  await page.goto(url);
+  await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
+}
+
 // each layout writes its own group, so the two projects never touch the same cell
 function plan(projectName: string) {
   return projectName === "tablet"
@@ -649,7 +659,7 @@ test("one button: \"Takarmánylap kész\" saves the day's feeds ticked above and
   const day = budapestDay(info.project.name === "tablet" ? -30 : -32);
   page.on("dialog", (d) => void d.accept());
   await login(page, "teszt.admin");
-  await page.goto(`/etetes?nap=${day}`);
+  await gotoReady(page, `/etetes?nap=${day}`);
   const dayFeeds = page.getByTestId("day-feeds");
   const ready = dayFeeds.getByRole("button", { name: "Takarmánylap kész" });
   await expect(ready).toBeVisible();
@@ -1054,7 +1064,7 @@ test("feeding day restore: the day's operations, a dry run before one, the run w
   const day = info.project.name === "tablet" ? "2026-01-20" : "2026-01-21";
   page.on("dialog", (dialog) => void (dialog.type() === "prompt" ? dialog.accept("e2e proba") : dialog.accept()));
   await login(page, "teszt.admin");
-  await page.goto(`/etetes?nap=${day}`);
+  await gotoReady(page, `/etetes?nap=${day}`);
   const sw = page.getByRole("switch", { name: "Nagymedence: mind kijelölve" });
   await sw.check();
   await expect(sw).toBeChecked();
@@ -2548,9 +2558,9 @@ test("the helper figure: dragged inside the screen, its place kept after a reloa
   await page.waitForTimeout(450);
   await button.dblclick();
   await expect(helper).not.toHaveAttribute("data-placed", "1");
-  const back = await box();
-  expect(Math.abs(back.x - corner.x)).toBeLessThan(3);
-  expect(Math.abs(back.y - corner.y)).toBeLessThan(3);
+  // the place where it settles, not one frame of the move: on the tablet (WebKit) a frame 4.17 px off was read once (card 51426546)
+  await expect.poll(async () => Math.abs((await box()).x - corner.x)).toBeLessThan(3);
+  await expect.poll(async () => Math.abs((await box()).y - corner.y)).toBeLessThan(3);
   await page.reload();
   await expect(helper).not.toHaveAttribute("data-placed", "1");
 });
