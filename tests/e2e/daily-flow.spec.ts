@@ -2732,3 +2732,18 @@ test("nothing can be typed before the page took over, and a water value typed af
   await expect(page.getByTestId(id!), `the value was saved (the save said: ${said})`).toHaveValue("1,025");
 });
 
+// card 51426546, barracuda's consequence on #246 (acrobot 55159): the main area is inert until the page hydrated, so a page whose
+// scripts never run (a script error, blocked scripts) takes no input at all. The person must SEE that, not face a page that looks
+// ready and ignores every tap. The scripts are blocked outright here.
+// WHAT TURNS THIS RED: no visible message on a page that never hydrated, or the message showing on a page that did.
+test("a page whose scripts never run says so; a page that hydrated shows no such message", async ({ page }) => {
+  await login(page, "teszt.akvarista1");
+  await page.route("**/_next/static/**/*.js", (route) => route.abort());
+  await page.goto("/vizmeres", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("hydration-failed"), "the page that never hydrated tells the person to reload").toBeVisible({ timeout: 15_000 });
+  await page.unroute("**/_next/static/**/*.js");
+  await page.reload();
+  await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
+  await expect(page.getByTestId("hydration-failed")).toHaveCount(0);
+});
+
