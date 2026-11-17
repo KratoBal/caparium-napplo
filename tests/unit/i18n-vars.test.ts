@@ -18,6 +18,12 @@ const FILES = [
   "src/app/kalkulator/page.tsx",
   "src/components/CalculatorForms.tsx",
   "src/app/api/exports/dosing/route.ts",
+  // Fagyasztó
+  "src/app/takarmanyhuto/page.tsx",
+  "src/components/IntakeForms.tsx",
+  "src/lib/exports/intake-pdf.ts",
+  "src/lib/exports/intake-excel.ts",
+  "src/lib/exports/intake-report-text.ts",
 ];
 
 type Call = { text: string; keys: string[]; line: number };
