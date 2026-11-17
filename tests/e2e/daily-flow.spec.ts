@@ -189,10 +189,12 @@ test("weekly measurement: value with dilution and RO/SW, the result x dilution, 
   // Lili 2026-11-01 22:35 UTC: the dilution is a factor; the result shows under the field before the save
   await expect(page.getByTestId(`dil-${pool}-NO3`)).toContainText("×10 = 84");
   await page.getByTestId("save-all").click();
-  // card 7fdbf78f (2026-11-17): on a loaded CI runner the save took past the default 5 s once, and the retry then ran into the
-  // first attempt's late save. The banner waits 15 s; the cause of the slow save was not found (the server log showed
-  // "destination stream closed early" at that time)
-  await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.", { timeout: 15_000 });
+  // card 7fdbf78f (2026-11-17): the save was not slow (the failed run's trace: every request under 100 ms); its banner showed
+  // and went, because the day's first save created round 1, and the refresh after it remounted the grid (its key held the
+  // round). The banner must still be there once the refresh is done
+  await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
 
   await page.reload();
   await page.getByRole("button", { name: pool, exact: true }).click();
@@ -2597,10 +2599,12 @@ test("eating log: \"Mindenki evett\" fills the empty rows of the list in one sav
   await sw.check();
   expect((await selected).ok()).toBe(true);
   await expect(sw).toBeChecked();
-  // card 7fdbf78f (2026-11-17): the save's router.refresh() runs after its response; a goto sent before it lands was cut off
-  // ("interrupted by another navigation to /etetes"). The refresh's request is waited out first
-  await page.waitForLoadState("networkidle");
-  await page.goto(`/evesi-naplo?nap=${day}`);
+  // card 7fdbf78f (2026-11-17): the save's router.refresh() runs after its response and is itself a navigation to /etetes; a goto
+  // sent before it lands is cut off ("interrupted by another navigation"). Waiting for network quiet was not enough (on a loaded
+  // runner the refresh can start after the quiet already held, #235's first run): the goto is retried until it lands
+  await expect(async () => {
+    await page.goto(`/evesi-naplo?nap=${day}`);
+  }).toPass({ timeout: 15_000 });
   await page.waitForLoadState("networkidle");
   const names = (await page.getByTestId("eating-table").locator("td.eat-name").allTextContents()).map((n) => n.trim());
   expect(names.length, "the big pool's animals are on the day's list").toBeGreaterThan(1);

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { gridKey } from "@/lib/grid-key";
 import { DayControls } from "@/components/DayControls";
 import { FridgeCard } from "@/components/FridgeCard";
 import { MeasurementGrid } from "@/components/MeasurementGrid";
@@ -177,7 +178,8 @@ export async function MeasurementPage({
       </div>
       {grid && (
         <MeasurementGrid
-          key={`${group.id}:${day}:${grid.selectedRound?.seq ?? 0}`}
+          // lib/grid-key.ts: "no round yet" keys like round 1, so the day's first save keeps its banner (card 7fdbf78f)
+          key={gridKey(group.id, day, grid.selectedRound?.seq)}
           initial={grid}
           groupCode={group.code}
           today={today}
