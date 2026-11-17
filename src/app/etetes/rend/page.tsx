@@ -31,7 +31,7 @@ export default async function TimetablePage() {
     .filter((t) => t.feeds.length > 0);
   const animals = view.animals.map((a) => ({ id: a.id, name: a.name, groupName: a.groupName, poolName: a.poolName, weekdays: plans[a.id] ?? [] }));
   return (
-    <Shell title={tr("Etetési rend")} active="feeding" user={user} helper={await feedingHelper(await helperStockAccess(user))}>
+    <Shell title={tr("Etetési rend")} active="feeding" user={user} helper={await feedingHelper(await helperStockAccess(user), new Date(), tr)}>
       <Timetable animals={animals} editable />
       {/* Lili 2026-10-26 (item 1): the named feeding lists, composed by the feeding admin */}
       {
