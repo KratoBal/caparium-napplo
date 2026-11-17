@@ -14,9 +14,9 @@ import { useHydrated } from "./useHydrated";
  * few seconds (.hydration-failed), and hydration removes it before that, so a normal load never shows it.
  */
 /**
- * `guard` false: the page's forms are native ones that post without the page's scripts (Belépés, Elfelejtett jelszó: the Shell without a
- * user). Nothing typed there lives in React state, so nothing is lost before hydration, and an inert area would only block the login on
- * a page whose scripts fail (measured on #249: the login's button took no click).
+ * `guard` false: the page's form is a native one that posts without the page's scripts (Belépés), so nothing typed there lives in React
+ * state, and an inert area would only block the login on a page whose scripts fail (measured on #249). Shell decides: guarded with a
+ * user, and on a page without one that asks (Elfelejtett jelszó: a React-state form; barracuda on #249).
  */
 export function HydratedMain({ className, guard = true, children }: { className: string; guard?: boolean; children: React.ReactNode }) {
   const hydrated = useHydrated();
