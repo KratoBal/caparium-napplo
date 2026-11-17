@@ -5,7 +5,7 @@
 // is asked only when the server says it is needed.
 import { DayControls, type DayLock } from "./DayControls";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { EATING_TOP_ACTIONS_ID, allAteTargets } from "@/lib/eating-all-ate";
 import { refusedNote, rowsToReset } from "@/lib/eating-drafts";
@@ -843,6 +843,9 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
   const seen = useRef<Record<string, string>>(Object.fromEntries(rows.map((r) => [r.animalId, serverKey(r)])));
   // the rows whose save was just refused: their typed values survive the refresh that follows (lib/eating-drafts.ts)
   const refused = useRef<Set<string>>(new Set());
+  // the refresh after a save runs as a transition, and the save buttons wait for it: a save sent before the refreshed
+  // rows arrive still carries the old versions and is refused again (the e2e of #229 caught it, 2026-11-17)
+  const [refreshing, startRefresh] = useTransition();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // the result shows where the click was: "Mindenki evett" is at the top, the Save at the bottom
@@ -951,7 +954,7 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
         : { ok: true, text: `${saved} sor mentve.` },
     );
     // always: a save whose every row was refused left the stale versions on the page, and every retry failed the same way
-    if (saved || failed.length) router.refresh();
+    if (saved || failed.length) startRefresh(() => router.refresh());
   }
 
   const fed = rows.filter((r) => r.selected);
@@ -1040,7 +1043,7 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
     <button
       className="btn btn-soft"
       type="button"
-      disabled={busy || dayClosed || allAte.length === 0}
+      disabled={busy || refreshing || dayClosed || allAte.length === 0}
       title={dayClosed ? "Lezárt napon nem használható." : undefined}
       onClick={markAllAte}
       data-testid="eating-all-ate"
@@ -1082,7 +1085,7 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
           <button
             className="btn"
             type="button"
-            disabled={busy || toSave.length === 0}
+            disabled={busy || refreshing || toSave.length === 0}
             onClick={() => {
               setMsgAtTop(false);
               void saveAll();
