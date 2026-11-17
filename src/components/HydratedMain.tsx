@@ -13,18 +13,24 @@ import { useHydrated } from "./useHydrated";
  * good, a page that looks ready and ignores every tap. The server's markup carries a message for that; the CSS shows it only after a
  * few seconds (.hydration-failed), and hydration removes it before that, so a normal load never shows it.
  */
-export function HydratedMain({ className, children }: { className: string; children: React.ReactNode }) {
+/**
+ * `guard` false: the page's forms are native ones that post without the page's scripts (Belépés, Elfelejtett jelszó: the Shell without a
+ * user). Nothing typed there lives in React state, so nothing is lost before hydration, and an inert area would only block the login on
+ * a page whose scripts fail (measured on #249: the login's button took no click).
+ */
+export function HydratedMain({ className, guard = true, children }: { className: string; guard?: boolean; children: React.ReactNode }) {
   const hydrated = useHydrated();
   const tr = useTr();
+  const blocked = guard && !hydrated;
   return (
     <>
       {/* beside the main area, not in it: inert content is hidden from screen readers too, and an alert there would be silent */}
-      {!hydrated && (
+      {blocked && (
         <p className="banner banner-error hydration-failed" role="alert" data-testid="hydration-failed">
           {tr("Az oldal nem töltődött be teljesen, ezért most nem fogad bevitelt. Frissítsd az oldalt; ha így marad, szólj az adminisztrátornak.")}
         </p>
       )}
-      <main className={className} inert={!hydrated} data-testid="main">
+      <main className={className} inert={blocked} data-testid="main">
         {children}
       </main>
     </>
