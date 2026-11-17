@@ -8,6 +8,7 @@ import { ApplyPlan } from "@/components/FeedingForms";
 import { ApplyList } from "@/components/FeedingLists";
 import type { FeedOpt, FeedTypeOpt, Recipient } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
+import { pageTr } from "@/lib/i18n/server";
 import { feedingHelper } from "@/lib/helpers";
 import { helperStockAccess } from "@/lib/helper-access";
 import { referencesOn } from "@/lib/calculator";
@@ -25,6 +26,7 @@ export const dynamic = "force-dynamic";
 // EGY-01..EGY-12: the common daily list (NY-06 default), then the items, totals per unit (DN-16).
 export default async function FeedingPage({ searchParams }: { searchParams: Promise<{ nap?: string }> }) {
   const { user, level } = await requireModuleRead("FEEDING");
+  const { tr } = await pageTr(user);
   const today = businessDayOf(new Date());
   const sp = await searchParams;
   const day = sp.nap && isValidDay(sp.nap) && sp.nap <= today ? sp.nap : today;
@@ -82,7 +84,7 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
     .map((t) => ({ code: t.code, name: t.name, emoji: t.emoji, feeds: t.feeds.filter((f) => f.active).map((f) => ({ id: f.id, name: f.name })) }))
     .filter((t) => t.feeds.length > 0);
   return (
-    <Shell title="Napi etetés" active="feeding" user={user} helper={await feedingHelper(await helperStockAccess(user))}>
+    <Shell title={tr("Napi etetés")} active="feeding" user={user} helper={await feedingHelper(await helperStockAccess(user))}>
       <div className="toolbar toolbar-end">
         <DayNav path="/etetes" day={day} today={today} />
         {/* Lili 2026-10-27 12:32 and 12:36 UTC (item 7): the jump calendar beside the arrows, as on the eating log */}
@@ -102,7 +104,7 @@ export default async function FeedingPage({ searchParams }: { searchParams: Prom
         {/* Lili 2026-10-26 (msg 1564404799359946884): the timetable is the admin's for now; nobody else sees the entry */}
         {isAdmin && (
           <Link className="btn btn-soft" href="/etetes/rend">
-            Etetési rend
+            {tr("Etetési rend")}
           </Link>
         )}
         <DayControls kind="FEEDING" day={day} status={lock} isAdmin={isAdmin} />

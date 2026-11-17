@@ -6,12 +6,14 @@
 // inactivation undone at once. The earlier days, the dosing log and the exports are not affected: they read the feeds
 // and chemicals themselves, not this list.
 import { createContext, useContext, useState } from "react";
+import { useTr } from "./LangProvider";
 
 type Filter = { show: boolean; kept: string[]; keep: (id: string) => void };
 const Ctx = createContext<Filter | null>(null);
 
 export function InactiveListFilter({ inactive, children }: { inactive: number; children: React.ReactNode }) {
   const [show, setShow] = useState(false);
+  const tr = useTr();
   const [kept, setKept] = useState<string[]>([]);
   const keep = (id: string) => setKept((k) => (k.includes(id) ? k : [...k, id]));
   return (
@@ -19,7 +21,7 @@ export function InactiveListFilter({ inactive, children }: { inactive: number; c
       {inactive > 0 && (
         <label className="toolbar no-print" style={{ margin: "8px 0" }}>
           <input className="switch" type="checkbox" role="switch" checked={show} onChange={(e) => setShow(e.target.checked)} />
-          Inaktívak mutatása ({inactive})
+          {tr("Inaktívak mutatása ({n})", { n: inactive })}
         </label>
       )}
       {children}

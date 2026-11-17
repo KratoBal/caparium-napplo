@@ -5,8 +5,9 @@
 // recorded twice.
 import { Fragment, useMemo, useState } from "react";
 import { Msg, useSend } from "./FeedingForms";
+import { weekLetters } from "@/lib/time";
+import { useLang, useTr } from "./LangProvider";
 
-const WEEKDAYS = ["H", "K", "Sze", "Cs", "P", "Szo", "V"];
 
 type Row = { id: string; name: string; groupName: string | null; poolName: string | null; weekdays: number[] };
 
@@ -22,6 +23,8 @@ export function Timetable({ animals, editable }: { animals: Row[]; editable: boo
   const [days, setDays] = useState<Record<string, number[]>>(() => Object.fromEntries(animals.map((a) => [a.id, a.weekdays])));
   const [pendingId, setPendingId] = useState<string | null>(null);
   const { msg, busy, run } = useSend();
+  const tr = useTr();
+  const WEEKDAYS = weekLetters(useLang());
   const changed = useMemo(() => animals.filter((a) => key(days[a.id] ?? []) !== key(a.weekdays)), [animals, days]);
   const anyPlan = animals.some((a) => a.weekdays.length > 0);
   const toggle = (id: string, d: number, on: boolean) => {
@@ -38,25 +41,25 @@ export function Timetable({ animals, editable }: { animals: Row[]; editable: boo
       "/api/feeding/plans",
       { requestId: id, plans: changed.map((a) => ({ animalId: a.id, weekdays: days[a.id] ?? [] })) },
       // a replay (the first answer was lost) is a save already done, not "0 saved" (barracuda #43)
-      (res) => (res.replayed ? "Már mentve." : `Mentve: ${Number(res.changed ?? 0)} állat terve.`),
+      (res) => (res.replayed ? tr("Már mentve.") : tr("Mentve: {n} állat terve.", { n: Number(res.changed ?? 0) })),
     );
     if (ok) setPendingId(null);
   }
   return (
     <div className="card" data-testid="timetable">
-      <h2>Heti etetési rend</h2>
+      <h2>{tr("Heti etetési rend")}</h2>
       {!anyPlan && (
         <p className="banner banner-warn" data-testid="timetable-empty">
-          Még nincs etetési terv. Pipáld be, melyik állat a hét mely napjain eszik, és mentsd: a takarmánynaplóban a „Mai Terv” gomb ebből jelöli ki az aznapi állatokat.
+          {tr("Még nincs etetési terv. Pipáld be, melyik állat a hét mely napjain eszik, és mentsd: a takarmánynaplóban a „Mai Terv” gomb ebből jelöli ki az aznapi állatokat.")}
         </p>
       )}
-      <p className="hint">Ugyanaz a terv, mint az állat adatlapján. A terv nem tény: a napi listát továbbra is kézzel lehet módosítani.</p>
+      <p className="hint">{tr("Ugyanaz a terv, mint az állat adatlapján. A terv nem tény: a napi listát továbbra is kézzel lehet módosítani.")}</p>
       <div className="table-scroll">
         <table className="log-table" data-testid="timetable-table">
           <thead>
             <tr>
-              <th>Állat</th>
-              <th>Medence</th>
+              <th>{tr("Állat")}</th>
+              <th>{tr("Medence")}</th>
               {WEEKDAYS.map((w) => (
                 <th key={w}>{w}</th>
               ))}
@@ -68,7 +71,7 @@ export function Timetable({ animals, editable }: { animals: Row[]; editable: boo
                 {(i === 0 || animals[i - 1]!.groupName !== a.groupName) && (
                   <tr className="group-head">
                     <td colSpan={2 + WEEKDAYS.length}>
-                      <b>{a.groupName ?? "Csoport nélkül"}</b>
+                      <b>{a.groupName ?? tr("Csoport nélkül")}</b>
                     </td>
                   </tr>
                 )}
@@ -95,7 +98,7 @@ export function Timetable({ animals, editable }: { animals: Row[]; editable: boo
       {editable && (
         <div className="toolbar">
           <button className="btn" type="button" disabled={busy || changed.length === 0} onClick={() => void save()}>
-            Etetési rend mentése{changed.length ? ` (${changed.length} állat)` : ""}
+            {changed.length ? tr("Etetési rend mentése ({n} állat)", { n: changed.length }) : tr("Etetési rend mentése")}
           </button>
           <Msg msg={msg} />
         </div>

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatDateTime, formatDay } from "@/lib/time";
 import { useReasonsOn } from "./ReasonSwitch";
+import { useTr } from "./LangProvider";
 
 type Op = { op: string; at: string; user: string; count: number; kinds: Record<string, number> };
 type Plan = {
@@ -25,6 +26,7 @@ function requestId(): string {
   return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
 
+// translated where shown (tr(KIND[k]))
 const KIND: Record<string, string> = {
   "FeedingSelection INVALIDATED": "kijelölés le",
   "FeedingSelection VALID": "kijelölés vissza",
@@ -46,6 +48,7 @@ export function DayRestore({ day }: { day: string }) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // the reason only while the app asks for reasons (Balázs 2026-10-20, task caparium-indoklas-ki): off, no field
   const reasonsOn = useReasonsOn();
+  const tr = useTr();
 
   async function call(body: Record<string, unknown>) {
     setBusy(true);
@@ -58,12 +61,12 @@ export function DayRestore({ day }: { day: string }) {
       });
       const b = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: { message?: string } };
       if (!res.ok) {
-        setMsg({ ok: false, text: b.error?.message ?? "Nem sikerült." });
+        setMsg({ ok: false, text: b.error?.message ?? tr("Nem sikerült.") });
         return null;
       }
       return b;
     } catch {
-      setMsg({ ok: false, text: "Nincs kapcsolat a szerverrel." });
+      setMsg({ ok: false, text: tr("Nincs kapcsolat a szerverrel.") });
       return null;
     } finally {
       setBusy(false);
@@ -73,13 +76,13 @@ export function DayRestore({ day }: { day: string }) {
   return (
     <details className="card no-print" data-testid="day-restore">
       <summary>
-        <h2 style={{ display: "inline" }}>Nap visszaállítása</h2>
+        <h2 style={{ display: "inline" }}>{tr("Nap visszaállítása")}</h2>
       </summary>
       <p className="hint">
-        A nap úgy áll vissza, ahogy egy kiválasztott művelet előtt állt: ami azóta került fel, lekerül, ami azóta lekerült, visszakerül, a nap takarmányai is. Előbb próba (nem ír semmit), utána külön megerősítéssel a visszaállítás. Törlés nincs, minden lépés naplózva.
+        {tr("A nap úgy áll vissza, ahogy egy kiválasztott művelet előtt állt: ami azóta került fel, lekerül, ami azóta lekerült, visszakerül, a nap takarmányai is. Előbb próba (nem ír semmit), utána külön megerősítéssel a visszaállítás. Törlés nincs, minden lépés naplózva.")}
       </p>
       <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void call({ mode: "ops" }).then((b) => b && setOps((b as { ops: Op[] }).ops))}>
-        A nap műveletei
+        {tr("A nap műveletei")}
       </button>
       {ops && (
         <table className="log-table" data-testid="day-restore-ops">
@@ -94,7 +97,7 @@ export function DayRestore({ day }: { day: string }) {
                     className="btn btn-row"
                     type="button"
                     disabled={busy}
-                    aria-label={`Próba: ${time(o.at)} előtti állapot`}
+                    aria-label={tr("Próba: {time} előtti állapot", { time: time(o.at) })}
                     onClick={() =>
                       void call({ mode: "plan", op: o.op }).then((b) => {
                         if (!b) return;
@@ -103,7 +106,7 @@ export function DayRestore({ day }: { day: string }) {
                       })
                     }
                   >
-                    Előtte állapot (próba)
+                    {tr("Előtte állapot (próba)")}
                   </button>
                 </td>
               </tr>
@@ -113,7 +116,7 @@ export function DayRestore({ day }: { day: string }) {
       )}
       {plan && op && (
         <div data-testid="day-restore-plan">
-          <p>Visszaállítás a(z) {time(plan.since)} előtti állapotra. Ezek a műveletek fordulnak vissza:</p>
+          <p>{tr("Visszaállítás a(z) {time} előtti állapotra. Ezek a műveletek fordulnak vissza:", { time: time(plan.since) })}</p>
           <ul data-testid="day-restore-turned-back">
             {plan.ops.map((o) => (
               <li key={o.op}>
@@ -121,41 +124,41 @@ export function DayRestore({ day }: { day: string }) {
               </li>
             ))}
           </ul>
-          <p>Ami változik:</p>
+          <p>{tr("Ami változik:")}</p>
           <ul>
             {Object.entries(plan.count).map(([k, n]) => (
               <li key={k}>
-                {KIND[k] ?? k}: {n}
+                {KIND[k] ? tr(KIND[k]) : k}: {n}
               </li>
             ))}
-            {plan.feedIds && <li>a nap takarmányai: {plan.feedIds.before.length} takarmány (most {plan.feedIds.now.length})</li>}
-            {!Object.keys(plan.count).length && !plan.feedIds && <li>nincs mit visszaállítani</li>}
+            {plan.feedIds && <li>{tr("a nap takarmányai: {n} takarmány (most {now})", { n: plan.feedIds.before.length, now: plan.feedIds.now.length })}</li>}
+            {!Object.keys(plan.count).length && !plan.feedIds && <li>{tr("nincs mit visszaállítani")}</li>}
           </ul>
           {plan.blocked.length > 0 ? (
             <p className="err">
-              {plan.blocked.length} változás a napló alapján nem fordítható vissza (tartalmi módosítás azóta), ezért a visszaállítás nem futtatható.
+              {tr("{n} változás a napló alapján nem fordítható vissza (tartalmi módosítás azóta), ezért a visszaállítás nem futtatható.", { n: plan.blocked.length })}
             </p>
           ) : (
             <div className="toolbar">
-              {reasonsOn && <input className="input" aria-label="A visszaállítás oka" placeholder="A visszaállítás oka" value={reason} onChange={(e) => setReason(e.target.value)} />}
+              {reasonsOn && <input className="input" aria-label={tr("A visszaállítás oka")} placeholder={tr("A visszaállítás oka")} value={reason} onChange={(e) => setReason(e.target.value)} />}
               <button
                 className="btn"
                 type="button"
                 disabled={busy || (reasonsOn && reason.trim().length < 3) || (!Object.keys(plan.count).length && !plan.feedIds)}
                 onClick={() => {
                   const others = plan.ops.slice(1);
-                  const also = others.length ? ` Ez a kiválasztotton kívül további ${others.length} műveletet is visszafordít: ${others.map((o) => `${time(o.at)} ${o.user}`).join(", ")}.` : "";
-                  if (!window.confirm(`Visszaállítod a(z) ${formatDay(day)} napot a(z) ${time(plan.since)} előtti állapotra?${also} A fenti változások mind megtörténnek.`)) return;
+                  const also = others.length ? " " + tr("Ez a kiválasztotton kívül további {n} műveletet is visszafordít: {list}.", { n: others.length, list: others.map((o) => `${time(o.at)} ${o.user}`).join(", ") }) : "";
+                  if (!window.confirm(tr("Visszaállítod a(z) {day} napot a(z) {time} előtti állapotra?{also} A fenti változások mind megtörténnek.", { day: formatDay(day), time: time(plan.since), also }))) return;
                   void call({ mode: "run", op, ...(reasonsOn ? { reason: reason.trim() } : {}) }).then((b) => {
                     if (!b) return;
-                    setMsg({ ok: true, text: "A nap visszaállítva." });
+                    setMsg({ ok: true, text: tr("A nap visszaállítva.") });
                     setPlan(null);
                     setOps(null);
                     router.refresh();
                   });
                 }}
               >
-                Visszaállítás
+                {tr("Visszaállítás")}
               </button>
             </div>
           )}

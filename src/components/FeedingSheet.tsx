@@ -26,10 +26,12 @@ import { formatDay } from "@/lib/time";
 import { ClearX } from "./ClearX";
 import { DayControls, type DayLock } from "./DayControls";
 import { Msg, parseAmount, useSend, type FeedOpt, type Recipient } from "./FeedingForms";
+import { useTr } from "./LangProvider";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 import { useIsPhone } from "./useIsPhone";
 import { useLeaveWarning } from "./useLeaveWarning";
 
+// translated where shown (tr(LEAVE_WARNING))
 const LEAVE_WARNING = "Van még nem mentett érték a takarmánylapon. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?";
 
 function newRequestId(): string {
@@ -105,6 +107,7 @@ export function FeedingSheet({
   const { msg, busy, run } = useSend();
   const router = useRouter();
   const reasonsOn = useReasonsOn();
+  const tr = useTr();
   // Lili 2026-10-30 17:17 UTC (msg 1565776571346976861, task caparium-takarmanylap-telefon): on a phone every row is a collapsed card, the name
   // and the row's total on top, and a tap on the name opens the row (it becomes the active one, its fields in two columns under their labels),
   // a second tap closes it. One card is open at a time. Tablet and desktop keep the table; there this stays null and no button is rendered.
@@ -192,7 +195,7 @@ export function FeedingSheet({
   const rowDirty = (rec: string) => feeds.some((f) => isDirty(rec, f));
   // a cell the save refused or could not read, on a closed card as well as an unsaved one: a mark on the name
   const rowFailed = (rec: string) => feeds.some((f) => failed.includes(cellKey(rec, f.id)) || bad.includes(cellKey(rec, f.id)));
-  const unitText = (f: FeedOpt) => (f.tick ? (f.dose ? `pipa = ${f.dose}` : "adva") : cellUnits(f).map((u) => u.symbol).join(" + "));
+  const unitText = (f: FeedOpt) => (f.tick ? (f.dose ? tr("pipa = {dose}", { dose: f.dose }) : tr("adva")) : cellUnits(f).map((u) => u.symbol).join(" + "));
   const headLabel = (f: FeedOpt) => `${f.name} (${unitText(f)})`;
   // on a phone each field stands under its feed's name and unit (two lines, so a pair of fields stays level); rendered there only,
   // so the cells' text on the tablet and the desktop is as before
@@ -205,11 +208,11 @@ export function FeedingSheet({
     ) : null;
   const colDirty = (f: FeedOpt) => recipients.some((r) => isDirty(r.key, f));
   // a total that counts a value not saved yet is marked like the draft cell itself (barracuda #45)
-  const totalMark = (dirty: boolean, text: string) => (dirty ? <span className="badge badge-pending" title="Nem mentett értéket is tartalmaz">{text}*</span> : text);
+  const totalMark = (dirty: boolean, text: string) => (dirty ? <span className="badge badge-pending" title={tr("Nem mentett értéket is tartalmaz")}>{text}*</span> : text);
 
   // leaving with drafts asks first: the page itself, and every in-app link (#38's rule). The browser's back button
   // is neither a click nor an unload in the App Router, so it is not asked, as on the measurement page
-  useLeaveWarning(changed.length, LEAVE_WARNING);
+  useLeaveWarning(changed.length, tr(LEAVE_WARNING));
 
   const drop = <T,>(list: T[], key: T) => list.filter((x) => x !== key);
   // A row that is gone after a refresh (an animal moved into a group, say) takes its drafts with it: they are dropped and the sheet says
@@ -227,6 +230,7 @@ export function FeedingSheet({
       },
       labelOf: (rec) => labels.current.get(rec) ?? "?",
       feedName: (feedId) => feeds.find((x) => x.id === feedId)?.name ?? "?",
+      tr,
     });
     labels.current = new Map(recipients.map((r) => [r.key, r.label]));
     if (gone.length === 0) return;
@@ -255,7 +259,7 @@ export function FeedingSheet({
     });
   }
   function discard() {
-    if (!window.confirm("A takarmánylap nem mentett értékei elvesznek. Elveted őket?")) return;
+    if (!window.confirm(tr("A takarmánylap nem mentett értékei elvesznek. Elveted őket?"))) return;
     setDrafts({});
     setBad([]);
     setFailed([]);
@@ -272,7 +276,7 @@ export function FeedingSheet({
     );
     setBad(invalid.map(({ r, f }) => cellKey(r.key, f.id)));
     if (invalid.length) {
-      setLocalMsg(`${invalid.length} cella nem menthető: érvénytelen mennyiség (${invalid.map(({ r, f }) => `${r.label}: ${f.name}`).join("; ")}).`);
+      setLocalMsg(tr("{n} cella nem menthető: érvénytelen mennyiség ({list}).", { n: invalid.length, list: invalid.map(({ r, f }) => `${r.label}: ${f.name}`).join("; ") }));
       return;
     }
     // a cell that got a second item since its draft began is read-only: the item form corrects it. A change made
@@ -281,14 +285,14 @@ export function FeedingSheet({
     const stale = changed.filter(({ r, f }) => multi(r.key, f.id));
     setFailed(stale.map(({ r, f }) => cellKey(r.key, f.id)));
     if (stale.length) {
-      setLocalMsg(`${stale.length} cellában közben több tétel lett: ${stale.map(({ r, f }) => `${r.label}: ${f.name}`).join("; ")}. A tétel-űrlapon javítsd, a piszkozatát vesd el.`);
+      setLocalMsg(tr("{n} cellában közben több tétel lett: {list}. A tétel-űrlapon javítsd, a piszkozatát vesd el.", { n: stale.length, list: stale.map(({ r, f }) => `${r.label}: ${f.name}`).join("; ") }));
       return;
     }
     const emptied = (f: FeedOpt, v: Record<string, string>) => (f.tick ? v[TICK] !== "1" : cellUnits(f).every((u) => !parseAmount(v[u.dimension] ?? "")));
     const clearing = changed.filter(({ r, f }) => drafts[cellKey(r.key, f.id)]!.baseId && emptied(f, shown(r.key, f)));
     let why: { reason?: string } | null = {};
     if (clearing.length) {
-      why = askReason(reasonsOn, "A kiürített cellák tételeinek érvénytelenítési oka:", `${clearing.length} kiürített cella tétele érvénytelenítődik. Folytatod?`);
+      why = askReason(reasonsOn, tr("A kiürített cellák tételeinek érvénytelenítési oka:"), tr("{n} kiürített cella tétele érvénytelenítődik. Folytatod?", { n: clearing.length }));
       if (!why) return;
     }
     setLocalMsg(null);
@@ -305,7 +309,7 @@ export function FeedingSheet({
       if (emptied(f, d.values)) {
         // an emptied (or unticked) saved cell: its item is invalidated, on the version the draft was typed on
         if (!d.baseId) ok = true;
-        else ok = await run(`/api/feeding/items/${d.baseId}/invalidate`, { requestId: id, expectedVersion: d.baseVersion, ...why }, "Takarmánylap mentve.");
+        else ok = await run(`/api/feeding/items/${d.baseId}/invalidate`, { requestId: id, expectedVersion: d.baseVersion, ...why }, tr("Takarmánylap mentve."));
       } else {
         ok = await run(
           "/api/feeding/items",
@@ -318,7 +322,7 @@ export function FeedingSheet({
             ...(d.baseId ? { itemId: d.baseId, expectedVersion: d.baseVersion } : {}),
             ...(r.animalId ? { animalId: r.animalId } : { groupId: r.groupId }),
           },
-          "Takarmánylap mentve.",
+          tr("Takarmánylap mentve."),
         );
       }
       if (!ok) {
@@ -342,7 +346,7 @@ export function FeedingSheet({
   }
   function printSheet() {
     // the paper should not carry a value that is not saved, unasked (barracuda #45)
-    if (changed.length && !window.confirm("A takarmánylapon nem mentett érték is van, a nyomtatás azt is mutatja. Nyomtatod így?")) return;
+    if (changed.length && !window.confirm(tr("A takarmánylapon nem mentett érték is van, a nyomtatás azt is mutatja. Nyomtatod így?"))) return;
     document.body.classList.add("print-sheet");
     window.print();
     document.body.classList.remove("print-sheet");
@@ -351,34 +355,35 @@ export function FeedingSheet({
   return (
     <div className="card feeding-sheet" data-testid="feeding-sheet">
       <div className="toolbar">
-        <h2>Takarmánylap, {formatDay(day)}</h2>
+        <h2>{tr("Takarmánylap, {day}", { day: formatDay(day) })}</h2>
         <span className="spacer" />
         <button className="btn btn-soft no-print" type="button" onClick={printSheet}>
-          Takarmánylap nyomtatása
+          {tr("Takarmánylap nyomtatása")}
         </button>
       </div>
       {feeds.length === 0 ? (
-        <p className="hint">Válaszd ki fent a nap takarmányait: a takarmánylap oszlopai ezek lesznek.</p>
+        <p className="hint">{tr("Válaszd ki fent a nap takarmányait: a takarmánylap oszlopai ezek lesznek.")}</p>
       ) : recipients.length === 0 ? (
-        <p className="hint">Előbb jelöld ki az aznap evő állatokat.</p>
+        <p className="hint">{tr("Előbb jelöld ki az aznap evő állatokat.")}</p>
       ) : (
         <>
           {editable && (
             <p className="hint no-print">
-              {phone ? "Koppints egy névre" : "Kattints egy sorra"}, és írd be a mennyiségeket: amit beírsz, a sor elhagyása után is megmarad és átírható. A végén a „Takarmánylap mentése” ment mindent. Az üres cella 0, nem kerül tételként rögzítésre; egy mentett cella kiürítése a tételét érvényteleníti.{feeds.some((f) => f.tick) ? " A koralltáp oszlopában pipa: adva vagy nem, mennyiség nélkül (a mennyiség a tétel-űrlapon írható be)." : ""}
+              {tr("{start}, és írd be a mennyiségeket: amit beírsz, a sor elhagyása után is megmarad és átírható. A végén a „Takarmánylap mentése” ment mindent. Az üres cella 0, nem kerül tételként rögzítésre; egy mentett cella kiürítése a tételét érvényteleníti.", { start: tr(phone ? "Koppints egy névre" : "Kattints egy sorra") })}
+              {feeds.some((f) => f.tick) ? " " + tr("A koralltáp oszlopában pipa: adva vagy nem, mennyiség nélkül (a mennyiség a tétel-űrlapon írható be).") : ""}
             </p>
           )}
           <div className="table-scroll sheet-scroll">
             <table className="log-table" data-testid="feeding-sheet-table">
               <thead>
                 <tr>
-                  <th>Állat</th>
+                  <th>{tr("Állat")}</th>
                   {feeds.map((f) => (
                     <th key={f.id}>
                       {headLabel(f)}
                     </th>
                   ))}
-                  <th>Összesen</th>
+                  <th>{tr("Összesen")}</th>
                 </tr>
               </thead>
               <tbody ref={body}>
@@ -421,9 +426,9 @@ export function FeedingSheet({
                             </span>
                             <span className="sheet-sum">{fmt(rowTotal(r.key)) || "0"}</span>
                             {rowFailed(r.key) ? (
-                              <span className="sheet-dot bad" role="img" aria-label="Nem mentődött érték" data-testid={`sheet-mark-${r.label}`} />
+                              <span className="sheet-dot bad" role="img" aria-label={tr("Nem mentődött érték")} data-testid={`sheet-mark-${r.label}`} />
                             ) : rowDirty(r.key) ? (
-                              <span className="sheet-dot" role="img" aria-label="Nem mentett érték" data-testid={`sheet-mark-${r.label}`} />
+                              <span className="sheet-dot" role="img" aria-label={tr("Nem mentett érték")} data-testid={`sheet-mark-${r.label}`} />
                             ) : null}
                             <span className="sheet-chevron" aria-hidden="true" />
                           </button>
@@ -448,8 +453,8 @@ export function FeedingSheet({
                           <td key={f.id} className="keep" data-testid={`sheet-cell-${r.label}-${f.name}`} data-failed={conflict || undefined}>
                             {cellLabel(f)}
                             {multi(r.key, f.id) ? (
-                              <span className="hint" title="Egy cellában több tétel: a tétel-űrlapon javítsd">
-                                {fmt(cellTotals(r.key, f))} (több tétel)
+                              <span className="hint" title={tr("Egy cellában több tétel: a tétel-űrlapon javítsd")}>
+                                {tr("{total} (több tétel)", { total: fmt(cellTotals(r.key, f)) })}
                               </span>
                             ) : isActive && f.tick ? (
                               <input
@@ -458,7 +463,7 @@ export function FeedingSheet({
                                 checked={d[TICK] === "1"}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => type(r.key, f, TICK, e.target.checked ? "1" : "")}
-                                aria-label={`${r.label}: ${f.name} (${f.dose ? `pipa = ${f.dose}` : "adva"})`}
+                                aria-label={`${r.label}: ${f.name} (${f.dose ? tr("pipa = {dose}", { dose: f.dose }) : tr("adva")})`}
                               />
                             ) : isActive ? (
                               cellUnits(f).map((u) => (
@@ -477,14 +482,14 @@ export function FeedingSheet({
                                   />
                                   <ClearX
                                     shown={(d[u.dimension] ?? "") !== ""}
-                                    label={`${u.symbol} kiürítése, ${r.label}, ${f.name}`}
+                                    label={tr("{unit} kiürítése, {row}, {feed}", { unit: u.symbol, row: r.label, feed: f.name })}
                                     onClear={() => type(r.key, f, u.dimension, "")}
                                   />
                                 </span>
                               ))
                             ) : (
-                              <span className={dirty || conflict ? "badge badge-pending" : undefined} title={conflict ? "Nem mentődött: lásd az üzenetet" : dirty ? "Nincs még mentve" : undefined}>
-                                {f.tick ? (d[TICK] === "1" ? fmt(cellTotals(r.key, f)) || "adva" : "nem") : fmt(cellTotals(r.key, f)) || "0"}
+                              <span className={dirty || conflict ? "badge badge-pending" : undefined} title={conflict ? tr("Nem mentődött: lásd az üzenetet") : dirty ? tr("Nincs még mentve") : undefined}>
+                                {f.tick ? (d[TICK] === "1" ? fmt(cellTotals(r.key, f)) || tr("adva") : tr("nem")) : fmt(cellTotals(r.key, f)) || "0"}
                               </span>
                             )}
                           </td>
@@ -497,7 +502,7 @@ export function FeedingSheet({
               </tbody>
               <tfoot>
                 <tr>
-                  <td>Összesen</td>
+                  <td>{tr("Összesen")}</td>
                   {feeds.map((f) => (
                     <td key={f.id} data-testid={`sheet-total-${f.id}`}>
                       {cellLabel(f)}
@@ -507,7 +512,7 @@ export function FeedingSheet({
                   <td data-testid="sheet-grand-total">
                     {phone && (
                       <span className="sheet-cell-label">
-                        <span className="sheet-cell-name">Mind együtt</span>
+                        <span className="sheet-cell-name">{tr("Mind együtt")}</span>
                       </span>
                     )}{totalMark(changed.length > 0, fmt(grand) || "0")}</td>
                 </tr>
@@ -517,11 +522,11 @@ export function FeedingSheet({
           {editable && (
             <div className="toolbar no-print">
               <button className="btn" type="button" disabled={busy || changed.length === 0} onClick={() => void saveAll()}>
-                Takarmánylap mentése{changed.length ? ` (${changed.length} cella)` : ""}
+                {tr(changed.length ? "Takarmánylap mentése ({n} cella)" : "Takarmánylap mentése", { n: changed.length })}
               </button>
               {Object.keys(drafts).length > 0 && (
                 <button className="btn btn-soft" type="button" disabled={busy} onClick={discard}>
-                  Piszkozat elvetése
+                  {tr("Piszkozat elvetése")}
                 </button>
               )}
               {localMsg ? (

@@ -11,6 +11,36 @@ import { describe, expect, it } from "vitest";
 const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
   "src/components/Helper.tsx": { allowed: ["Zebracápa"], why: "the figure's name" },
   "src/lib/helpers.ts": { allowed: [], why: "" },
+  "src/app/etetes/page.tsx": { allowed: [], why: "" },
+  "src/app/etetes/rend/page.tsx": { allowed: [], why: "" },
+  "src/app/evesi-naplo/page.tsx": { allowed: [], why: "" },
+  "src/app/kivetel/page.tsx": { allowed: [], why: "" },
+  "src/app/takarmany-naplo/page.tsx": { allowed: [], why: "" },
+  "src/components/FeedingForms.tsx": {
+    allowed: ["Merüléses etetés (M)", "Felszíni etetés (F)", "Koplalónap (K)", "tömeg", "térfogat", "Van még nem mentett sor az evési naplóban. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?"],
+    why: "the feeding modes, the dimensions and the leave warning, translated where shown (tr(FEEDING_MODE_LABEL[m]), tr(DIM[d]), tr(EATING_LEAVE_WARNING))",
+  },
+  "src/components/FeedingDay.tsx": { allowed: [], why: "" },
+  "src/components/FeedingSheet.tsx": {
+    allowed: ["Van még nem mentett érték a takarmánylapon. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?"],
+    why: "the leave warning, translated where used (tr(LEAVE_WARNING))",
+  },
+  "src/components/FeedingLists.tsx": { allowed: [], why: "" },
+  "src/components/DayRestore.tsx": {
+    allowed: ["kijelölés le", "kijelölés vissza", "tétel le", "tétel vissza", "evési állapot le", "evési állapot vissza"],
+    why: "the operation kinds, translated where shown (tr(KIND[k]))",
+  },
+  "src/lib/sheet-drafts.ts": { allowed: [], why: "" },
+  "src/components/Timetable.tsx": { allowed: [], why: "" },
+  "src/components/DayNav.tsx": { allowed: [], why: "" },
+  "src/components/PrintButton.tsx": { allowed: [], why: "" },
+  "src/components/InactiveListFilter.tsx": { allowed: [], why: "" },
+  "src/lib/eating-labels.ts": { allowed: ["evett", "nem evett meg mindent", "nem evett", "koplalónap"], why: "the eating states, translated where shown (tr(EAT_LABEL[state]))" },
+  "src/lib/eating-drafts.ts": {
+    allowed: [" A frissebb állapot betöltve; a be nem mentett sorokban a beírt érték megmaradt, újra mentve azt írja be."],
+    why: "translated where shown (EatingTable: tr(note.trim()))",
+  },
+  "src/lib/stock-hint.ts": { allowed: [], why: "" },
   "src/components/MeasurementPage.tsx": {
     allowed: ["Kis Akváriumok", "Fagyasztók hőmérséklete"],
     why: "the tiles' captions, translated where shown (tr(look.label), tr(FRIDGE_TILE.label))",

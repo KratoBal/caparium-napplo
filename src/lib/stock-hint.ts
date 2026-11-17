@@ -4,13 +4,20 @@
 // flagged, as the chemicals' (R-16). Pure, so the page's server part and the form share the numbers and a test reaches it.
 import { plainNumber, rowForDisplay } from "./mass-display";
 import { otherKey } from "./other-name";
+import { translate, type TrVars } from "./i18n/translate";
 
 export type StockInfo = { feedId: string; /** the other name as a key (otherKey), null for a plain feed */ otherName: string | null; dimension: string; unit: string; level: number };
 
 export type TypedAmount = { dimension: string; /** the typed number in the chosen unit, null when it is not a number yet */ value: number | null; /** the chosen unit's factor to the base unit */ factor: number };
 
-/** The stock lines of one feed (and other name) with a warning for each dimension whose typed amount exceeds it. */
-export function stockHint(stock: readonly StockInfo[], feedId: string, otherName: string | null, typed: readonly TypedAmount[]): { text: string; over: boolean }[] {
+/** The stock lines of one feed (and other name) with a warning for each dimension whose typed amount exceeds it; `tr` is the page's translator (Hungarian without it). */
+export function stockHint(
+  stock: readonly StockInfo[],
+  feedId: string,
+  otherName: string | null,
+  typed: readonly TypedAmount[],
+  tr: (text: string, vars?: TrVars) => string = (t, v) => translate("hu", t, v),
+): { text: string; over: boolean }[] {
   const name = otherName?.trim() ? otherKey(otherName) : null;
   return stock
     .filter((s) => s.feedId === feedId && s.otherName === name)
@@ -20,7 +27,7 @@ export function stockHint(stock: readonly StockInfo[], feedId: string, otherName
       const asked = t?.value != null ? t.value * t.factor : 0;
       const over = asked > 0 && asked > s.level;
       return {
-        text: `Készlet: ${shown.values[0]} ${shown.unit}${over ? `. A kivétel (${plainNumber(asked)} ${s.unit}) meghaladja a készletet, negatív készlet lesz.` : ""}`,
+        text: `${tr("Készlet: {amount} {unit}", { amount: shown.values[0]!, unit: shown.unit })}${over ? `. ${tr("A kivétel ({amount} {unit}) meghaladja a készletet, negatív készlet lesz.", { amount: plainNumber(asked), unit: s.unit })}` : ""}`,
         over,
       };
     });

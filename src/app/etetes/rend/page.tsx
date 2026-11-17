@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { Shell } from "@/components/Shell";
+import { pageTr } from "@/lib/i18n/server";
 import type { FeedTypeOpt } from "@/components/FeedingForms";
 import { FeedingListsEditor } from "@/components/FeedingLists";
 import { Timetable } from "@/components/Timetable";
@@ -21,6 +22,7 @@ export default async function TimetablePage() {
   const { user, level } = await requireModuleRead("FEEDING");
   // Lili 2026-10-26 (msg 1564404799359946884): the timetable is the admin's for now
   if (level !== "ADMIN") redirect("/nincs-jogosultsag");
+  const { tr } = await pageTr(user);
   const today = businessDayOf(new Date());
   const [view, plans, lists, types] = await Promise.all([feedingDayView(today), currentPlans(), activeFeedingLists(), listFeeds()]);
   const feedTypes: FeedTypeOpt[] = types
@@ -29,7 +31,7 @@ export default async function TimetablePage() {
     .filter((t) => t.feeds.length > 0);
   const animals = view.animals.map((a) => ({ id: a.id, name: a.name, groupName: a.groupName, poolName: a.poolName, weekdays: plans[a.id] ?? [] }));
   return (
-    <Shell title="Etetési rend" active="feeding" user={user} helper={await feedingHelper(await helperStockAccess(user))}>
+    <Shell title={tr("Etetési rend")} active="feeding" user={user} helper={await feedingHelper(await helperStockAccess(user))}>
       <Timetable animals={animals} editable />
       {/* Lili 2026-10-26 (item 1): the named feeding lists, composed by the feeding admin */}
       {

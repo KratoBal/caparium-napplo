@@ -174,9 +174,25 @@ export function weekdayName(day: string): string {
   return HU_WEEKDAYS[dayToDate(day).getUTCDay()];
 }
 
-const HU_WEEKDAY_LETTERS = ["V", "H", "K", "Sze", "Cs", "P", "Szo"];
+// Sunday first, as getUTCDay(). Not dictionary keys: one letter would collide ("V" is Sunday and the vitamin mark), so the
+// letters are a table per language (task t-20261117-caparium-angol-alap); the export keeps the Hungarian ones.
+const WEEKDAY_LETTERS = {
+  hu: ["V", "H", "K", "Sze", "Cs", "P", "Szo"],
+  en: ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"],
+} as const;
 
 /** The day's letter, as the feeding timetable writes it: H, K, Sze, Cs, P, Szo, V (Lili 2026-10-29, package item 7). */
 export function weekdayLetter(day: string): string {
-  return HU_WEEKDAY_LETTERS[dayToDate(day).getUTCDay()];
+  return weekdayLetterIn("hu", day);
+}
+
+/** The day's letter in a language; the language first, so `days.map(weekdayLetter)` can never pass an index as one. */
+export function weekdayLetterIn(lang: "hu" | "en", day: string): string {
+  return WEEKDAY_LETTERS[lang][dayToDate(day).getUTCDay()];
+}
+
+/** The week's letters from Monday, the timetable's columns. */
+export function weekLetters(lang: "hu" | "en" = "hu"): string[] {
+  const l = WEEKDAY_LETTERS[lang];
+  return [...l.slice(1), l[0]];
 }
