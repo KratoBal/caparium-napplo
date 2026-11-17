@@ -177,7 +177,10 @@ export async function MeasurementPage({
       </div>
       {grid && (
         <MeasurementGrid
-          key={`${group.id}:${day}:${grid.selectedRound?.seq ?? 0}`}
+          // "no round yet" keys like the first round (card 7fdbf78f, 2026-11-17): the day's first save creates round 1, and with
+          // `?? 0` the refresh after it changed the key, remounted the grid and took its "Minden érték mentve." banner (and the
+          // rest of its state) away a moment after it showed. A real change of round (Új kör, 1 -> 2) still remounts it.
+          key={`${group.id}:${day}:${grid.selectedRound?.seq ?? 1}`}
           initial={grid}
           groupCode={group.code}
           today={today}
