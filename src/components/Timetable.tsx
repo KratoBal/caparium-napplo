@@ -5,9 +5,9 @@
 // recorded twice.
 import { Fragment, useMemo, useState } from "react";
 import { Msg, useSend } from "./FeedingForms";
-import { useTr } from "./LangProvider";
+import { weekLetters } from "@/lib/time";
+import { useLang, useTr } from "./LangProvider";
 
-const WEEKDAYS = ["H", "K", "Sze", "Cs", "P", "Szo", "V"];
 
 type Row = { id: string; name: string; groupName: string | null; poolName: string | null; weekdays: number[] };
 
@@ -24,6 +24,7 @@ export function Timetable({ animals, editable }: { animals: Row[]; editable: boo
   const [pendingId, setPendingId] = useState<string | null>(null);
   const { msg, busy, run } = useSend();
   const tr = useTr();
+  const WEEKDAYS = weekLetters(useLang());
   const changed = useMemo(() => animals.filter((a) => key(days[a.id] ?? []) !== key(a.weekdays)), [animals, days]);
   const anyPlan = animals.some((a) => a.weekdays.length > 0);
   const toggle = (id: string, d: number, on: boolean) => {

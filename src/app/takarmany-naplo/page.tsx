@@ -9,7 +9,7 @@ import { feedingLog } from "@/lib/feeding-log";
 import { listAnimals } from "@/lib/animals";
 import { pickValid } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
-import { addDays, businessDayOf, formatDay, isValidDay, weekdayLetter } from "@/lib/time";
+import { addDays, businessDayOf, formatDay, isValidDay, weekdayLetterIn } from "@/lib/time";
 import { poolInUse } from "@/lib/pool-periods";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ const fmt = (t: Record<string, number>) => Object.entries(t).map(([u, v]) => `${
 // of the same animals; TAK-05: the same period as Excel, and the page itself as PDF.
 export default async function FeedingLogPage({ searchParams }: { searchParams: Promise<{ tol?: string; ig?: string; medence?: string; allat?: string }> }) {
   const { user } = await requireModuleRead("FEEDING");
-  const { tr } = await pageTr(user);
+  const { lang, tr } = await pageTr(user);
   const sp = await searchParams;
   const today = businessDayOf(new Date());
   const to = sp.ig && isValidDay(sp.ig) ? sp.ig : today;
@@ -94,7 +94,7 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
                       // EVE-08: the weeks in two alternating colours
                       <th key={d} style={{ background: `#${weekShade(log!.days[0], d).slice(2)}` }}>
                         <small className="day-letter" data-testid={`pattern-letter-${d}`}>
-                          {weekdayLetter(d)}
+                          {weekdayLetterIn(lang, d)}
                         </small>
                         {formatDay(d)}
                       </th>
@@ -111,7 +111,7 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
                           <td key={d} className="keep">
                             {c && (
                               <span className={`badge eat-${c.state}${c.vitamin || c.medicine ? "" : " eat-bar"}`} title={tr(EAT_LABEL[c.state]!)}>
-                                {[c.vitamin ? "V" : "", c.medicine ? "Gy" : ""].filter(Boolean).join(" ") || " "}
+                                {[c.vitamin ? tr("V") : "", c.medicine ? tr("Gy") : ""].filter(Boolean).join(" ") || " "}
                               </span>
                             )}
                           </td>

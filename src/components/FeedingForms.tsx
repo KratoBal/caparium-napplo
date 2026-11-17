@@ -1014,8 +1014,8 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
           )}
         </td>
         <td className="eat-mark">
-          {s?.vitamin ? "V " : ""}
-          {s?.medicine ? `Gy${s.medicineNote ? `: ${s.medicineNote}` : ""}` : ""}
+          {s?.vitamin ? `${tr("V")} ` : ""}
+          {s?.medicine ? `${tr("Gy")}${s.medicineNote ? `: ${s.medicineNote}` : ""}` : ""}
         </td>
         {editable && folded && (
           <td className="keep eat-ctl">
@@ -1041,10 +1041,10 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
                 ))}
               </select>
               <label className="check">
-                <input type="checkbox" checked={d.vitamin} onChange={(e) => set(r.animalId, { vitamin: e.target.checked })} aria-label={`${r.name} vitamin`} />V
+                <input type="checkbox" checked={d.vitamin} onChange={(e) => set(r.animalId, { vitamin: e.target.checked })} aria-label={tr("{name} vitamin", { name: r.name })} />{tr("V")}
               </label>
               <label className="check">
-                <input type="checkbox" checked={d.medicine} onChange={(e) => set(r.animalId, { medicine: e.target.checked })} aria-label={tr("{name} gyógyszer", { name: r.name })} />Gy
+                <input type="checkbox" checked={d.medicine} onChange={(e) => set(r.animalId, { medicine: e.target.checked })} aria-label={tr("{name} gyógyszer", { name: r.name })} />{tr("Gy")}
               </label>
               {d.medicine && (
                 <input className="input" value={d.note} onChange={(e) => set(r.animalId, { note: e.target.value })} placeholder={tr("Gyógyszer megjegyzés")} aria-label={tr("{name} gyógyszer megjegyzés", { name: r.name })} />

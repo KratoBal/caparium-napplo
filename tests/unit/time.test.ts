@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, businessDayOf, EXCEL_DATE_FORMAT, formatDateTime, formatDay, formatPeriod, localTimeOf, resolveLocalDateTime, weekdayLetter } from "@/lib/time";
+import { addDays, businessDayOf, EXCEL_DATE_FORMAT, formatDateTime, formatDay, formatPeriod, localTimeOf, resolveLocalDateTime, weekdayLetter, weekdayLetterIn, weekLetters } from "@/lib/time";
 
 describe("business day (K2: Europe/Budapest, midnight boundary)", () => {
   it("summer: 23:59 local is still the same day, 00:00 local is the next", () => {
@@ -84,5 +84,9 @@ describe("the dotted date (formatDay, formatPeriod, formatDateTime)", () => {
 describe("the day's letter (Lili 2026-10-29, package item 7)", () => {
   it("as the timetable writes it, Monday first", () => {
     expect(["2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31", "2026-11-01"].map(weekdayLetter)).toEqual(["H", "K", "Sze", "Cs", "P", "Szo", "V"]);
+    // the English view: two letters, as T and S would repeat; the timetable's columns from Monday
+    expect(["2026-10-26", "2026-11-01"].map((d) => weekdayLetterIn("en", d))).toEqual(["Mo", "Su"]);
+    expect(weekLetters("hu")).toEqual(["H", "K", "Sze", "Cs", "P", "Szo", "V"]);
+    expect(weekLetters("en")).toEqual(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]);
   });
 });
