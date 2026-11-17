@@ -2,6 +2,7 @@ import { DayControls } from "@/components/DayControls";
 import { DayJump, DayNav } from "@/components/DayNav";
 import { EatingTable, FeedingModeChoice } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
+import { pageTr } from "@/lib/i18n/server";
 import { feedingHelper } from "@/lib/helpers";
 import { helperStockAccess } from "@/lib/helper-access";
 import { eatingDayView } from "@/lib/eating";
@@ -16,6 +17,7 @@ export const dynamic = "force-dynamic";
 // EVE-01..EVE-06, EVE-11: ate / partly / not, fasting day; V and Gy; the colour is display only (DN-03).
 export default async function EatingPage({ searchParams }: { searchParams: Promise<{ nap?: string }> }) {
   const { user, level } = await requireModuleRead("FEEDING");
+  const { tr } = await pageTr(user);
   const today = businessDayOf(new Date());
   const sp = await searchParams;
   const day = sp.nap && isValidDay(sp.nap) && sp.nap <= today ? sp.nap : today;
@@ -25,7 +27,7 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
   const editable = canRecord && (isAdmin || (day === today && lock.state === "OPEN"));
   const rows = new Map(eat.rows.map((r) => [r.animalId, r]));
   return (
-    <Shell title="Evési napló" active="eating" user={user} helper={await feedingHelper(await helperStockAccess(user))}>
+    <Shell title={tr("Evési napló")} active="eating" user={user} helper={await feedingHelper(await helperStockAccess(user))}>
       <div className="toolbar toolbar-end">
         <DayNav path="/evesi-naplo" day={day} today={today} />
         {/* Lili 2026-10-26 (Caparium channel msg 1564356412946124921, item 4): the jump calendar, as on the water measurement
@@ -35,21 +37,21 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
         <span id={EATING_TOP_ACTIONS_ID} style={{ display: "contents" }} />
         <span className="spacer" />
         <span className={`badge ${eat.listState === "FINALIZED" ? "badge-valid" : "badge-pending"}`}>
-          {eat.listState === "FINALIZED" ? "Lista kész" : "Lista nincs kész"}
+          {tr(eat.listState === "FINALIZED" ? "Lista kész" : "Lista nincs kész")}
         </span>
         <DayControls kind="FEEDING" day={day} status={lock} isAdmin={isAdmin} />
       </div>
-      {eat.reopened && <div className="banner banner-warn">Újranyitva: a koplalónapok a nap újbóli lezárásakor számolódnak újra.</div>}
+      {eat.reopened && <div className="banner banner-warn">{tr("Újranyitva: a koplalónapok a nap újbóli lezárásakor számolódnak újra.")}</div>}
       {/* f0552bd4 (Lili 2026-11-11): the day's feeding mode, at the top of the eating log; M, F or K in the export */}
       <div className="card">
         <FeedingModeChoice key={day} day={day} mode={eat.feedingMode} editable={editable} />
       </div>
       <div className="card">
-        <h2>Evési állapotok</h2>
+        <h2>{tr("Evési állapotok")}</h2>
         <p className="hint">
-          Csak a napi etetési listán szereplő állatokat kell kitölteni: evett, nem evett meg mindent vagy nem evett. Aki nincs a
-          listán, arra nem kell semmit beírni: a kész lista lezárásakor magától koplalónapot kap. Töltsd ki a sorokat, és egyszer
-          ments: a mentés csak a kitöltött vagy megváltoztatott sorokat rögzíti.
+          {tr(
+            "Csak a napi etetési listán szereplő állatokat kell kitölteni: evett, nem evett meg mindent vagy nem evett. Aki nincs a listán, arra nem kell semmit beírni: a kész lista lezárásakor magától koplalónapot kap. Töltsd ki a sorokat, és egyszer ments: a mentés csak a kitöltött vagy megváltoztatott sorokat rögzíti.",
+          )}
         </p>
         {/* keyed by the day: DayNav changes ?nap= on the same route, which keeps a client component's state, so an
             unsaved draft (and an opened fasting row) would move to the other day (barracuda on #50, the #45 lesson) */}

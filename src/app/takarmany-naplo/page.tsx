@@ -1,5 +1,6 @@
 import { PrintButton } from "@/components/PrintButton";
 import { Shell } from "@/components/Shell";
+import { pageTr } from "@/lib/i18n/server";
 import { prisma } from "@/lib/db";
 import { EAT_LABEL } from "@/lib/eating-labels";
 import { AppError } from "@/lib/errors";
@@ -20,6 +21,7 @@ const fmt = (t: Record<string, number>) => Object.entries(t).map(([u, v]) => `${
 // of the same animals; TAK-05: the same period as Excel, and the page itself as PDF.
 export default async function FeedingLogPage({ searchParams }: { searchParams: Promise<{ tol?: string; ig?: string; medence?: string; allat?: string }> }) {
   const { user } = await requireModuleRead("FEEDING");
+  const { tr } = await pageTr(user);
   const sp = await searchParams;
   const today = businessDayOf(new Date());
   const to = sp.ig && isValidDay(sp.ig) ? sp.ig : today;
@@ -41,20 +43,20 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
     error = e.message;
   }
   return (
-    <Shell title="Takarmányozási napló" active="feedlog" user={user}>
+    <Shell title={tr("Takarmányozási napló")} active="feedlog" user={user}>
       <form method="get" action="/takarmany-naplo" className="filters no-print">
         <label className="field">
-          Naptól
+          {tr("Naptól")}
           <input className="input" type="date" name="tol" defaultValue={from} />
         </label>
         <label className="field">
-          Napig
+          {tr("Napig")}
           <input className="input" type="date" name="ig" defaultValue={to} />
         </label>
         <label className="field">
-          Medence
-          <select className="input" name="medence" defaultValue={poolId ?? ""} aria-label="Medence">
-            <option value="">mind</option>
+          {tr("Medence")}
+          <select className="input" name="medence" defaultValue={poolId ?? ""} aria-label={tr("Medence")}>
+            <option value="">{tr("mind")}</option>
             {pools.map((p) => (
               <option key={p.id} value={p.id}>
                 {pickValid(p.names, now)?.displayName ?? p.code}
@@ -63,9 +65,9 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
           </select>
         </label>
         <label className="field">
-          Állat
-          <select className="input" name="allat" defaultValue={animalId ?? ""} aria-label="Állat">
-            <option value="">mind</option>
+          {tr("Állat")}
+          <select className="input" name="allat" defaultValue={animalId ?? ""} aria-label={tr("Állat")}>
+            <option value="">{tr("mind")}</option>
             {animals.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -73,21 +75,21 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
             ))}
           </select>
         </label>
-        <button className="btn btn-soft" type="submit">Lekérés</button>
+        <button className="btn btn-soft" type="submit">{tr("Lekérés")}</button>
         <span className="spacer" />
         <PrintButton />
       </form>
-      {error && <div className="banner banner-error">{error}</div>}
+      {error && <div className="banner banner-error">{tr(error)}</div>}
       {log && (
         <>
           <div className="card">
-            <h2>Evési minta</h2>
+            <h2>{tr("Evési minta")}</h2>
             <div className="table-scroll">
               {/* Lili 2026-10-29 (package item 7): the day's letter above the date, firmer colours, thicker bars */}
               <table className="log-table eat-pattern" data-testid="eating-pattern">
                 <thead>
                   <tr>
-                    <th>Állat</th>
+                    <th>{tr("Állat")}</th>
                     {log.days.map((d) => (
                       // EVE-08: the weeks in two alternating colours
                       <th key={d} style={{ background: `#${weekShade(log!.days[0], d).slice(2)}` }}>
@@ -108,7 +110,7 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
                         return (
                           <td key={d} className="keep">
                             {c && (
-                              <span className={`badge eat-${c.state}${c.vitamin || c.medicine ? "" : " eat-bar"}`} title={EAT_LABEL[c.state]}>
+                              <span className={`badge eat-${c.state}${c.vitamin || c.medicine ? "" : " eat-bar"}`} title={tr(EAT_LABEL[c.state]!)}>
                                 {[c.vitamin ? "V" : "", c.medicine ? "Gy" : ""].filter(Boolean).join(" ") || " "}
                               </span>
                             )}
@@ -122,17 +124,17 @@ export default async function FeedingLogPage({ searchParams }: { searchParams: P
             </div>
           </div>
           <div className="card">
-            <h2>Etetések ({log.rows.length})</h2>
+            <h2>{tr("Etetések ({n})", { n: log.rows.length })}</h2>
             <p className="hint" data-testid="log-totals">
               {log.filtered && Object.keys(log.group).length > 0
-                ? `Egyedi tételek: ${fmt(log.own) || "semmi"}; csoportos tételekben (a csoport teljes mennyisége, felosztás nélkül): ${fmt(log.group)}`
-                : `Összesen: ${fmt(log.totals) || "semmi"}`}{" "}
-              (alapegységben; a darab és a tömeg külön)
+                ? tr("Egyedi tételek: {own}; csoportos tételekben (a csoport teljes mennyisége, felosztás nélkül): {group}", { own: fmt(log.own) || tr("semmi"), group: fmt(log.group) })
+                : tr("Összesen: {total}", { total: fmt(log.totals) || tr("semmi") })}{" "}
+              {tr("(alapegységben; a darab és a tömeg külön)")}
             </p>
             <div className="table-scroll">
               <table className="log-table" data-testid="feeding-log">
                 <thead>
-                  <tr><th>Nap</th><th>Kinek</th><th>Medence</th><th>Takarmány</th><th>Mennyiség</th></tr>
+                  <tr><th>{tr("Nap")}</th><th>{tr("Kinek")}</th><th>{tr("Medence")}</th><th>{tr("Takarmány")}</th><th>{tr("Mennyiség")}</th></tr>
                 </thead>
                 <tbody>
                   {log.rows.map((r) => (

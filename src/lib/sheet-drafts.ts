@@ -3,6 +3,7 @@
 // nor vanish without a word: it is dropped, and the sheet says which row's draft was lost (Lili 2026-10-30, msg 1565798789183447103; acrobot
 // 38947, b; the wording names no cause, since a row also goes when its individual item is invalidated: barracuda on #153).
 // A draft that equals what is saved is nothing lost, and is dropped silently.
+import { translate, type TrVars } from "./i18n/translate";
 
 export function vanishedDrafts(input: {
   /** the drafts by "rowKey|feedId" */
@@ -13,7 +14,10 @@ export function vanishedDrafts(input: {
   dirty: (rowKey: string, feedId: string) => boolean;
   labelOf: (rowKey: string) => string;
   feedName: (feedId: string) => string;
+  /** the page's translator (Hungarian without it) */
+  tr?: (text: string, vars?: TrVars) => string;
 }): { drop: string[]; message: string | null } {
+  const tr = input.tr ?? ((t: string, v?: TrVars) => translate("hu", t, v));
   const drop: string[] = [];
   const lost = new Map<string, string[]>();
   for (const key of input.draftKeys) {
@@ -27,6 +31,6 @@ export function vanishedDrafts(input: {
     feeds.push(input.feedName(feedId));
     lost.set(row, feeds);
   }
-  const parts = [...lost].map(([row, feeds]) => `${input.labelOf(row)} sor eltűnt a lapról, a piszkozata elveszett: ${feeds.join(", ")}.`);
+  const parts = [...lost].map(([row, feeds]) => tr("{row} sor eltűnt a lapról, a piszkozata elveszett: {feeds}.", { row: input.labelOf(row), feeds: feeds.join(", ") }));
   return { drop, message: parts.length ? parts.join(" ") : null };
 }

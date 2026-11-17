@@ -12,6 +12,7 @@ import { refusedNote, rowsToReset } from "@/lib/eating-drafts";
 import { EAT_LABEL } from "@/lib/eating-labels";
 import { stockHint, type StockInfo } from "@/lib/stock-hint";
 import { formatDay } from "@/lib/time";
+import { useTr } from "./LangProvider";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
 import { useLeaveWarning } from "./useLeaveWarning";
 
@@ -25,9 +26,10 @@ type ErrorBody = { error?: { code?: string; message?: string; issues?: { message
 
 export function useSend() {
   const router = useRouter();
+  const tr = useTr();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  async function run(url: string, body: Record<string, unknown>, okText: string | ((res: Record<string, unknown>) => string) = "Mentve.") {
+  async function run(url: string, body: Record<string, unknown>, okText: string | ((res: Record<string, unknown>) => string) = tr("Mentve.")) {
     setBusy(true);
     setMsg(null);
     let extra: Record<string, unknown> = {};
@@ -45,7 +47,7 @@ export function useSend() {
         }
         const b = (await res.json().catch(() => ({}))) as ErrorBody;
         const code = b.error?.code;
-        const message = b.error?.issues?.[0]?.message ?? b.error?.message ?? "Nem sikerült.";
+        const message = b.error?.issues?.[0]?.message ?? b.error?.message ?? tr("Nem sikerült.");
         if (code === "HAS_RECORDS" && !extra.confirmCascade && window.confirm(message)) {
           extra = { ...extra, confirmCascade: true };
           continue;
@@ -55,7 +57,7 @@ export function useSend() {
           continue;
         }
         if (code === "REASON_REQUIRED" && !extra.reason) {
-          const r = window.prompt(`${message} Indoklás:`);
+          const r = window.prompt(`${message} ${tr("Indoklás:")}`);
           if (r && r.trim().length >= 3) {
             extra = { ...extra, reason: r.trim() };
             continue;
@@ -66,7 +68,7 @@ export function useSend() {
       }
       return false;
     } catch {
-      setMsg({ ok: false, text: "Nincs kapcsolat a szerverrel." });
+      setMsg({ ok: false, text: tr("Nincs kapcsolat a szerverrel.") });
       return false;
     } finally {
       setBusy(false);
@@ -87,6 +89,7 @@ export function Msg({ msg }: { msg: { ok: boolean; text: string } | null }) {
 /** One animal on the daily list (EGY-01; the list is common, R-7). */
 export function SelectBox({ day, animalId, name, selected, disabled }: { day: string; animalId: string; name: string; selected: boolean; disabled: boolean }) {
   const { msg, busy, run } = useSend();
+  const tr = useTr();
   // shown at once, rolled back when the server refuses (the refresh brings the stored state)
   const [shown, setShown] = useState(selected);
   useEffect(() => setShown(selected), [selected]);
@@ -96,7 +99,7 @@ export function SelectBox({ day, animalId, name, selected, disabled }: { day: st
         type="checkbox"
         checked={shown}
         disabled={disabled || busy}
-        aria-label={`${name} a mai listán`}
+        aria-label={tr("{name} a mai listán", { name })}
         onChange={(e) => {
           const next = e.target.checked;
           setShown(next);
@@ -119,6 +122,7 @@ export function SelectBox({ day, animalId, name, selected, disabled }: { day: st
  */
 export function GroupSwitch({ day, name, memberIds, selectedCount }: { day: string; name: string; memberIds: string[]; selectedCount: number }) {
   const { msg, busy, run } = useSend();
+  const tr = useTr();
   const allOn = memberIds.length > 0 && selectedCount === memberIds.length;
   // shown at once, rolled back when the server refuses (the refresh brings the stored state), as the animal's tick
   const [shown, setShown] = useState(allOn);
@@ -131,8 +135,8 @@ export function GroupSwitch({ day, name, memberIds, selectedCount }: { day: stri
         role="switch"
         checked={shown}
         disabled={busy}
-        aria-label={`${name}: mind kijelölve`}
-        title={shown ? "Mind kijelölve: kikapcsolva egyik sem" : "Bekapcsolva mind kijelölve"}
+        aria-label={tr("{name}: mind kijelölve", { name })}
+        title={tr(shown ? "Mind kijelölve: kikapcsolva egyik sem" : "Bekapcsolva mind kijelölve")}
         onChange={(e) => {
           const next = e.target.checked;
           setShown(next);
@@ -171,6 +175,7 @@ export function DayFeeds({
   const chosenKey = [...chosen].sort().join();
   useEffect(() => setPicked(chosenKey ? chosenKey.split(",") : []), [chosenKey]);
   const { msg, busy, run } = useSend();
+  const tr = useTr();
   const changed = [...picked].sort().join() !== [...chosen].sort().join();
   return (
     <div data-testid="day-feeds">
@@ -187,7 +192,7 @@ export function DayFeeds({
                 type="checkbox"
                 checked={picked.includes(f.id)}
                 disabled={!editable || busy}
-                aria-label={`A nap takarmánya: ${f.name}`}
+                aria-label={tr("A nap takarmánya: {name}", { name: f.name })}
                 onChange={(e) => {
                   // functional: two quick ticks before a re-render must not overwrite each other (seen in the e2e)
                   const on = e.target.checked;
@@ -207,14 +212,14 @@ export function DayFeeds({
               <FinalizeList day={day} finalized editable />
               {/* after the list is ready, a changed choice still needs a way in; the button shows only then */}
               {changed && (
-                <button className="btn" type="button" disabled={busy} onClick={() => void run("/api/feeding/day-feeds", { day, feedIds: picked }, "A nap takarmányai mentve.")}>
-                  A nap takarmányainak mentése
+                <button className="btn" type="button" disabled={busy} onClick={() => void run("/api/feeding/day-feeds", { day, feedIds: picked }, tr("A nap takarmányai mentve."))}>
+                  {tr("A nap takarmányainak mentése")}
                 </button>
               )}
             </>
           ) : (
             <button className="btn" type="button" disabled={busy} onClick={() => void ready()}>
-              Takarmánylap kész
+              {tr("Takarmánylap kész")}
             </button>
           )}
           <Msg msg={msg} />
@@ -240,6 +245,7 @@ const scrollToSheet = () =>
  * f0552bd4: the labels of the day's feeding mode; the letter is the export's cell (M, F, K). NONE reads "Koplalónap"
  * (Lili 2026-11-11 12:07 UTC, via acrobot 47044): for the divers a day with neither is a fasting day; its cell stays K.
  */
+// translated where shown (tr(FEEDING_MODE_LABEL[mode]))
 export const FEEDING_MODE_LABEL = {
   DIVING: "Merüléses etetés (M)",
   SURFACE: "Felszíni etetés (F)",
@@ -253,12 +259,13 @@ export type FeedingModeValue = keyof typeof FEEDING_MODE_LABEL;
  */
 export function FeedingModeChoice({ day, mode, editable }: { day: string; mode: FeedingModeValue | null; editable: boolean }) {
   const { msg, busy, run } = useSend();
+  const tr = useTr();
   // the choice shows at once; the saved one comes back with the refresh, and a failed save puts the saved one back
   const [picked, setPicked] = useState<FeedingModeValue | null>(mode);
   useEffect(() => setPicked(mode), [mode]);
   return (
     <fieldset className="toolbar" data-testid="feeding-mode">
-      <legend className="section-title">A nap etetése</legend>
+      <legend className="section-title">{tr("A nap etetése")}</legend>
       {(Object.keys(FEEDING_MODE_LABEL) as FeedingModeValue[]).map((m) => (
         <label key={m} className="check">
           <input
@@ -268,13 +275,13 @@ export function FeedingModeChoice({ day, mode, editable }: { day: string; mode: 
             disabled={!editable || busy}
             onChange={async () => {
               setPicked(m);
-              if (!(await run("/api/feeding/feeding-mode", { day, mode: m }, "A nap etetése mentve."))) setPicked(mode);
+              if (!(await run("/api/feeding/feeding-mode", { day, mode: m }, tr("A nap etetése mentve.")))) setPicked(mode);
             }}
           />
-          {FEEDING_MODE_LABEL[m]}
+          {tr(FEEDING_MODE_LABEL[m])}
         </label>
       ))}
-      {!picked && <span className="hint">Még nincs kiválasztva.</span>}
+      {!picked && <span className="hint">{tr("Még nincs kiválasztva.")}</span>}
       <Msg msg={msg} />
     </fieldset>
   );
@@ -287,10 +294,11 @@ export function FeedingModeChoice({ day, mode, editable }: { day: string; mode: 
  */
 export function FinalizeList({ day, finalized, editable }: { day: string; finalized: boolean; editable: boolean }) {
   const { msg, busy, run } = useSend();
+  const tr = useTr();
   if (finalized || !editable) {
     return (
       <span className={`badge ${finalized ? "badge-valid" : "badge-pending"}`} data-testid="list-state">
-        {finalized ? "Takarmánylap kész" : "Takarmánylap nincs kész"}
+        {tr(finalized ? "Takarmánylap kész" : "Takarmánylap nincs kész")}
       </span>
     );
   }
@@ -300,7 +308,7 @@ export function FinalizeList({ day, finalized, editable }: { day: string; finali
   return (
     <span>
       <button className="btn" type="button" disabled={busy} onClick={() => void finalize()}>
-        Takarmánylap kész
+        {tr("Takarmánylap kész")}
       </button>
       <Msg msg={msg} />
     </span>
@@ -328,6 +336,7 @@ export function parseAmount(v: string): number | null {
   return Number(t);
 }
 
+// translated where shown (tr(DIM[dimension]))
 export const DIM: Record<string, string> = { MASS: "tömeg", COUNT: "darab", VOLUME: "térfogat" };
 
 /** A feeding item: one recipient, one feed, at most one quantity per dimension (T-08). */
@@ -369,17 +378,19 @@ export function editFields(item: EditItem) {
 
 /** "Módosítás" in a list row: quiet, beside "Érvénytelenítés" (item 8). */
 export function EditButton({ label, onEdit }: { label: string; onEdit: () => void }) {
+  const tr = useTr();
   return (
-    <button className="btn btn-row" type="button" onClick={onEdit} aria-label={`${label}: módosítás`}>
-      Módosítás
+    <button className="btn btn-row" type="button" onClick={onEdit} aria-label={tr("{label}: módosítás", { label })}>
+      {tr("Módosítás")}
     </button>
   );
 }
 
 export function EditBar({ busy, onCancel }: { busy: boolean; onCancel: () => void }) {
+  const tr = useTr();
   return (
     <button className="btn btn-soft" type="button" disabled={busy} onClick={onCancel}>
-      Mégse
+      {tr("Mégse")}
     </button>
   );
 }
@@ -421,6 +432,7 @@ export function ItemForm({
   const [values, setValues] = useState<Record<string, string>>({});
   const [units, setUnits] = useState<Record<string, string>>({});
   const { msg, busy, run } = useSend();
+  const tr = useTr();
   const feed = feeds.find((x) => x.id === feedId);
   const r = recipients.find((x) => x.key === rec);
   useEffect(() => {
@@ -445,7 +457,7 @@ export function ItemForm({
     // the load runs once per chosen item
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
-  if (recipients.length === 0) return <p className="hint">Tételt csak a listán kiválasztott állat vagy csoport kaphat.</p>;
+  if (recipients.length === 0) return <p className="hint">{tr("Tételt csak a listán kiválasztott állat vagy csoport kaphat.")}</p>;
   async function save() {
     if (!feed || !r) return;
     const quantities = feed.dims
@@ -461,7 +473,7 @@ export function ItemForm({
         ...(feed.isOther ? { otherName: other.trim() } : {}),
         ...(editing ? { itemId: editing.id, expectedVersion: editing.version } : {}),
       },
-      editing ? "Tétel módosítva." : "Tétel mentve.",
+      tr(editing ? "Tétel módosítva." : "Tétel mentve."),
     );
     if (ok) {
       setValues({});
@@ -471,8 +483,8 @@ export function ItemForm({
   return (
     <div className="toolbar" data-testid="item-form">
       <label className="field">
-        Kinek
-        <select className="input" value={rec} onChange={(e) => setRec(e.target.value)} aria-label="Kinek">
+        {tr("Kinek")}
+        <select className="input" value={rec} onChange={(e) => setRec(e.target.value)} aria-label={tr("Kinek")}>
           {recipients.map((x) => (
             <option key={x.key} value={x.key}>
               {x.label}
@@ -481,8 +493,8 @@ export function ItemForm({
         </select>
       </label>
       <label className="field">
-        Takarmány
-        <select className="input" value={feedId} onChange={(e) => setFeedId(e.target.value)} aria-label="Takarmány">
+        {tr("Takarmány")}
+        <select className="input" value={feedId} onChange={(e) => setFeedId(e.target.value)} aria-label={tr("Takarmány")}>
           {feeds.map((x) => (
             <option key={x.id} value={x.id}>
               {x.name}
@@ -492,14 +504,14 @@ export function ItemForm({
       </label>
       {feed?.isOther && (
         <label className="field">
-          Az egyéb takarmány neve
-          <input className="input" list="egyeb-nevek-etetes" value={other} onChange={(e) => setOther(e.target.value)} aria-label="Az egyéb takarmány neve" />
+          {tr("Az egyéb takarmány neve")}
+          <input className="input" list="egyeb-nevek-etetes" value={other} onChange={(e) => setOther(e.target.value)} aria-label={tr("Az egyéb takarmány neve")} />
           <OtherNames id="egyeb-nevek-etetes" names={otherNames} />
         </label>
       )}
       {feed?.dims.map((d) => (
         <label className="field" key={d.dimension}>
-          Mennyiség ({DIM[d.dimension] ?? d.dimension})
+          {tr("Mennyiség ({x})", { x: tr(DIM[d.dimension] ?? d.dimension) })}
           <span style={{ display: "flex", gap: 6 }}>
             <input
               className="input"
@@ -507,9 +519,9 @@ export function ItemForm({
               style={{ width: 110 }}
               value={values[d.dimension] ?? ""}
               onChange={(e) => setValues({ ...values, [d.dimension]: e.target.value })}
-              aria-label={`Mennyiség (${DIM[d.dimension] ?? d.dimension})`}
+              aria-label={tr("Mennyiség ({x})", { x: tr(DIM[d.dimension] ?? d.dimension) })}
             />
-            <select className="input" value={units[d.dimension] ?? d.units[0]?.id} onChange={(e) => setUnits({ ...units, [d.dimension]: e.target.value })} aria-label={`Egység (${DIM[d.dimension] ?? d.dimension})`}>
+            <select className="input" value={units[d.dimension] ?? d.units[0]?.id} onChange={(e) => setUnits({ ...units, [d.dimension]: e.target.value })} aria-label={tr("Egység ({x})", { x: tr(DIM[d.dimension] ?? d.dimension) })}>
               {d.units.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.symbol}
@@ -520,7 +532,7 @@ export function ItemForm({
         </label>
       ))}
       <button className="btn" type="button" disabled={busy} onClick={() => void save()}>
-        {editing ? "Módosítás mentése" : "Tétel mentése"}
+        {tr(editing ? "Módosítás mentése" : "Tétel mentése")}
       </button>
       {editing && <EditBar busy={busy} onCancel={() => { setValues({}); onEditDone?.(); }} />}
       <Msg msg={msg} />
@@ -528,9 +540,10 @@ export function ItemForm({
   );
 }
 
-export function InvalidateButton({ url, version, label = "Érvénytelenítés", row = false }: { url: string; version: number; label?: string; row?: boolean }) {
+export function InvalidateButton({ url, version, label, row = false }: { url: string; version: number; label?: string; row?: boolean }) {
   const { msg, busy, run } = useSend();
   const reasonsOn = useReasonsOn();
+  const tr = useTr();
   return (
     <span>
       <button
@@ -538,11 +551,11 @@ export function InvalidateButton({ url, version, label = "Érvénytelenítés", 
         type="button"
         disabled={busy}
         onClick={() => {
-          const asked = askReason(reasonsOn, "Az érvénytelenítés oka:", "Érvényteleníted ezt a tételt?");
-          if (asked) void run(url, { expectedVersion: version, ...asked }, "Érvénytelenítve.");
+          const asked = askReason(reasonsOn, tr("Az érvénytelenítés oka:"), tr("Érvényteleníted ezt a tételt?"));
+          if (asked) void run(url, { expectedVersion: version, ...asked }, tr("Érvénytelenítve."));
         }}
       >
-        {label}
+        {label ?? tr("Érvénytelenítés")}
       </button>
       <Msg msg={msg} />
     </span>
@@ -577,6 +590,7 @@ export function WithdrawalForm({
   const [values, setValues] = useState<Record<string, string>>({});
   const [units, setUnits] = useState<Record<string, string>>({});
   const { msg, busy, run } = useSend();
+  const tr = useTr();
   const feed = feeds.find((x) => x.id === feedId);
   useEffect(() => {
     if (!editing) return;
@@ -608,7 +622,7 @@ export function WithdrawalForm({
         ...(feed.isOther ? { otherName: other.trim() } : {}),
         ...(editing ? { itemId: editing.id, expectedVersion: editing.version } : {}),
       },
-      editing ? "Kivétel módosítva." : "Kivétel mentve.",
+      tr(editing ? "Kivétel módosítva." : "Kivétel mentve."),
     );
     if (ok) {
       if (editing) reset();
@@ -618,8 +632,8 @@ export function WithdrawalForm({
   return (
     <div className="toolbar" data-testid="withdrawal-form">
       <label className="field">
-        Takarmány
-        <select className="input" value={feedId} onChange={(e) => setFeedId(e.target.value)} aria-label="Takarmány">
+        {tr("Takarmány")}
+        <select className="input" value={feedId} onChange={(e) => setFeedId(e.target.value)} aria-label={tr("Takarmány")}>
           {feeds.map((x) => (
             <option key={x.id} value={x.id}>
               {x.name}
@@ -629,14 +643,14 @@ export function WithdrawalForm({
       </label>
       {feed?.isOther && (
         <label className="field">
-          Az egyéb takarmány neve
-          <input className="input" list="egyeb-nevek-kivetel" value={other} onChange={(e) => setOther(e.target.value)} aria-label="Az egyéb takarmány neve" />
+          {tr("Az egyéb takarmány neve")}
+          <input className="input" list="egyeb-nevek-kivetel" value={other} onChange={(e) => setOther(e.target.value)} aria-label={tr("Az egyéb takarmány neve")} />
           <OtherNames id="egyeb-nevek-kivetel" names={otherNames} />
         </label>
       )}
       {feed?.dims.map((d) => (
         <label className="field" key={d.dimension}>
-          Mennyiség ({DIM[d.dimension] ?? d.dimension})
+          {tr("Mennyiség ({x})", { x: tr(DIM[d.dimension] ?? d.dimension) })}
           <span style={{ display: "flex", gap: 6 }}>
             <input
               className="input"
@@ -653,9 +667,9 @@ export function WithdrawalForm({
                 e.preventDefault();
                 if (!busy) void save();
               }}
-              aria-label={`Mennyiség (${DIM[d.dimension] ?? d.dimension})`}
+              aria-label={tr("Mennyiség ({x})", { x: tr(DIM[d.dimension] ?? d.dimension) })}
             />
-            <select className="input" value={units[d.dimension] ?? d.units[0]?.id} onChange={(e) => setUnits({ ...units, [d.dimension]: e.target.value })} aria-label={`Egység (${DIM[d.dimension] ?? d.dimension})`}>
+            <select className="input" value={units[d.dimension] ?? d.units[0]?.id} onChange={(e) => setUnits({ ...units, [d.dimension]: e.target.value })} aria-label={tr("Egység ({x})", { x: tr(DIM[d.dimension] ?? d.dimension) })}>
               {d.units.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.symbol}
@@ -675,17 +689,18 @@ export function WithdrawalForm({
             value: parseAmount(values[d.dimension] ?? ""),
             factor: (d.units.find((u) => u.id === (units[d.dimension] ?? d.units[0]?.id)) ?? d.units[0])?.factor ?? 1,
           })),
+          tr,
         ).map((h, i) => (
           <span key={i} className={h.over ? "err" : "hint"} role="note" data-testid="stock-hint">
             {h.text}
           </span>
         ))}
       <label className="field">
-        Felhasználás napja
-        <input className="input" type="date" value={use} onChange={(e) => setUse(e.target.value)} aria-label="Felhasználás napja" />
+        {tr("Felhasználás napja")}
+        <input className="input" type="date" value={use} onChange={(e) => setUse(e.target.value)} aria-label={tr("Felhasználás napja")} />
       </label>
       <button className="btn" type="button" disabled={busy} onClick={() => void save()}>
-        {editing ? "Módosítás mentése" : "Kivétel mentése"}
+        {tr(editing ? "Módosítás mentése" : "Kivétel mentése")}
       </button>
       {editing && <EditBar busy={busy} onCancel={reset} />}
       <Msg msg={msg} />
@@ -710,12 +725,13 @@ export type WithdrawalRow = {
  */
 export function WithdrawalItems({ day, useDay, feeds, otherNames, stock, items, editable }: { day: string; useDay: string; feeds: FeedOpt[]; otherNames?: string[]; stock?: StockInfo[]; items: WithdrawalRow[]; editable: boolean }) {
   const [editing, setEditing] = useState<EditItem | null>(null);
+  const tr = useTr();
   return (
     <>
       <div className="table-scroll">
         <table className="log-table" data-testid="withdrawal-list">
           <thead>
-            <tr><th>Típus</th><th>Takarmány</th><th>Mennyiség</th><th>Felhasználás napja</th><th></th></tr>
+            <tr><th>{tr("Típus")}</th><th>{tr("Takarmány")}</th><th>{tr("Mennyiség")}</th><th>{tr("Felhasználás napja")}</th><th></th></tr>
           </thead>
           <tbody>
             {items.map((i) => {
@@ -748,6 +764,7 @@ export function WithdrawalItems({ day, useDay, feeds, otherNames, stock, items, 
 /** KIV-03 "Lezárás": closes the day's input; reopening is admin work. */
 export function CloseWithdrawalDay({ day }: { day: string }) {
   const { msg, busy, run } = useSend();
+  const tr = useTr();
   return (
     <span>
       <button
@@ -755,10 +772,10 @@ export function CloseWithdrawalDay({ day }: { day: string }) {
         type="button"
         disabled={busy}
         onClick={() => {
-          if (window.confirm("Lezárod a mai kivételt? Utána csak adminisztrátor nyithatja újra.")) void run("/api/withdrawals/close", { day }, "A nap lezárva.");
+          if (window.confirm(tr("Lezárod a mai kivételt? Utána csak adminisztrátor nyithatja újra."))) void run("/api/withdrawals/close", { day }, tr("A nap lezárva."));
         }}
       >
-        Lezárás
+        {tr("Lezárás")}
       </button>
       <Msg msg={msg} />
     </span>
@@ -769,19 +786,20 @@ export function CloseWithdrawalDay({ day }: { day: string }) {
 // the feeding timetable (Timetable.tsx, /etetes/rend) writes the same plan (feeding_plan) for every animal at once.
 
 /** JAV-08: selects the animals planned for the day's weekday; it only adds to the common list. */
-function planText(res: Record<string, unknown>): string {
+function planText(res: Record<string, unknown>, tr: (text: string, vars?: Record<string, string | number>) => string): string {
   const skipped = Array.isArray(res.skipped) ? (res.skipped as string[]) : [];
   // Lili 2026-10-27 (item 4): the plain success says nothing in the header bar; the ticked boxes show it
   if (skipped.length === 0) return "";
-  return `A terv szerinti állatok a listán, kivéve, akinek ma kézi koplalónapja van: ${skipped.join(", ")}. Őket kézzel lehet felvenni.`;
+  return tr("A terv szerinti állatok a listán, kivéve, akinek ma kézi koplalónapja van: {names}. Őket kézzel lehet felvenni.", { names: skipped.join(", ") });
 }
 
 export function ApplyPlan({ day }: { day: string }) {
   const { msg, busy, run } = useSend();
+  const tr = useTr();
   return (
     <span>
-      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void run("/api/feeding/plan/apply", { day }, planText)}>
-        Mai Terv
+      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void run("/api/feeding/plan/apply", { day }, (res) => planText(res, tr))}>
+        {tr("Mai Terv")}
       </button>
       <Msg msg={msg} />
     </span>
@@ -792,11 +810,12 @@ export function ApplyPlan({ day }: { day: string }) {
 export function IconForm({ target, id, name, emoji }: { target: "pool" | "feedType"; id: string; name: string; emoji: string | null }) {
   const [value, setValue] = useState(emoji ?? "");
   const { msg, busy, run } = useSend();
+  const tr = useTr();
   return (
     <span className="toolbar" style={{ margin: 0 }}>
-      <input className="input" style={{ width: 70 }} value={value} onChange={(e) => setValue(e.target.value)} aria-label={`${name} ikonja`} />
-      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void run("/api/admin/icon", { target, id, emoji: value.trim() }, "Ikon mentve.")}>
-        Mentés
+      <input className="input" style={{ width: 70 }} value={value} onChange={(e) => setValue(e.target.value)} aria-label={tr("{name} ikonja", { name })} />
+      <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void run("/api/admin/icon", { target, id, emoji: value.trim() }, tr("Ikon mentve."))}>
+        {tr("Mentés")}
       </button>
       <Msg msg={msg} />
     </span>
@@ -822,10 +841,12 @@ type RowDraft = { state: string; vitamin: boolean; medicine: boolean; note: stri
  * version check and request id), so one refused row does not undo the others, and it is named in the result.
  * A new row has no preselected state: the save records only what someone actually filled in.
  */
+// translated where used (tr(EATING_LEAVE_WARNING))
 const EATING_LEAVE_WARNING = "Van még nem mentett sor az evési naplóban. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?";
 
 export function EatingTable({ day, rows, editable, lock }: { day: string; rows: EatingRowView[]; editable: boolean; lock?: DayLock }) {
   const router = useRouter();
+  const tr = useTr();
   const initial = (r: EatingRowView): RowDraft => {
     const manual = r.status?.source === "MANUAL" ? r.status : null;
     // a manual state the row no longer offers (the animal left the list) is not carried into the draft
@@ -876,7 +897,7 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
   // acrobot 34710 (barracuda on #50): unsaved rows ask before the page or an in-app link (the day navigation too) is
   // left, as the feeding sheet and the measurement page do; the browser's back button is neither, so it is not asked
-  useLeaveWarning(editable ? toSave.length : 0, EATING_LEAVE_WARNING);
+  useLeaveWarning(editable ? toSave.length : 0, tr(EATING_LEAVE_WARNING));
 
   // "Mindenki evett" (Lili 2026-11-11 09:14 UTC, msg 1570003887203688529): the empty rows of the list become EATEN and are
   // saved at once with every other filled-in row; a filled row (saved or only picked) is never overwritten. Not on a
@@ -927,10 +948,10 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
             break;
           }
           const b = (await res.json().catch(() => ({}))) as ErrorBody;
-          const message = b.error?.issues?.[0]?.message ?? b.error?.message ?? "Nem sikerült.";
+          const message = b.error?.issues?.[0]?.message ?? b.error?.message ?? tr("Nem sikerült.");
           // an earlier day: one reason for the whole save, asked once
           if (b.error?.code === "REASON_REQUIRED" && !reason && attempt === 0) {
-            const given = window.prompt(`${message} Indoklás (minden mentett sorra):`);
+            const given = window.prompt(`${message} ${tr("Indoklás (minden mentett sorra):")}`);
             if (given && given.trim().length >= 3) {
               reason = given.trim();
               continue;
@@ -944,14 +965,18 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
         }
       }
     } catch {
-      failed.push("Nincs kapcsolat a szerverrel.");
+      failed.push(tr("Nincs kapcsolat a szerverrel."));
     } finally {
       setBusy(false);
     }
+    const note = refusedNote(failed.length);
     setMsg(
       failed.length
-        ? { ok: false, text: `${saved} sor mentve, ${failed.length} nem: ${failed.join("; ")}${stopped ? " (a mentés indoklás nélkül megállt)" : ""}${refusedNote(failed.length) ?? ""}` }
-        : { ok: true, text: `${saved} sor mentve.` },
+        ? {
+            ok: false,
+            text: `${tr("{saved} sor mentve, {failed} nem: {list}", { saved, failed: failed.length, list: failed.join("; ") })}${stopped ? ` (${tr("a mentés indoklás nélkül megállt")})` : ""}${note ? ` ${tr(note.trim())}` : ""}`,
+          }
+        : { ok: true, text: tr("{n} sor mentve.", { n: saved }) },
     );
     // always: a save whose every row was refused left the stale versions on the page, and every retry failed the same way
     if (saved || failed.length) startRefresh(() => router.refresh());
@@ -961,7 +986,7 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
   const fasting = rows.filter((r) => !r.selected);
   const head = (
     <thead>
-      <tr><th>Állat</th><th>Csoport</th><th>Medence</th><th>Állapot</th><th>Jelölés</th>{editable && <th>Rögzítés</th>}</tr>
+      <tr><th>{tr("Állat")}</th><th>{tr("Csoport")}</th><th>{tr("Medence")}</th><th>{tr("Állapot")}</th><th>{tr("Jelölés")}</th>{editable && <th>{tr("Rögzítés")}</th>}</tr>
     </thead>
   );
   const row = (r: EatingRowView) => {
@@ -979,13 +1004,13 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
         <td className="keep eat-state">
           {s ? (
             <span className={`badge eat-${s.state}`} data-testid={`state-${r.name}`}>
-              {EAT_LABEL[s.state]}
-              {s.source === "AUTOMATIC" ? " (automatikus)" : ""}
+              {tr(EAT_LABEL[s.state]!)}
+              {s.source === "AUTOMATIC" ? ` (${tr("automatikus")})` : ""}
             </span>
           ) : r.pendingFasting ? (
-            <span className="badge eat-pending" data-testid={`state-${r.name}`}>koplal, még nem végleges</span>
+            <span className="badge eat-pending" data-testid={`state-${r.name}`}>{tr("koplal, még nem végleges")}</span>
           ) : (
-            <span className="hint" data-testid={`state-${r.name}`}>{r.selected ? "nincs rögzítve" : "–"}</span>
+            <span className="hint" data-testid={`state-${r.name}`}>{r.selected ? tr("nincs rögzítve") : "–"}</span>
           )}
         </td>
         <td className="eat-mark">
@@ -998,20 +1023,20 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
               className="btn btn-soft small"
               type="button"
               onClick={() => setOpened((cur) => new Set(cur).add(r.animalId))}
-              aria-label={`${r.name}: kivétel rögzítése`}
+              aria-label={tr("{name}: kivétel rögzítése", { name: r.name })}
             >
-              Kivétel rögzítése
+              {tr("Kivétel rögzítése")}
             </button>
           </td>
         )}
         {editable && !folded && (
           <td className="keep eat-ctl">
             <div className="toolbar" style={{ margin: 0 }} data-testid={`eating-${r.name}`}>
-              <select className="input" value={d.state} onChange={(e) => set(r.animalId, { state: e.target.value })} aria-label={`${r.name} evési állapota`}>
-                <option value="">– válassz –</option>
+              <select className="input" value={d.state} onChange={(e) => set(r.animalId, { state: e.target.value })} aria-label={tr("{name} evési állapota", { name: r.name })}>
+                <option value="">– {tr("válassz")} –</option>
                 {states.map((x) => (
                   <option key={x} value={x}>
-                    {EAT_LABEL[x]}
+                    {tr(EAT_LABEL[x]!)}
                   </option>
                 ))}
               </select>
@@ -1019,12 +1044,12 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
                 <input type="checkbox" checked={d.vitamin} onChange={(e) => set(r.animalId, { vitamin: e.target.checked })} aria-label={`${r.name} vitamin`} />V
               </label>
               <label className="check">
-                <input type="checkbox" checked={d.medicine} onChange={(e) => set(r.animalId, { medicine: e.target.checked })} aria-label={`${r.name} gyógyszer`} />Gy
+                <input type="checkbox" checked={d.medicine} onChange={(e) => set(r.animalId, { medicine: e.target.checked })} aria-label={tr("{name} gyógyszer", { name: r.name })} />Gy
               </label>
               {d.medicine && (
-                <input className="input" value={d.note} onChange={(e) => set(r.animalId, { note: e.target.value })} placeholder="Gyógyszer megjegyzés" aria-label={`${r.name} gyógyszer megjegyzés`} />
+                <input className="input" value={d.note} onChange={(e) => set(r.animalId, { note: e.target.value })} placeholder={tr("Gyógyszer megjegyzés")} aria-label={tr("{name} gyógyszer megjegyzés", { name: r.name })} />
               )}
-              {manual && <InvalidateButton url={`/api/feeding/eating/${manual.id}/invalidate`} version={manual.version} label="Törlés (érvénytelenítés)" />}
+              {manual && <InvalidateButton url={`/api/feeding/eating/${manual.id}/invalidate`} version={manual.version} label={tr("Törlés (érvénytelenítés)")} />}
             </div>
           </td>
         )}
@@ -1044,11 +1069,11 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
       className="btn btn-soft"
       type="button"
       disabled={busy || refreshing || dayClosed || allAte.length === 0}
-      title={dayClosed ? "Lezárt napon nem használható." : undefined}
+      title={dayClosed ? tr("Lezárt napon nem használható.") : undefined}
       onClick={markAllAte}
       data-testid="eating-all-ate"
     >
-      {allAte.length && !dayClosed ? `Mindenki evett (${allAte.length} sor)` : "Mindenki evett"}
+      {allAte.length && !dayClosed ? tr("Mindenki evett ({n} sor)", { n: allAte.length }) : tr("Mindenki evett")}
     </button>
   );
   const topActions = (
@@ -1066,11 +1091,11 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
           <tbody>{fed.map(row)}</tbody>
         </table>
       </div>
-      {fed.length === 0 && <p className="hint">Ma még senki nincs a napi etetési listán.</p>}
+      {fed.length === 0 && <p className="hint">{tr("Ma még senki nincs a napi etetési listán.")}</p>}
       {fasting.length > 0 && (
         <details style={{ marginTop: 12 }} data-testid="eating-fasting">
           <summary>
-            Koplalónapos állatok ({fasting.length}): nincsenek a napi listán, a lista lezárásakor automatikusan koplalónapot kapnak; csak a kivételt kell rögzíteni (például vitamin vagy gyógyszer)
+            {tr("Koplalónapos állatok ({n}): nincsenek a napi listán, a lista lezárásakor automatikusan koplalónapot kapnak; csak a kivételt kell rögzíteni (például vitamin vagy gyógyszer)", { n: fasting.length })}
           </summary>
           <div className="table-scroll">
             <table className="log-table eating-log" data-testid="eating-fasting-table">
@@ -1092,7 +1117,7 @@ export function EatingTable({ day, rows, editable, lock }: { day: string; rows: 
             }}
             data-testid="eating-save-all"
           >
-            {toSave.length ? `Mentés (${toSave.length} sor)` : "Mentés"}
+            {toSave.length ? tr("Mentés ({n} sor)", { n: toSave.length }) : tr("Mentés")}
           </button>
           {!msgAtTop && result}
         </div>

@@ -6,6 +6,9 @@
 import { useEffect, useState } from "react";
 import { chooserPools, sortDayAnimals, type ChooserAnimal } from "@/lib/day-animals";
 import { Msg, useSend, type FeedTypeOpt } from "./FeedingForms";
+import { useTr } from "./LangProvider";
+
+type Tr = ReturnType<typeof useTr>;
 
 export type ListOpt = { id: string; name: string };
 export type ListView = ListOpt & { animalIds: string[]; feedIds: string[] };
@@ -18,16 +21,17 @@ function newRequestId(): string {
 
 const keptOf = (res: Record<string, unknown>) => (Array.isArray(res.kept) ? (res.kept as string[]) : []);
 
-function appliedText(res: Record<string, unknown>): string {
+function appliedText(res: Record<string, unknown>, tr: Tr): string {
   const skipped = Array.isArray(res.skipped) ? (res.skipped as string[]) : [];
   const kept = keptOf(res);
   // an animal with a record that day stays on the list (the 10-21 loss): said every time, also when the switch went off
-  const keptText = kept.length ? `A listán maradt, mert ezen a napon már van beírt etetése: ${kept.join(", ")}.` : "";
-  const tail = `${skipped.length ? ` Kézi koplalónap miatt kimaradt: ${skipped.join(", ")}.` : ""}${keptText ? ` ${keptText}` : ""}`;
+  const keptText = kept.length ? tr("A listán maradt, mert ezen a napon már van beírt etetése: {list}.", { list: kept.join(", ") }) : "";
+  const tail = `${skipped.length ? ` ${tr("Kézi koplalónap miatt kimaradt: {list}.", { list: skipped.join(", ") })}` : ""}${keptText ? ` ${keptText}` : ""}`;
   // Lili 2026-10-27 (item 4): the switch turned off says nothing but who stayed; the unchecked boxes show the rest
   if (res.name === null || res.name === undefined) return keptText;
   const removed = Number(res.removed ?? 0);
-  return `${String(res.name)}: ${Number(res.added ?? 0)} állat kijelölve${removed ? `, ${removed} kivéve` : ""}, ${Number(res.feeds ?? 0)} takarmány.${tail}`;
+  const counts = { name: String(res.name), added: Number(res.added ?? 0), removed, feeds: Number(res.feeds ?? 0) };
+  return `${tr(removed ? "{name}: {added} állat kijelölve, {removed} kivéve, {feeds} takarmány." : "{name}: {added} állat kijelölve, {feeds} takarmány.", counts)}${tail}`;
 }
 
 /**
@@ -39,6 +43,7 @@ function appliedText(res: Record<string, unknown>): string {
  */
 export function ApplyList({ day, lists, selectedAnimalIds, dayFeedIds }: { day: string; lists: ListOpt[]; selectedAnimalIds: string[]; dayFeedIds: string[] }) {
   const { msg, busy, run } = useSend();
+  const tr = useTr();
   const [value, setValue] = useState("");
   const hasSelection = selectedAnimalIds.length > 0 || dayFeedIds.length > 0;
   const [on, setOn] = useState(hasSelection);
@@ -54,14 +59,14 @@ export function ApplyList({ day, lists, selectedAnimalIds, dayFeedIds }: { day: 
         role="switch"
         checked={on}
         disabled={busy}
-        aria-label="Etetési listák"
-        title={on ? "Bekapcsolva: lista választható. Kikapcsolva a kijelölés kikerül, kivéve akinek aznap már van beírt etetése." : "Kikapcsolva: kapcsold be a lista választásához."}
+        aria-label={tr("Etetési listák")}
+        title={tr(on ? "Bekapcsolva: lista választható. Kikapcsolva a kijelölés kikerül, kivéve akinek aznap már van beírt etetése." : "Kikapcsolva: kapcsold be a lista választásához.")}
         onChange={(e) => {
           const next = e.target.checked;
           setOn(next);
           if (next) return;
           let kept = 0;
-          const text = (res: Record<string, unknown>) => ((kept = keptOf(res).length), appliedText(res));
+          const text = (res: Record<string, unknown>) => ((kept = keptOf(res).length), appliedText(res, tr));
           // the animals with a record stay ticked, so the switch stays on beside them
           void run("/api/feeding/lists/apply", { day, listId: null }, text).then((ok) => {
             if (!ok || kept) setOn(true);
@@ -70,17 +75,17 @@ export function ApplyList({ day, lists, selectedAnimalIds, dayFeedIds }: { day: 
       />
       <select
         className="input"
-        aria-label="Névvel ellátott lista"
+        aria-label={tr("Névvel ellátott lista")}
         value={value}
         disabled={busy || !on}
         onChange={(e) => {
           const listId = e.target.value;
           if (!listId) return;
           setValue(listId);
-          void run("/api/feeding/lists/apply", { day, listId }, appliedText).then(() => setValue(""));
+          void run("/api/feeding/lists/apply", { day, listId }, (res) => appliedText(res, tr)).then(() => setValue(""));
         }}
       >
-        <option value="">Lista választása…</option>
+        <option value="">{tr("Lista választása…")}</option>
         {lists.map((l) => (
           <option key={l.id} value={l.id}>
             {l.name}
@@ -100,6 +105,7 @@ function ListForm(p: { list?: ListView; animals: EditAnimal[]; types: FeedTypeOp
   const [animalIds, setAnimalIds] = useState<string[]>(list?.animalIds ?? []);
   const [feedIds, setFeedIds] = useState<string[]>(list?.feedIds ?? []);
   const { msg, busy, run } = useSend();
+  const tr = useTr();
   const visibleAnimals = new Set(p.animals.map((a) => a.id));
   const visibleFeeds = new Set(p.types.flatMap((t) => t.feeds.map((f) => f.id)));
   const flip = (ids: string[], id: string) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
@@ -111,11 +117,11 @@ function ListForm(p: { list?: ListView; animals: EditAnimal[]; types: FeedTypeOp
     feedIds: [...feedIds.filter((id) => visibleFeeds.has(id)), ...keep(list?.feedIds, visibleFeeds)],
   });
   const ready = name.trim().length >= 2 && animalIds.length + feedIds.length > 0;
-  const label = list ? list.name : "új lista";
+  const label = list ? list.name : tr("új lista");
   return (
     <div data-testid={list ? `list-${list.name}` : "new-list"}>
       <div className="toolbar">
-        <input className="input" aria-label={`${label}: neve`} placeholder="a lista neve" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="input" aria-label={tr("{name}: neve", { name: label })} placeholder={tr("a lista neve")} value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       {chooserPools(sortDayAnimals(p.animals)).map((g) => (
         <div key={g.key} className="pick-block">
@@ -155,7 +161,7 @@ function ListForm(p: { list?: ListView; animals: EditAnimal[]; types: FeedTypeOp
           type="button"
           disabled={busy || !ready}
           onClick={() =>
-            void run(list ? "/api/feeding/lists/update" : "/api/feeding/lists", { requestId: newRequestId(), ...(list ? { listId: list.id } : {}), ...body() }, list ? "Mentve." : "Lista felvéve.").then((ok) => {
+            void run(list ? "/api/feeding/lists/update" : "/api/feeding/lists", { requestId: newRequestId(), ...(list ? { listId: list.id } : {}), ...body() }, tr(list ? "Mentve." : "Lista felvéve.")).then((ok) => {
               if (ok && !list) {
                 setName("");
                 setAnimalIds([]);
@@ -164,7 +170,7 @@ function ListForm(p: { list?: ListView; animals: EditAnimal[]; types: FeedTypeOp
             })
           }
         >
-          {list ? "Mentés" : "Lista felvétele"}
+          {tr(list ? "Mentés" : "Lista felvétele")}
         </button>
         {list && (
           <button
@@ -172,12 +178,12 @@ function ListForm(p: { list?: ListView; animals: EditAnimal[]; types: FeedTypeOp
             type="button"
             disabled={busy}
             onClick={() => {
-              if (window.confirm(`Archiválod a(z) „${list.name}” listát? A legördülőből eltűnik, a neve újra használható.`)) {
-                void run("/api/feeding/lists/archive", { requestId: newRequestId(), listId: list.id }, "Archiválva.");
+              if (window.confirm(tr("Archiválod a(z) „{name}” listát? A legördülőből eltűnik, a neve újra használható.", { name: list.name }))) {
+                void run("/api/feeding/lists/archive", { requestId: newRequestId(), listId: list.id }, tr("Archiválva."));
               }
             }}
           >
-            Archiválás
+            {tr("Archiválás")}
           </button>
         )}
         <Msg msg={msg} />
@@ -188,13 +194,12 @@ function ListForm(p: { list?: ListView; animals: EditAnimal[]; types: FeedTypeOp
 
 /** The admin's side: the lists as checkboxes of animals (by pool) and feeds (by type); a new list at the end. */
 export function FeedingListsEditor({ lists, animals, types }: { lists: ListView[]; animals: EditAnimal[]; types: FeedTypeOpt[] }) {
+  const tr = useTr();
   return (
     <div className="card" data-testid="feeding-lists">
-      <h2>Névvel ellátott listák</h2>
+      <h2>{tr("Névvel ellátott listák")}</h2>
       <p className="hint">
-        Egy lista állatokat és takarmányokat gyűjt egy név alá (például „Puhatestű nap”). A takarmánynapló fejlécében legördülőből választható:
-        a napi lista pontosan a lista állatai és takarmányai lesz (nem halmozódik az előző listára). Utána kézzel bővíthető és szűkíthető;
-        a „Mai Terv” mellette marad. A fejléc kapcsolója kikapcsolva az összes kijelölést kiveszi.
+        {tr("Egy lista állatokat és takarmányokat gyűjt egy név alá (például „Puhatestű nap”). A takarmánynapló fejlécében legördülőből választható: a napi lista pontosan a lista állatai és takarmányai lesz (nem halmozódik az előző listára). Utána kézzel bővíthető és szűkíthető; a „Mai Terv” mellette marad. A fejléc kapcsolója kikapcsolva az összes kijelölést kiveszi.")}
       </p>
       {lists.map((l) => (
         <details key={l.id} className="pick-details">
@@ -202,7 +207,7 @@ export function FeedingListsEditor({ lists, animals, types }: { lists: ListView[
           <ListForm list={l} animals={animals} types={types} />
         </details>
       ))}
-      <h3 style={{ marginTop: 20 }}>Új lista</h3>
+      <h3 style={{ marginTop: 20 }}>{tr("Új lista")}</h3>
       <ListForm animals={animals} types={types} />
     </div>
   );
