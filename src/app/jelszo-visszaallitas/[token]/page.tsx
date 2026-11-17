@@ -10,7 +10,7 @@ export default async function PasswordResetPage({ params }: { params: Promise<{ 
   const { token } = await params;
   const usable = await resetLinkUsable(token);
   return (
-    <Shell title="Új jelszó" user={null} guard>
+    <Shell title="Új jelszó" user={null}>
       <div className="login-wrap">
       <div className="card login-card">
         <h2>Új jelszó</h2>

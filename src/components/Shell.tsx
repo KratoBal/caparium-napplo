@@ -17,8 +17,9 @@ export async function Shell({
   children,
 }: {
   /**
-   * Whether the main area is inert until hydration (HydratedMain). By default only with a user: the login is a native form. A page
-   * without a user that holds a React-state form (Elfelejtett jelszó, the reset link's Új jelszó) asks for it (barracuda on #249).
+   * Whether the main area is inert until hydration (HydratedMain). ALWAYS by default (barracuda on #250): a page forgotten here then
+   * blocks a native form, which shows, instead of losing a typed value in silence. Only a page whose form is a native one that must work
+   * without the scripts turns it off: Belépés (guard={false}).
    */
   guard?: boolean;
   /** none on the start page (Lili 2026-10-27 13:02 UTC): the bar keeps the day and the user */
@@ -36,7 +37,7 @@ export async function Shell({
   const raw = user ? (await monogramResolver([user.id])).monogram(user.id, new Date()) : "";
   const monogram = user && (raw === user.fullName || raw.length > 4) ? user.fullName.split(/\s+/).map((w) => w.charAt(0).toLocaleUpperCase("hu")).join("") : raw;
   return (
-    <ShellView title={title} active={active} user={user} helper={helper} guard={guard ?? user !== null} today={today} reasons={reasons} monogram={monogram} lang={lang}>
+    <ShellView title={title} active={active} user={user} helper={helper} guard={guard ?? true} today={today} reasons={reasons} monogram={monogram} lang={lang}>
       {children}
     </ShellView>
   );

@@ -18,8 +18,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const { hiba } = await searchParams;
   // the device's language: the header's HU/EN switch is here too, before anyone logs in (lib/i18n/lang.ts)
   const { tr } = await pageTr();
+  // the login is a native form: it must work even when the page's scripts fail, so it is not guarded (Shell guard)
   return (
-    <Shell title={tr("Bejelentkezés")} user={null}>
+    <Shell title={tr("Bejelentkezés")} user={null} guard={false}>
       <div className="login-wrap">
         <div className="card login-card">
           <h2 style={{ fontSize: 34 }}>Cápárium nAPPló</h2>

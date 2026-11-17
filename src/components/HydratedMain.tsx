@@ -15,8 +15,8 @@ import { useHydrated } from "./useHydrated";
  */
 /**
  * `guard` false: the page's form is a native one that posts without the page's scripts (Belépés), so nothing typed there lives in React
- * state, and an inert area would only block the login on a page whose scripts fail (measured on #249). Shell decides: guarded with a
- * user, and on a page without one that asks (Elfelejtett jelszó: a React-state form; barracuda on #249).
+ * state, and an inert area would only block the login on a page whose scripts fail (measured on #249). Shell decides: every page is
+ * guarded unless it turns it off (only Belépés; barracuda on #250).
  */
 export function HydratedMain({ className, guard = true, children }: { className: string; guard?: boolean; children: React.ReactNode }) {
   const hydrated = useHydrated();
