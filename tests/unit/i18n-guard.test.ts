@@ -57,7 +57,7 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
   "src/lib/exports/intake-pdf.ts": { allowed: ["Cápárium nAPPló"], why: "the app's name (the PDF's author)" },
   "src/lib/exports/intake-excel.ts": { allowed: [], why: "" },
   "src/lib/exports/intake-report-text.ts": { allowed: [], why: "" },
-  "src/lib/exports/intake-report.ts": { allowed: ["Az időszak vége nem lehet a kezdete előtt."], why: "an AppError message: errorResponse (lib/api.ts) translates it where the answer is built" },
+  "src/lib/exports/intake-report.ts": { allowed: ["Az időszak vége nem lehet a kezdete előtt."], why: "a defensive check, not a shown text: the only caller (the feeding export route) rejects from > to first (route.ts), and returns an AppError message raw, not through errorResponse" },
 };
 
 const ACCENT = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;
