@@ -90,6 +90,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .userbox form { margin: 0; }
 /* where the head wraps (a tablet), the name and the buttons go to the right of the second line */
 .topbar > .userbox { margin-left: auto; }
+/* the HU/EN switch (Lili 2026-11-17, task t-20261117-caparium-angol-alap): two small buttons at the right end, before the user;
+   the chosen one filled. On the start page the spacer already pushes it right, the auto margin is then harmless */
+.lang-switch { display: inline-flex; margin-left: auto; border: 1px solid var(--c-line); border-radius: 999px; overflow: hidden; }
+.lang-switch + .userbox, .lang-switch + .profile { margin-left: 0; }
+.lang-switch button { border: 0; background: var(--c-white); color: var(--c-muted); font: inherit; font-size: 12px; font-weight: 700; padding: 4px 10px; min-height: 30px; cursor: pointer; }
+.lang-switch button.lang-on { background: var(--c-primary); color: var(--c-white); }
+.lang-switch button:disabled { opacity: 0.6; cursor: progress; }
+.profile-panel .lang-switch { margin-left: 0; }
 
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
@@ -116,7 +124,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .head .pill { margin-left: auto; padding: 6px 10px; font-size: 13px; }
   .head > .topbar > .pill + span[aria-hidden="true"] { display: none; }
   /* before the page is hydrated the old box is still in the markup: hidden at once, so the row does not jump from two lines to one when the button comes */
-  .topbar > .userbox, .topbar > .helper-toggle { display: none; }
+  .topbar > .userbox, .topbar > .helper-toggle, .topbar > .lang-switch-header { display: none; }
   .nav { grid-row: 2; position: sticky; top: 0; z-index: 30; }
   .nav-group { display: flex; flex: none; }
   .nav > a.nav-in-group { display: none; }

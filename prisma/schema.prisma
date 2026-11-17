@@ -32,6 +32,12 @@ enum AppModule {
   EXPORT
 }
 
+// The language the screens speak (Lili 2026-11-17): the user's default; the header's switch overrides it per device
+enum UiLanguage {
+  HU
+  EN
+}
+
 enum PermissionLevel {
   NONE
   READ
@@ -44,6 +50,9 @@ model User {
   fullName      String
   // Lili 2026-11-01 (point 17): what the helper calls the user in its greeting, set by the user; empty = the given name of fullName
   nickname      String?
+  // Lili 2026-11-17 (task t-20261117-caparium-angol-alap): the default language of the screens; a device's own choice (the
+  // header's HU/EN switch, a cookie) wins over it
+  language      UiLanguage @default(HU)
   loginId       String    @unique
   // task e7f9e84d: optional, the user's own (or set by an admin); trimmed and lower-case; the password reset's address
   email         String?   @unique

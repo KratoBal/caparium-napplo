@@ -3,9 +3,13 @@ import { Fragment } from "react";
 import type { SessionUser } from "@/lib/auth";
 import type { HelperData } from "@/lib/helpers";
 import { greetingName } from "@/lib/helper-notice";
+import type { Lang } from "@/lib/i18n/lang";
+import { translate } from "@/lib/i18n/translate";
 import { navChildren, navFor, phoneGroups, type NavKey } from "@/lib/nav";
 import { Helper } from "./Helper";
 import { HelperToggle } from "./HelperToggle";
+import { LangProvider } from "./LangProvider";
+import { LangSwitch } from "./LangSwitch";
 import { NavGroup } from "./NavGroup";
 import { NavSub } from "./NavSub";
 import { ReasonProvider } from "./ReasonSwitch";
@@ -24,6 +28,7 @@ export function ShellView({
   today,
   reasons,
   monogram,
+  lang = "hu",
   children,
 }: {
   title?: string;
@@ -35,9 +40,13 @@ export function ShellView({
   reasons: boolean;
   /** the user's monogram for the phone's profile button */
   monogram: string;
+  /** the device's language (lib/i18n/lang.ts) */
+  lang?: Lang;
   children: React.ReactNode;
 }) {
+  const tr = (text: string) => translate(lang, text);
   return (
+    <LangProvider lang={lang}>
     <div className="shell">
       <div className="head">
         <div className="brand">
@@ -48,23 +57,25 @@ export function ShellView({
           {title && <h1>{title}</h1>}
           <span className="pill" data-testid="today">{today}</span>
           {!title && <span style={{ flex: 1 }} aria-hidden="true" />}
+          <LangSwitch inHeader={!!user} />
           {user ? (
-            <TopbarUser name={user.fullName} roleLabel={user.role === "ADMIN" ? "adminisztrátor" : "akvarista"} monogram={monogram} helper={!!helper} />
+            <TopbarUser name={user.fullName} roleLabel={tr(user.role === "ADMIN" ? "adminisztrátor" : "akvarista")} monogram={monogram} helper={!!helper} />
           ) : (
             /* the helper's switch, only on a page that has one (card 8b22c3c2) */
             helper && <HelperToggle />
           )}
         </header>
       </div>
-      <nav className="nav" aria-label="Fő navigáció">
-        {user && <NavLinks items={navFor(user.role)} active={active} />}
-        <div className="nav-foot">CÁPASULI • TESZTKÖRNYEZET</div>
+      <nav className="nav" aria-label={tr("Fő navigáció")}>
+        {user && <NavLinks items={navFor(user.role).map((n) => ({ ...n, label: tr(n.label) }))} active={active} tr={tr} />}
+        <div className="nav-foot">{tr("CÁPASULI • TESZTKÖRNYEZET")}</div>
       </nav>
       <main className="main">
         <ReasonProvider on={reasons}>{children}</ReasonProvider>
       </main>
       {helper && <Helper data={helper} userName={user ? greetingName(user) : undefined} loginAt={user?.sessionStartedAt} userKey={user?.id} />}
     </div>
+    </LangProvider>
   );
 }
 
@@ -73,7 +84,7 @@ export function ShellView({
  * phone the drop-downs show and the colored entries hide, on a tablet and a desktop the other way round (globals.css), so the server
  * renders one markup for both and nothing jumps at hydration.
  */
-function NavLinks({ items, active }: { items: ReturnType<typeof navFor>; active?: NavKey }) {
+function NavLinks({ items, active, tr }: { items: ReturnType<typeof navFor>; active?: NavKey; tr: (text: string) => string }) {
   const groups = phoneGroups(items);
   // an entry with a `parent` is rendered inside its parent's drop-down (NavSub), not in the row
   return items.filter((n) => !n.parent).map((n) => {
@@ -82,7 +93,7 @@ function NavLinks({ items, active }: { items: ReturnType<typeof navFor>; active?
     if (children.length) return <NavSub key={n.label} parent={n} items={children} active={active} />;
     return (
       <Fragment key={n.label}>
-        {group && <NavGroup label={group.label} tone={group.tone} items={group.items} active={active} />}
+        {group && <NavGroup label={tr(group.label)} tone={group.tone} items={group.items} active={active} />}
         <Link
           href={n.href}
           className={[n.tone ? `nav-${n.tone} nav-in-group` : "", n.key === active ? "active" : ""].filter(Boolean).join(" ") || undefined}

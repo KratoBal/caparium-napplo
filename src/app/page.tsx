@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Shell } from "@/components/Shell";
 import { helperStockAccess } from "@/lib/helper-access";
+import { pageTr } from "@/lib/i18n/server";
 import { feedingHelper, waterHelper } from "@/lib/helpers";
 import { prisma } from "@/lib/db";
 import { moduleLevel } from "@/lib/master";
@@ -35,6 +36,8 @@ const HOME_ROWS: HomeCard[][] = [
 
 export default async function OverviewPage() {
   const user = await requireUser();
+  // lib/i18n: the captions and sentences in the device's language; the pools' and chemicals' names are data, not translated
+  const { tr } = await pageTr(user);
   const today = businessDayOf(new Date());
   // R-17: without access to the water module its numbers are not shown either
   const water = (await moduleLevel(prisma, user.id, user.role, "WATER")) !== "NONE";
@@ -56,17 +59,19 @@ export default async function OverviewPage() {
       : [];
   return (
     <Shell active="overview" user={user} helper={water ? await waterHelper(await helperStockAccess(user)) : feeding ? await feedingHelper(await helperStockAccess(user)) : null}>
-      <h2 style={{ fontSize: 40 }}>Jó munkát!</h2>
-      <p className="hint" style={{ fontSize: 17 }}>A mai feladatok és a naplók állapota egy helyen.</p>
+      <h2 style={{ fontSize: 40 }}>{tr("Jó munkát!")}</h2>
+      <p className="hint" style={{ fontSize: 17 }}>{tr("A mai feladatok és a naplók állapota egy helyen.")}</p>
       {/* the daily count the old tile carried */}
       {water && (
         <p className="hint" data-testid="daily-progress">
-          Napi mérés ma: {done} / {total} medence{total - done > 0 ? `, ${total - done} még vár` : ", mind mérve"}.
+          {total - done > 0
+            ? tr("Napi mérés ma: {done} / {total} medence, {left} még vár.", { done, total, left: total - done })
+            : tr("Napi mérés ma: {done} / {total} medence, mind mérve.", { done, total })}
         </p>
       )}
       {reopened.length > 0 && (
         <div className="banner banner-warn" style={{ marginTop: 20 }} data-testid="reopened-days">
-          Újranyitva hagyott napok:{" "}
+          {tr("Újranyitva hagyott napok:")}{" "}
           {reopened.map((j, i) => (
             <span key={j.id}>
               {i > 0 && ", "}
@@ -75,28 +80,36 @@ export default async function OverviewPage() {
               </Link>
             </span>
           ))}
-          . Ha a javítás kész, zárd le őket.
+          {tr(". Ha a javítás kész, zárd le őket.")}
         </div>
       )}
       {(missed.pools.length > 0 || low.length > 0) && (
         <div className="banner banner-warn" style={{ marginTop: 20 }} data-testid="notices">
           {missed.pools.length > 0 && (
             <div data-testid="notice-missed">
-              {MEASUREMENT_DEADLINE} elmúlt, és ma még nincs napi mérés: {missed.pools.join(", ")}. <Link href="/vizmeres">Mérés rögzítése</Link>
+              {tr("{deadline} elmúlt, és ma még nincs napi mérés: {pools}.", { deadline: MEASUREMENT_DEADLINE, pools: missed.pools.join(", ") })}{" "}
+              <Link href="/vizmeres">{tr("Mérés rögzítése")}</Link>
             </div>
           )}
           {low.length > 0 && (
             <div data-testid="notice-stock">
-              Fogyóban ({RUN_OUT_DAYS} napon belül vagy már nulla alatt):{" "}
-              {low.map((c) => `${c.name} (${String(c.level).replace(".", ",")} ${c.unit}${c.daysLeft !== null ? `, kb. ${String(c.daysLeft).replace(".", ",")} nap` : ""})`).join("; ")}.{" "}
-              <Link href="/adagolas">Készlet</Link>
+              {tr("Fogyóban ({days} napon belül vagy már nulla alatt):", { days: RUN_OUT_DAYS })}{" "}
+              {low
+                .map((c) =>
+                  c.daysLeft !== null
+                    ? tr("{name} ({level} {unit}, kb. {days} nap)", { name: c.name, level: String(c.level).replace(".", ","), unit: c.unit, days: String(c.daysLeft).replace(".", ",") })
+                    : tr("{name} ({level} {unit})", { name: c.name, level: String(c.level).replace(".", ","), unit: c.unit }),
+                )
+                .join("; ")}
+              .{" "}
+              <Link href="/adagolas">{tr("Készlet")}</Link>
             </div>
           )}
         </div>
       )}
       {/* caparium-hibak-5 (Balázs 2026-10-20 11:37 UTC, the customer's layout): illustrated cards, 3-2-3, the picture
           above, the caption below, each to its module; a card shows only with access to its module, as the tiles did */}
-      <nav className="home-cards" aria-label="Modulok">
+      <nav className="home-cards" aria-label={tr("Modulok")}>
         {HOME_ROWS.map((row, i) => {
           const visible = row.filter((c) => ({ water, feeding, dosing, withdrawal })[c.module]);
           return visible.length ? (
@@ -107,7 +120,7 @@ export default async function OverviewPage() {
                   <img src={`/kezdolap/${c.id}.webp`} alt="" width={c.narrow ? 720 : 960} height={c.narrow ? 960 : 640} loading={i === 0 ? "eager" : "lazy"} />
                   <span className="home-caption">
                     {c.caption.map((line) => (
-                      <span key={line}>{line}</span>
+                      <span key={line}>{tr(line)}</span>
                     ))}
                   </span>
                 </Link>
