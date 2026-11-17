@@ -2,6 +2,7 @@ import { DayControls } from "@/components/DayControls";
 import { DayJump, DayNav } from "@/components/DayNav";
 import { CloseWithdrawalDay, WithdrawalItems, type FeedOpt } from "@/components/FeedingForms";
 import { Shell } from "@/components/Shell";
+import { pageTr } from "@/lib/i18n/server";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { feedStock } from "@/lib/feed-intake";
@@ -19,6 +20,7 @@ export const dynamic = "force-dynamic";
 // corner; the "Lezárás" button; taken against given for a period; the Excel after the template.
 export default async function WithdrawalPage({ searchParams }: { searchParams: Promise<{ nap?: string; tol?: string; ig?: string }> }) {
   const { user, level } = await requireModuleRead("WITHDRAWAL");
+  const { tr } = await pageTr(user);
   const today = businessDayOf(new Date());
   const sp = await searchParams;
   const day = sp.nap && isValidDay(sp.nap) && sp.nap <= today ? sp.nap : today;
@@ -59,21 +61,21 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
       })),
   );
   return (
-    <Shell title="Takarmánykivétel" active="withdrawal" user={user}>
+    <Shell title={tr("Takarmánykivétel")} active="withdrawal" user={user}>
       <div className="toolbar toolbar-end">
         <DayNav path="/kivetel" day={day} today={today} />
         {/* Lili 2026-10-26: a date picker, as on the water measurement pages; the compare period is kept */}
         <DayJump path="/kivetel" day={day} today={today} keep={{ tol: from, ig: to }} />
         <span className="spacer" />
         <span className="pill" data-testid="withdrawal-total">
-          Kivéve: {Object.entries(view.totals).map(([u, v]) => `${num(v)} ${u}`).join(", ") || "semmi"}
+          {tr("Kivéve:")} {Object.entries(view.totals).map(([u, v]) => `${num(v)} ${u}`).join(", ") || tr("semmi")}
         </span>
         {canRecord && lock.state === "OPEN" && day === today && !isAdmin && <CloseWithdrawalDay day={day} />}
         <DayControls kind="WITHDRAWAL" day={day} status={lock} isAdmin={isAdmin} />
       </div>
       <div className="card">
-        <h2>Kivett takarmány</h2>
-        <p className="hint">Amit ma kiveszel a fagyasztóból; a felhasználás napja alapból a holnap. A darab és a tömeg külön összeg. A kivétel a Fagyasztó készletéből vonódik le.</p>
+        <h2>{tr("Kivett takarmány")}</h2>
+        <p className="hint">{tr("Amit ma kiveszel a fagyasztóból; a felhasználás napja alapból a holnap. A darab és a tömeg külön összeg. A kivétel a Fagyasztó készletéből vonódik le.")}</p>
         <WithdrawalItems
           day={day}
           useDay={addDays(day, 1)}
@@ -88,32 +90,32 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
       </div>
 
       <div className="card">
-        <h2>Kivett és kiosztott</h2>
+        <h2>{tr("Kivett és kiosztott")}</h2>
         <form method="get" action="/kivetel" className="filters">
           <input type="hidden" name="nap" value={day} />
           <label className="field">
-            Naptól
+            {tr("Naptól")}
             <input className="input" type="date" name="tol" defaultValue={from} />
           </label>
           <label className="field">
-            Napig
+            {tr("Napig")}
             <input className="input" type="date" name="ig" defaultValue={to} />
           </label>
-          <button className="btn btn-soft" type="submit">Összevetés</button>
+          <button className="btn btn-soft" type="submit">{tr("Összevetés")}</button>
         </form>
-        <p className="hint">A kivett a felhasználás napja szerint, a kiosztott az egyedi takarmánynaplóból; a különbség kimutatás, nem hiba. Az „Egyéb” tételek a szabad nevük miatt nem párosíthatók.</p>
-        {compareError && <div className="banner banner-error">{compareError}</div>}
+        <p className="hint">{tr("A kivett a felhasználás napja szerint, a kiosztott az egyedi takarmánynaplóból; a különbség kimutatás, nem hiba. Az „Egyéb” tételek a szabad nevük miatt nem párosíthatók.")}</p>
+        {compareError && <div className="banner banner-error">{tr(compareError)}</div>}
         <div className="table-scroll">
           <table className="log-table" data-testid="taken-given">
             <thead>
-              <tr><th>Takarmány</th><th>Egység</th><th>Kivett</th><th>Kiosztott</th><th>Különbség</th></tr>
+              <tr><th>{tr("Takarmány")}</th><th>{tr("Egység")}</th><th>{tr("Kivett")}</th><th>{tr("Kiosztott")}</th><th>{tr("Különbség")}</th></tr>
             </thead>
             <tbody>
               {compare.map((r) => {
                 const shown = rowForDisplay(r.unit, [r.taken, r.given, r.taken - r.given]);
                 return (
                   <tr key={r.key}>
-                    <td>{r.feed}{r.paired ? "" : " (nem párosított)"}</td>
+                    <td>{r.feed}{r.paired ? "" : ` (${tr("nem párosított")})`}</td>
                     <td>{shown.unit}</td>
                     {shown.values.map((v, i) => (
                       <td key={i}>{v}</td>
@@ -129,7 +131,7 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
             <input type="hidden" name="kind" value="kivetel" />
             <input type="hidden" name="from" value={from} />
             <input type="hidden" name="to" value={to} />
-            <button className="btn" type="submit" data-testid="excel-kivetel">Takarmánykivétel (Excel, {formatPeriod(from, to)})</button>
+            <button className="btn" type="submit" data-testid="excel-kivetel">{tr("Takarmánykivétel (Excel, {period})", { period: formatPeriod(from, to) })}</button>
           </form>
         )}
       </div>

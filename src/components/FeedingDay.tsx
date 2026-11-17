@@ -11,6 +11,7 @@ import type { DayAnimal } from "@/lib/feeding";
 import { DayFeeds, FinalizeList, GroupSwitch, InvalidateButton, ItemForm, SelectBox, type FeedOpt, type FeedTypeOpt, type Recipient } from "./FeedingForms";
 import type { DayLock } from "./DayControls";
 import { FeedingSheet } from "./FeedingSheet";
+import { useTr } from "./LangProvider";
 
 type Item = {
   id: string;
@@ -53,6 +54,7 @@ export function FeedingDay(props: {
   sheetFeeds?: FeedOpt[];
 }) {
   const { day, editable, animals, groups, items, totals, recipients, feeds } = props;
+  const tr = useTr();
   const sheetRows = props.sheetRecipients ?? recipients;
   const [active, setActive] = useState(sheetRows[0]?.key ?? recipients[0]?.key ?? "");
   const [draft, setDraft] = useState<Record<string, number>>({});
@@ -80,7 +82,7 @@ export function FeedingDay(props: {
     const off = state === "off";
     return (
       <span className={`ref-value ref-${state}`} data-testid={`reference-${key}`} data-state={state}>
-        ref {num(ref)} g{off ? ": eltér" : ""}
+        ref {num(ref)} g{off ? `: ${tr("eltér")}` : ""}
       </span>
     );
   };
@@ -97,7 +99,7 @@ export function FeedingDay(props: {
       <InvalidateButton url={`/api/feeding/items/${i.id}/invalidate`} version={i.version} row />
     </span>
   );
-  const line = (i: Item) => `${i.otherName ? `${i.feed}: ${i.otherName}` : i.feed} ${i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ") || GIVEN}`;
+  const line = (i: Item) => `${i.otherName ? `${i.feed}: ${i.otherName}` : i.feed} ${i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ") || tr(GIVEN)}`;
 
   return (
     <>
@@ -105,8 +107,8 @@ export function FeedingDay(props: {
           olyanok, mint a takarmány kiválasztás", without the pool and group details): one line per group, names
           with a tick, "select all" and "none" per group */}
       <div className="card">
-        <h2>Ki eszik ma ({animals.filter((a) => a.selected).length} állat)</h2>
-        <p className="hint">Közös lista: bármelyik akvarista módosíthatja. Akit a kész listán nem választottak ki, a nap lezárásakor koplalónapot kap.</p>
+        <h2>{tr("Ki eszik ma ({n} állat)", { n: animals.filter((a) => a.selected).length })}</h2>
+        <p className="hint">{tr("Közös lista: bármelyik akvarista módosíthatja. Akit a kész listán nem választottak ki, a nap lezárásakor koplalónapot kap.")}</p>
         <div data-testid="animal-chooser">
           {chooserGroups.map((g) => (
             <div key={g.key} className="pick-block" data-testid={`group-head-${g.name}`}>
@@ -130,8 +132,8 @@ export function FeedingDay(props: {
       </div>
       {props.feedTypes && (
         <div className="card">
-          <h2>A nap takarmányai</h2>
-          <p className="hint">A második lépés: mit kapnak ma az állatok. A takarmánylap oszlopai és a tétel takarmány-listája ezek lesznek; ha nincs kiválasztva semmi, minden takarmány választható.</p>
+          <h2>{tr("A nap takarmányai")}</h2>
+          <p className="hint">{tr("A második lépés: mit kapnak ma az állatok. A takarmánylap oszlopai és a tétel takarmány-listája ezek lesznek; ha nincs kiválasztva semmi, minden takarmány választható.")}</p>
           {/* the feeds' one button saves the choice and finalizes (Lili 2026-10-27 22:47 UTC); a read-only day shows the state */}
           <DayFeeds day={day} types={props.feedTypes} chosen={props.dayFeedIds ?? []} editable={editable} finalized={props.finalized} />
           {!editable && finalizeBar}
@@ -142,12 +144,12 @@ export function FeedingDay(props: {
       <FeedingSheet key={day} day={day} editable={editable} recipients={sheetRows} lock={props.lock} feeds={props.sheetFeeds ?? []} items={items} active={active} onActive={setActive} />
       {editable && (
         <div className="card">
-          <h2>Új tétel</h2>
-          <p className="hint">Kattints a takarmánylapon vagy a lent álló Mai tételek listában egy állat vagy csoport sorára: a tétel annak szól. A darab és a tömeg külön mennyiség, sosem adódik össze.</p>
+          <h2>{tr("Új tétel")}</h2>
+          <p className="hint">{tr("Kattints a takarmánylapon vagy a lent álló Mai tételek listában egy állat vagy csoport sorára: a tétel annak szól. A darab és a tömeg külön mennyiség, sosem adódik össze.")}</p>
           {activeLabel && (
             <p className="banner banner-ok" data-testid="live-total">
-              {activeLabel}: eddig {fmt(saved) || "semmi"}
-              {Object.keys(draft).length > 0 && ` · most beírva ${fmt(draft)} · együtt ${fmt(together)}`}
+              {tr("{who}: eddig {saved}", { who: activeLabel, saved: fmt(saved) || tr("semmi") })}
+              {Object.keys(draft).length > 0 && ` · ${tr("most beírva {draft} · együtt {together}", { draft: fmt(draft), together: fmt(together) })}`}
             </p>
           )}
           <ItemForm
@@ -164,12 +166,12 @@ export function FeedingDay(props: {
       {/* Lili 2026-10-26 (Caparium channel msg 1564403940320346223): "Mai tételek" is LAST, as a summary. The order of the page: Ki eszik
           ma, A nap takarmányai, Takarmánylap, Új tétel, Mai tételek (before: Mai tételek stood between the feeds and the sheet) */}
       <div className="card">
-        <h2>Mai tételek</h2>
-        <p className="hint">Az aznapi állatok tételei, összege és referenciája. Kattints egy sorra: az új tétel annak szól.</p>
+        <h2>{tr("Mai tételek")}</h2>
+        <p className="hint">{tr("Az aznapi állatok tételei, összege és referenciája. Kattints egy sorra: az új tétel annak szól.")}</p>
         <div className="table-scroll">
           <table className="log-table" data-testid="feeding-list">
             <thead>
-              <tr><th>Állat</th><th>Tételek</th><th>Összesen</th></tr>
+              <tr><th>{tr("Állat")}</th><th>{tr("Tételek")}</th><th>{tr("Összesen")}</th></tr>
             </thead>
             <tbody>
               {animals
@@ -193,14 +195,14 @@ export function FeedingDay(props: {
               {groups.map((g) =>
                 itemsFor(`g:${g.id}`).length || isRecipient(`g:${g.id}`) ? (
                   <tr key={g.id} {...rowProps(`g:${g.id}`)}>
-                    <td>{g.name} (csoport)</td>
+                    <td>{g.name} ({tr("csoport")})</td>
                     <td className="keep">
                       {itemsFor(`g:${g.id}`).map((i) => (
                         <div key={i.id}>
                           {line(i)} · <span className="hint">{i.participants.map((p) => names.get(p) ?? "?").join(", ")}</span>{" "}
                           {i.noSelectedMember && (
                             <span className="badge badge-pending" data-testid="group-item-no-member">
-                              nincs kiválasztott tag: az érvénytelenítés külön döntés
+                              {tr("nincs kiválasztott tag: az érvénytelenítés külön döntés")}
                             </span>
                           )}{" "}
                           {editable && rowButtons(i)}
