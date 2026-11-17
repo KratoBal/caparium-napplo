@@ -30,7 +30,8 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
 
 const ACCENT = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;
 // Hungarian words without an accent that the screens use: a text holding one is Hungarian too
-const WORDS = new Set(["sor", "mentve", "evett", "mindenki", "nap", "napi", "heti", "medence", "csoport", "igen", "nem", "vissza", "rendben", "hiba", "nincs", "van", "kell", "csak", "egy", "lista", "kilepes"]);
+// (murena, 2026-11-17: "Szer", "mind", "Napig" slipped through; the list grows as the modules come in)
+const WORDS = new Set(["sor", "mentve", "evett", "mindenki", "nap", "napi", "heti", "medence", "csoport", "igen", "nem", "vissza", "rendben", "hiba", "nincs", "van", "kell", "csak", "egy", "lista", "kilepes", "szer", "mind", "napig", "korallos", "halas", "adag", "napra", "napon", "minden", "egyik", "kesz", "uj", "mentes", "mentese"]);
 // a path, a query or an identifier ("/heti", "heti", "nap=...") is code, not a text a person reads
 const codeLike = (text: string) => /^[`/]/.test(text.trim()) || /^[a-z0-9_.:-]+$/.test(text.trim());
 const hungarian = (text: string) => !codeLike(text) && (ACCENT.test(text) || text.toLowerCase().split(/[^a-z]+/).some((w) => WORDS.has(w)));
@@ -47,6 +48,11 @@ function inTr(node: ts.Node): boolean {
   return false;
 }
 
+/** A template's literal parts, its ${...} places as {x}: what a person reads of it. */
+function templateText(node: ts.TemplateExpression): string {
+  return node.head.text + node.templateSpans.map((s) => "{x}" + s.literal.text).join("");
+}
+
 function leftOut(file: string): string[] {
   const src = readFileSync(join(process.cwd(), file), "utf8");
   const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
@@ -60,8 +66,10 @@ function leftOut(file: string): string[] {
       const p = node.parent;
       const isKey = p && ts.isPropertyAssignment(p) && p.name === node;
       if (!isKey && hungarian(node.text) && !inTr(node)) out.push(node.text);
-    } else if (ts.isTemplateExpression(node) && hungarian(node.getText()) && !inTr(node)) {
-      out.push(node.getText());
+    } else if (ts.isTemplateExpression(node) && hungarian(templateText(node)) && !inTr(node)) {
+      // the template's own text, not its source: the source starts with a backtick, and that read as code, so no template was ever
+      // checked (murena, 2026-11-17)
+      out.push(templateText(node));
     }
     ts.forEachChild(node, visit);
   };
