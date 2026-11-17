@@ -35,6 +35,13 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
   "src/app/kalkulator/page.tsx": { allowed: [], why: "" },
   "src/components/CalculatorForms.tsx": { allowed: [], why: "" },
   "src/app/api/exports/dosing/route.ts": { allowed: [], why: "" },
+  // murena: Fagyasztó
+  "src/app/takarmanyhuto/page.tsx": { allowed: [], why: "" },
+  "src/components/IntakeForms.tsx": { allowed: [], why: "" },
+  "src/lib/exports/intake-pdf.ts": { allowed: ["Cápárium nAPPló"], why: "the app's name (the PDF's author)" },
+  "src/lib/exports/intake-excel.ts": { allowed: [], why: "" },
+  "src/lib/exports/intake-report-text.ts": { allowed: [], why: "" },
+  "src/lib/exports/intake-report.ts": { allowed: ["Az időszak vége nem lehet a kezdete előtt."], why: "an AppError message: errorResponse (lib/api.ts) translates it where the answer is built" },
 };
 
 const ACCENT = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;

@@ -4,7 +4,7 @@
 import type { Writable } from "node:stream";
 import ExcelJS from "exceljs";
 import { intakeReport, type IntakeReport } from "./intake-report";
-import { EXCEL_DATE_FORMAT, reportTitle } from "./intake-report-text";
+import { EXCEL_DATE_FORMAT, hungarianTr, reportTitle, type Tr } from "./intake-report-text";
 import { finish, pace, PACE_ROWS, workbookBuffer, workbookWriter, type StreamedWorkbook } from "./xlsx-stream";
 
 const HEAD = "FFA6CAEC"; // the same header blue as the other exports
@@ -37,17 +37,17 @@ function header(ws: ExcelJS.Worksheet, title: string, labels: string[]) {
 }
 
 /** The report's two sheets, written row by row (ten years in one request, #198). */
-export function intakeWorkbook(report: IntakeReport): StreamedWorkbook {
-  const title = reportTitle(report);
+export function intakeWorkbook(report: IntakeReport, tr: Tr = hungarianTr): StreamedWorkbook {
+  const title = reportTitle(report, tr);
   const lines = report.balance.reduce((n, t) => n + t.lines.length, 0);
   const write = async (out: Writable) => {
     const wb = workbookWriter(out);
     (wb as unknown as { title: string }).title = title; // the writer has no typed title, its core properties read it all the same
 
-    const a = sheet(wb, "Bevételek", [12, 22, 24, 12, 14, 30, 14], HEADER_ROW);
-    header(a, title, ["Dátum", "Takarmány típusa", "Takarmány", "Mennyiség", "Mértékegység", "Megjegyzés", "Visszaküldve"]);
+    const a = sheet(wb, tr("Bevételek"), [12, 22, 24, 12, 14, 30, 14], HEADER_ROW);
+    header(a, title, [tr("Dátum"), tr("Takarmány típusa"), tr("Takarmány"), tr("Mennyiség"), tr("Mértékegység"), tr("Megjegyzés"), tr("Visszaküldve")]);
     for (const [n, i] of report.intake.entries()) {
-      const r = a.addRow([new Date(`${i.day}T00:00:00Z`), i.type, i.feed, asNumber(i.quantity), i.unit, i.note, i.returned ? "igen" : ""]);
+      const r = a.addRow([new Date(`${i.day}T00:00:00Z`), i.type, i.feed, asNumber(i.quantity), i.unit, i.note, i.returned ? tr("igen") : ""]);
       r.getCell(1).numFmt = EXCEL_DATE_FORMAT;
       if (i.returned) r.font = { color: { argb: RETURNED_ARGB } };
       r.commit();
@@ -58,17 +58,17 @@ export function intakeWorkbook(report: IntakeReport): StreamedWorkbook {
     // Lili 2026-11-01 (point 7): the balance, a block a feed: its name, the header, a line a unit
     // only column A has a width, as before this file streamed: the seven widths once listed here reached A alone (they were set
     // before the other columns existed)
-    const b = sheet(wb, "Egyenleg", [16]);
+    const b = sheet(wb, tr("Egyenleg"), [16]);
     b.getRow(1).getCell(1).value = title;
     b.getRow(1).font = { bold: true, size: 14 };
     let at = 3;
-    if (report.balance.length === 0) b.getRow(at).getCell(1).value = "Az időszakban nem volt készletmozgás.";
+    if (report.balance.length === 0) b.getRow(at).getCell(1).value = tr("Az időszakban nem volt készletmozgás.");
     for (const t of report.balance) {
       const before = t.lines.some((l) => l.beforeStock !== null);
       const name = b.getRow(at);
       name.getCell(1).value = t.feed;
       name.font = { bold: true };
-      const labels = ["Mértékegység", "Nyitó", "Bevétel", "Kivétel", ...(before ? ["Készlet előtti kivétel"] : []), "Záró", "Jelzés"];
+      const labels = [tr("Mértékegység"), tr("Nyitó"), tr("Bevétel"), tr("Kivétel"), ...(before ? [tr("Készlet előtti kivétel")] : []), tr("Záró"), tr("Jelzés")];
       const head = b.getRow(at + 1);
       labels.forEach((l, i) => {
         head.getCell(i + 1).value = l;
@@ -83,7 +83,7 @@ export function intakeWorkbook(report: IntakeReport): StreamedWorkbook {
           asNumber(l.taken),
           ...(before ? [l.beforeStock === null ? null : asNumber(l.beforeStock)] : []),
           asNumber(l.closing),
-          l.negative ? "negatív készlet" : l.low ? "fogyóban" : "",
+          l.negative ? tr("negatív készlet") : l.low ? tr("fogyóban") : "",
         ];
       });
       b.getRow(at + 1 + t.lines.length).commit(); // the block's last row, and with it the rows above
@@ -97,11 +97,11 @@ export function intakeWorkbook(report: IntakeReport): StreamedWorkbook {
 }
 
 /** The report read and checked (a refusal before any byte); the route streams the answer. */
-export async function intakeWorkbookOf(f: { from: string; to: string }): Promise<StreamedWorkbook> {
-  return intakeWorkbook(await intakeReport(f));
+export async function intakeWorkbookOf(f: { from: string; to: string }, tr: Tr = hungarianTr): Promise<StreamedWorkbook> {
+  return intakeWorkbook(await intakeReport(f), tr);
 }
 
 /** The report in a buffer (the tests). */
-export async function buildIntakeWorkbook(f: { from: string; to: string }): Promise<{ buffer: Buffer; rows: number }> {
-  return workbookBuffer(await intakeWorkbookOf(f));
+export async function buildIntakeWorkbook(f: { from: string; to: string }, tr: Tr = hungarianTr): Promise<{ buffer: Buffer; rows: number }> {
+  return workbookBuffer(await intakeWorkbookOf(f, tr));
 }
