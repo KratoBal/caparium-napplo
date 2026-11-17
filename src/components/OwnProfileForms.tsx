@@ -189,3 +189,40 @@ export function OwnEmailForm({ email }: { email: string }) {
     </div>
   );
 }
+
+/**
+ * The screens' default language (t-20261117-caparium-angol-alap). It is only the default: a device that has chosen with
+ * the header's HU/EN switch keeps its own; a device with no choice yet gets this one at the next login.
+ */
+export function OwnLanguageForm({ language }: { language: "HU" | "EN" }) {
+  const router = useRouter();
+  const [value, setValue] = useState(language);
+  const [msg, setMsg] = useState<Msg>(null);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="toolbar" data-testid="own-language">
+      <label className="field">
+        <span>Alapértelmezett nyelv</span>
+        <select className="input" value={value} onChange={(e) => setValue(e.target.value as "HU" | "EN")}>
+          <option value="HU">magyar</option>
+          <option value="EN">English</option>
+        </select>
+      </label>
+      <button
+        className="btn"
+        type="button"
+        disabled={busy || value === language}
+        onClick={async () => {
+          setBusy(true);
+          const err = await patch({ language: value });
+          setBusy(false);
+          setMsg(err ? { ok: false, text: err } : { ok: true, text: "Nyelv mentve." });
+          if (!err) router.refresh();
+        }}
+      >
+        Nyelv mentése
+      </button>
+      <Status msg={msg} />
+    </div>
+  );
+}

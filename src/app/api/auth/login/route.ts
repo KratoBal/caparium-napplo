@@ -1,4 +1,5 @@
-import { login, sameOrigin, sessionCookie } from "@/lib/auth";
+import { login, readCookie, sameOrigin, sessionCookie } from "@/lib/auth";
+import { LANG_COOKIE, langCookie, parseLang, resolveLang } from "@/lib/i18n/lang";
 import { clientIp, FailureLimiter } from "@/lib/basic-auth";
 import { seeOther } from "@/lib/redirect";
 
@@ -29,5 +30,10 @@ export async function POST(req: Request) {
   const result = await login(loginId, password, client);
   if (!result.ok) return back(result.code === "BUSY" ? "hiba=sok" : "hiba=adat");
   addressLimiter.succeed(ip);
-  return seeOther("/", sessionCookie(result.token, result.expiresAt, process.env.COOKIE_SECURE === "true"));
+  const secure = process.env.COOKIE_SECURE === "true";
+  // the user's default language goes to a device that has none yet; a device's own choice stays (lib/i18n/lang.ts)
+  const deviceLang = parseLang(readCookie(req.headers.get("cookie"), LANG_COOKIE));
+  const cookies = [sessionCookie(result.token, result.expiresAt, secure)];
+  if (!deviceLang) cookies.push(langCookie(resolveLang(null, result.user.language), secure));
+  return seeOther("/", cookies);
 }

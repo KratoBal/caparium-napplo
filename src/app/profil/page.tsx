@@ -1,4 +1,4 @@
-import { OwnEmailForm, OwnNameForm, OwnNicknameForm, OwnPasswordForm } from "@/components/OwnProfileForms";
+import { OwnEmailForm, OwnLanguageForm, OwnNameForm, OwnNicknameForm, OwnPasswordForm } from "@/components/OwnProfileForms";
 import { Shell } from "@/components/Shell";
 import { prisma } from "@/lib/db";
 import { greetingName } from "@/lib/helper-notice";
@@ -27,6 +27,12 @@ export default async function OwnProfilePage() {
           Ezen a becenéven köszön a segítő. Ha üres, a megjelenő név keresztnevét használja: {greetingName({ fullName: u.fullName })}.
         </p>
         <OwnNicknameForm nickname={u.nickname ?? ""} />
+      </div>
+      {/* t-20261117-caparium-angol-alap: the default only; the header's HU/EN switch is the device's own choice and wins */}
+      <div className="card">
+        <h2>Nyelv</h2>
+        <p className="hint">Ezen a nyelven nyílnak a képernyők egy olyan eszközön, ahol még senki nem választott a fejléc HU/EN gombjával. A gomb az eszközön megjegyzett választás, és erősebb ennél.</p>
+        <OwnLanguageForm language={u.language} />
       </div>
       <div className="card">
         <h2>Jelszó</h2>

@@ -21,6 +21,8 @@ export const ownProfileSchema = z
       .optional(),
     /** point 17: the greeting's name; "" clears it (the given name then) */
     nickname: z.string().trim().max(40).optional(),
+    /** t-20261117-caparium-angol-alap: the screens' default language; a device's own choice (the header's switch) wins */
+    language: z.enum(["HU", "EN"]).optional(),
     /** task e7f9e84d: the address a forgotten password's link goes to; "" clears it */
     email: userEmailField.optional(),
     currentPassword: z.string().max(200).optional(),
@@ -52,6 +54,7 @@ export async function updateOwnProfile(
   if (input.fullName !== undefined && input.fullName !== u.fullName) changes.fullName = { before: u.fullName, after: input.fullName };
   const nickname = input.nickname === undefined ? undefined : input.nickname || null;
   if (nickname !== undefined && nickname !== u.nickname) changes.nickname = { before: u.nickname, after: nickname };
+  if (input.language !== undefined && input.language !== u.language) changes.language = { before: u.language, after: input.language };
   const email = emailOrNull(input.email);
   if (email !== undefined && email !== u.email) changes.email = { before: u.email, after: email };
   let passwordHash: string | undefined;
@@ -76,6 +79,7 @@ export async function updateOwnProfile(
       data: {
         ...(changes.fullName ? { fullName: input.fullName } : {}),
         ...(changes.nickname ? { nickname } : {}),
+        ...(changes.language ? { language: input.language } : {}),
         ...(changes.email ? { email } : {}),
         ...(passwordHash ? { passwordHash } : {}),
       },

@@ -7,10 +7,12 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { HelperToggle } from "./HelperToggle";
+import { useTr } from "./LangProvider";
 import { useIsPhone } from "./useIsPhone";
 
 export function TopbarUser({ name, roleLabel, monogram, helper }: { name: string; roleLabel: string; monogram: string; helper: boolean }) {
   const phone = useIsPhone();
+  const tr = useTr();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -38,11 +40,11 @@ export function TopbarUser({ name, roleLabel, monogram, helper }: { name: string
           </span>
           {/* Lili 2026-11-01 (point 11): the own name and password */}
           <Link className="btn btn-soft" href="/profil">
-            Saját beállítások
+            {tr("Saját beállítások")}
           </Link>
           <form method="post" action="/api/auth/logout">
             <button className="btn btn-soft" type="submit">
-              Kilépés
+              {tr("Kilépés")}
             </button>
           </form>
         </div>
@@ -56,24 +58,24 @@ export function TopbarUser({ name, roleLabel, monogram, helper }: { name: string
         className="profile-btn"
         aria-expanded={open}
         aria-haspopup="true"
-        aria-label={`${name}, profil`}
+        aria-label={tr("{name}, profil", { name })}
         data-testid="profile-button"
         onClick={() => setOpen(!open)}
       >
         {monogram}
       </button>
       {open && (
-        <div className="profile-panel" role="group" aria-label="Profil" data-testid="profile-panel">
+        <div className="profile-panel" role="group" aria-label={tr("Profil")} data-testid="profile-panel">
           <span data-testid="current-user">
             {name} · {roleLabel}
           </span>
           {helper && <HelperToggle />}
           <Link href="/profil" onClick={() => setOpen(false)}>
-            Saját beállítások
+            {tr("Saját beállítások")}
           </Link>
           <form method="post" action="/api/auth/logout">
             <button className="btn btn-soft" type="submit">
-              Kilépés
+              {tr("Kilépés")}
             </button>
           </form>
         </div>
