@@ -37,6 +37,15 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
     ],
     why: "the menu labels, translated where shown (ShellView: tr(n.label), tr(group.label); t-20261118-caparium-angol-menu)",
   },
+  "src/app/naplo/page.tsx": {
+    allowed: ["Érvényes", "Érvénytelenített", "Függő"],
+    why: "the measurement statuses, translated where shown (tr(STATUS_LABEL[r.status]))",
+  },
+  "src/app/naplo/[id]/page.tsx": {
+    allowed: ["Érték", "Mérés időpontja", "Nap", "Mérést végezte", "Gyakornok végezte", "Hígítás", "Hígító víz", "Állapot", "Érvénytelenítés oka", "Mérési kör"],
+    why: "the changed fields' names, translated where shown (tr(FIELD_LABEL[k]))",
+  },
+  "src/components/CorrectionForm.tsx": { allowed: [], why: "" },
   "src/components/Helper.tsx": { allowed: ["Zebracápa"], why: "the figure's name" },
   "src/lib/helpers.ts": { allowed: [], why: "" },
   "src/app/etetes/page.tsx": { allowed: [], why: "" },

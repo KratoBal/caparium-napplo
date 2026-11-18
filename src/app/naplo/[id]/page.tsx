@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CorrectionForm } from "@/components/CorrectionForm";
 import { Shell } from "@/components/Shell";
+import { pageTr } from "@/lib/i18n/server";
+import type { TrVars } from "@/lib/i18n/translate";
 import { prisma } from "@/lib/db";
 import { canModify } from "@/lib/permissions";
 import { formatDecimalHu } from "@/lib/decimal";
@@ -27,9 +29,9 @@ const FIELD_LABEL: Record<string, string> = {
 // technical fields stay in the audit, but are not shown to the user
 const HIDDEN = new Set(["poolId", "parameterId", "unitId", "referenceRangeId", "version", "roundId"]);
 
-function show(v: unknown): string {
+function show(v: unknown, tr: (text: string, vars?: TrVars) => string): string {
   if (v === null || v === undefined || v === "") return "–";
-  if (typeof v === "boolean") return v ? "igen" : "nem";
+  if (typeof v === "boolean") return v ? tr("igen") : tr("nem");
   if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
     return formatDateTime(v);
   }
@@ -39,6 +41,7 @@ function show(v: unknown): string {
 
 export default async function MeasurementHistoryPage({ params }: { params: Promise<{ id: string }> }) {
   const { user, level } = await requireModuleRead("WATER");
+  const { tr } = await pageTr(user);
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const h = await measurementHistory(id);
@@ -61,34 +64,34 @@ export default async function MeasurementHistoryPage({ params }: { params: Promi
       : null;
   const people = decision?.kind === "ALLOW" ? await responsiblePeople(m.businessDay, businessDayOf(new Date())) : [];
   return (
-    <Shell title="Mérés előzménye" active="log" user={user}>
+    <Shell title={tr("Mérés előzménye")} active="log" user={user}>
       <p>
-        <Link href="/naplo">← Vissza a naplóhoz</Link>
+        <Link href="/naplo">← {tr("Vissza a naplóhoz")}</Link>
       </p>
       <div className="card">
         <h2>
           {m.poolName} · {m.parameterName}
         </h2>
         <p className="hint">
-          {formatDay(m.businessDay)} {m.localTime} · {m.groupName}, {m.roundSeq}. mérés · mérte: {m.responsibleMonogram} · rögzítette:{" "}
-          {m.createdByName}
+          {formatDay(m.businessDay)} {m.localTime} · {m.groupName},{" "}
+          {tr("{round}. mérés · mérte: {who} · rögzítette: {by}", { round: m.roundSeq, who: m.responsibleMonogram, by: m.createdByName })}
         </p>
         <p style={{ fontSize: 28, margin: "16px 0 0" }} className={out ? "value-out" : undefined} data-testid="history-value">
           {formatDecimalHu(m.value, m.decimals)} {m.unitSymbol !== m.parameterName ? m.unitSymbol : ""}
         </p>
         {m.baseValue !== null && m.dilution !== null && (
           <p className="hint" data-testid="history-base-value">
-            Hígítás előtt: {m.baseValue.replace(".", ",")} × {m.dilution}
+            {tr("Hígítás előtt:")} {m.baseValue.replace(".", ",")} × {m.dilution}
           </p>
         )}
         {out && m.range && (
           <p className="hint">
-            Eltérés a referenciától ({m.range.min ?? "–"}–{m.range.max ?? "–"} {m.range.unitSymbol})
+            {tr("Eltérés a referenciától")} ({m.range.min ?? "–"}–{m.range.max ?? "–"} {m.range.unitSymbol})
           </p>
         )}
         <p>
-          Állapot: <b data-testid="history-status">{m.status === "VALID" ? "érvényes" : m.status === "INVALIDATED" ? "érvénytelenített" : "függő"}</b>
-          {m.invalidationReason ? ` (ok: ${m.invalidationReason})` : ""}
+          {tr("Állapot:")} <b data-testid="history-status">{tr(m.status === "VALID" ? "érvényes" : m.status === "INVALIDATED" ? "érvénytelenített" : "függő")}</b>
+          {m.invalidationReason ? ` (${tr("ok: {reason}", { reason: m.invalidationReason })})` : ""}
         </p>
       </div>
       {decision?.kind === "ALLOW" && (
@@ -115,21 +118,21 @@ export default async function MeasurementHistoryPage({ params }: { params: Promi
         </p>
       )}
       <div className="card">
-        <h2>Módosítási előzmények</h2>
-        <p className="hint">Minden rögzítés, javítás és érvénytelenítés: ki, mikor, mit, előtte és utána.</p>
+        <h2>{tr("Módosítási előzmények")}</h2>
+        <p className="hint">{tr("Minden rögzítés, javítás és érvénytelenítés: ki, mikor, mit, előtte és utána.")}</p>
         {h.entries.map((e) => (
           <div key={e.id} className="history-item" data-testid="history-entry">
             <div className="when">
               {formatDay(e.localDay)} {e.localTime} · {e.userName} ({e.userMonogram})
             </div>
             <b>{e.actionLabel}</b>
-            {e.reason && <div>Indoklás: {e.reason}</div>}
+            {e.reason && <div>{tr("Indoklás:")} {e.reason}</div>}
             <ul>
               {Object.entries(e.changes)
                 .filter(([k]) => !HIDDEN.has(k))
                 .map(([k, c]) => (
                   <li key={k}>
-                    {FIELD_LABEL[k] ?? k}: {e.action === "CREATE" || e.action === "PENDING_CREATED" ? show(c.after) : `${show(c.before)} → ${show(c.after)}`}
+                    {FIELD_LABEL[k] ? tr(FIELD_LABEL[k]) : k}: {e.action === "CREATE" || e.action === "PENDING_CREATED" ? show(c.after, tr) : `${show(c.before, tr)} → ${show(c.after, tr)}`}
                   </li>
                 ))}
             </ul>
