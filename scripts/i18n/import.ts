@@ -10,7 +10,8 @@
 // sheet and row, and nothing is written. Empty English cells and code keys no sheet holds are listed, not errors: they stay Hungarian.
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildDictionary, codeKeys, readSheet, readSources, renderEnTs } from "./core";
+import { applyOverrides, buildDictionary, codeKeys, readSheet, readSources, renderEnTs } from "./core";
+import { OVERRIDES } from "./overrides";
 import { EN } from "../../src/lib/i18n/en";
 
 function sourcesUnder(dir: string): string[] {
@@ -45,12 +46,15 @@ async function main(): Promise<number> {
   ] as const) {
     if (list.length) console.log(`\n${title}:\n${list.map((l) => `  - ${l}`).join("\n")}`);
   }
+  const o = applyOverrides(r.entries, OVERRIDES, keys);
+  console.log(`\nkézi döntés a táblák fölött (scripts/i18n/overrides.ts): ${o.applied.length}${o.applied.length ? ` (${o.applied.join(", ")})` : ""}`);
+  if (o.stale.length) console.log(`ELAVULT KÉZI DÖNTÉS (a kód már nem használja a kulcsot, nem íródik):\n${o.stale.map((k) => `  - ${k}`).join("\n")}`);
   if (r.errors.length) {
     console.error(`\nHIBA (${r.errors.length}), semmi nem íródott:\n${r.errors.map((e) => `  - ${e}`).join("\n")}`);
     return 1;
   }
   if (write) {
-    writeFileSync("src/lib/i18n/en.ts", renderEnTs(r.entries, EN));
+    writeFileSync("src/lib/i18n/en.ts", renderEnTs(o.entries, EN));
     console.log("\nsrc/lib/i18n/en.ts megírva");
   }
   return 0;
