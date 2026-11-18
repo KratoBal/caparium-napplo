@@ -8,6 +8,7 @@ import ExcelJS from "exceljs";
 import { afterAll, describe, expect, it } from "vitest";
 import { applyOverrides, applyProposals, buildDictionary, codeKeys, readSheet, renderEnTs, type CodeKey } from "../../scripts/i18n/core";
 import { OVERRIDES } from "../../scripts/i18n/overrides";
+import { EN } from "../../src/lib/i18n/en";
 import { PROPOSAL_FILES, PROPOSALS } from "../../scripts/i18n/proposals";
 
 const dir = mkdtempSync(join(tmpdir(), "i18n-import-"));
@@ -150,6 +151,12 @@ describe("the import of the filled-in sheets", () => {
 
   it("every override has its source", () => {
     for (const [hu, o] of Object.entries(OVERRIDES)) expect(o.source.length, hu).toBeGreaterThan(10);
+  });
+
+  // a decision over the sheets (overrides.ts) is what en.ts holds: en.ts is GENERATED, so an override left out of the import, or an en.ts edited by hand beside it, would be
+  // written back (or lost) at the next import (Lili's header and chip decisions, 2026-11-18)
+  it("every override's English is what en.ts holds", () => {
+    expect(Object.entries(OVERRIDES).filter(([hu, o]) => EN[hu] !== o.en).map(([hu]) => hu)).toEqual([]);
   });
 
   // the server's messages the response translates (lib/api.ts errorResponse: tr(e.message), tr(issue.message)); they were no keys, so
