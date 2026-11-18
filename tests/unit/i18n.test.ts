@@ -1,6 +1,7 @@
 // t-20261117-caparium-angol-alap (Lili 2026-11-17): the device's language wins over the user's default, a text with no
 // English stays Hungarian, a translation keeps the text's data places
 import { describe, expect, it } from "vitest";
+import { PARAMETERS } from "@/lib/base-data";
 import { EN } from "@/lib/i18n/en";
 import { langCookie, parseLang, resolveLang } from "@/lib/i18n/lang";
 import { placeholdersOf, translate } from "@/lib/i18n/translate";
@@ -28,5 +29,17 @@ describe("translate", () => {
   it("every English text keeps its Hungarian's data places (a {name} lost or added would hide data or show a brace)", () => {
     const broken = Object.entries(EN).filter(([hu, en]) => placeholdersOf(hu).join() !== placeholdersOf(en).join());
     expect(broken).toEqual([]);
+  });
+});
+
+// barracuda on caparium #262: a measurement's name is data, translated where shown (tr(p.name)); its English comes in only if the
+// import reads the name as a key (the guard's MeasurementGrid list). A seeded parameter renamed or added in Hungarian would
+// otherwise fall back to Hungarian on the English page, and nothing would say so.
+describe("the seeded measurements' names", () => {
+  // the names that read the same in English: a symbol or a chemical formula
+  const SAME_IN_ENGLISH = ["pH", "ORP", "KH", "Mg", "Ca", "NO3", "PO4"];
+  it("each has its English in the dictionary, or is a symbol that reads the same in English", () => {
+    const missing = PARAMETERS.map((p) => p.name).filter((name) => !SAME_IN_ENGLISH.includes(name) && !Object.hasOwn(EN, name));
+    expect(missing).toEqual([]);
   });
 });
