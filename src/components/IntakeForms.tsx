@@ -145,37 +145,40 @@ export function IntakeItems({ day, feeds, otherNames, items, editable }: { day: 
   const [editing, setEditing] = useState<IntakeEdit | null>(null);
   return (
     <>
-      <div className="table-scroll">
-        <table className="log-table" data-testid="intake-list">
-          <thead>
-            <tr><th>{tr("Típus")}</th><th>{tr("Takarmány")}</th><th>{tr("Mennyiség")}</th><th>{tr("Megjegyzés")}</th><th>{tr("Visszaküldve")}</th><th></th></tr>
-          </thead>
-          <tbody>
-            {items.map((i) => {
-              const name = i.otherName ? `${i.feed}: ${i.otherName}` : i.feed;
-              return (
-                <tr key={i.id} className={editing?.id === i.id ? "active-row" : undefined} data-returned={i.returned ? "yes" : "no"}>
-                  <td>{i.type}</td>
-                  <td>{name}</td>
-                  <td>{i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")}</td>
-                  <td>{i.note ?? ""}</td>
-                  <td>{i.returned ? tr("igen") : ""}</td>
-                  <td className="keep">
-                    {editable && (
-                      <span className="row-actions">
-                        {feeds.some((f) => f.id === i.feedId) && (
-                          <EditButton label={name} onEdit={() => setEditing({ id: i.id, version: i.version, feedId: i.feedId, otherName: i.otherName, quantities: i.quantities, note: i.note, returned: i.returned })} />
-                        )}
-                        <InvalidateButton url={`/api/feed-intake/items/${i.id}/invalidate`} version={i.version} row />
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {/* no item yet: no table, only the form (a header alone stood above the form as if its column heads, Lili's picture 5, 2026-11-18) */}
+      {items.length > 0 && (
+        <div className="table-scroll">
+          <table className="log-table" data-testid="intake-list">
+            <thead>
+              <tr><th>{tr("Típus")}</th><th>{tr("Takarmány")}</th><th>{tr("Mennyiség")}</th><th>{tr("Megjegyzés")}</th><th>{tr("Visszaküldve")}</th><th></th></tr>
+            </thead>
+            <tbody>
+              {items.map((i) => {
+                const name = i.otherName ? `${i.feed}: ${i.otherName}` : i.feed;
+                return (
+                  <tr key={i.id} className={editing?.id === i.id ? "active-row" : undefined} data-returned={i.returned ? "yes" : "no"}>
+                    <td>{i.type}</td>
+                    <td>{name}</td>
+                    <td>{i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")}</td>
+                    <td>{i.note ?? ""}</td>
+                    <td>{i.returned ? tr("igen") : ""}</td>
+                    <td className="keep">
+                      {editable && (
+                        <span className="row-actions">
+                          {feeds.some((f) => f.id === i.feedId) && (
+                            <EditButton label={name} onEdit={() => setEditing({ id: i.id, version: i.version, feedId: i.feedId, otherName: i.otherName, quantities: i.quantities, note: i.note, returned: i.returned })} />
+                          )}
+                          <InvalidateButton url={`/api/feed-intake/items/${i.id}/invalidate`} version={i.version} row />
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
       {editable && <IntakeForm day={day} feeds={feeds} otherNames={otherNames} editing={editing} onEditDone={() => setEditing(null)} />}
     </>
   );

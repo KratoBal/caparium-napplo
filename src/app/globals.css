@@ -186,6 +186,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .toolbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 18px 0; }
 .toolbar .spacer { flex: 1; }
 .toolbar-end { align-items: flex-end; }
+/* A FORM ROW: labels above the fields, the button beside them. The button sits on the FIELDS' line (their bottom), not centred against the
+   label-plus-field block (Lili's pictures 3, 4 and 5, 2026-11-18, English view: Save removal, Save dosing, Save and Save start day hung higher than the
+   fields). A row with a field in it is a form row; a row of buttons and chips only keeps the centre. */
+.toolbar:has(> .field) { align-items: flex-end; }
+/* the tick under a label (Returned): a 24 px box in a 48 px slot, so it sits on the line of the 48 px fields beside it */
+.field > input[type="checkbox"] { width: 24px; height: 24px; margin: 12px 0; align-self: flex-start; }
+/* a chip in a page's head row (the withdrawal total, "List not ready") in a box of the day badge's own height: both centre on one line, whatever
+   their own height (the day badge keeps three lines of room, see .toolbar > .day-controls below) */
+.toolbar-end > .head-chip { display: flex; align-items: center; min-height: calc(3 * 1.25 * 13px + 14px); }
 /* the day picker (DayNav + DayJump, Lili 2026-10-29 item 2): the weekday under the date, smaller step buttons, and
    the row on one bottom line, so the "Nap" label above the calendar does not push it below the buttons */
 .day-shown { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.2; }
