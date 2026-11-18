@@ -44,6 +44,9 @@ test("the header's HU/EN switch: the device's choice, kept across a reload; the 
     const html = page.locator("html");
     await expect(html).toHaveAttribute("lang", "hu");
     await expect(page.getByTestId("lang-hu")).toHaveAttribute("aria-pressed", "true");
+    // the Hungarian header is unchanged (Lili 2026-11-18): CÁPÁRIUM over nAPPló
+    await expect(page.locator(".brand-title")).toHaveText("CÁPÁRIUM");
+    await expect(page.locator(".brand-sub")).toHaveText("nAPPló");
     await page.getByTestId("lang-en").click();
     await expect(html).toHaveAttribute("lang", "en");
     await expect(page.getByTestId("lang-en")).toHaveAttribute("aria-pressed", "true");
@@ -64,6 +67,13 @@ test("the header's HU/EN switch: the device's choice, kept across a reload; the 
     // a measurement's name is data, translated where shown (Lili 2026-11-18 13:08 UTC: Salinity in the daily table's header)
     await page.goto("/vizmeres?csoport=NAPI_NAGY");
     await expect(page.getByRole("columnheader", { name: /^Salinity/ })).toBeVisible();
+    // the header in English (Lili 2026-11-18): Shark Nursery big, SnAPPs' (the apostrophe is the word's) below it
+    await expect(page.locator(".brand-title")).toHaveText("Shark Nursery");
+    await expect(page.locator(".brand-sub")).toHaveText("SnAPPs'");
+    // the removed-feed page's header chip key: Removed:, not Except:
+    await page.goto("/kivetel");
+    await expect(page.locator(".head-chip")).toContainText("Removed:");
+    await expect(page.locator(".head-chip")).not.toContainText("Except:");
     await page.goto("/");
     await page.getByTestId("lang-hu").click();
     await expect(html).toHaveAttribute("lang", "hu");

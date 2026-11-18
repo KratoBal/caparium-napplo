@@ -32,6 +32,20 @@ describe("translate", () => {
   });
 });
 
+// Lili 2026-11-18 16:46 UTC (Caparium thread msgs 1572654266085146647, 1572654324851679273, 1572654361535058001; acrobot 56133): in the English view the header reads
+// "Shark Nursery" big and "SnAPPs'" (the apostrophe is part of the word) below it, in the place the Hungarian brand stands; the Hungarian view is unchanged. And the removed-feed
+// page's header chip key "Kivéve:" is "Removed:" in English, not her table's "Except:" (acrobot: "if nobody objects"). WHAT TURNS THIS RED: a brand text that falls back to Hungarian in the
+// English view; the Hungarian view changed; "Except:" back on the chip.
+describe("the header's brand and the removed-feed chip, in English", () => {
+  it("the English brand is Shark Nursery over SnAPPs', and the Hungarian stays CÁPÁRIUM over nAPPló", () => {
+    expect([translate("en", "CÁPÁRIUM"), translate("en", "nAPPló")]).toEqual(["Shark Nursery", "SnAPPs'"]);
+    expect([translate("hu", "CÁPÁRIUM"), translate("hu", "nAPPló")]).toEqual(["CÁPÁRIUM", "nAPPló"]);
+  });
+  it("the removed-feed chip key is Removed: in English", () => {
+    expect(translate("en", "Kivéve:")).toBe("Removed:");
+  });
+});
+
 // barracuda on caparium #262: a measurement's name is data, translated where shown (tr(p.name)); its English comes in only if the
 // import reads the name as a key (the guard's MeasurementGrid list). A seeded parameter renamed or added in Hungarian would
 // otherwise fall back to Hungarian on the English page, and nothing would say so.

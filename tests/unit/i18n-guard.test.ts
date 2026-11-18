@@ -99,7 +99,7 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
   "src/lib/fridge-alert.ts": { allowed: [], why: "" },
   "src/app/vizmeres/page.tsx": { allowed: ["Napi vízmérések"], why: "the title, translated where shown (MeasurementPage: tr(title))" },
   "src/app/heti/page.tsx": { allowed: ["Heti vízmérések"], why: "the title, translated where shown (MeasurementPage: tr(title))" },
-  "src/components/ShellView.tsx": { allowed: ["CÁPÁRIUM", "nAPPló"], why: "the app's name" },
+  "src/components/ShellView.tsx": { allowed: [], why: "the header's brand goes through tr(): Shark Nursery / SnAPPs' in English (Lili 2026-11-18)" },
   "src/components/TopbarUser.tsx": { allowed: [], why: "" },
   "src/components/HelperToggle.tsx": { allowed: [], why: "" },
   "src/components/NavSub.tsx": { allowed: [], why: "" },
