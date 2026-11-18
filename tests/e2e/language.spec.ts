@@ -57,6 +57,11 @@ test("the header's HU/EN switch: the device's choice, kept across a reload; the 
     await expect(html).toHaveAttribute("lang", "en");
     await expect(page.getByRole("heading", { name: "Keep up the good work!" })).toBeVisible();
     await expect(page.getByTestId("lang-en")).toHaveAttribute("aria-pressed", "true");
+    // a wrapped module reads the dictionary too: the WQ diary (t-20261118-caparium-angol-naplo)
+    await page.goto("/naplo");
+    await expect(page.getByRole("heading", { name: "Recorded measurements" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Filter" })).toBeVisible();
+    await page.goto("/");
     await page.getByTestId("lang-hu").click();
     await expect(html).toHaveAttribute("lang", "hu");
     await expect(page.getByRole("heading", { name: "Jó munkát!" })).toBeVisible();
