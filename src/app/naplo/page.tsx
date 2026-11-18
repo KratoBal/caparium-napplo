@@ -102,7 +102,7 @@ export default async function LogPage({
                         </Link>
                       </td>
                       <td>{r.poolName}</td>
-                      <td>{r.parameterName}</td>
+                      <td>{tr(r.parameterName)}</td>
                       <td className={out ? "value-out" : undefined} title={out && r.range ? `ref: ${r.range.min ?? ""}–${r.range.max ?? ""}` : undefined}>
                         {formatDecimalHu(r.value, r.decimals)} {r.unitSymbol !== r.parameterName ? r.unitSymbol : ""}
                         {(r.dilution || r.diluentWater) && (

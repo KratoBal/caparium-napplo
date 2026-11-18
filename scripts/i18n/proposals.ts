@@ -2,6 +2,7 @@
 // one file a round. The import writes one only where no sheet row is filled, and reports the ones a sheet has filled since, to be deleted.
 // A decision of Lili's that must win over a sheet is no proposal: it goes in overrides.ts.
 import { EXPORT_PROPOSALS } from "./javaslat-export";
+import { LILI_PROPOSALS } from "./javaslat-lili";
 import { NAPLO_PROPOSALS } from "./javaslat-naplo";
 import { SERVER_PROPOSALS } from "./javaslat-szerver";
 
@@ -15,6 +16,7 @@ export const PROPOSAL_FILES: Readonly<Record<string, Proposals>> = {
   "javaslat-szerver.ts": SERVER_PROPOSALS,
   "javaslat-naplo.ts": NAPLO_PROPOSALS,
   "javaslat-export.ts": EXPORT_PROPOSALS,
+  "javaslat-lili.ts": LILI_PROPOSALS,
 };
 
 export const PROPOSALS: Proposals = Object.assign({}, ...Object.values(PROPOSAL_FILES));
