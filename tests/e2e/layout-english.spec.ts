@@ -4,7 +4,7 @@
 // row or a head row: nothing is compared with a stored picture, the check is the geometry itself (the Chromium of the CI).
 // - a row (.toolbar) with a labelled field and a button: the button's bottom is the bottom of the row's inputs (1 px);
 // - a tick (checkbox) inside a field is centred on the inputs beside it;
-// - a head chip (.head-chip: the withdrawal total, "List not ready") is centred on the day badge;
+// - a head chip (.head-chip: the withdrawal total, "List not ready") is centred on the day badge, and the day button on the date field;
 // - a list table that has no row does not stand above its form (the withdrawal and the intake list).
 import { expect, test, type Page } from "@playwright/test";
 
@@ -45,6 +45,15 @@ async function offenders(page: Page, path: string): Promise<Offender[]> {
         const a = (rect(chip.firstElementChild ?? chip).top + rect(chip.firstElementChild ?? chip).bottom) / 2;
         const b = (rect(dayBadge).top + rect(dayBadge).bottom) / 2;
         if (Math.abs(a - b) > tolerance) found.push(`${where} head chip centre ${Math.round(a)} vs day badge ${Math.round(b)}`);
+      }
+      // the head row: the day controls stand on the row's line, the Close/Reopen button centred on the date field beside it
+      for (const head of Array.from(document.querySelectorAll<HTMLElement>(".toolbar-end")).filter(visible)) {
+        const button = head.querySelector(":scope > .day-controls button");
+        const date = head.querySelector("input.input");
+        if (!button || !date) continue;
+        const a = (rect(button).top + rect(button).bottom) / 2;
+        const b = (rect(date).top + rect(date).bottom) / 2;
+        if (Math.abs(a - b) > tolerance) found.push(`${where} day button centre ${Math.round(a)} vs date field ${Math.round(b)}`);
       }
       for (const id of ["withdrawal-list", "intake-list"]) {
         const table = document.querySelector(`[data-testid=${id}]`);
