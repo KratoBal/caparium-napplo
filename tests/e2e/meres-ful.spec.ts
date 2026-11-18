@@ -1,7 +1,9 @@
 // MEASUREMENT ONLY (card de99fbd4, t-20261118-caparium-vizmeres-villogo), never merged.
 // Round 1 (47be1df): a pool chosen while the tab's RSC request was held SURVIVED the navigation (both projects).
 // Round 2 (87e19b8): Playwright does not click a pool button in an inert main; it waits (both engines).
-// Round 3: does the page MOVE when the tab navigation commits? A shift in that moment lands a click elsewhere (the #251 kind).
+// Round 3 (6f03741): the layout does not move at the commit (button and toolbar the same before, during, after); but on the
+// tablet the pool button is below the fold (y 986 in a 768 px viewport), so Playwright scrolls to it before the click.
+// Round 4: does the tab navigation's commit SCROLL the page (back to the top) after Playwright has scrolled to the pool?
 // Every line it prints starts with MERES; the test always passes.
 import { expect, test, type Page } from "@playwright/test";
 
@@ -28,7 +30,8 @@ test("MERES does the page move when the tab navigation commits", async ({ page }
     const b = await button.boundingBox();
     const t = await page.locator(".toolbar").first().boundingBox();
     const toolbarText = (await page.locator(".toolbar").first().innerText()).replace(/\s+/g, " ").slice(0, 160);
-    return `button=${b ? `${Math.round(b.x)},${Math.round(b.y)},${Math.round(b.height)}` : "none"} toolbarH=${t ? Math.round(t.height) : "none"} toolbar="${toolbarText}"`;
+    const y = await page.evaluate(() => Math.round(window.scrollY));
+    return `scrollY=${y} button=${b ? `${Math.round(b.x)},${Math.round(b.y)},${Math.round(b.height)}` : "none"} toolbarH=${t ? Math.round(t.height) : "none"} toolbar="${toolbarText}"`;
   };
 
   let release!: () => void;
@@ -47,6 +50,7 @@ test("MERES does the page move when the tab navigation commits", async ({ page }
   const before = await snap();
   await page.getByRole("tab", { name: "Nagy medencék" }).click();
   await expect.poll(() => held, { timeout: 5000 }).toBeGreaterThan(0).catch(() => undefined);
+  await button.scrollIntoViewIfNeeded();
   const during = await snap();
   release();
   await page.waitForURL(/csoport=NAPI_NAGY/, { timeout: 10000 }).catch(() => undefined);
