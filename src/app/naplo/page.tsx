@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Shell } from "@/components/Shell";
+import { pageTr } from "@/lib/i18n/server";
 import { prisma } from "@/lib/db";
 import { formatDecimalHu } from "@/lib/decimal";
 import { pickValid } from "@/lib/master";
@@ -19,6 +20,7 @@ export default async function LogPage({
   searchParams: Promise<{ tol?: string; ig?: string; medence?: string; allapot?: string; oldal?: string }>;
 }) {
   const { user } = await requireModuleRead("WATER");
+  const { tr } = await pageTr(user);
   const sp = await searchParams;
   const today = businessDayOf(new Date());
   const to = sp.ig && isValidDay(sp.ig) ? sp.ig : today;
@@ -34,20 +36,20 @@ export default async function LogPage({
     `/naplo?tol=${from}&ig=${to}${poolId ? `&medence=${poolId}` : ""}${status !== "ALL" ? `&allapot=${status}` : ""}&oldal=${p}`;
 
   return (
-    <Shell title="Vízmérési napló" active="log" user={user}>
+    <Shell title={tr("Vízmérési napló")} active="log" user={user}>
       <form method="get" action="/naplo" className="filters">
         <label className="field">
-          Naptól
+          {tr("Naptól")}
           <input className="input" type="date" name="tol" defaultValue={from} />
         </label>
         <label className="field">
-          Napig
+          {tr("Napig")}
           <input className="input" type="date" name="ig" defaultValue={to} />
         </label>
         <label className="field">
-          Medence
+          {tr("Medence")}
           <select className="input" name="medence" defaultValue={poolId ?? ""}>
-            <option value="">Minden medence</option>
+            <option value="">{tr("Minden medence")}</option>
             {pools.map((p) => (
               <option key={p.id} value={p.id}>
                 {pickValid(p.names, now)?.displayName ?? p.code}
@@ -56,37 +58,37 @@ export default async function LogPage({
           </select>
         </label>
         <label className="field">
-          Állapot
+          {tr("Állapot")}
           <select className="input" name="allapot" defaultValue={status}>
-            <option value="ALL">Mind</option>
-            <option value="VALID">Érvényes</option>
-            <option value="INVALIDATED">Érvénytelenített</option>
-            <option value="PENDING">Függő</option>
+            <option value="ALL">{tr("Mind")}</option>
+            <option value="VALID">{tr(STATUS_LABEL.VALID)}</option>
+            <option value="INVALIDATED">{tr(STATUS_LABEL.INVALIDATED)}</option>
+            <option value="PENDING">{tr(STATUS_LABEL.PENDING)}</option>
           </select>
         </label>
-        <button className="btn" type="submit">Szűrés</button>
+        <button className="btn" type="submit">{tr("Szűrés")}</button>
       </form>
 
       <div className="card">
-        <h2>Rögzített mérések</h2>
-        <p className="hint">A korábbi mérési eredmények külön bejegyzésként megmaradnak. A sorra kattintva látszik a javítások története.</p>
+        <h2>{tr("Rögzített mérések")}</h2>
+        <p className="hint">{tr("A korábbi mérési eredmények külön bejegyzésként megmaradnak. A sorra kattintva látszik a javítások története.")}</p>
         {!result ? (
-          <p className="banner banner-error">A kezdő nap nem lehet a záró nap után.</p>
+          <p className="banner banner-error">{tr("A kezdő nap nem lehet a záró nap után.")}</p>
         ) : result.rows.length === 0 ? (
-          <p className="hint" data-testid="log-empty">Ebben az időszakban nincs rögzített mérés.</p>
+          <p className="hint" data-testid="log-empty">{tr("Ebben az időszakban nincs rögzített mérés.")}</p>
         ) : (
           <div className="table-scroll">
             <table className="log-table" data-testid="log-table">
               <thead>
                 <tr>
-                  <th>Dátum</th>
-                  <th>Medence</th>
-                  <th>Paraméter</th>
-                  <th>Érték</th>
-                  <th>Mérte</th>
-                  <th>Rögzítő</th>
-                  <th>Kör</th>
-                  <th>Állapot</th>
+                  <th>{tr("Dátum")}</th>
+                  <th>{tr("Medence")}</th>
+                  <th>{tr("Paraméter")}</th>
+                  <th>{tr("Érték")}</th>
+                  <th>{tr("Mérte")}</th>
+                  <th>{tr("Rögzítő")}</th>
+                  <th>{tr("Kör")}</th>
+                  <th>{tr("Állapot")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -112,13 +114,13 @@ export default async function LogPage({
                       </td>
                       <td>
                         {r.responsibleMonogram}
-                        {r.traineePerformed ? " (gyak.)" : ""}
+                        {r.traineePerformed ? ` (${tr("gyak.")})` : ""}
                       </td>
                       <td>{r.recordedByMonogram}</td>
                       <td>{r.roundSeq}.</td>
                       <td className="keep">
-                        <span className={`badge ${STATUS_CLASS[r.status]}`}>{STATUS_LABEL[r.status]}</span>
-                        {r.version > 1 && r.status === "VALID" && <span className="hint"> javítva</span>}
+                        <span className={`badge ${STATUS_CLASS[r.status]}`}>{tr(STATUS_LABEL[r.status])}</span>
+                        {r.version > 1 && r.status === "VALID" && <span className="hint"> {tr("javítva")}</span>}
                       </td>
                     </tr>
                   );
@@ -129,11 +131,11 @@ export default async function LogPage({
         )}
         {result && pages > 1 && (
           <div className="toolbar">
-            {page > 1 && <Link className="btn btn-soft" href={qs(page - 1)}>Előző oldal</Link>}
+            {page > 1 && <Link className="btn btn-soft" href={qs(page - 1)}>{tr("Előző oldal")}</Link>}
             <span className="hint">
-              {page}. oldal / {pages} ({result.total} mérés)
+              {tr("{page}. oldal / {pages} ({total} mérés)", { page, pages, total: result.total })}
             </span>
-            {page < pages && <Link className="btn btn-soft" href={qs(page + 1)}>Következő oldal</Link>}
+            {page < pages && <Link className="btn btn-soft" href={qs(page + 1)}>{tr("Következő oldal")}</Link>}
           </div>
         )}
       </div>

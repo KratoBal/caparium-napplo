@@ -8,7 +8,7 @@ import ExcelJS from "exceljs";
 import { afterAll, describe, expect, it } from "vitest";
 import { applyOverrides, applyProposals, buildDictionary, codeKeys, readSheet, renderEnTs, type CodeKey } from "../../scripts/i18n/core";
 import { OVERRIDES } from "../../scripts/i18n/overrides";
-import { PROPOSALS } from "../../scripts/i18n/proposals";
+import { PROPOSAL_FILES, PROPOSALS } from "../../scripts/i18n/proposals";
 
 const dir = mkdtempSync(join(tmpdir(), "i18n-import-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -133,6 +133,14 @@ describe("the import of the filled-in sheets", () => {
     expect(p.applied).toEqual(["A csoport nem található."]);
     expect(p.replaced).toEqual(["Nincs jogosultság."]);
     expect(p.stale).toEqual(["régi"]);
+  });
+
+  // barracuda on #260: the files are spread together, so a key in two of them would let the last one win, silently
+  it("a key stands in exactly one proposal file", () => {
+    const where = new Map<string, string[]>();
+    for (const [file, proposals] of Object.entries(PROPOSAL_FILES))
+      for (const hu of Object.keys(proposals)) where.set(hu, [...(where.get(hu) ?? []), file]);
+    expect([...where].filter(([, files]) => files.length > 1)).toEqual([]);
   });
 
   it("every proposal has its source, and no key is both a proposal and a decision", () => {

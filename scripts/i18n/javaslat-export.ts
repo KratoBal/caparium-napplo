@@ -48,7 +48,6 @@ export const EXPORT_PROPOSALS: Readonly<Record<string, { en: string; source: str
   "Próbaimportra": { en: "For a trial import", source: SOURCE },
   "Rendszerek (üresen: mind)": { en: "Systems (empty: all)", source: SOURCE },
   "Rendszerenként külön fájl. Az elkészült export még nincs a ZIMS-ben: amikor feltöltötted, jelöld „Leadva”-ként.": { en: "A separate file per system. A finished export is not in ZIMS yet: once you have uploaded it, mark it “Submitted”.", source: SOURCE },
-  "Szűrés": { en: "Filter", source: SOURCE },
   "Takarmányozás (Excel)": { en: "Feeding (Excel)", source: SOURCE },
   "Vízmérés kiküldése": { en: "Send water measurements", source: SOURCE },
   "ZIMS CSV készítése": { en: "Make ZIMS CSV", source: SOURCE },
