@@ -10,6 +10,11 @@ import { describe, expect, it } from "vitest";
 
 const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
   "src/components/HydratedMain.tsx": { allowed: [], why: "" },
+  "src/app/export/page.tsx": {
+    allowed: ["Leadás", "Próbaimport", "Előnézet", "Elkészült, még nincs leadva", "Leadva", "A ZIMS elutasította"],
+    why: "a run's purpose and state, translated where shown (tr(PURPOSE[r.purpose]), tr(STATE[r.submissionState]))",
+  },
+  "src/components/ExportActions.tsx": { allowed: [], why: "" },
   "src/lib/time.ts": {
     allowed: ["vasárnap", "hétfő", "kedd", "szerda", "csütörtök", "péntek", "szombat"],
     why: "the weekday names, translated where shown (DayNav, MeasurementPage: tr(weekdayName(day))); all seven, so the import reads them as keys",
