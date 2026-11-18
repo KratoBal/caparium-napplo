@@ -121,6 +121,22 @@ describe("the import of the filled-in sheets", () => {
     for (const [hu, o] of Object.entries(OVERRIDES)) expect(o.source.length, hu).toBeGreaterThan(10);
   });
 
+  // the server's messages the response translates (lib/api.ts errorResponse: tr(e.message), tr(issue.message)); they were no keys, so
+  // the sheet's English for them never reached en.ts (t-20261118-caparium-angol-szerver)
+  it("the server's messages are keys: an AppError's, requireReason's, a zod check's; a zod value and an empty text are not", () => {
+    const src = `
+      throw new AppError(404, "NOT_FOUND", "A csoport nem található.");
+      throw new AppError(422, "X", ok ? "Első ág." : "Második ág.");
+      await requireReason(tx, true, input.reason, "A javításhoz indoklás kell.");
+      const s = z.object({ name: z.string().min(2, "A név legalább 2 karakter legyen."), kind: z.literal("WATER") });
+      const t = z.string().refine((v) => v !== "", { message: "Válassz legalább egy napi vagy heti táblát." });
+      throw new AppError(400, "Y", cond ? "" : "Nem üres.");
+    `;
+    expect(codeKeys([{ path: "src/lib/x.ts", src }]).map((k) => k.hu)).toEqual(
+      ["A csoport nem található.", "A javításhoz indoklás kell.", "A név legalább 2 karakter legyen.", "Első ág.", "Második ág.", "Nem üres.", "Válassz legalább egy napi vagy heti táblát."],
+    );
+  });
+
   it("a sheet-name key with a character Excel refuses is an error", () => {
     const r = buildDictionary([key("Egyenleg", true)], [{ sheet: "nagy", row: 2, hu: "Egyenleg", en: "Balance [stock]" }]);
     expect(r.errors[0]).toMatch(/^Excel-lapnév/);
