@@ -18,7 +18,8 @@ describe("translate", () => {
   it("English when the dictionary has it, Hungarian when not; the data places filled in both", () => {
     expect(translate("en", "Nyelv")).toBe("Language");
     expect(translate("hu", "Nyelv")).toBe("Nyelv");
-    expect(translate("en", "{n} sor mentve.", { n: 3 })).toBe("3 sor mentve.");
+    expect(translate("en", "{n} sor mentve.", { n: 3 })).toBe("3 rows saved.");
+    expect(translate("en", "{n} ilyen szöveg nincs a szótárban.", { n: 3 })).toBe("3 ilyen szöveg nincs a szótárban.");
     expect(translate("en", "{a} és {b}", { a: 1 })).toBe("1 és {b}");
   });
   it("a text named like an object's member (toString, constructor) is a plain text, in the dictionary and in the data places", () => {

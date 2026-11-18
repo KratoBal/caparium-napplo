@@ -1,8 +1,9 @@
 // t-20261117-caparium-angol-alap (Lili 2026-11-17, acrobot 54635): one account serves a Hungarian colleague and a foreign
 // student in turn, so the language is the device's: the header's HU/EN switch, remembered on the device across a reload;
-// the profile's language is only the default a device without a choice gets at login. Until Lili's English arrives the
-// dictionary holds only the switch's own words, so the page text stays Hungarian on an English device (the fallback);
-// what is measured here is the choice, its memory and its default. The user's default is set back at the end.
+// the profile's language is only the default a device without a choice gets at login. Since Lili's first sheet
+// (t-20261118-caparium-angol-1) the Start page's heading has its English, so an English page shows it; a text without English
+// still falls back to Hungarian, which tests/unit/i18n.test.ts pins (that list shrinks with every sheet, so the e2e does not name
+// one). What is measured here is the choice, its memory and its default. The user's default is set back at the end.
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
@@ -13,7 +14,8 @@ async function login(page: Page) {
   await page.getByLabel("Felhasználónév").fill(USER);
   await page.getByLabel("Jelszó").fill(PASSWORD);
   await page.getByRole("button", { name: "Bejelentkezés" }).click();
-  await expect(page.getByRole("heading", { name: "Jó munkát!" })).toBeVisible();
+  // the device's language decides the heading: a device that gets the English default lands on the English Start
+  await expect(page.getByRole("heading", { name: /^(Jó munkát!|Keep up the good work!)$/ })).toBeVisible();
 }
 
 async function setDefault(page: Page, value: "HU" | "EN") {
@@ -35,7 +37,7 @@ test.beforeAll(() => {
   if (!PASSWORD) throw new Error("SEED_TEST_PASSWORD must be set for the e2e run");
 });
 
-test("the header's HU/EN switch: the device's choice, kept across a reload; the page falls back to Hungarian", async ({ browser }) => {
+test("the header's HU/EN switch: the device's choice, kept across a reload; the page reads the dictionary", async ({ browser }) => {
   const { context, page } = await freshDevice(browser);
   try {
     await login(page);
@@ -47,13 +49,15 @@ test("the header's HU/EN switch: the device's choice, kept across a reload; the 
     await expect(page.getByTestId("lang-en")).toHaveAttribute("aria-pressed", "true");
     // the switch's own words are in the dictionary: the group is named in English
     await expect(page.getByTestId("lang-switch")).toHaveAttribute("aria-label", "Language");
-    // a text without English yet stays Hungarian, nothing breaks
-    await expect(page.getByRole("heading", { name: "Jó munkát!" })).toBeVisible();
+    // the page's own text comes from the dictionary (Lili's sheet): the Start heading in English
+    await expect(page.getByRole("heading", { name: "Keep up the good work!" })).toBeVisible();
     await page.reload();
     await expect(html).toHaveAttribute("lang", "en");
+    await expect(page.getByRole("heading", { name: "Keep up the good work!" })).toBeVisible();
     await expect(page.getByTestId("lang-en")).toHaveAttribute("aria-pressed", "true");
     await page.getByTestId("lang-hu").click();
     await expect(html).toHaveAttribute("lang", "hu");
+    await expect(page.getByRole("heading", { name: "Jó munkát!" })).toBeVisible();
   } finally {
     await context.close();
   }
