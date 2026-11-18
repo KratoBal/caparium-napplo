@@ -13,14 +13,19 @@ export function measureLayout([where, tolerance]: readonly [string, number]): La
   const rect = (e: Element) => e.getBoundingClientRect();
   const visible = (e: Element) => e.getClientRects().length > 0;
   const mid = (e: Element) => (rect(e).top + rect(e).bottom) / 2;
+  // two boxes are on one LINE when they overlap vertically: a button wrapped onto a second line of its row has no field beside it to be level with,
+  // and a chip and a badge on different lines of a wrapped head row are not compared (they are not counted as measured either)
+  const sameLine = (a: Element, b: Element) => rect(a).top < rect(b).bottom && rect(b).top < rect(a).bottom;
   for (const row of Array.from(document.querySelectorAll<HTMLElement>(".toolbar"))) {
     if (!visible(row)) continue;
     const fields = Array.from(row.querySelectorAll(":scope > .field")).filter(visible);
     const buttons = Array.from(row.querySelectorAll(":scope > button.btn")).filter(visible);
     const inputs = fields.flatMap((f) => Array.from(f.querySelectorAll("input.input, select.input"))).filter(visible);
     if (fields.length === 0 || inputs.length === 0) continue;
-    const bottom = Math.max(...inputs.map((i) => rect(i).bottom));
     for (const b of buttons) {
+      const beside = inputs.filter((i) => sameLine(i, b));
+      if (beside.length === 0) continue;
+      const bottom = Math.max(...beside.map((i) => rect(i).bottom));
       measured.formButtons += 1;
       if (Math.abs(rect(b).bottom - bottom) > tolerance)
         found.push(`${where} button "${(b.textContent ?? "").trim().slice(0, 24)}" bottom ${Math.round(rect(b).bottom)} vs fields ${Math.round(bottom)}`);
@@ -35,7 +40,7 @@ export function measureLayout([where, tolerance]: readonly [string, number]): La
     const inner = chip.firstElementChild ?? chip;
     // the badge of the SAME row; a chip with no badge beside it was not compared, so it is not counted as measured (barracuda, #261 v2)
     const dayBadge = chip.parentElement?.querySelector(":scope > .day-controls .badge");
-    if (!dayBadge) continue;
+    if (!dayBadge || !sameLine(inner, dayBadge)) continue;
     measured.headChips += 1;
     if (Math.abs(mid(inner) - mid(dayBadge)) > tolerance)
       found.push(`${where} head chip centre ${Math.round(mid(inner))} vs day badge ${Math.round(mid(dayBadge))}`);
@@ -43,7 +48,7 @@ export function measureLayout([where, tolerance]: readonly [string, number]): La
   for (const head of Array.from(document.querySelectorAll<HTMLElement>(".toolbar-end")).filter(visible)) {
     const button = head.querySelector(":scope > .day-controls button");
     const date = head.querySelector("input.input");
-    if (!button || !date) continue;
+    if (!button || !date || !sameLine(button, date)) continue;
     measured.dayButtons += 1;
     if (Math.abs(mid(button) - mid(date)) > tolerance)
       found.push(`${where} day button centre ${Math.round(mid(button))} vs date field ${Math.round(mid(date))}`);

@@ -34,7 +34,9 @@ test("English view: a form row's button stands on its fields' line, a head chip 
   await expect(page.getByRole("heading", { name: /^(Jó munkát!|Keep up the good work!)$/ })).toBeVisible();
   await page.getByTestId("lang-en").click();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await page.setViewportSize({ width: 1400, height: 900 });
+  // wide enough that the rows do not wrap (a wrapped row has its button alone on a second line; the check compares what is on one line and the minimums below
+  // fail the run if nothing was)
+  await page.setViewportSize({ width: 1900, height: 1000 });
 
   const all: string[] = [];
   const missing: string[] = [];

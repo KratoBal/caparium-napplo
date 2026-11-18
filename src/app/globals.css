@@ -195,8 +195,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* a chip in a page's head row (the withdrawal total, "List not ready") in a box of the controls' own height (48 px): it centres on the line of the day
    badge and the buttons, whatever its own height */
 /* the day badge's box in a head row keeps three lines of room (below), which centred its button 7 px above the date field's line: the controls stand on
-   the row's bottom line, the badge centred on the 48 px button beside it, and the chips (.head-chip) on the same centre */
-.toolbar-end > .day-controls { align-items: flex-end; }
+   the row's bottom line, the badge centred on the 48 px button beside it, and the chips (.head-chip) on the same centre. The badge's lift is part of the
+   reserved height (the line above: three lines of text plus the lift), so a long day text still does not move the toolbar (daily-flow.spec.ts, "fits the
+   day controls without moving the toolbar") */
+.toolbar.toolbar-end > .day-controls { align-items: flex-end; min-height: calc(3 * 1.25 * 13px + 14px + (var(--touch) - 12px - 1.25 * 13px) / 2); }
 .toolbar-end > .day-controls .badge { margin-bottom: calc((var(--touch) - 12px - 1.25 * 13px) / 2); }
 .toolbar-end > .head-chip { display: flex; align-items: center; min-height: var(--touch); }
 /* the day picker (DayNav + DayJump, Lili 2026-10-29 item 2): the weekday under the date, smaller step buttons, and
