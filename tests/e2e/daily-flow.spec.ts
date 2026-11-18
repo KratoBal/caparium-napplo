@@ -42,6 +42,25 @@ async function gotoReady(page: Page, url: string) {
   await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
 }
 
+/**
+ * Clicks a water group's tab and waits until its navigation has committed (card de99fbd4). The commit scrolls the page back to
+ * the top; on the tablet a pool button below the fold, to which Playwright had just scrolled for the next click, then took that
+ * click somewhere else, and the pool's cells never came (measured on caparium #253: scrollY 574 before the commit, 0 after). The
+ * address changes in the same commit, so the wait is on the tab's own address. A tab whose page is already open is not clicked.
+ */
+async function openTab(page: Page, name: string) {
+  const tab = page.getByRole("tab", { name });
+  const href = await tab.getAttribute("href");
+  if (!href) throw new Error(`the tab "${name}" has no address`);
+  const here = () => {
+    const url = new URL(page.url());
+    return `${url.pathname}${url.search}` === href;
+  };
+  if (here()) return;
+  await tab.click();
+  await expect.poll(here, { message: `the tab "${name}" navigated to ${href}` }).toBe(true);
+}
+
 // each layout writes its own group, so the two projects never touch the same cell
 function plan(projectName: string) {
   return projectName === "tablet"
@@ -58,7 +77,7 @@ test("login, record a daily measurement, it survives a reload and shows in the l
   await login(page, "teszt.akvarista1");
 
   await page.getByRole("link", { name: "Napi vízmérés", exact: true }).first().click();
-  await page.getByRole("tab", { name: p.tab }).click();
+  await openTab(page, p.tab);
   await expect(page.getByRole("heading", { name: /Napi paraméterek/ })).toBeVisible();
 
   // the first pool is the active row; tap it anyway, as on the tablet
@@ -100,7 +119,7 @@ test("a value is saved only by the Mentés button, leaving with it asks first, a
   const page = await browser.newPage();
   await login(page, "teszt.akvarista1");
   await page.goto("/vizmeres");
-  await page.getByRole("tab", { name: p.tab }).click();
+  await openTab(page, p.tab);
   await page.getByRole("button", { name: p.pool, exact: true }).click();
   await expect(page.getByTestId("measured-at")).toHaveAttribute("type", "time");
 
@@ -113,7 +132,7 @@ test("a value is saved only by the Mentés button, leaving with it asks first, a
   const other = await browser.newPage();
   await login(other, "teszt.akvarista2");
   await other.goto("/vizmeres");
-  await other.getByRole("tab", { name: p.tab }).click();
+  await openTab(other, p.tab);
   await other.getByRole("button", { name: p.pool, exact: true }).click();
   await expect(other.getByTestId(`cell-${p.pool}-Hőmérséklet`)).toHaveValue("");
 
@@ -130,7 +149,7 @@ test("a value is saved only by the Mentés button, leaving with it asks first, a
   await page.getByTestId("save-all").click();
   await expect(page.getByTestId("banner")).toHaveText("Minden érték mentve.");
   await other.reload();
-  await other.getByRole("tab", { name: p.tab }).click();
+  await openTab(other, p.tab);
   await other.getByRole("button", { name: p.pool, exact: true }).click();
   await expect(other.getByTestId(`cell-${p.pool}-Hőmérséklet`)).toHaveValue("24,6");
   await other.close();
@@ -153,7 +172,7 @@ test("a second editor of the same cell gets a conflict, not a silent overwrite",
   await login(b, "teszt.akvarista2");
   for (const page of [a, b]) {
     await page.goto("/vizmeres");
-    await page.getByRole("tab", { name: p.tab }).click();
+    await openTab(page, p.tab);
     await page.getByRole("button", { name: p.pool, exact: true }).click();
   }
   // a writes ORP first; b's page still shows the empty cell and writes too
@@ -1127,7 +1146,7 @@ for (const [name, link, tab, param] of [["daily", "Napi vízmérés", "Nagy mede
     const open = async (loginId: string) => {
       await login(page, loginId);
       await page.getByRole("link", { name: link, exact: true }).first().click();
-      if (tab) await page.getByRole("tab", { name: tab }).click();
+      if (tab) await openTab(page, tab);
       await page.getByRole("button", { name: pool, exact: true }).click();
     };
     const cell = page.getByTestId(`cell-${pool}-${param}`);
@@ -2412,7 +2431,7 @@ test("daily measurement: the pool ticks save on their own and survive a reload; 
   const other = info.project.name === "tablet" ? "Visszamosás" : "Vízcsere";
   await login(page, "teszt.akvarista1");
   await page.getByRole("link", { name: "Napi vízmérés", exact: true }).first().click();
-  await page.getByRole("tab", { name: p.tab }).click();
+  await openTab(page, p.tab);
   await expect(page.getByRole("heading", { name: /Napi paraméterek/ })).toBeVisible();
   const row = page.getByTestId(`row-${p.pool}`);
   await expect(row.getByLabel(other, { exact: true })).toHaveCount(0);
