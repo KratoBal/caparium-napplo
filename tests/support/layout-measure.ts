@@ -4,12 +4,12 @@
 // empty page and proves nothing (barracuda, caparium #261 review).
 export type LayoutReport = {
   found: string[];
-  measured: { formButtons: number; ticks: number; headChips: number; dayButtons: number; emptyLists: number };
+  measured: { formButtons: number; wrappedButtons: number; ticks: number; headChips: number; dayButtons: number; emptyLists: number };
 };
 
 export function measureLayout([where, tolerance]: readonly [string, number]): LayoutReport {
   const found: string[] = [];
-  const measured = { formButtons: 0, ticks: 0, headChips: 0, dayButtons: 0, emptyLists: 0 };
+  const measured = { formButtons: 0, wrappedButtons: 0, ticks: 0, headChips: 0, dayButtons: 0, emptyLists: 0 };
   const rect = (e: Element) => e.getBoundingClientRect();
   const visible = (e: Element) => e.getClientRects().length > 0;
   const mid = (e: Element) => (rect(e).top + rect(e).bottom) / 2;
@@ -23,17 +23,29 @@ export function measureLayout([where, tolerance]: readonly [string, number]): La
     const inputs = fields.flatMap((f) => Array.from(f.querySelectorAll("input.input, select.input"))).filter(visible);
     if (fields.length === 0 || inputs.length === 0) continue;
     for (const b of buttons) {
-      const beside = inputs.filter((i) => sameLine(i, b));
-      if (beside.length === 0) continue;
-      const bottom = Math.max(...beside.map((i) => rect(i).bottom));
+      // the fields on the button's line (a tick's field has no .input, but it is a field on the line, and its box ends on the row's line too)
+      const beside = fields.filter((f) => sameLine(f, b));
+      if (beside.length === 0) {
+        // wrapped onto a line of its own (a tablet's width): it stands UNDER the fields at the row's left edge, level with the first field's left edge
+        const firstField = fields[0];
+        measured.wrappedButtons += 1;
+        if (rect(b).top < Math.max(...inputs.map((i) => rect(i).bottom)) - tolerance)
+          found.push(`${where} wrapped button "${(b.textContent ?? "").trim().slice(0, 24)}" is not under the fields`);
+        else if (Math.abs(rect(b).left - rect(firstField).left) > tolerance)
+          found.push(`${where} wrapped button "${(b.textContent ?? "").trim().slice(0, 24)}" left ${Math.round(rect(b).left)} vs first field ${Math.round(rect(firstField).left)}`);
+        continue;
+      }
+      const bottom = Math.max(...beside.map((f) => rect(f).bottom));
       measured.formButtons += 1;
       if (Math.abs(rect(b).bottom - bottom) > tolerance)
         found.push(`${where} button "${(b.textContent ?? "").trim().slice(0, 24)}" bottom ${Math.round(rect(b).bottom)} vs fields ${Math.round(bottom)}`);
     }
     for (const box of Array.from(row.querySelectorAll(":scope > .field > input[type=checkbox]")).filter(visible)) {
+      const level = inputs.filter((i) => sameLine(i, box));
+      if (level.length === 0) continue;
       measured.ticks += 1;
-      if (Math.abs(mid(box) - mid(inputs[0])) > tolerance)
-        found.push(`${where} tick centre ${Math.round(mid(box))} vs inputs ${Math.round(mid(inputs[0]))}`);
+      if (Math.abs(mid(box) - mid(level[0])) > tolerance)
+        found.push(`${where} tick centre ${Math.round(mid(box))} vs inputs ${Math.round(mid(level[0]))}`);
     }
   }
   for (const chip of Array.from(document.querySelectorAll(".toolbar-end > .head-chip")).filter(visible)) {
