@@ -1,7 +1,8 @@
 // MEASUREMENT ONLY (card de99fbd4, t-20261118-caparium-vizmeres-villogo), never merged.
-// Round 1 (47be1df): a pool chosen while the tab's RSC request was held SURVIVED the navigation on both projects, so the
-// tab navigation is not what loses it. Round 2: does Playwright click a pool button while the page is not hydrated yet
-// (main inert, the JS chunks held), and is that click lost? Every line it prints starts with MERES; the test always passes.
+// Round 1 (47be1df): a pool chosen while the tab's RSC request was held SURVIVED the navigation (both projects).
+// Round 2 (87e19b8): Playwright does not click a pool button in an inert main; it waits (both engines).
+// Round 3: does the page MOVE when the tab navigation commits? A shift in that moment lands a click elsewhere (the #251 kind).
+// Every line it prints starts with MERES; the test always passes.
 import { expect, test, type Page } from "@playwright/test";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
@@ -14,32 +15,42 @@ async function login(page: Page, loginId: string) {
   await expect(page.getByRole("heading", { name: "Jó munkát!" })).toBeVisible();
 }
 
-test("MERES a pool click before hydration", async ({ page, browserName }, info) => {
+test("MERES does the page move when the tab navigation commits", async ({ page }, info) => {
   const pool = info.project.name === "tablet" ? "Karantén" : "Kismedence";
   const button = page.getByRole("button", { name: pool, exact: true });
   await login(page, "teszt.akvarista1");
-  const homeHydratedAtHeading = await page.locator("html[data-hydrated]").count();
+  await page.getByRole("link", { name: "Napi vízmérés", exact: true }).first().click();
+  await expect(page.getByRole("tab", { name: "Nagy medencék" })).toBeVisible();
+  await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
+  await page.waitForTimeout(1000);
 
-  let held = 0;
+  const snap = async () => {
+    const b = await button.boundingBox();
+    const t = await page.locator(".toolbar").first().boundingBox();
+    const toolbarText = (await page.locator(".toolbar").first().innerText()).replace(/\s+/g, " ").slice(0, 160);
+    return `button=${b ? `${Math.round(b.x)},${Math.round(b.y)},${Math.round(b.height)}` : "none"} toolbarH=${t ? Math.round(t.height) : "none"} toolbar="${toolbarText}"`;
+  };
+
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
-  await page.route("**/_next/static/**/*.js", async (route) => {
-    held++;
-    await gate;
-    await route.continue();
-  });
-  await page.goto("/vizmeres?csoport=NAPI_NAGY", { waitUntil: "commit" });
-  await expect(button).toBeVisible();
-  const inertBefore = await page.locator("main[inert]").count();
-  let click = "resolved";
-  await button.click({ timeout: 3000 }).catch((e: Error) => (click = `threw: ${e.message.split("\n")[0]}`));
-  release();
-  await expect(page.locator("html[data-hydrated]")).toHaveCount(1, { timeout: 15000 }).catch(() => undefined);
-  await page.waitForTimeout(1000);
-  const pressedAfter = await button.getAttribute("aria-pressed");
-  const cellAfter = await page.getByTestId(`cell-${pool}-pH`).isVisible();
-  console.log(
-    `MERES ${info.project.name} engine=${browserName} homeHydratedAtHeading=${homeHydratedAtHeading} held=${held} ` +
-      `inertBefore=${inertBefore} click=${click} pressedAfter=${pressedAfter} cellAfter=${cellAfter}`,
+  let held = 0;
+  await page.route(
+    (u) => u.pathname === "/vizmeres" && u.searchParams.has("csoport"),
+    async (route) => {
+      if (route.request().headers()["rsc"] === "1") {
+        held++;
+        await gate;
+      }
+      await route.continue();
+    },
   );
+  const before = await snap();
+  await page.getByRole("tab", { name: "Nagy medencék" }).click();
+  await expect.poll(() => held, { timeout: 5000 }).toBeGreaterThan(0).catch(() => undefined);
+  const during = await snap();
+  release();
+  await page.waitForURL(/csoport=NAPI_NAGY/, { timeout: 10000 }).catch(() => undefined);
+  await page.waitForTimeout(1500);
+  const after = await snap();
+  console.log(`MERES ${info.project.name} held=${held}\n  MERES before ${before}\n  MERES during ${during}\n  MERES after  ${after}`);
 });
