@@ -2590,24 +2590,38 @@ test("the helper figure: dragged inside the screen, its place kept after a reloa
 // and the choice stands after a reload. WHAT TURNS THIS RED: the choice missing from the page, not saved, two at once, or lost.
 test("eating log: the day's feeding mode is one choice, saved at once, kept after a reload", async ({ page }) => {
   await login(page, "teszt.akvarista1");
-  await page.goto("/evesi-naplo");
-  // each choice waits for its own save (a retry finds the day's choice of the earlier attempt, so the text alone proves nothing)
+  await gotoReady(page, "/evesi-naplo");
+  // each choice waits for its own save (a retry finds the day's choice of the earlier attempt, so the text alone proves nothing),
+  // and for the refresh that save starts (card 94f43c2e). The choice shows at once and the refresh brings the saved one back: a
+  // refresh still on its way from the PREVIOUS save put that choice back right after the next click, and check() read "did not
+  // change its state" (CI cced3b589, desktop). A networkidle wait did not stop it: once the page has been idle it resolves at once.
   const choose = async (label: string) => {
-    await page.waitForLoadState("networkidle"); // hydrated, and the previous save's refresh is over
+    const radio = page.getByTestId("feeding-mode").getByLabel(label);
+    await expect(radio).toBeEnabled(); // hydrated, and no save in flight (the choice is off until then)
     const saved = page.waitForResponse((r) => r.url().endsWith("/api/feeding/feeding-mode") && r.request().method() === "POST");
-    await page.getByTestId("feeding-mode").getByLabel(label).check();
+    const refreshed = page.waitForResponse(
+      (r) =>
+        r.request().method() === "GET" &&
+        new URL(r.url()).pathname === "/evesi-naplo" &&
+        r.request().headers()["rsc"] === "1" &&
+        !r.request().headers()["next-router-prefetch"],
+    );
+    await radio.click();
     expect((await saved).ok()).toBe(true);
+    await refreshed;
+    await expect(radio).toBeChecked();
     await expect(page.getByTestId("feeding-mode")).toContainText("A nap etetése mentve.");
   };
   // the first choice differs from whatever an earlier attempt left on the day, so it is a change and sends a save
-  await page.waitForLoadState("networkidle");
   const diving = page.getByTestId("feeding-mode").getByLabel("Merüléses etetés (M)");
   await choose((await diving.isChecked()) ? "Koplalónap (K)" : "Merüléses etetés (M)");
   await choose("Felszíni etetés (F)");
   await page.reload();
+  await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
   await expect(page.getByTestId("feeding-mode").getByLabel("Felszíni etetés (F)")).toBeChecked();
   await choose("Koplalónap (K)");
   await page.reload();
+  await expect(page.locator("html[data-hydrated]")).toHaveCount(1);
   const after = page.getByTestId("feeding-mode");
   await expect(after.getByLabel("Koplalónap (K)")).toBeChecked();
   await expect(after.getByLabel("Felszíni etetés (F)")).not.toBeChecked();
