@@ -68,6 +68,35 @@ function leaves(node: ts.Node): string[] {
 }
 
 /**
+ * The server's messages the response translates (lib/api.ts, errorResponse: tr(e.message), tr(issue.message)); without them as keys the
+ * sheet's English for them never reached en.ts (t-20261118-caparium-angol-szerver). An AppError's message, a helper that throws its
+ * message argument as one (requireReason), and a zod check's message (a string argument of a z. chain, or its { message }).
+ */
+const MESSAGE_ARG: Record<string, number> = { requireReason: 3 };
+
+function serverMessages(node: ts.Node, addAny: (text: string) => void): void {
+  const add = (text: string) => {
+    if (text.trim()) addAny(text);
+  };
+  if (ts.isNewExpression(node) && node.expression.getText() === "AppError" && node.arguments?.[2]) {
+    for (const t of leaves(node.arguments[2])) add(t);
+    return;
+  }
+  if (!ts.isCallExpression(node)) return;
+  const callee = node.expression.getText().replace(/\s+/g, "");
+  const at = MESSAGE_ARG[callee];
+  if (at !== undefined && node.arguments[at]) for (const t of leaves(node.arguments[at])) add(t);
+  // a check's message, not a value: z.literal("WATER"), z.enum, a default or a description are data
+  if (/^z\./.test(callee) && ts.isPropertyAccessExpression(node.expression) && !/^(literal|enum|nativeEnum|default|describe)$/.test(node.expression.name.text))
+    for (const arg of node.arguments) {
+      for (const t of leaves(arg)) add(t);
+      if (ts.isObjectLiteralExpression(arg))
+        for (const p of arg.properties)
+          if (ts.isPropertyAssignment(p) && p.name.getText() === "message") for (const t of leaves(p.initializer)) add(t);
+    }
+}
+
+/**
  * The keys of the code: every tr(text) and translate(lang, text) with a string text, plus the data tables the guard allows as "translated
  * where shown" (tests/unit/i18n-guard.test.ts). A key passed to a call that makes a worksheet (addWorksheet, or a helper whose name says
  * sheet) is a sheet name, and its English must fit Excel's rule.
@@ -83,6 +112,7 @@ export function codeKeys(files: { path: string; src: string }[], guardSrc?: stri
   for (const { path, src } of files) {
     const sf = ts.createSourceFile(path, src, ts.ScriptTarget.Latest, true, path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
     const visit = (node: ts.Node) => {
+      serverMessages(node, (t) => add(t, path));
       if (ts.isCallExpression(node)) {
         const callee = node.expression.getText();
         const arg = callee === "tr" ? node.arguments[0] : callee === "translate" ? node.arguments[1] : undefined;
@@ -203,6 +233,32 @@ export function buildDictionary(keys: CodeKey[], rows: SheetRow[]): ImportResult
   }
   const unused = rows.filter((r) => r.en && !used.has(r)).map((r) => `${where(r)}: "${r.hu}"`);
   return { entries, errors, empty, unmatched, unused, positional };
+}
+
+/**
+ * Proposals (scripts/i18n/proposals.ts): my English for keys the sheets have no English for, UNDER the sheets (barracuda on #259). One
+ * is written only where no sheet row gave an English; a key a sheet row has filled since is reported as replaced, so its line can go,
+ * and one whose key the code no longer uses as stale. Neither is written.
+ */
+export function applyProposals(
+  entries: Record<string, string>,
+  proposals: Readonly<Record<string, { en: string }>>,
+  keys: CodeKey[],
+): { entries: Record<string, string>; applied: string[]; replaced: string[]; stale: string[] } {
+  const known = new Set(keys.map((k) => k.hu));
+  const out = { ...entries };
+  const applied: string[] = [];
+  const replaced: string[] = [];
+  const stale: string[] = [];
+  for (const [hu, { en }] of Object.entries(proposals)) {
+    if (!known.has(hu)) stale.push(hu);
+    else if (hu in entries) replaced.push(hu);
+    else {
+      out[hu] = en;
+      applied.push(hu);
+    }
+  }
+  return { entries: out, applied, replaced, stale };
 }
 
 /**

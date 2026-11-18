@@ -1,6 +1,6 @@
 // Proposals for the Export page's texts that are not in Lili's first sheet (t-20261118-caparium-angol-export, acrobot 55626, round 3):
-// my English, each to be checked by Lili, applied over the sheets through OVERRIDES (overrides.ts). The exported files themselves stay
-// Hungarian. A later sheet with her own English for one of these: delete its line here.
+// my English, each to be checked by Lili, applied UNDER the sheets through PROPOSALS (proposals.ts): a later sheet row with her English
+// wins, and the import names this line as replaced. The exported files themselves stay Hungarian.
 const SOURCE = "JAVASLAT (nautilus, 2026-11-18, acrobot 55626): the Export page, not in Lili's first sheet, on the list for her to check";
 
 export const EXPORT_PROPOSALS: Readonly<Record<string, { en: string; source: string }>> = {
