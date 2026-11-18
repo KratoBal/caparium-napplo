@@ -10,6 +10,33 @@ import { describe, expect, it } from "vitest";
 
 const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
   "src/components/HydratedMain.tsx": { allowed: [], why: "" },
+  "src/lib/time.ts": {
+    allowed: ["vasárnap", "hétfő", "kedd", "szerda", "csütörtök", "péntek", "szombat"],
+    why: "the weekday names, translated where shown (DayNav, MeasurementPage: tr(weekdayName(day))); all seven, so the import reads them as keys",
+  },
+  "src/lib/nav.ts": {
+    allowed: [
+      "Napi vízmérés",
+      "Heti vízmérés",
+      "Napi etetés",
+      "Evési napló",
+      "Takarmánykivétel",
+      "Takarmánykalkulátor",
+      "Vegyszeradagolás",
+      "Vízmérési napló",
+      "Takarmányozási napló",
+      "Fagyasztó",
+      "Takarmánylista",
+      "Kimutatások",
+      "Beállítások",
+      "Függő mentések",
+      "Állatok",
+      "Aktivitás",
+      "Vízmérés",
+      "Takarmányozás",
+    ],
+    why: "the menu labels, translated where shown (ShellView: tr(n.label), tr(group.label); t-20261118-caparium-angol-menu)",
+  },
   "src/components/Helper.tsx": { allowed: ["Zebracápa"], why: "the figure's name" },
   "src/lib/helpers.ts": { allowed: [], why: "" },
   "src/app/etetes/page.tsx": { allowed: [], why: "" },
