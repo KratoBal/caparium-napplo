@@ -31,6 +31,18 @@ describe("the feeding sheet's row colours", () => {
       for (const y of SHEET_COLORS.slice(i + 1)) expect(x.bg === y.bg || Math.abs(luminance(x.bg) - luminance(y.bg)) + hueGap(x.bg, y.bg) < 0.05, `${x.key} ${y.key}`).toBe(false);
   });
 
+  it("Lili's seven of 2026-11-18 are on the palette with her shades, after the first six", () => {
+    expect(SHEET_COLORS.slice(6).map((c) => [c.key, c.bg])).toEqual([
+      ["LIGHT_GRAY", "#f6f5f4"],
+      ["DUSTY_TEAL", "#cfe4e1"],
+      ["OCHRE_CREAM", "#f4e6c8"],
+      ["STONE", "#e7e2dd"],
+      ["OLIVE_BEIGE", "#dcd6c8"],
+      ["MUSHROOM", "#d7ccc5"],
+      ["CLAY_PINK", "#e7d4cf"],
+    ]);
+  });
+
   it("no colour, or a key no longer on the palette, is no background", () => {
     expect(sheetColorBg(null)).toBeNull();
     expect(sheetColorBg("")).toBeNull();
