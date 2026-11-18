@@ -32,11 +32,12 @@ export function measureLayout([where, tolerance]: readonly [string, number]): La
     }
   }
   for (const chip of Array.from(document.querySelectorAll(".toolbar-end > .head-chip")).filter(visible)) {
-    measured.headChips += 1;
     const inner = chip.firstElementChild ?? chip;
-    // the badge of the SAME row
+    // the badge of the SAME row; a chip with no badge beside it was not compared, so it is not counted as measured (barracuda, #261 v2)
     const dayBadge = chip.parentElement?.querySelector(":scope > .day-controls .badge");
-    if (dayBadge && Math.abs(mid(inner) - mid(dayBadge)) > tolerance)
+    if (!dayBadge) continue;
+    measured.headChips += 1;
+    if (Math.abs(mid(inner) - mid(dayBadge)) > tolerance)
       found.push(`${where} head chip centre ${Math.round(mid(inner))} vs day badge ${Math.round(mid(dayBadge))}`);
   }
   for (const head of Array.from(document.querySelectorAll<HTMLElement>(".toolbar-end")).filter(visible)) {
