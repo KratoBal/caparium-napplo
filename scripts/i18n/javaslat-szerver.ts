@@ -1,6 +1,6 @@
 // Proposals for the server's messages that are not in Lili's first sheet (t-20261118-caparium-angol-szerver, acrobot 55626): my English,
-// each to be checked by Lili, and applied over the sheets through OVERRIDES (overrides.ts). A later sheet with her own English for one of
-// these: delete its line here.
+// each to be checked by Lili, applied UNDER the sheets through PROPOSALS (proposals.ts): a later sheet row with her English wins, and the
+// import names this line as replaced, to be deleted.
 const SOURCE = "JAVASLAT (nautilus, 2026-11-18, acrobot 55626): a server message not in Lili's first sheet, on the list for her to check";
 
 export const SERVER_PROPOSALS: Readonly<Record<string, { en: string; source: string }>> = {

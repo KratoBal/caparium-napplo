@@ -236,6 +236,32 @@ export function buildDictionary(keys: CodeKey[], rows: SheetRow[]): ImportResult
 }
 
 /**
+ * Proposals (scripts/i18n/proposals.ts): my English for keys the sheets have no English for, UNDER the sheets (barracuda on #259). One
+ * is written only where no sheet row gave an English; a key a sheet row has filled since is reported as replaced, so its line can go,
+ * and one whose key the code no longer uses as stale. Neither is written.
+ */
+export function applyProposals(
+  entries: Record<string, string>,
+  proposals: Readonly<Record<string, { en: string }>>,
+  keys: CodeKey[],
+): { entries: Record<string, string>; applied: string[]; replaced: string[]; stale: string[] } {
+  const known = new Set(keys.map((k) => k.hu));
+  const out = { ...entries };
+  const applied: string[] = [];
+  const replaced: string[] = [];
+  const stale: string[] = [];
+  for (const [hu, { en }] of Object.entries(proposals)) {
+    if (!known.has(hu)) stale.push(hu);
+    else if (hu in entries) replaced.push(hu);
+    else {
+      out[hu] = en;
+      applied.push(hu);
+    }
+  }
+  return { entries: out, applied, replaced, stale };
+}
+
+/**
  * The decisions given apart from the sheets (scripts/i18n/overrides.ts) over the sheets' entries. One whose key the code no longer uses is
  * returned as stale and not written: a dictionary line for no key would only hide that the decision has lost its place.
  */
