@@ -6,8 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import ExcelJS from "exceljs";
 import { afterAll, describe, expect, it } from "vitest";
-import { applyOverrides, buildDictionary, codeKeys, readSheet, renderEnTs, type CodeKey } from "../../scripts/i18n/core";
+import { applyOverrides, applyProposals, buildDictionary, codeKeys, readSheet, renderEnTs, type CodeKey } from "../../scripts/i18n/core";
 import { OVERRIDES } from "../../scripts/i18n/overrides";
+import { PROPOSALS } from "../../scripts/i18n/proposals";
 
 const dir = mkdtempSync(join(tmpdir(), "i18n-import-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -117,8 +118,46 @@ describe("the import of the filled-in sheets", () => {
     expect(o.stale).toEqual(["régi"]);
   });
 
+  // barracuda on #259: a proposal is my English until Lili gives her own, so it stands UNDER the sheet. Over it, her later row would
+  // never reach en.ts, silently.
+  it("a proposal fills only a key no sheet row gave an English; a sheet row wins over it, and the proposal is named as replaced", () => {
+    const sheet = buildDictionary([key("A csoport nem található."), key("Nincs jogosultság.")], [
+      { sheet: "kiegészítő", row: 4, hu: "Nincs jogosultság.", en: "Not allowed." },
+    ]);
+    const p = applyProposals(
+      sheet.entries,
+      { "A csoport nem található.": { en: "The group was not found." }, "Nincs jogosultság.": { en: "No permission." }, régi: { en: "old" } },
+      [key("A csoport nem található."), key("Nincs jogosultság.")],
+    );
+    expect(p.entries).toEqual({ "A csoport nem található.": "The group was not found.", "Nincs jogosultság.": "Not allowed." });
+    expect(p.applied).toEqual(["A csoport nem található."]);
+    expect(p.replaced).toEqual(["Nincs jogosultság."]);
+    expect(p.stale).toEqual(["régi"]);
+  });
+
+  it("every proposal has its source, and no key is both a proposal and a decision", () => {
+    for (const [hu, o] of Object.entries(PROPOSALS)) expect(o.source.length, hu).toBeGreaterThan(10);
+    expect(Object.keys(PROPOSALS).filter((hu) => hu in OVERRIDES)).toEqual([]);
+  });
+
   it("every override has its source", () => {
     for (const [hu, o] of Object.entries(OVERRIDES)) expect(o.source.length, hu).toBeGreaterThan(10);
+  });
+
+  // the server's messages the response translates (lib/api.ts errorResponse: tr(e.message), tr(issue.message)); they were no keys, so
+  // the sheet's English for them never reached en.ts (t-20261118-caparium-angol-szerver)
+  it("the server's messages are keys: an AppError's, requireReason's, a zod check's; a zod value and an empty text are not", () => {
+    const src = `
+      throw new AppError(404, "NOT_FOUND", "A csoport nem található.");
+      throw new AppError(422, "X", ok ? "Első ág." : "Második ág.");
+      await requireReason(tx, true, input.reason, "A javításhoz indoklás kell.");
+      const s = z.object({ name: z.string().min(2, "A név legalább 2 karakter legyen."), kind: z.literal("WATER") });
+      const t = z.string().refine((v) => v !== "", { message: "Válassz legalább egy napi vagy heti táblát." });
+      throw new AppError(400, "Y", cond ? "" : "Nem üres.");
+    `;
+    expect(codeKeys([{ path: "src/lib/x.ts", src }]).map((k) => k.hu)).toEqual(
+      ["A csoport nem található.", "A javításhoz indoklás kell.", "A név legalább 2 karakter legyen.", "Első ág.", "Második ág.", "Nem üres.", "Válassz legalább egy napi vagy heti táblát."],
+    );
   });
 
   it("a sheet-name key with a character Excel refuses is an error", () => {
