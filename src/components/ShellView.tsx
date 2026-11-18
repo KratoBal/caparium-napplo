@@ -54,8 +54,8 @@ export function ShellView({
     <div className="shell">
       <div className="head">
         <div className="brand">
-          <div className="brand-title">CÁPÁRIUM</div>
-          <div className="brand-sub">nAPPló</div>
+          <div className="brand-title">{tr("CÁPÁRIUM")}</div>
+          <div className="brand-sub">{tr("nAPPló")}</div>
         </div>
         <header className="topbar">
           {title && <h1>{title}</h1>}

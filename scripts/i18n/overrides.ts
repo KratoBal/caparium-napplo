@@ -8,5 +8,8 @@ export const OVERRIDES: Readonly<Record<string, { en: string; source: string }>>
   kedd: { en: "Tuesday", source: "a weekday name missing from the first sheet (the other four are in it)" },
   szerda: { en: "Wednesday", source: "a weekday name missing from the first sheet" },
   szombat: { en: "Saturday", source: "a weekday name missing from the first sheet" },
+  "CÁPÁRIUM": { en: "Shark Nursery", source: "Lili 2026-11-18 16:46 UTC (Caparium thread msgs 1572654266085146647, 1572654324851679273; acrobot 56133): the header's big brand text in the English view; the Hungarian view stays" },
+  nAPPló: { en: "SnAPPs'", source: "Lili 2026-11-18 16:46 UTC (msg 1572654361535058001; acrobot 56133): the header's small text below the brand in the English view, the apostrophe is part of the word" },
+  "Kivéve:": { en: "Removed:", source: "acrobot 56133 (Lili's table has Except:; msg 1572654370091303033: Removed: if nobody objects): the header chip of the removed-feed page" },
   "Sűrűség": { en: "Salinity", source: "Lili 2026-11-18 13:08 UTC (msg 1572599428135526483, acrobot 55913): the daily WQ column header" },
 };
