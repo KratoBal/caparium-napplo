@@ -70,7 +70,7 @@ export default async function MeasurementHistoryPage({ params }: { params: Promi
       </p>
       <div className="card">
         <h2>
-          {m.poolName} · {m.parameterName}
+          {m.poolName} · {tr(m.parameterName)}
         </h2>
         <p className="hint">
           {formatDay(m.businessDay)} {m.localTime} · {m.groupName},{" "}

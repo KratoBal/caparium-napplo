@@ -61,6 +61,9 @@ test("the header's HU/EN switch: the device's choice, kept across a reload; the 
     await page.goto("/naplo");
     await expect(page.getByRole("heading", { name: "Recorded measurements" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Filter" })).toBeVisible();
+    // a measurement's name is data, translated where shown (Lili 2026-11-18 13:08 UTC: Salinity in the daily table's header)
+    await page.goto("/vizmeres?csoport=NAPI_NAGY");
+    await expect(page.getByRole("columnheader", { name: /^Salinity/ })).toBeVisible();
     await page.goto("/");
     await page.getByTestId("lang-hu").click();
     await expect(html).toHaveAttribute("lang", "hu");

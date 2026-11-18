@@ -4,8 +4,10 @@
 // notices stay (Helper.tsx shows them in a small strip).
 import { useEffect, useState } from "react";
 import { readOff, SWITCH_EVENT, writeOff } from "@/lib/helper-switch";
+import { useTr } from "./LangProvider";
 
 export function HelperToggle() {
+  const tr = useTr();
   const [off, setOff] = useState<boolean | null>(null);
   useEffect(() => {
     setOff(readOff());
@@ -18,8 +20,8 @@ export function HelperToggle() {
   // the switch the other pages use (Lili 2026-10-29): the same `switch` input, with a small label
   return (
     <label className="switch-wrap helper-toggle no-print">
-      <input className="switch" type="checkbox" role="switch" checked={!off} onChange={() => writeOff(!off)} aria-label="Segítő" data-testid="helper-toggle" />
-      <span className="helper-toggle-label">Segítő</span>
+      <input className="switch" type="checkbox" role="switch" checked={!off} onChange={() => writeOff(!off)} aria-label={tr("Segítő")} data-testid="helper-toggle" />
+      <span className="helper-toggle-label">{tr("Segítő")}</span>
     </label>
   );
 }

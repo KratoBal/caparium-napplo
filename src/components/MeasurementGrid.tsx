@@ -713,7 +713,7 @@ export function MeasurementGrid({
                 <th>{tr("Medence")}</th>
                 {grid.layout.parameters.map((p) => (
                   <th key={p.id}>
-                    {p.name}
+                    {tr(p.name)}
                     {p.unit.symbol !== p.name ? ` · ${p.unit.symbol}` : ""}
                   </th>
                 ))}
@@ -785,7 +785,7 @@ export function MeasurementGrid({
                       // point 9 (Lili 2026-11-01): a measurement started in some pools only; in the others its column is a dash
                       if (param.pools && !param.pools.includes(pool.id) && !cell) {
                         return (
-                          <td key={param.id} className="cell-na" data-label={`${param.name}${param.unit.symbol !== param.name ? ` · ${param.unit.symbol}` : ""}`}>
+                          <td key={param.id} className="cell-na" data-label={`${tr(param.name)}${param.unit.symbol !== param.name ? ` · ${param.unit.symbol}` : ""}`}>
                             <div className="cell-value empty" data-testid={`na-${pool.name}-${param.name}`} title={tr("Ebben a medencében ezt nem mérik")}>
                               –
                             </div>
@@ -805,7 +805,7 @@ export function MeasurementGrid({
                           />
                         ) : null;
                       return (
-                        <td key={param.id} data-label={`${param.name}${param.unit.symbol !== param.name ? ` · ${param.unit.symbol}` : ""}`}>
+                        <td key={param.id} data-label={`${tr(param.name)}${param.unit.symbol !== param.name ? ` · ${param.unit.symbol}` : ""}`}>
                           {active ? (
                             // Lili 2026-10-29: the same corner X as on the feeding sheet (ClearX)
                             <span className="clearable clearable-block">

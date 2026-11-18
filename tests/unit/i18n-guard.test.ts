@@ -88,8 +88,8 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
     why: "the tiles' captions, translated where shown (tr(look.label), tr(FRIDGE_TILE.label))",
   },
   "src/components/MeasurementGrid.tsx": {
-    allowed: ["Visszamosás", "Rátöltés", "Vízcsere", "Van még nem mentett mérési érték. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?"],
-    why: "the tick names and the leave warning, translated where shown (tr(TICK_TEXT[kind]), tr(LEAVE_WARNING))",
+    allowed: ["Visszamosás", "Rátöltés", "Vízcsere", "Van még nem mentett mérési érték. Ha most továbblépsz, elveszik. Továbblépsz mentés nélkül?", "Sűrűség", "Hőmérséklet"],
+    why: "the tick names and the leave warning, translated where shown (tr(TICK_TEXT[kind]), tr(LEAVE_WARNING)); the two Hungarian names of the seeded parameters (src/lib/base-data.ts PARAMETERS) are data, translated where shown (tr(p.name)), and listed here so the import reads them as keys",
   },
   "src/components/FridgeCard.tsx": { allowed: ["hűtő", "fagyasztó"], why: "the kind names, translated where shown (tr(KIND[kind]))" },
   "src/components/DayControls.tsx": { allowed: [], why: "" },
@@ -101,6 +101,7 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
   "src/app/heti/page.tsx": { allowed: ["Heti vízmérések"], why: "the title, translated where shown (MeasurementPage: tr(title))" },
   "src/components/ShellView.tsx": { allowed: ["CÁPÁRIUM", "nAPPló"], why: "the app's name" },
   "src/components/TopbarUser.tsx": { allowed: [], why: "" },
+  "src/components/HelperToggle.tsx": { allowed: [], why: "" },
   "src/components/NavSub.tsx": { allowed: [], why: "" },
   "src/components/LangSwitch.tsx": { allowed: ["Magyar nyelv", "Angol nyelv"], why: "passed to tr() through a conditional" },
   "src/app/belepes/page.tsx": {

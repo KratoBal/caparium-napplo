@@ -8,4 +8,5 @@ export const OVERRIDES: Readonly<Record<string, { en: string; source: string }>>
   kedd: { en: "Tuesday", source: "a weekday name missing from the first sheet (the other four are in it)" },
   szerda: { en: "Wednesday", source: "a weekday name missing from the first sheet" },
   szombat: { en: "Saturday", source: "a weekday name missing from the first sheet" },
+  "Sűrűség": { en: "Salinity", source: "Lili 2026-11-18 13:08 UTC (msg 1572599428135526483, acrobot 55913): the daily WQ column header" },
 };
