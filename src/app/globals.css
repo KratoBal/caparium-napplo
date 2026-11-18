@@ -186,6 +186,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .toolbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 18px 0; }
 .toolbar .spacer { flex: 1; }
 .toolbar-end { align-items: flex-end; }
+/* A FORM ROW: labels above the fields, the button beside them. The button sits on the FIELDS' line (their bottom), not centred against the
+   label-plus-field block (Lili's pictures 3, 4 and 5, 2026-11-18, English view: Save removal, Save dosing, Save and Save start day hung higher than the
+   fields). A row with a field in it is a form row; a row of buttons and chips only keeps the centre. */
+.toolbar:has(> .field) { align-items: flex-end; }
+/* the tick under a label (Returned): a 24 px box in a 48 px slot, so it sits on the line of the 48 px fields beside it */
+.field > input[type="checkbox"] { width: 24px; height: 24px; margin: 12px 0; align-self: flex-start; }
+/* a chip in a page's head row (the withdrawal total, "List not ready") in a box of the controls' own height (48 px): it centres on the line of the day
+   badge and the buttons, whatever its own height */
+/* the day badge's box in a head row keeps three lines of room (below), which centred its button 7 px above the date field's line: the controls stand on
+   the row's bottom line, the badge centred on the 48 px button beside it, and the chips (.head-chip) on the same centre. The badge's lift is part of the
+   reserved height (the line above: three lines of text plus the lift), so a long day text still does not move the toolbar (daily-flow.spec.ts, "fits the
+   day controls without moving the toolbar") */
+.toolbar.toolbar-end > .day-controls { align-items: flex-end; min-height: calc(3 * 1.25 * 13px + 14px + (var(--touch) - 12px - 1.25 * 13px) / 2); }
+.toolbar-end > .day-controls .badge { margin-bottom: calc((var(--touch) - 12px - 1.25 * 13px) / 2); }
+.toolbar-end > .head-chip { display: flex; align-items: center; min-height: var(--touch); }
 /* the day picker (DayNav + DayJump, Lili 2026-10-29 item 2): the weekday under the date, smaller step buttons, and
    the row on one bottom line, so the "Nap" label above the calendar does not push it below the buttons */
 .day-shown { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.2; }

@@ -67,8 +67,10 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
         {/* Lili 2026-10-26: a date picker, as on the water measurement pages; the compare period is kept */}
         <DayJump path="/kivetel" day={day} today={today} keep={{ tol: from, ig: to }} />
         <span className="spacer" />
-        <span className="pill" data-testid="withdrawal-total">
-          {tr("Kivéve:")} {Object.entries(view.totals).map(([u, v]) => `${num(v)} ${u}`).join(", ") || tr("semmi")}
+        <span className="head-chip">
+          <span className="pill" data-testid="withdrawal-total">
+            {tr("Kivéve:")} {Object.entries(view.totals).map(([u, v]) => `${num(v)} ${u}`).join(", ") || tr("semmi")}
+          </span>
         </span>
         {canRecord && lock.state === "OPEN" && day === today && !isAdmin && <CloseWithdrawalDay day={day} />}
         <DayControls kind="WITHDRAWAL" day={day} status={lock} isAdmin={isAdmin} />

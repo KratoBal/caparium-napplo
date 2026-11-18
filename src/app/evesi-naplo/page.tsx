@@ -36,8 +36,10 @@ export default async function EatingPage({ searchParams }: { searchParams: Promi
         {/* Lili 2026-11-11 (acrobot 46859): "Mindenki evett" next to the day picker; the eating table renders into this slot */}
         <span id={EATING_TOP_ACTIONS_ID} style={{ display: "contents" }} />
         <span className="spacer" />
-        <span className={`badge ${eat.listState === "FINALIZED" ? "badge-valid" : "badge-pending"}`}>
-          {tr(eat.listState === "FINALIZED" ? "Lista kész" : "Lista nincs kész")}
+        <span className="head-chip">
+          <span className={`badge ${eat.listState === "FINALIZED" ? "badge-valid" : "badge-pending"}`}>
+            {tr(eat.listState === "FINALIZED" ? "Lista kész" : "Lista nincs kész")}
+          </span>
         </span>
         <DayControls kind="FEEDING" day={day} status={lock} isAdmin={isAdmin} />
       </div>

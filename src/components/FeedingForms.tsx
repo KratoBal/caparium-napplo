@@ -733,34 +733,38 @@ export function WithdrawalItems({ day, useDay, feeds, otherNames, stock, items, 
   const tr = useTr();
   return (
     <>
-      <div className="table-scroll">
-        <table className="log-table" data-testid="withdrawal-list">
-          <thead>
-            <tr><th>{tr("Típus")}</th><th>{tr("Takarmány")}</th><th>{tr("Mennyiség")}</th><th>{tr("Felhasználás napja")}</th><th></th></tr>
-          </thead>
-          <tbody>
-            {items.map((i) => {
-              const name = i.otherName ? `${i.feed}: ${i.otherName}` : i.feed;
-              return (
-                <tr key={i.id} className={editing?.id === i.id ? "active-row" : undefined}>
-                  <td>{i.type}</td>
-                  <td>{name}</td>
-                  <td>{i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")}</td>
-                  <td>{formatDay(i.useDay)}</td>
-                  <td className="keep">
-                    {editable && (
-                      <span className="row-actions">
-                        {feeds.some((f) => f.id === i.feedId) && <EditButton label={name} onEdit={() => setEditing({ id: i.id, version: i.version, feedId: i.feedId, otherName: i.otherName, quantities: i.quantities, useDay: i.useDay })} />}
-                        <InvalidateButton url={`/api/withdrawals/items/${i.id}/invalidate`} version={i.version} row />
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {/* no item yet: no table at all. A header alone (Type / Feed / Quantity / Usage day) stood above the form below it and read as the form's own column
+          heads, off its fields (Lili's picture 3, 2026-11-18, English view) */}
+      {items.length > 0 && (
+        <div className="table-scroll">
+          <table className="log-table" data-testid="withdrawal-list">
+            <thead>
+              <tr><th>{tr("Típus")}</th><th>{tr("Takarmány")}</th><th>{tr("Mennyiség")}</th><th>{tr("Felhasználás napja")}</th><th></th></tr>
+            </thead>
+            <tbody>
+              {items.map((i) => {
+                const name = i.otherName ? `${i.feed}: ${i.otherName}` : i.feed;
+                return (
+                  <tr key={i.id} className={editing?.id === i.id ? "active-row" : undefined}>
+                    <td>{i.type}</td>
+                    <td>{name}</td>
+                    <td>{i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")}</td>
+                    <td>{formatDay(i.useDay)}</td>
+                    <td className="keep">
+                      {editable && (
+                        <span className="row-actions">
+                          {feeds.some((f) => f.id === i.feedId) && <EditButton label={name} onEdit={() => setEditing({ id: i.id, version: i.version, feedId: i.feedId, otherName: i.otherName, quantities: i.quantities, useDay: i.useDay })} />}
+                          <InvalidateButton url={`/api/withdrawals/items/${i.id}/invalidate`} version={i.version} row />
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
       {editable && <WithdrawalForm day={day} useDay={useDay} feeds={feeds} otherNames={otherNames} stock={stock} editing={editing} onEditDone={() => setEditing(null)} />}
     </>
   );
