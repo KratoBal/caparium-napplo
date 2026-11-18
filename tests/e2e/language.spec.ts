@@ -51,6 +51,8 @@ test("the header's HU/EN switch: the device's choice, kept across a reload; the 
     await expect(page.getByTestId("lang-switch")).toHaveAttribute("aria-label", "Language");
     // the page's own text comes from the dictionary (Lili's sheet): the Start heading in English
     await expect(page.getByRole("heading", { name: "Keep up the good work!" })).toBeVisible();
+    // and the menu's labels, translated where shown (src/lib/nav.ts on the guard's list)
+    await expect(page.getByRole("link", { name: "Daily WQ", exact: true }).first()).toBeVisible();
     await page.reload();
     await expect(html).toHaveAttribute("lang", "en");
     await expect(page.getByRole("heading", { name: "Keep up the good work!" })).toBeVisible();

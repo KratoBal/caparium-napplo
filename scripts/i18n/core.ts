@@ -27,6 +27,11 @@ export type ImportResult = {
 const PLACE = /\{(\w+)\}/g;
 const placesInOrder = (text: string) => [...text.matchAll(PLACE)].map((m) => m[1]!);
 const normal = (text: string) => text.replace(PLACE, "{}").replace(/\s+/g, " ").trim();
+// The marks the code keeps OUTSIDE tr() ("‹ {tr("előző nap")}", "– {tr("válassz")} –"), while the sheet's extractor took the visible
+// text with them ("‹ előző nap"; Lili on the stage, 2026-11-18, acrobot 55602): a row matches its key without them, and its English
+// loses the same marks, or the screen would show them twice.
+const EDGE = /^[‹«–—]\s+|\s+[›»–—]$/g;
+const bare = (text: string) => text.replace(EDGE, "").trim();
 const where = (r: SheetRow) => `${r.sheet}:${r.row}`;
 
 // An Excel sheet name: at most 31 characters, none of : \ / ? * [ ] (ExcelJS cuts or drops it otherwise; barracuda on #238)
@@ -132,11 +137,15 @@ export function buildDictionary(keys: CodeKey[], rows: SheetRow[]): ImportResult
   }
   const byNormal = new Map<string, SheetRow[]>();
   for (const r of rows) byNormal.set(normal(r.hu), [...(byNormal.get(normal(r.hu)) ?? []), r]);
+  const byBare = new Map<string, SheetRow[]>();
+  for (const r of rows) if (bare(r.hu) !== r.hu.trim()) byBare.set(normal(bare(r.hu)), [...(byBare.get(normal(bare(r.hu))) ?? []), r]);
 
   const used = new Set<SheetRow>();
   for (const key of keys) {
     const exact = byHu.get(key.hu);
-    const candidates = exact ?? byNormal.get(normal(key.hu)) ?? [];
+    const loose = exact ? undefined : byNormal.get(normal(key.hu));
+    const marked = exact || loose ? undefined : byBare.get(normal(key.hu));
+    const candidates = exact ?? loose ?? marked ?? [];
     if (candidates.length === 0) {
       unmatched.push(key.hu);
       continue;
@@ -154,8 +163,9 @@ export function buildDictionary(keys: CodeKey[], rows: SheetRow[]): ImportResult
       continue;
     }
     const row = filled[0]!;
+    const english = marked ? bare(row.en) : row.en;
     const rowPlaces = placesInOrder(row.hu);
-    const enPlaces = placesInOrder(row.en);
+    const enPlaces = placesInOrder(english);
     if (!sameMultiset(rowPlaces, enPlaces)) {
       errors.push(
         `helyőrző-eltérés: "${row.hu}" (${where(row)}): a magyarban {${rowPlaces.join("}, {")}}, az angolban {${enPlaces.join("}, {")}}`.replace(/\{\}/g, "nincs"),
@@ -176,12 +186,12 @@ export function buildDictionary(keys: CodeKey[], rows: SheetRow[]): ImportResult
       else rename.set(name, to);
     });
     let en: string;
-    if (!shared) en = row.en.replace(PLACE, (_, name: string) => `{${rename.get(name) ?? name}}`);
+    if (!shared) en = english.replace(PLACE, (_, name: string) => `{${rename.get(name) ?? name}}`);
     else if (rowPlaces.join("\u0000") === enPlaces.join("\u0000")) {
       // one sheet name for two of the code's places ("Kiürítés, {name}, {name}" for "{pool}, {param}"; Lili's first sheet): renamed by
       // name, every one became the last; by position it is right if the English keeps the Hungarian's order, which the report names
       let i = 0;
-      en = row.en.replace(PLACE, () => `{${keyPlaces[i++]!}}`);
+      en = english.replace(PLACE, () => `{${keyPlaces[i++]!}}`);
       positional.push(`${where(row)}: "${key.hu}"`);
     } else {
       errors.push(`a tábla egy helyőrző-neve a kód több helyét jelöli, és az angol más sorrendben használja: "${row.hu}" (${where(row)}); kézzel kell eldönteni`);
@@ -193,6 +203,30 @@ export function buildDictionary(keys: CodeKey[], rows: SheetRow[]): ImportResult
   }
   const unused = rows.filter((r) => r.en && !used.has(r)).map((r) => `${where(r)}: "${r.hu}"`);
   return { entries, errors, empty, unmatched, unused, positional };
+}
+
+/**
+ * The decisions given apart from the sheets (scripts/i18n/overrides.ts) over the sheets' entries. One whose key the code no longer uses is
+ * returned as stale and not written: a dictionary line for no key would only hide that the decision has lost its place.
+ */
+export function applyOverrides(
+  entries: Record<string, string>,
+  overrides: Readonly<Record<string, { en: string }>>,
+  keys: CodeKey[],
+): { entries: Record<string, string>; applied: string[]; stale: string[] } {
+  const known = new Set(keys.map((k) => k.hu));
+  const out = { ...entries };
+  const applied: string[] = [];
+  const stale: string[] = [];
+  for (const [hu, { en }] of Object.entries(overrides)) {
+    if (!known.has(hu)) {
+      stale.push(hu);
+      continue;
+    }
+    out[hu] = en;
+    applied.push(hu);
+  }
+  return { entries: out, applied, stale };
 }
 
 /** en.ts: the entries of the sheets over the ones already there (the language switch's own words stay), sorted, one per line. */

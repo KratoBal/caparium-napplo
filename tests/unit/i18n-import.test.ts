@@ -6,7 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import ExcelJS from "exceljs";
 import { afterAll, describe, expect, it } from "vitest";
-import { buildDictionary, codeKeys, readSheet, renderEnTs, type CodeKey } from "../../scripts/i18n/core";
+import { applyOverrides, buildDictionary, codeKeys, readSheet, renderEnTs, type CodeKey } from "../../scripts/i18n/core";
+import { OVERRIDES } from "../../scripts/i18n/overrides";
 
 const dir = mkdtempSync(join(tmpdir(), "i18n-import-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -88,6 +89,36 @@ describe("the import of the filled-in sheets", () => {
     );
     expect(r.entries).toEqual({});
     expect(r.errors[0]).toContain("nagy:9");
+  });
+
+  // Lili on the stage (acrobot 55602): the code keeps an arrow or a dash outside tr() ("‹ {tr("előző nap")}", "– {tr("válassz")} –"),
+  // the sheet's row has them ("‹ előző nap"); the row matched no key, and the screen stayed Hungarian.
+  it("a row with edge marks the code keeps outside tr() matches its bare key, and its English loses the same marks", () => {
+    const r = buildDictionary(
+      [key("előző nap"), key("következő nap"), key("válassz"), key("‹ vissza")],
+      [
+        { sheet: "nagy", row: 537, hu: "‹ előző nap", en: "‹ previous day" },
+        { sheet: "nagy", row: 434, hu: "következő nap ›", en: "next day ›" },
+        { sheet: "nagy", row: 536, hu: "– válassz –", en: "– select –" },
+        { sheet: "nagy", row: 9, hu: "‹ vissza", en: "‹ back" },
+      ],
+    );
+    expect(r.errors).toEqual([]);
+    expect(r.entries).toEqual({ "előző nap": "previous day", "következő nap": "next day", "válassz": "select", "‹ vissza": "‹ back" });
+    expect(r.unused).toEqual([]);
+  });
+
+  // Lili 2026-11-18 (acrobot 55615): the sheet says "Gy" -> "Gy", her later word says "Med". Without the override list the next import
+  // writes "Gy" back.
+  it("a decision given apart from the sheets wins over the sheet; one for a key the code no longer uses is stale, not written", () => {
+    const o = applyOverrides({ Gy: "Gy", V: "V" }, { Gy: { en: "Med" }, régi: { en: "old" } }, [key("Gy"), key("V")]);
+    expect(o.entries).toEqual({ Gy: "Med", V: "V" });
+    expect(o.applied).toEqual(["Gy"]);
+    expect(o.stale).toEqual(["régi"]);
+  });
+
+  it("every override has its source", () => {
+    for (const [hu, o] of Object.entries(OVERRIDES)) expect(o.source.length, hu).toBeGreaterThan(10);
   });
 
   it("a sheet-name key with a character Excel refuses is an error", () => {
