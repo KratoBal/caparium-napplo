@@ -29,6 +29,13 @@ async function slowRefresh(page: Page) {
     await new Promise((r) => setTimeout(r, 1500));
     await route.fulfill({ response });
   });
+  // and the save's answer 3 s: the previous choice's refresh then lands while the next choice's save is still out, the window the
+  // flaky run met (the second run, 49d7438d: with the save fast, the newer refresh was out first and the router dropped the stale one)
+  await page.route("**/api/feeding/feeding-mode", async (route) => {
+    const response = await route.fetch();
+    await new Promise((r) => setTimeout(r, 3000));
+    await route.fulfill({ response });
+  });
 }
 
 /** Records, every 10 ms, whether the radio of `label` is checked; read back with seen(). */
@@ -71,7 +78,7 @@ test("MERES A: the old waits, a held-back refresh puts the previous choice back 
   await expect(box.getByLabel(F)).toBeEnabled();
   await box.getByLabel(F).click();
   await watch(page, F);
-  await page.waitForTimeout(4000);
+  await page.waitForTimeout(7000);
   const s = await seen(page);
   console.log(`MERES A: ${s.length} samples, unchecked ${s.filter((x) => !x).length}`);
   expect(s.some((x) => !x)).toBe(true);
@@ -93,7 +100,7 @@ test("MERES B: the new waits, the next choice is never put back", async ({ page 
   await expect(box.getByLabel(F)).toBeEnabled();
   await box.getByLabel(F).click();
   await watch(page, F);
-  await page.waitForTimeout(4000);
+  await page.waitForTimeout(7000);
   const s = await seen(page);
   console.log(`MERES B: ${s.length} samples, unchecked ${s.filter((x) => !x).length}`);
   expect(s.length).toBeGreaterThan(100);
