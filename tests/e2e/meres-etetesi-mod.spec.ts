@@ -21,9 +21,13 @@ const isRefresh = (url: string, headers: Record<string, string>) =>
   new URL(url).pathname === "/evesi-naplo" && headers["rsc"] === "1" && !headers["next-router-prefetch"];
 
 async function slowRefresh(page: Page) {
+  // the RESPONSE is held back, not the request: a held request reaches the server after the next save and answers the new choice
+  // (the first run of this branch, 167e7ec8: A saw no revert for that reason)
   await page.route("**/evesi-naplo*", async (route) => {
-    if (route.request().method() === "GET" && isRefresh(route.request().url(), route.request().headers())) await new Promise((r) => setTimeout(r, 1500));
-    await route.continue();
+    if (!(route.request().method() === "GET" && isRefresh(route.request().url(), route.request().headers()))) return route.continue();
+    const response = await route.fetch();
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.fulfill({ response });
   });
 }
 
