@@ -62,6 +62,34 @@ describe("the import of the filled-in sheets", () => {
     expect(r.errors[0]).toContain("nagy:7");
   });
 
+  // Lili's first sheet (t-20261118-caparium-angol-1): the sheet's extractor gave one generic name to two different places of the code
+  // ("Kiürítés, {name}, {name}" for "Kiürítés, {pool}, {param}"). Renamed by name, both became the last one, silently.
+  it("a sheet name standing for two of the code's places is renamed by position when the English keeps the Hungarian's order", () => {
+    const r = buildDictionary(
+      [key("Kiürítés, {pool}, {param}"), key("Ajánlott: {perDay} g (+{raise} {unit}), legfeljebb {max} {unit}")],
+      [
+        { sheet: "nagy", row: 215, hu: "Kiürítés, {name}, {name}", en: "Clear, {name}, {name}" },
+        { sheet: "nagy", row: 677, hu: "Ajánlott: {format} g (+{format} {unit}), legfeljebb {format} {unit}", en: "Recommended: {format} g (+{format} {unit}), at most {format} {unit}" },
+      ],
+    );
+    expect(r.errors).toEqual([]);
+    // named in the report: the order is an assumption a person checks, not a fact the names prove
+    expect(r.positional).toEqual(["nagy:215: \"Kiürítés, {pool}, {param}\"", "nagy:677: \"Ajánlott: {perDay} g (+{raise} {unit}), legfeljebb {max} {unit}\""]);
+    expect(r.entries).toEqual({
+      "Kiürítés, {pool}, {param}": "Clear, {pool}, {param}",
+      "Ajánlott: {perDay} g (+{raise} {unit}), legfeljebb {max} {unit}": "Recommended: {perDay} g (+{raise} {unit}), at most {max} {unit}",
+    });
+  });
+
+  it("a sheet name standing for two places, and an English that orders the places otherwise, is an error: nothing is guessed", () => {
+    const r = buildDictionary(
+      [key("{a} és {b}, {c} darab")],
+      [{ sheet: "nagy", row: 9, hu: "{x} és {x}, {n} darab", en: "{n} pieces: {x} and {x}" }],
+    );
+    expect(r.entries).toEqual({});
+    expect(r.errors[0]).toContain("nagy:9");
+  });
+
   it("a sheet-name key with a character Excel refuses is an error", () => {
     const r = buildDictionary([key("Egyenleg", true)], [{ sheet: "nagy", row: 2, hu: "Egyenleg", en: "Balance [stock]" }]);
     expect(r.errors[0]).toMatch(/^Excel-lapnév/);

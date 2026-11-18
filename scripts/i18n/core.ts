@@ -18,8 +18,10 @@ export type ImportResult = {
   empty: string[];
   /** keys no sheet holds: for the next supplement */
   unmatched: string[];
-  /** filled rows no key uses (an older fragment of the extraction) */
+  /** filled rows no key uses: a text the code does not pass through tr() yet, a label translated from a data table, or an older fragment */
   unused: string[];
+  /** keys whose places were renamed by position (one sheet name for two of the code's places): right if the English keeps the order */
+  positional: string[];
 };
 
 const PLACE = /\{(\w+)\}/g;
@@ -115,6 +117,7 @@ export function buildDictionary(keys: CodeKey[], rows: SheetRow[]): ImportResult
   const errors: string[] = [];
   const empty: string[] = [];
   const unmatched: string[] = [];
+  const positional: string[] = [];
   const entries: Record<string, string> = {};
 
   // one Hungarian text, two different Englishes (in one sheet or across the two): a person must choose, the import does not
@@ -165,14 +168,31 @@ export function buildDictionary(keys: CodeKey[], rows: SheetRow[]): ImportResult
       continue;
     }
     // the sheet's names to the code's, by their order in the Hungarian (the sheet may say {saved} where the code says {n})
-    const rename = new Map(rowPlaces.map((name, i) => [name, keyPlaces[i]!]));
-    const en = row.en.replace(PLACE, (_, name: string) => `{${rename.get(name) ?? name}}`);
+    const rename = new Map<string, string>();
+    let shared = false;
+    rowPlaces.forEach((name, i) => {
+      const to = keyPlaces[i]!;
+      if (rename.has(name) && rename.get(name) !== to) shared = true;
+      else rename.set(name, to);
+    });
+    let en: string;
+    if (!shared) en = row.en.replace(PLACE, (_, name: string) => `{${rename.get(name) ?? name}}`);
+    else if (rowPlaces.join("\u0000") === enPlaces.join("\u0000")) {
+      // one sheet name for two of the code's places ("Kiürítés, {name}, {name}" for "{pool}, {param}"; Lili's first sheet): renamed by
+      // name, every one became the last; by position it is right if the English keeps the Hungarian's order, which the report names
+      let i = 0;
+      en = row.en.replace(PLACE, () => `{${keyPlaces[i++]!}}`);
+      positional.push(`${where(row)}: "${key.hu}"`);
+    } else {
+      errors.push(`a tábla egy helyőrző-neve a kód több helyét jelöli, és az angol más sorrendben használja: "${row.hu}" (${where(row)}); kézzel kell eldönteni`);
+      continue;
+    }
     if (key.sheetName && (en.length > SHEET_NAME_MAX || SHEET_NAME_BAD.test(en)))
       errors.push(`Excel-lapnév nem lehet: "${en}" ("${key.hu}", ${where(row)}): legfeljebb ${SHEET_NAME_MAX} karakter, és nem lehet benne : \\ / ? * [ ]`);
     else entries[key.hu] = en;
   }
   const unused = rows.filter((r) => r.en && !used.has(r)).map((r) => `${where(r)}: "${r.hu}"`);
-  return { entries, errors, empty, unmatched, unused };
+  return { entries, errors, empty, unmatched, unused, positional };
 }
 
 /** en.ts: the entries of the sheets over the ones already there (the language switch's own words stay), sorted, one per line. */

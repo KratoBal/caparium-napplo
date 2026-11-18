@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { readFileSync } from "node:fs";
 import { greetingFigure } from "../../src/lib/helper-notice";
 import { businessDayOf } from "../../src/lib/time";
+import { translate } from "../../src/lib/i18n/translate";
 import { openAllSettings, openMeasurement } from "../support/settings-folds";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
@@ -2819,3 +2820,26 @@ test("the first selection of a past day does not move the page under the toolbar
   expect(after, "the toolbar's height and the day's feeds stay where they were").toEqual(before);
 });
 
+// barracuda on #251 (t-20261118-caparium-angol-1): the day controls are sized for three lines of the badge; an English state that wraps
+// to a fourth would move the tablet's page again. Every state's text, Hungarian and English, is put into the badge on an English page,
+// and the toolbar keeps its height. A text twice the longest is the control that the measure sees a fourth line at all.
+// WHAT TURNS THIS RED: a state's English (from Lili's sheet) longer than the badge holds.
+test("every day state, Hungarian and English, fits the day controls without moving the toolbar", async ({ page }, info) => {
+  const day = info.project.name === "tablet" ? "2026-03-16" : "2026-03-17";
+  await login(page, "teszt.admin");
+  await page.context().addCookies([{ name: "nyelv", value: "en", url: new URL(page.url()).origin }]);
+  await gotoReady(page, `/etetes?nap=${day}`);
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  const toolbar = page.locator(".toolbar").first();
+  const badge = page.getByTestId("day-status").locator(".badge");
+  const states = ["Nyitott", "Nyitott (visszamenőleges bevitel)", "Újranyitva", "Lezárva", "Lezárva (automatikusan, éjfélkor)"];
+  const texts = [...states, ...states.map((hu) => translate("en", hu))];
+  const heightWith = async (text: string) => {
+    await badge.evaluate((el, t) => (el.textContent = t), text);
+    return (await toolbar.boundingBox())!.height;
+  };
+  const base = await heightWith(texts[0]!);
+  for (const text of texts) expect(await heightWith(text), text).toBe(base);
+  const longest = texts.reduce((a, b) => (b.length > a.length ? b : a));
+  expect(await heightWith(`${longest} ${longest}`), "the control: a text twice the longest moves it").toBeGreaterThan(base);
+});

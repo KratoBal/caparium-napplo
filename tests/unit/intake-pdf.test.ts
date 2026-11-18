@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { intakePdfFrom, intakeTitle, RETURNED_INK } from "@/lib/exports/intake-pdf";
+import { translate } from "@/lib/i18n/translate";
 import type { IntakeReport } from "@/lib/exports/intake-report";
 import { readPdfColors } from "../support/pdf-colors";
 import { readPdfLines } from "../support/pdf-readback";
@@ -78,5 +79,17 @@ describe("the Cápasuli takarmányegyenleg PDF", () => {
     expect(lines[0]).toBe("Cápasuli takarmányegyenleg: 2026.10.01.");
     for (const s of ["Az időszakban nem érkezett takarmány.", "Az időszakban nem volt készletmozgás."]) expect(lines.some((l) => l.includes(s)), s).toBe(true);
     expect(intakeTitle({ from: "2026-10-01", to: "2026-10-02" })).toBe("Cápasuli takarmányegyenleg: 2026.10.01. – 2026.10.02.");
+  });
+
+  // barracuda on #238: the English view's PDF, from Lili's sheet (t-20261118-caparium-angol-1). Its words come from the dictionary,
+  // and the data (a feed's name, a note) stays as typed, accents and all, in the same embedded font (the built-in one drops them).
+  it("in English: the dictionary's words, the data with its accents", async () => {
+    const lines = await readPdfLines(new Uint8Array(await intakePdfFrom(sample, (text, vars) => translate("en", text, vars))));
+    for (const s of ["Receipts", "Balance per feed (2026.10.01. – 2026.10.30.)", "Period: 2026.10.01. – 2026.10.30. Returned"])
+      expect(lines.some((l) => l.includes(s)), s).toBe(true);
+    const pecten = lines.lastIndexOf("Pecten jacobaeus");
+    expect(lines[pecten + 1]).toBe("Opening Receipt Removal Closing Indicator");
+    expect(lines.some((l) => l.includes("nyitó készlet"))).toBe(true);
+    for (const hu of ["Bevételek", "Nyitó Bevétel", "Időszak:"]) expect(lines.some((l) => l.includes(hu)), hu).toBe(false);
   });
 });
