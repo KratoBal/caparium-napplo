@@ -6,6 +6,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTr } from "./LangProvider";
 import { useReasonsOn } from "./ReasonSwitch";
 
 type Props = {
@@ -33,6 +34,7 @@ function requestId(): string {
 
 export function CorrectionForm({ measurement: m, people, reasonRequired }: Props) {
   const router = useRouter();
+  const tr = useTr();
   const original = m.value.replace(".", ",");
   const [value, setValue] = useState(original);
   const [time, setTime] = useState(m.measuredAtLocal);
@@ -59,7 +61,7 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
       });
       const payload = (await res.json().catch(() => ({}))) as { error?: { code?: string; message?: string } };
       if (res.ok) {
-        setMessage({ kind: "ok", text: "A változás bekerült a naplóba." });
+        setMessage({ kind: "ok", text: tr("A változás bekerült a naplóba.") });
         router.refresh();
         return;
       }
@@ -68,11 +70,11 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
         kind: "error",
         text:
           e.code === "VERSION_CONFLICT"
-            ? "A mérés időközben megváltozott. Töltsd újra az oldalt, és nézd meg a friss értéket."
-            : e.message ?? "A változás nem mentődött.",
+            ? tr("A mérés időközben megváltozott. Töltsd újra az oldalt, és nézd meg a friss értéket.")
+            : e.message ?? tr("A változás nem mentődött."),
       });
     } catch {
-      setMessage({ kind: "error", text: "Nincs kapcsolat a szerverrel. A változás nem mentődött." });
+      setMessage({ kind: "error", text: tr("Nincs kapcsolat a szerverrel. A változás nem mentődött.") });
     } finally {
       setBusy(false);
     }
@@ -87,7 +89,7 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
     if (m.dilutable && dilution !== m.dilution) body.dilution = dilution;
     if (m.dilutable && diluent !== m.diluentWater) body.diluentWater = diluent;
     if (Object.keys(body).length === 0) {
-      setMessage({ kind: "error", text: "Nincs változás." });
+      setMessage({ kind: "error", text: tr("Nincs változás.") });
       return;
     }
     if (reason.trim()) body.reason = reason.trim();
@@ -96,30 +98,30 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
 
   function invalidate() {
     if (reasonsOn && invalidReason.trim().length < 3) {
-      setMessage({ kind: "error", text: "Az érvénytelenítéshez indoklás kell." });
+      setMessage({ kind: "error", text: tr("Az érvénytelenítéshez indoklás kell.") });
       return;
     }
-    if (!window.confirm("Biztosan érvényteleníted ezt a mérést? A bejegyzés megmarad, áthúzva.")) return;
+    if (!window.confirm(tr("Biztosan érvényteleníted ezt a mérést? A bejegyzés megmarad, áthúzva."))) return;
     void call(`/api/measurements/${m.id}/invalidate`, "POST", reasonsOn ? { reason: invalidReason.trim() } : {});
   }
 
   return (
     <>
       <div className="card" data-testid="correction">
-        <span className="tag-soft">{reasonRequired ? "Adminisztrátori művelet" : "Saját mai bejegyzés"}</span>
-        <h2 style={{ marginTop: 12 }}>Mérési adat javítása</h2>
-        <p className="hint">A javítás nem törli a korábbi értéket; a változás visszakereshető.</p>
+        <span className="tag-soft">{tr(reasonRequired ? "Adminisztrátori művelet" : "Saját mai bejegyzés")}</span>
+        <h2 style={{ marginTop: 12 }}>{tr("Mérési adat javítása")}</h2>
+        <p className="hint">{tr("A javítás nem törli a korábbi értéket; a változás visszakereshető.")}</p>
         {m.dilutable && (
-          <p className="hint">Az érték a hígítás előtti leolvasás; a mentett érték ennek és a hígításnak a szorzata.</p>
+          <p className="hint">{tr("Az érték a hígítás előtti leolvasás; a mentett érték ennek és a hígításnak a szorzata.")}</p>
         )}
         <div className="form-grid">
-          <span className="form-label">Eredeti érték</span>
+          <span className="form-label">{tr("Eredeti érték")}</span>
           <span className="pill">{original}</span>
-          <label className="form-label" htmlFor="corr-value">Új érték</label>
+          <label className="form-label" htmlFor="corr-value">{tr("Új érték")}</label>
           <input id="corr-value" className="input" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} />
-          <label className="form-label" htmlFor="corr-time">Mérés időpontja</label>
+          <label className="form-label" htmlFor="corr-time">{tr("Mérés időpontja")}</label>
           <input id="corr-time" className="input" type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} />
-          <label className="form-label" htmlFor="corr-resp">Mérést végezte</label>
+          <label className="form-label" htmlFor="corr-resp">{tr("Mérést végezte")}</label>
           <select id="corr-resp" className="input" value={responsible} onChange={(e) => setResponsible(e.target.value)}>
             {people.map((p) => (
               <option key={p.id} value={p.id}>
@@ -127,35 +129,35 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
               </option>
             ))}
           </select>
-          <span className="form-label">Gyakornok</span>
+          <span className="form-label">{tr("Gyakornok")}</span>
           <label className="check">
             <input type="checkbox" checked={trainee} onChange={(e) => setTrainee(e.target.checked)} />
-            Gyakornok végezte
+            {tr("Gyakornok végezte")}
           </label>
           {m.dilutable && (
             <>
-              <label className="form-label" htmlFor="corr-dil">Hígítás</label>
+              <label className="form-label" htmlFor="corr-dil">{tr("Hígítás")}</label>
               <select
                 id="corr-dil"
                 className="input"
                 value={dilution ?? ""}
                 onChange={(e) => setDilution(e.target.value ? Number(e.target.value) : null)}
               >
-                <option value="">nincs</option>
+                <option value="">{tr("nincs")}</option>
                 {Array.from({ length: 100 }, (_, i) => i + 1).map((d) => (
                   <option key={d} value={d}>
                     1:{d}
                   </option>
                 ))}
               </select>
-              <label className="form-label" htmlFor="corr-ro">Hígító víz</label>
+              <label className="form-label" htmlFor="corr-ro">{tr("Hígító víz")}</label>
               <select
                 id="corr-ro"
                 className="input"
                 value={diluent ?? ""}
                 onChange={(e) => setDiluent((e.target.value || null) as "RO" | "SW" | null)}
               >
-                <option value="">nincs</option>
+                <option value="">{tr("nincs")}</option>
                 <option value="RO">RO</option>
                 <option value="SW">SW</option>
               </select>
@@ -164,14 +166,14 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
           {reasonsOn && (
             <>
               <label className="form-label" htmlFor="corr-reason">
-                Indoklás{needReason ? " (kötelező)" : ""}
+                {tr("Indoklás")}{needReason ? ` (${tr("kötelező")})` : ""}
               </label>
               <input
                 id="corr-reason"
                 className="input"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder={needReason ? "pl. Mérőműszer adatának helyesbítése" : "nem kötelező"}
+                placeholder={tr(needReason ? "pl. Mérőműszer adatának helyesbítése" : "nem kötelező")}
               />
             </>
           )}
@@ -179,7 +181,7 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
         <div className="toolbar">
           <span className="spacer" />
           <button className="btn" type="button" onClick={save} disabled={busy || (needReason && reason.trim().length < 3)}>
-            Változtatás naplózása
+            {tr("Változtatás naplózása")}
           </button>
         </div>
         {message && (
@@ -189,25 +191,25 @@ export function CorrectionForm({ measurement: m, people, reasonRequired }: Props
         )}
       </div>
       <div className="card">
-        <h2>Érvénytelenítés</h2>
-        <p className="hint">Törlés nincs: az érvénytelenített mérés a naplóban áthúzva megmarad{reasonsOn ? ", okkal együtt" : ""}.</p>
+        <h2>{tr("Érvénytelenítés")}</h2>
+        <p className="hint">{tr(reasonsOn ? "Törlés nincs: az érvénytelenített mérés a naplóban áthúzva megmarad, okkal együtt." : "Törlés nincs: az érvénytelenített mérés a naplóban áthúzva megmarad.")}</p>
         <div className="toolbar">
           {reasonsOn && (
             <input
               className="input"
               style={{ flex: 1, minWidth: 220 }}
-              aria-label="Az érvénytelenítés oka"
-              placeholder="Az érvénytelenítés oka (kötelező)"
+              aria-label={tr("Az érvénytelenítés oka")}
+              placeholder={tr("Az érvénytelenítés oka (kötelező)")}
               value={invalidReason}
               onChange={(e) => setInvalidReason(e.target.value)}
             />
           )}
           <button className="btn btn-dark" type="button" onClick={invalidate} disabled={busy}>
-            Érvénytelenítés
+            {tr("Érvénytelenítés")}
           </button>
         </div>
       </div>
-      <div className="banner banner-ok">Audit: régi érték • új érték • módosító • időpont{reasonsOn ? " • indoklás" : ""}</div>
+      <div className="banner banner-ok">{tr(reasonsOn ? "Audit: régi érték • új érték • módosító • időpont • indoklás" : "Audit: régi érték • új érték • módosító • időpont")}</div>
     </>
   );
 }
