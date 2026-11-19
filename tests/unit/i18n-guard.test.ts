@@ -133,12 +133,25 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
   "src/lib/exports/intake-excel.ts": { allowed: [], why: "" },
   "src/lib/exports/intake-report-text.ts": { allowed: [], why: "" },
   "src/lib/exports/intake-report.ts": { allowed: ["Az időszak vége nem lehet a kezdete előtt."], why: "a defensive check, not a shown text: the only caller (the feeding export route) rejects from > to first (route.ts), and returns an AppError message raw, not through errorResponse" },
+  // round 3, the animals and the feed list (t-20261119-caparium-forditas-allatok)
+  "src/components/AnimalForms.tsx": {
+    allowed: ["Áthelyezés", "Csoportváltás", "Elhullás", "Kiadás"],
+    why: "the event kinds, translated where shown (tr(ACTION_LABEL[k]))",
+  },
+  "src/components/AnimalOrder.tsx": { allowed: [], why: "" },
+  "src/components/GroupPlacementFix.tsx": { allowed: [], why: "" },
+  "src/app/allatok/page.tsx": {
+    allowed: ["Érkezés", "Áthelyezés", "Csoportváltás", "Elhullás", "Kiadás", "hím", "nőstény"],
+    why: "the event kinds and the sexes, translated where shown (tr(TYPE[t]), tr(SEX[s]))",
+  },
+  "src/app/takarmanyok/page.tsx": { allowed: ["tömeg", "darab", "térfogat"], why: "the dimensions, translated where shown (tr(DIM[d]))" },
 };
 
 const ACCENT = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;
 // Hungarian words without an accent that the screens use: a text holding one is Hungarian too
-// (murena, 2026-11-17: "Szer", "mind", "Napig" slipped through; the list grows as the modules come in)
-const WORDS = new Set(["sor", "mentve", "evett", "mindenki", "nap", "napi", "heti", "medence", "csoport", "igen", "nem", "vissza", "rendben", "hiba", "nincs", "van", "kell", "csak", "egy", "lista", "kilepes", "szer", "mind", "napig", "korallos", "halas", "adag", "napra", "napon", "minden", "egyik", "kesz", "uj", "mentes", "mentese"]);
+// (murena, 2026-11-17: "Szer", "mind", "Napig" slipped through; the list grows as the modules come in; the animals' round added
+// "Fel", "Le", "Hova", "Faj", "Eddig" and the rest after them: a planted "Le" passed the guard before)
+const WORDS = new Set(["sor", "mentve", "evett", "mindenki", "nap", "napi", "heti", "medence", "csoport", "igen", "nem", "vissza", "rendben", "hiba", "nincs", "van", "kell", "csak", "egy", "lista", "kilepes", "szer", "mind", "napig", "korallos", "halas", "adag", "napra", "napon", "minden", "egyik", "kesz", "uj", "mentes", "mentese", "fel", "le", "hova", "faj", "ismeretlen", "darabban", "eddig", "tagok", "tagja", "most", "pipa", "sorrend", "indoklas"]);
 // a path, a link or an identifier ("/heti", "{x}?csoport={x}&nap={x}", "napplo-queue-v1-{x}") is code, not a text a person
 // reads. A bare lowercase word is NOT code (murena, 2026-11-17: "igen" passed as one): it needs a character only code has.
 const codeLike = (text: string) => /^[`/]/.test(text.trim()) || /^(?=.*[_.:=?&{}/0-9-])[a-z0-9_.:=?&{}/-]+$/.test(text.trim());

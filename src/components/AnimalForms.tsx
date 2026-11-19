@@ -6,6 +6,10 @@ import { useKeepRow } from "./InactiveListFilter";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
+import { useTr } from "./LangProvider";
+import type { TrVars } from "@/lib/i18n/translate";
+
+type Tr = (text: string, vars?: TrVars) => string;
 
 type Opt = { id: string; name: string };
 
@@ -23,9 +27,10 @@ function nowLocal(): string {
 
 function useApi() {
   const router = useRouter();
+  const tr = useTr();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  async function call(url: string, method: string, body: Record<string, unknown>, okText = "Mentve.", onOk?: (answer: Record<string, unknown>) => void | Promise<void>) {
+  async function call(url: string, method: string, body: Record<string, unknown>, okText?: string, onOk?: (answer: Record<string, unknown>) => void | Promise<void>) {
     setBusy(true);
     setMsg(null);
     try {
@@ -36,15 +41,15 @@ function useApi() {
       });
       const b = (await res.json().catch(() => ({}))) as { error?: { message?: string; issues?: { message: string }[] } };
       if (!res.ok) {
-        setMsg({ ok: false, text: b.error?.issues?.[0]?.message ?? b.error?.message ?? "Nem sikerült." });
+        setMsg({ ok: false, text: b.error?.issues?.[0]?.message ?? b.error?.message ?? tr("Nem sikerült.") });
         return false;
       }
-      setMsg({ ok: true, text: okText });
+      setMsg({ ok: true, text: okText ?? tr("Mentve.") });
       await onOk?.(b as Record<string, unknown>);
       router.refresh();
       return true;
     } catch {
-      setMsg({ ok: false, text: "Nincs kapcsolat a szerverrel." });
+      setMsg({ ok: false, text: tr("Nincs kapcsolat a szerverrel.") });
       return false;
     } finally {
       setBusy(false);
@@ -66,10 +71,10 @@ function Msg({ msg }: { msg: { ok: boolean; text: string } | null }) {
  * A group an event (or a members step) left without a member: the page asks whether to switch it off (Lili 2026-10-30, task
  * caparium-csoport-inaktiv; acrobot 38970); never by itself, and a "no" leaves the switch on the Állatok page.
  */
-async function askAboutEmptied(answer: Record<string, unknown>) {
+async function askAboutEmptied(answer: Record<string, unknown>, tr: Tr) {
   const emptied = Array.isArray(answer.emptiedGroups) ? (answer.emptiedGroups as { id: string; name: string }[]) : [];
   for (const g of emptied) {
-    if (window.confirm(`A(z) ${g.name} csoport kiürült. Inaktiválod?`)) {
+    if (window.confirm(tr("A(z) {name} csoport kiürült. Inaktiválod?", { name: g.name }))) {
       const res = await fetch(`/api/admin/animal-groups/${g.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -77,12 +82,13 @@ async function askAboutEmptied(answer: Record<string, unknown>) {
       }).catch(() => null);
       if (!res?.ok) {
         const b = (await res?.json().catch(() => ({}))) as { error?: { message?: string } } | undefined;
-        window.alert(b?.error?.message ?? `A(z) ${g.name} csoportot nem sikerült inaktiválni: az Állatok oldalon a Csoportok listában próbáld újra.`);
+        window.alert(b?.error?.message ?? tr("A(z) {name} csoportot nem sikerült inaktiválni: az Állatok oldalon a Csoportok listában próbáld újra.", { name: g.name }));
       }
     }
   }
 }
 
+// the event kinds, translated where shown (tr(ACTION_LABEL[k])); on the i18n guard's list
 const ACTION_LABEL = { TRANSFER: "Áthelyezés", GROUP_CHANGE: "Csoportváltás", DEATH: "Elhullás", RELEASE: "Kiadás" } as const;
 
 /** One lifecycle event for an existing animal: transfer, group change, death, release. */
@@ -95,22 +101,23 @@ export function AnimalActions({ animalId, pools, groups }: { animalId: string; p
   const [note, setNote] = useState("");
   const { msg, busy, call } = useApi();
   const reasonsOn = useReasonsOn();
+  const tr = useTr();
   return (
     <div className="toolbar" data-testid="animal-actions">
       <label className="field">
-        Esemény
-        <select className="input" value={type} onChange={(e) => setType(e.target.value as typeof type)} aria-label="Esemény">
+        {tr("Esemény")}
+        <select className="input" value={type} onChange={(e) => setType(e.target.value as typeof type)} aria-label={tr("Esemény")}>
           {Object.entries(ACTION_LABEL).map(([k, v]) => (
             <option key={k} value={k}>
-              {v}
+              {tr(v)}
             </option>
           ))}
         </select>
       </label>
       {type === "TRANSFER" && (
         <label className="field">
-          Hova
-          <select className="input" value={pool} onChange={(e) => setPool(e.target.value)} aria-label="Cél medence">
+          {tr("Hova")}
+          <select className="input" value={pool} onChange={(e) => setPool(e.target.value)} aria-label={tr("Cél medence")}>
             {pools.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -121,9 +128,9 @@ export function AnimalActions({ animalId, pools, groups }: { animalId: string; p
       )}
       {type === "GROUP_CHANGE" && (
         <label className="field">
-          Csoport
-          <select className="input" value={group} onChange={(e) => setGroup(e.target.value)} aria-label="Cél csoport">
-            <option value="">nincs csoport</option>
+          {tr("Csoport")}
+          <select className="input" value={group} onChange={(e) => setGroup(e.target.value)} aria-label={tr("Cél csoport")}>
+            <option value="">{tr("nincs csoport")}</option>
             {groups.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name}
@@ -133,17 +140,17 @@ export function AnimalActions({ animalId, pools, groups }: { animalId: string; p
         </label>
       )}
       <label className="field">
-        Időpont
-        <input className="input" type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Az esemény időpontja" />
+        {tr("Időpont")}
+        <input className="input" type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} aria-label={tr("Az esemény időpontja")} />
       </label>
       <label className="field">
-        Megjegyzés
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} aria-label="Megjegyzés" />
+        {tr("Megjegyzés")}
+        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} aria-label={tr("Megjegyzés")} />
       </label>
       {reasonsOn && (
         <label className="field">
-          Indoklás (korábbi napnál)
-          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Indoklás" />
+          {tr("Indoklás (korábbi napnál)")}
+          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} aria-label={tr("Indoklás")} />
         </label>
       )}
       <button
@@ -159,10 +166,10 @@ export function AnimalActions({ animalId, pools, groups }: { animalId: string; p
             ...(type === "GROUP_CHANGE" ? { toGroupId: group || null } : {}),
             ...(note.trim() ? { note: note.trim() } : {}),
             ...(reason.trim() ? { reason: reason.trim() } : {}),
-          }, `${ACTION_LABEL[type]} rögzítve.`, askAboutEmptied)
+          }, tr("{action} rögzítve.", { action: tr(ACTION_LABEL[type]) }), (answer) => askAboutEmptied(answer, tr))
         }
       >
-        Rögzítés
+        {tr("Rögzítés")}
       </button>
       <Msg msg={msg} />
     </div>
@@ -172,6 +179,7 @@ export function AnimalActions({ animalId, pools, groups }: { animalId: string; p
 export function InvalidateEvent({ eventId, version }: { eventId: string; version: number }) {
   const { msg, busy, call } = useApi();
   const reasonsOn = useReasonsOn();
+  const tr = useTr();
   return (
     <>
       <button
@@ -179,11 +187,11 @@ export function InvalidateEvent({ eventId, version }: { eventId: string; version
         type="button"
         disabled={busy}
         onClick={() => {
-          const asked = askReason(reasonsOn, "Az érvénytelenítés oka:", "Érvényteleníted ezt az eseményt?");
-          if (asked) void call(`/api/animals/events/${eventId}/invalidate`, "POST", { expectedVersion: version, ...asked }, "Érvénytelenítve.");
+          const asked = askReason(reasonsOn, tr("Az érvénytelenítés oka:"), tr("Érvényteleníted ezt az eseményt?"));
+          if (asked) void call(`/api/animals/events/${eventId}/invalidate`, "POST", { expectedVersion: version, ...asked }, tr("Érvénytelenítve."));
         }}
       >
-        Érvénytelenítés
+        {tr("Érvénytelenítés")}
       </button>{" "}
       <Msg msg={msg} />
     </>
@@ -195,40 +203,41 @@ export function NewArrival({ species, pools, groups }: { species: Opt[]; pools: 
   const [f, setF] = useState({ name: "", speciesId: species[0]?.id ?? "", sex: "UNKNOWN", pool: pools[0]?.id ?? "", group: "", time: nowLocal(), reason: "" });
   const { msg, busy, call } = useApi();
   const reasonsOn = useReasonsOn();
+  const tr = useTr();
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   return (
     <div className="toolbar" data-testid="new-arrival">
-      <input className="input" placeholder="név" aria-label="Az új állat neve" value={f.name} onChange={set("name")} />
-      <select className="input" aria-label="Faj" value={f.speciesId} onChange={set("speciesId")}>
+      <input className="input" placeholder={tr("név")} aria-label={tr("Az új állat neve")} value={f.name} onChange={set("name")} />
+      <select className="input" aria-label={tr("Faj")} value={f.speciesId} onChange={set("speciesId")}>
         {species.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name}
           </option>
         ))}
       </select>
-      <select className="input" aria-label="Nem" value={f.sex} onChange={set("sex")}>
-        <option value="UNKNOWN">ismeretlen</option>
-        <option value="MALE">hím</option>
-        <option value="FEMALE">nőstény</option>
+      <select className="input" aria-label={tr("Nem")} value={f.sex} onChange={set("sex")}>
+        <option value="UNKNOWN">{tr("ismeretlen")}</option>
+        <option value="MALE">{tr("hím")}</option>
+        <option value="FEMALE">{tr("nőstény")}</option>
       </select>
-      <select className="input" aria-label="Medence" value={f.pool} onChange={set("pool")}>
+      <select className="input" aria-label={tr("Medence")} value={f.pool} onChange={set("pool")}>
         {pools.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
           </option>
         ))}
       </select>
-      <select className="input" aria-label="Csoport" value={f.group} onChange={set("group")}>
-        <option value="">nincs csoport</option>
+      <select className="input" aria-label={tr("Csoport")} value={f.group} onChange={set("group")}>
+        <option value="">{tr("nincs csoport")}</option>
         {groups.map((g) => (
           <option key={g.id} value={g.id}>
             {g.name}
           </option>
         ))}
       </select>
-      <input className="input" type="datetime-local" aria-label="Érkezés időpontja" value={f.time} onChange={set("time")} />
+      <input className="input" type="datetime-local" aria-label={tr("Érkezés időpontja")} value={f.time} onChange={set("time")} />
       {reasonsOn && (
-        <input className="input" placeholder="indoklás (korábbi napnál)" aria-label="Indoklás az érkezéshez" value={f.reason} onChange={set("reason")} />
+        <input className="input" placeholder={tr("indoklás (korábbi napnál)")} aria-label={tr("Indoklás az érkezéshez")} value={f.reason} onChange={set("reason")} />
       )}
       <button
         className="btn"
@@ -242,10 +251,10 @@ export function NewArrival({ species, pools, groups }: { species: Opt[]; pools: 
             toGroupId: f.group || null,
             occurredAtLocal: f.time,
             ...(f.reason.trim() ? { reason: f.reason.trim() } : {}),
-          }, "Az állat felvéve.")
+          }, tr("Az állat felvéve."))
         }
       >
-        Érkezés rögzítése
+        {tr("Érkezés rögzítése")}
       </button>
       <Msg msg={msg} />
     </div>
@@ -255,11 +264,12 @@ export function NewArrival({ species, pools, groups }: { species: Opt[]; pools: 
 export function SimpleCreate({ url, label, field, testId }: { url: string; label: string; field: string; testId: string }) {
   const [v, setV] = useState("");
   const { msg, busy, call } = useApi();
+  const tr = useTr();
   return (
     <div className="toolbar" data-testid={testId}>
       <input className="input" aria-label={label} placeholder={label} value={v} onChange={(e) => setV(e.target.value)} />
       <button className="btn btn-soft" type="button" disabled={busy || !v.trim()} onClick={() => void call(url, "POST", { [field]: v.trim() })}>
-        Felvétel
+        {tr("Felvétel")}
       </button>
       <Msg msg={msg} />
     </div>
@@ -270,24 +280,25 @@ export function NewFeed({ types, units }: { types: Opt[]; units: { id: string; s
   const usable = units.filter((u) => ["MASS", "COUNT", "VOLUME"].includes(u.dimension));
   const [f, setF] = useState({ typeId: types[0]?.id ?? "", name: "", unit: usable[0]?.id ?? "", count: false });
   const { msg, busy, call } = useApi();
+  const tr = useTr();
   const unit = usable.find((u) => u.id === f.unit);
   if (types.length === 0)
     return (
       <p className="banner banner-warn" data-testid="new-feed">
-        Még nincs egyetlen takarmánytípus sem, ezért takarmány sem vehető fel. A típusokat az alapadatok betöltése hozza létre.
+        {tr("Még nincs egyetlen takarmánytípus sem, ezért takarmány sem vehető fel. A típusokat az alapadatok betöltése hozza létre.")}
       </p>
     );
   return (
     <div className="toolbar" data-testid="new-feed">
-      <select className="input" aria-label="Takarmánytípus" value={f.typeId} onChange={(e) => setF({ ...f, typeId: e.target.value })}>
+      <select className="input" aria-label={tr("Takarmánytípus")} value={f.typeId} onChange={(e) => setF({ ...f, typeId: e.target.value })}>
         {types.map((t) => (
           <option key={t.id} value={t.id}>
             {t.name}
           </option>
         ))}
       </select>
-      <input className="input" aria-label="Takarmány neve" placeholder="takarmány neve" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-      <select className="input" aria-label="Alapértelmezett egység" value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })}>
+      <input className="input" aria-label={tr("Takarmány neve")} placeholder={tr("takarmány neve")} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+      <select className="input" aria-label={tr("Alapértelmezett egység")} value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })}>
         {usable.map((u) => (
           <option key={u.id} value={u.id}>
             {u.symbol}
@@ -296,7 +307,7 @@ export function NewFeed({ types, units }: { types: Opt[]; units: { id: string; s
       </select>
       <label className="check">
         <input type="checkbox" checked={f.count} onChange={(e) => setF({ ...f, count: e.target.checked })} />
-        darabban is
+        {tr("darabban is")}
       </label>
       <button
         className="btn"
@@ -308,10 +319,10 @@ export function NewFeed({ types, units }: { types: Opt[]; units: { id: string; s
             name: f.name,
             defaultUnitId: f.unit,
             dimensions: [...new Set([unit!.dimension, ...(f.count ? ["COUNT"] : [])])],
-          }, "Takarmány felvéve.")
+          }, tr("Takarmány felvéve."))
         }
       >
-        Felvétel
+        {tr("Felvétel")}
       </button>
       <Msg msg={msg} />
     </div>
@@ -320,6 +331,7 @@ export function NewFeed({ types, units }: { types: Opt[]; units: { id: string; s
 
 export function FeedActive({ id, active }: { id: string; active: boolean }) {
   const { msg, busy, call } = useApi();
+  const tr = useTr();
   // the row stays in view after the switch (InactiveListFilter, as the pools of #107): its message is read
   const keep = useKeepRow();
   return (
@@ -330,10 +342,10 @@ export function FeedActive({ id, active }: { id: string; active: boolean }) {
         disabled={busy}
         onClick={() => {
           keep(id);
-          void call(`/api/admin/feeds/${id}`, "PATCH", { active: !active }, active ? "Inaktiválva." : "Újra aktív.");
+          void call(`/api/admin/feeds/${id}`, "PATCH", { active: !active }, active ? tr("Inaktiválva.") : tr("Újra aktív."));
         }}
       >
-        {active ? "Inaktiválás" : "Aktiválás"}
+        {active ? tr("Inaktiválás") : tr("Aktiválás")}
       </button>
       <Msg msg={msg} />
     </>
@@ -346,31 +358,32 @@ export function FeedActive({ id, active }: { id: string; active: boolean }) {
  */
 export function FeedPeriods({ id, name, periods }: { id: string; name: string; periods: { firstDay: string; lastDay: string | null }[] }) {
   const { msg, busy, call } = useApi();
+  const tr = useTr();
   const keep = useKeepRow();
   const [rows, setRows] = useState(periods.map((p) => ({ from: p.firstDay, to: p.lastDay ?? "" })));
   const set = (i: number, k: "from" | "to", v: string) => setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
-  const shown = periods.length ? periods.map((p) => `${p.firstDay.replaceAll("-", ".")}. – ${p.lastDay ? `${p.lastDay.replaceAll("-", ".")}.` : ""}`).join(", ") : "nincs";
+  const shown = periods.length ? periods.map((p) => `${p.firstDay.replaceAll("-", ".")}. – ${p.lastDay ? `${p.lastDay.replaceAll("-", ".")}.` : ""}`).join(", ") : tr("nincs");
   return (
     <details className="feed-periods" data-testid={`feed-periods-${id}`}>
-      <summary>Időszakok: {shown}</summary>
+      <summary>{tr("Időszakok: {periods}", { periods: shown })}</summary>
       {rows.map((r, i) => (
         <div className="toolbar" key={i}>
           <label className="field">
-            Mettől
-            <input className="input" type="date" aria-label={`${name} időszak ${i + 1} kezdete`} value={r.from} onChange={(e) => set(i, "from", e.target.value)} />
+            {tr("Mettől")}
+            <input className="input" type="date" aria-label={tr("{name} időszak {n} kezdete", { name, n: i + 1 })} value={r.from} onChange={(e) => set(i, "from", e.target.value)} />
           </label>
           <label className="field">
-            Meddig (üresen: nyitott)
-            <input className="input" type="date" aria-label={`${name} időszak ${i + 1} vége`} value={r.to} onChange={(e) => set(i, "to", e.target.value)} />
+            {tr("Meddig (üresen: nyitott)")}
+            <input className="input" type="date" aria-label={tr("{name} időszak {n} vége", { name, n: i + 1 })} value={r.to} onChange={(e) => set(i, "to", e.target.value)} />
           </label>
           <button className="btn btn-row" type="button" onClick={() => setRows((x) => x.filter((_, j) => j !== i))}>
-            Törlés
+            {tr("Törlés")}
           </button>
         </div>
       ))}
       <div className="toolbar">
         <button className="btn btn-soft" type="button" onClick={() => setRows((x) => [...x, { from: "", to: "" }])}>
-          + Időszak
+          {tr("+ Időszak")}
         </button>
         <button
           className="btn"
@@ -378,10 +391,10 @@ export function FeedPeriods({ id, name, periods }: { id: string; name: string; p
           disabled={busy || rows.some((r) => !r.from)}
           onClick={() => {
             keep(id);
-            void call(`/api/admin/feeds/${id}/periods`, "PUT", { periods: rows.map((r) => ({ firstDay: r.from, lastDay: r.to || null })) }, "Időszakok mentve.");
+            void call(`/api/admin/feeds/${id}/periods`, "PUT", { periods: rows.map((r) => ({ firstDay: r.from, lastDay: r.to || null })) }, tr("Időszakok mentve."));
           }}
         >
-          Időszakok mentése
+          {tr("Időszakok mentése")}
         </button>
         <Msg msg={msg} />
       </div>
@@ -392,6 +405,7 @@ export function FeedPeriods({ id, name, periods }: { id: string; name: string; p
 /** The switch of a group on the Állatok page (Lili 2026-10-30, task caparium-csoport-inaktiv): the feeds' button, with the server's answer when the group still has members. */
 export function GroupActive({ id, active }: { id: string; active: boolean }) {
   const { msg, busy, call } = useApi();
+  const tr = useTr();
   const keep = useKeepRow();
   return (
     <>
@@ -401,10 +415,10 @@ export function GroupActive({ id, active }: { id: string; active: boolean }) {
         disabled={busy}
         onClick={() => {
           keep(id);
-          void call(`/api/admin/animal-groups/${id}`, "PATCH", { active: !active }, active ? "Inaktiválva." : "Újra aktív.");
+          void call(`/api/admin/animal-groups/${id}`, "PATCH", { active: !active }, active ? tr("Inaktiválva.") : tr("Újra aktív."));
         }}
       >
-        {active ? "Inaktiválás" : "Aktiválás"}
+        {active ? tr("Inaktiválás") : tr("Aktiválás")}
       </button>
       <Msg msg={msg} />
     </>
@@ -434,6 +448,7 @@ export function FeedEdit({ feed, units }: { feed: FeedRow; units: { id: string; 
   const [f, setF] = useState(start);
   const { msg, busy, call } = useApi();
   const reasonsOn = useReasonsOn();
+  const tr = useTr();
   const unit = usable.find((u) => u.id === f.unit);
   const locked = feed.uses > 0;
   if (!open)
@@ -441,13 +456,13 @@ export function FeedEdit({ feed, units }: { feed: FeedRow; units: { id: string; 
       <button
         className="btn btn-row"
         type="button"
-        aria-label={`${feed.name}: módosítás`}
+        aria-label={tr("{label}: módosítás", { label: feed.name })}
         onClick={() => {
           setF(start);
           setOpen(true);
         }}
       >
-        Módosítás
+        {tr("Módosítás")}
       </button>
     );
   const renamed = f.name.trim() !== feed.name;
@@ -459,20 +474,20 @@ export function FeedEdit({ feed, units }: { feed: FeedRow; units: { id: string; 
     if (renamed) {
       const asked = askReason(
         reasonsOn,
-        "Az átnevezés oka (a korábbi napokon is az új név áll):",
-        `Átnevezed: ${feed.name} -> ${f.name.trim()}? A korábbi napokon is az új név fog állni.`,
+        tr("Az átnevezés oka (a korábbi napokon is az új név áll):"),
+        tr("Átnevezed: {old} -> {new}? A korábbi napokon is az új név fog állni.", { old: feed.name, new: f.name.trim() }),
       );
       if (!asked) return;
       Object.assign(body, { name: f.name.trim(), mode: "correction" }, asked);
     }
     if (unitChanged) Object.assign(body, { defaultUnitId: f.unit, dimensions });
     if (doseChanged) body.dose = f.dose.trim() ? { value: f.dose.trim(), unitId: f.doseUnit } : null;
-    if (await call(`/api/admin/feeds/${feed.id}`, "PATCH", body, "Takarmány módosítva.")) setOpen(false);
+    if (await call(`/api/admin/feeds/${feed.id}`, "PATCH", body, tr("Takarmány módosítva."))) setOpen(false);
   }
   return (
     <div className="toolbar toolbar-end" data-testid={`feed-edit-${feed.id}`}>
-      <input className="input" aria-label="Takarmány új neve" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-      <select className="input" aria-label="Alapértelmezett egység" value={f.unit} disabled={locked} onChange={(e) => setF({ ...f, unit: e.target.value })}>
+      <input className="input" aria-label={tr("Takarmány új neve")} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+      <select className="input" aria-label={tr("Alapértelmezett egység")} value={f.unit} disabled={locked} onChange={(e) => setF({ ...f, unit: e.target.value })}>
         {usable.map((u) => (
           <option key={u.id} value={u.id}>
             {u.symbol}
@@ -481,14 +496,14 @@ export function FeedEdit({ feed, units }: { feed: FeedRow; units: { id: string; 
       </select>
       <label className="check">
         <input type="checkbox" checked={f.count} disabled={locked} onChange={(e) => setF({ ...f, count: e.target.checked })} />
-        darabban is
+        {tr("darabban is")}
       </label>
-      {locked && <span className="hint">Tétel van rá, a mértékegysége nem változtatható.</span>}
+      {locked && <span className="hint">{tr("Tétel van rá, a mértékegysége nem változtatható.")}</span>}
       <label className="field">
-        Pipa = alapmennyiség
-        <input className="input" inputMode="decimal" aria-label="Alapmennyiség a pipához" placeholder="nincs" value={f.dose} onChange={(e) => setF({ ...f, dose: e.target.value })} />
+        {tr("Pipa = alapmennyiség")}
+        <input className="input" inputMode="decimal" aria-label={tr("Alapmennyiség a pipához")} placeholder={tr("nincs")} value={f.dose} onChange={(e) => setF({ ...f, dose: e.target.value })} />
       </label>
-      <select className="input" aria-label="Az alapmennyiség egysége" value={f.doseUnit} onChange={(e) => setF({ ...f, doseUnit: e.target.value })}>
+      <select className="input" aria-label={tr("Az alapmennyiség egysége")} value={f.doseUnit} onChange={(e) => setF({ ...f, doseUnit: e.target.value })}>
         {doseUnits.map((u) => (
           <option key={u.id} value={u.id}>
             {u.symbol}
@@ -496,10 +511,10 @@ export function FeedEdit({ feed, units }: { feed: FeedRow; units: { id: string; 
         ))}
       </select>
       <button className="btn" type="button" disabled={busy || !f.name.trim() || !unit || (!renamed && !unitChanged && !doseChanged)} onClick={() => void save()}>
-        Mentés
+        {tr("Mentés")}
       </button>
       <button className="btn btn-soft" type="button" disabled={busy} onClick={() => setOpen(false)}>
-        Mégse
+        {tr("Mégse")}
       </button>
       <Msg msg={msg} />
     </div>
@@ -538,6 +553,7 @@ export function AnimalEditForm({ a, species, pools, groups }: { a: AnimalEditVie
   const nameChanged = f.name.trim() !== a.name;
   const changed = nameChanged || f.speciesId !== a.speciesId || f.sex !== a.sex || arrivalChanged;
   const reasonsOn = useReasonsOn();
+  const tr = useTr();
   const needsReason = reasonsOn && (arrivalChanged || (nameChanged && f.nameMode === "correction"));
   function save() {
     const body: Record<string, unknown> = {};
@@ -557,28 +573,28 @@ export function AnimalEditForm({ a, species, pools, groups }: { a: AnimalEditVie
       };
     }
     if (f.reason.trim()) body.reason = f.reason.trim();
-    void call(`/api/animals/${a.id}`, "PATCH", body, "Az állat adatai mentve.").then((ok) => ok && setF((x) => ({ ...x, reason: "" })));
+    void call(`/api/animals/${a.id}`, "PATCH", body, tr("Az állat adatai mentve.")).then((ok) => ok && setF((x) => ({ ...x, reason: "" })));
   }
   return (
     <div data-testid="animal-edit">
-      <h3 style={{ marginTop: 20 }}>Adatok módosítása</h3>
+      <h3 style={{ marginTop: 20 }}>{tr("Adatok módosítása")}</h3>
       <div className="toolbar">
         <label className="field">
-          Név
-          <input className="input" aria-label="Név (módosítás)" value={f.name} onChange={set("name")} />
+          {tr("Név")}
+          <input className="input" aria-label={tr("Név (módosítás)")} value={f.name} onChange={set("name")} />
         </label>
         {nameChanged && (
           <label className="field">
-            A névváltozás
-            <select className="input" aria-label="A névváltozás fajtája" value={f.nameMode} onChange={set("nameMode")}>
-              <option value="correction">Helyesbítés (elírás, visszamenőleg)</option>
-              <option value="change">Változás (mostantól)</option>
+            {tr("A névváltozás")}
+            <select className="input" aria-label={tr("A névváltozás fajtája")} value={f.nameMode} onChange={set("nameMode")}>
+              <option value="correction">{tr("Helyesbítés (elírás, visszamenőleg)")}</option>
+              <option value="change">{tr("Változás (mostantól)")}</option>
             </select>
           </label>
         )}
         <label className="field">
-          Faj
-          <select className="input" aria-label="Faj (módosítás)" value={f.speciesId} onChange={set("speciesId")}>
+          {tr("Faj")}
+          <select className="input" aria-label={tr("Faj (módosítás)")} value={f.speciesId} onChange={set("speciesId")}>
             {species.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -587,23 +603,23 @@ export function AnimalEditForm({ a, species, pools, groups }: { a: AnimalEditVie
           </select>
         </label>
         <label className="field">
-          Nem
-          <select className="input" aria-label="Nem (módosítás)" value={f.sex} onChange={set("sex")}>
-            <option value="UNKNOWN">ismeretlen</option>
-            <option value="MALE">hím</option>
-            <option value="FEMALE">nőstény</option>
+          {tr("Nem")}
+          <select className="input" aria-label={tr("Nem (módosítás)")} value={f.sex} onChange={set("sex")}>
+            <option value="UNKNOWN">{tr("ismeretlen")}</option>
+            <option value="MALE">{tr("hím")}</option>
+            <option value="FEMALE">{tr("nőstény")}</option>
           </select>
         </label>
       </div>
       {a.arrival && (
         <div className="toolbar">
           <label className="field">
-            Érkezés időpontja
-            <input className="input" type="datetime-local" aria-label="Érkezés időpontja (módosítás)" value={f.time} onChange={set("time")} />
+            {tr("Érkezés időpontja")}
+            <input className="input" type="datetime-local" aria-label={tr("Érkezés időpontja (módosítás)")} value={f.time} onChange={set("time")} />
           </label>
           <label className="field">
-            Érkezési medence
-            <select className="input" aria-label="Érkezési medence (módosítás)" value={f.pool} onChange={set("pool")}>
+            {tr("Érkezési medence")}
+            <select className="input" aria-label={tr("Érkezési medence (módosítás)")} value={f.pool} onChange={set("pool")}>
               {pools.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -612,9 +628,9 @@ export function AnimalEditForm({ a, species, pools, groups }: { a: AnimalEditVie
             </select>
           </label>
           <label className="field">
-            Érkezési csoport
-            <select className="input" aria-label="Érkezési csoport (módosítás)" value={f.group} onChange={set("group")}>
-              <option value="">nincs csoport</option>
+            {tr("Érkezési csoport")}
+            <select className="input" aria-label={tr("Érkezési csoport (módosítás)")} value={f.group} onChange={set("group")}>
+              <option value="">{tr("nincs csoport")}</option>
               {groups.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.name}
@@ -623,29 +639,29 @@ export function AnimalEditForm({ a, species, pools, groups }: { a: AnimalEditVie
             </select>
           </label>
           <label className="field">
-            Megjegyzés
-            <input className="input" aria-label="Érkezési megjegyzés (módosítás)" value={f.note} onChange={set("note")} />
+            {tr("Megjegyzés")}
+            <input className="input" aria-label={tr("Érkezési megjegyzés (módosítás)")} value={f.note} onChange={set("note")} />
           </label>
         </div>
       )}
       <p className="hint">
         {reasonsOn
-          ? "Az érkezés adatai és a név helyesbítése a múltra is hatnak, ezért indoklás kell. "
-          : "Az érkezés adatai és a név helyesbítése a múltra is hatnak. "}
-        Ahol az állat most van, azt áthelyezéssel vagy csoportváltással rögzítsd, nem az érkezés javításával.
+          ? tr("Az érkezés adatai és a név helyesbítése a múltra is hatnak, ezért indoklás kell.")
+          : tr("Az érkezés adatai és a név helyesbítése a múltra is hatnak.")}{" "}
+        {tr("Ahol az állat most van, azt áthelyezéssel vagy csoportváltással rögzítsd, nem az érkezés javításával.")}
       </p>
       <div className="toolbar">
         {reasonsOn && (
           <input
             className="input"
-            aria-label="Indoklás a módosításhoz"
-            placeholder={needsReason ? "indoklás (kötelező)" : "indoklás"}
+            aria-label={tr("Indoklás a módosításhoz")}
+            placeholder={needsReason ? tr("indoklás (kötelező)") : tr("indoklás")}
             value={f.reason}
             onChange={set("reason")}
           />
         )}
         <button className="btn" type="button" disabled={busy || !changed || (needsReason && f.reason.trim().length < 3)} onClick={save}>
-          Módosítás mentése
+          {tr("Módosítás mentése")}
         </button>
         <Msg msg={msg} />
       </div>
@@ -678,25 +694,26 @@ function MembershipTime({ event, local, label }: { event: { id: string; version:
   const [time, setTime] = useState(local);
   const [reason, setReason] = useState("");
   const { msg, busy, call } = useApi();
+  const tr = useTr();
   if (!open)
     return (
       <button className="btn btn-row" type="button" onClick={() => setOpen(true)} aria-label={label}>
-        Módosítás
+        {tr("Módosítás")}
       </button>
     );
   return (
     <span className="toolbar">
-      <input className="input" type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} aria-label={`${label}: új időpont`} />
-      <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} aria-label={`${label}: indoklás`} placeholder="Indoklás" />
+      <input className="input" type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} aria-label={tr("{label}: új időpont", { label })} />
+      <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} aria-label={tr("{label}: indoklás", { label })} placeholder={tr("Indoklás")} />
       <button
         className="btn btn-row"
         type="button"
         disabled={busy || reason.trim().length < 3 || time === local}
         onClick={() =>
-          void call(`/api/animals/events/${event.id}/correct-time`, "POST", { expectedVersion: event.version, occurredAtLocal: time, reason: reason.trim() }, "Időpont javítva.")
+          void call(`/api/animals/events/${event.id}/correct-time`, "POST", { expectedVersion: event.version, occurredAtLocal: time, reason: reason.trim() }, tr("Időpont javítva."))
         }
       >
-        Mentés
+        {tr("Mentés")}
       </button>
       <Msg msg={msg} />
     </span>
@@ -725,6 +742,7 @@ export function GroupMembers({
   const [reason, setReason] = useState("");
   const { msg, busy, call } = useApi();
   const reasonsOn = useReasonsOn();
+  const tr = useTr();
   // the panel's content only while it is open: closed, the row reads as before (its text is the group's, not every animal's)
   const [open, setOpen] = useState(false);
   const toggle = (set: Set<string>, setter: (s: Set<string>) => void, id: string) => {
@@ -735,13 +753,13 @@ export function GroupMembers({
   };
   return (
     <details data-testid={`group-members-${group.id}`} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
-      <summary>Tagok ({members.length})</summary>
+      <summary>{tr("Tagok ({n})", { n: members.length })}</summary>
       {open && (
         <>
       <div className="table-scroll">
         <table className="log-table" data-testid={`group-memberships-${group.id}`}>
           <thead>
-            <tr><th>Állat</th><th>Tagja ettől</th><th></th><th>Eddig</th><th></th></tr>
+            <tr><th>{tr("Állat")}</th><th>{tr("Tagja ettől")}</th><th></th><th>{tr("Eddig")}</th><th></th></tr>
           </thead>
           <tbody>
             {memberships.map((m) => (
@@ -750,17 +768,17 @@ export function GroupMembers({
                 <td>{m.fromText}</td>
                 <td className="keep">
                   {m.start.type === "GROUP_CHANGE" ? (
-                    <MembershipTime event={m.start} local={m.fromLocal} label={`${m.animalName}: a tagság kezdete`} />
+                    <MembershipTime event={m.start} local={m.fromLocal} label={tr("{name}: a tagság kezdete", { name: m.animalName })} />
                   ) : (
-                    <span className="hint">érkezéskor</span>
+                    <span className="hint">{tr("érkezéskor")}</span>
                   )}
                 </td>
-                <td>{m.toText ?? "most is"}</td>
+                <td>{m.toText ?? tr("most is")}</td>
                 <td className="keep">
                   {m.end && m.toLocal && m.end.type === "GROUP_CHANGE" ? (
-                    <MembershipTime event={m.end} local={m.toLocal} label={`${m.animalName}: a tagság vége`} />
+                    <MembershipTime event={m.end} local={m.toLocal} label={tr("{name}: a tagság vége", { name: m.animalName })} />
                   ) : m.end ? (
-                    <span className="hint">{m.end.type === "DEATH" ? "elhullás" : m.end.type === "RELEASE" ? "kiadás" : ""}</span>
+                    <span className="hint">{m.end.type === "DEATH" ? tr("elhullás") : m.end.type === "RELEASE" ? tr("kiadás") : ""}</span>
                   ) : null}
                 </td>
               </tr>
@@ -769,33 +787,33 @@ export function GroupMembers({
         </table>
       </div>
       <fieldset className="field">
-        <legend>Most a csoportban (pipáld, akit kiveszel)</legend>
-        {members.length === 0 && <span className="hint">Nincs tagja.</span>}
+        <legend>{tr("Most a csoportban (pipáld, akit kiveszel)")}</legend>
+        {members.length === 0 && <span className="hint">{tr("Nincs tagja.")}</span>}
         {members.map((a) => (
           <label key={a.id} className="check">
-            <input type="checkbox" checked={remove.has(a.id)} onChange={() => toggle(remove, setRemove, a.id)} aria-label={`Kivesz: ${a.name}`} /> {a.name}
+            <input type="checkbox" checked={remove.has(a.id)} onChange={() => toggle(remove, setRemove, a.id)} aria-label={tr("Kivesz: {name}", { name: a.name })} /> {a.name}
           </label>
         ))}
       </fieldset>
       {group.active && (
         <fieldset className="field">
-          <legend>Betesz (élő állatok)</legend>
+          <legend>{tr("Betesz (élő állatok)")}</legend>
           {others.map((a) => (
             <label key={a.id} className="check">
-              <input type="checkbox" checked={add.has(a.id)} onChange={() => toggle(add, setAdd, a.id)} aria-label={`Betesz: ${a.name}`} /> {a.name}
-              {a.groupName ? <span className="hint"> (most: {a.groupName})</span> : null}
+              <input type="checkbox" checked={add.has(a.id)} onChange={() => toggle(add, setAdd, a.id)} aria-label={tr("Betesz: {name}", { name: a.name })} /> {a.name}
+              {a.groupName ? <span className="hint"> {tr("(most: {group})", { group: a.groupName })}</span> : null}
             </label>
           ))}
         </fieldset>
       )}
       <label className="field">
-        Időpont
-        <input className="input" type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} aria-label={`${group.name}: a változás időpontja`} />
+        {tr("Időpont")}
+        <input className="input" type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} aria-label={tr("{name}: a változás időpontja", { name: group.name })} />
       </label>
       {reasonsOn && (
         <label className="field">
-          Indoklás (korábbi napnál)
-          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} aria-label={`${group.name}: indoklás`} />
+          {tr("Indoklás (korábbi napnál)")}
+          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} aria-label={tr("{name}: indoklás", { name: group.name })} />
         </label>
       )}
       <button
@@ -807,17 +825,17 @@ export function GroupMembers({
             `/api/admin/animal-groups/${group.id}/members`,
             "POST",
             { add: [...add], remove: [...remove], occurredAtLocal: time, ...(reason.trim() ? { reason: reason.trim() } : {}) },
-            `${add.size} állat be, ${remove.size} ki: rögzítve.`,
+            tr("{in} állat be, {out} ki: rögzítve.", { in: add.size, out: remove.size }),
             async (answer) => {
               setAdd(new Set());
               setRemove(new Set());
               // the group card asks about an emptied group as the single group change does (card b98016a1)
-              await askAboutEmptied(answer);
+              await askAboutEmptied(answer, tr);
             },
           )
         }
       >
-        Tagok mentése
+        {tr("Tagok mentése")}
       </button>
         </>
       )}

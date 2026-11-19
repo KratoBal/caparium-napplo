@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatDay } from "@/lib/time";
 import { useReasonsOn } from "./ReasonSwitch";
+import { useTr } from "./LangProvider";
 
 type Plan = {
   changes: { animalId: string; animalName: string; groupName: string; fromDay: string; toDay: string }[];
@@ -28,6 +29,7 @@ export function GroupPlacementFix() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const reasonsOn = useReasonsOn();
+  const tr = useTr();
 
   async function call(body: Record<string, unknown>) {
     setBusy(true);
@@ -40,12 +42,12 @@ export function GroupPlacementFix() {
       });
       const b = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: { message?: string } };
       if (!res.ok) {
-        setMsg({ ok: false, text: b.error?.message ?? "Nem sikerült." });
+        setMsg({ ok: false, text: b.error?.message ?? tr("Nem sikerült.") });
         return null;
       }
       return b;
     } catch {
-      setMsg({ ok: false, text: "Nincs kapcsolat a szerverrel." });
+      setMsg({ ok: false, text: tr("Nincs kapcsolat a szerverrel.") });
       return null;
     } finally {
       setBusy(false);
@@ -54,7 +56,7 @@ export function GroupPlacementFix() {
 
   async function run() {
     if (!plan) return;
-    if (!window.confirm(`${plan.changes.length} állat csoportba helyezése az érkezése napjára kerül. Végrehajtod?`)) return;
+    if (!window.confirm(tr("{n} állat csoportba helyezése az érkezése napjára kerül. Végrehajtod?", { n: plan.changes.length }))) return;
     const b = await call({ mode: "run", ...(reason.trim() ? { reason: reason.trim() } : {}) });
     if (!b) return;
     const fixed = (b as { fixed?: Plan }).fixed;
@@ -63,10 +65,16 @@ export function GroupPlacementFix() {
     setMsg({
       ok: true,
       text:
-        `Kész: ${fixed?.changes.length ?? 0} állat csoportba helyezése az érkezése napjára került. ` +
+        tr("Kész: {n} állat csoportba helyezése az érkezése napjára került.", { n: fixed?.changes.length ?? 0 }) +
+        " " +
         (changed && changed.days.length
-          ? `${changed.days.length} lezárt napon változott a koplalás (${changed.fastingAdded} új, ${changed.fastingRemoved} megszűnt koplalónap): ${changed.days.map(formatDay).join(", ")}.`
-          : "A lezárt napok koplalása nem változott."),
+          ? tr("{n} lezárt napon változott a koplalás ({added} új, {removed} megszűnt koplalónap): {days}.", {
+              n: changed.days.length,
+              added: changed.fastingAdded,
+              removed: changed.fastingRemoved,
+              days: changed.days.map(formatDay).join(", "),
+            })
+          : tr("A lezárt napok koplalása nem változott.")),
     });
     router.refresh();
   }
@@ -74,25 +82,25 @@ export function GroupPlacementFix() {
   return (
     <details className="card no-print" data-testid="group-placement-fix">
       <summary>
-        <h2 style={{ display: "inline" }}>Csoportba helyezés javítása</h2>
+        <h2 style={{ display: "inline" }}>{tr("Csoportba helyezés javítása")}</h2>
       </summary>
       <p className="hint">
-        Azok az állatok, amelyek egyedül érkeztek és később kerültek a mostani csoportjukba, az érkezésük napjától lesznek a csoport tagjai, így a régi
-        takarmánylapokon is a csoportban szerepelnek. Aki több csoportban is volt, kimarad és a listán megjelenik. Előbb próba (nem ír semmit), utána külön
-        megerősítéssel a végrehajtás. Törlés nincs, minden lépés naplózva.
+        {tr(
+          "Azok az állatok, amelyek egyedül érkeztek és később kerültek a mostani csoportjukba, az érkezésük napjától lesznek a csoport tagjai, így a régi takarmánylapokon is a csoportban szerepelnek. Aki több csoportban is volt, kimarad és a listán megjelenik. Előbb próba (nem ír semmit), utána külön megerősítéssel a végrehajtás. Törlés nincs, minden lépés naplózva.",
+        )}
       </p>
       <button className="btn btn-soft" type="button" disabled={busy} onClick={() => void call({ mode: "plan" }).then((b) => b && setPlan((b as { plan: Plan }).plan))}>
-        Próba
+        {tr("Próba")}
       </button>
       {plan && (
         <div data-testid="group-placement-plan">
           {plan.changes.length === 0 ? (
-            <p>Nincs javítandó csoportba helyezés.</p>
+            <p>{tr("Nincs javítandó csoportba helyezés.")}</p>
           ) : (
             <div className="table-scroll">
               <table className="log-table">
                 <thead>
-                  <tr><th>Állat</th><th>Csoport</th><th>Most csoportban</th><th>Javítva</th></tr>
+                  <tr><th>{tr("Állat")}</th><th>{tr("Csoport")}</th><th>{tr("Most csoportban")}</th><th>{tr("Javítva")}</th></tr>
                 </thead>
                 <tbody>
                   {plan.changes.map((c) => (
@@ -109,7 +117,7 @@ export function GroupPlacementFix() {
           )}
           {plan.skipped.length > 0 && (
             <>
-              <p>Kimarad (ezekről te döntesz, a javítás nem nyúl hozzájuk):</p>
+              <p>{tr("Kimarad (ezekről te döntesz, a javítás nem nyúl hozzájuk):")}</p>
               <ul data-testid="group-placement-skipped">
                 {plan.skipped.map((s) => (
                   <li key={s.animalId}>
@@ -123,17 +131,20 @@ export function GroupPlacementFix() {
             <>
               <p data-testid="group-placement-closed">
                 {plan.closedDays.count > 0 && plan.closedDays.from
-                  ? `${plan.closedDays.count} lezárt nap (${formatDay(plan.closedDays.from)}-tól) koplalását a végrehajtás újraszámolja: ahol egy állat ezeken a napokon a csoporttagság miatt máshogy számít, ott koplalónap kerülhet fel vagy le. A végrehajtás után a pontos lista megjelenik.`
-                  : "Lezárt nap nem érintett."}
+                  ? tr(
+                      "{n} lezárt nap ({from}-tól) koplalását a végrehajtás újraszámolja: ahol egy állat ezeken a napokon a csoporttagság miatt máshogy számít, ott koplalónap kerülhet fel vagy le. A végrehajtás után a pontos lista megjelenik.",
+                      { n: plan.closedDays.count, from: formatDay(plan.closedDays.from) },
+                    )
+                  : tr("Lezárt nap nem érintett.")}
               </p>
               {reasonsOn && (
                 <label className="field">
-                  Indoklás
+                  {tr("Indoklás")}
                   <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
                 </label>
               )}
               <button className="btn" type="button" disabled={busy || (reasonsOn && reason.trim().length < 3)} onClick={() => void run()}>
-                Végrehajtás
+                {tr("Végrehajtás")}
               </button>
             </>
           )}
