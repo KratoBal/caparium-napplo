@@ -155,6 +155,8 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
         <p className="hint">{tr("A készlet a mozgások összege; kezdőkészlet nélkül negatív lehet, ez jelzés, nem hiba. Bevételezést és leltárkorrekciót adminisztrátor rögzít.")}</p>
         {/* Lili 2026-10-29 (package item 16): an inactive chemical behind "Inaktívak mutatása", as the feeds; its dosings stay */}
         <InactiveListFilter inactive={stock.filter((c) => !c.active).length}>
+        {/* in its own scrolling box like the dosing log above: at 390 px it widened the whole page (bug round 2026-11-19) */}
+        <div className="table-scroll">
         <table className="log-table" data-testid="stock">
           <thead>
             <tr><th>{tr("Szer")}</th><th>{tr("Készlet")}</th><th>{tr("Fogyás, 7 nap")}</th><th>{tr("Fogyás, 30 nap")}</th>{isAdmin && <th className="no-print" />}</tr>
@@ -183,6 +185,7 @@ export default async function DosingPage({ searchParams }: { searchParams: Promi
             ))}
           </tbody>
         </table>
+        </div>
         </InactiveListFilter>
         {isAdmin && (
           <div className="no-print">

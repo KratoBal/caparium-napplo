@@ -664,7 +664,8 @@ select.input, .meta-select { -webkit-appearance: none; appearance: none; backgro
    up/down buttons; the rows alternate in a faint background so the white is broken, the row being moved and the place it
    would land on are highlighted, and the last touched row stands out */
 .order-list { list-style: none; padding: 0; margin: 0; }
-.order-row { display: flex; align-items: center; gap: 12px; padding: 4px 10px; border-radius: var(--radius-sm); border: 2px solid transparent; }
+/* the row wraps: at 390 px the handle, the place, the 200 px name and the two buttons ran 223 px past the screen (bug round 2026-11-19) */
+.order-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 4px 10px; border-radius: var(--radius-sm); border: 2px solid transparent; }
 .order-row:nth-child(even) { background: var(--c-field); }
 /* the reports' tables (Lili 2026-10-29, package item 12): banded rows, a group header per feed type, the total line
    apart at the bottom; the bands and the total keep their background on paper too */
