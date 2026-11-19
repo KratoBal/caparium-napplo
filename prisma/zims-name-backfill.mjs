@@ -27,16 +27,19 @@
 // Output names nobody: a ZIMS name only by its length (the output lands in the deploy log), the login id not at all.
 import { PrismaClient } from "@prisma/client";
 
+// a flag's value; a missing one (the flag last, or followed by another flag) is null, an absent flag undefined
 const argAfter = (flag) => {
   const at = process.argv.indexOf(flag);
-  return at >= 0 ? process.argv[at + 1] : undefined;
+  if (at < 0) return undefined;
+  const value = process.argv[at + 1];
+  return value === undefined || value.startsWith("--") ? null : value;
 };
 const LOGIN_ID = argAfter("--login");
 const REFERENCE = argAfter("--hivatkozas");
 const BEGINNING = new Date("1970-01-01T00:00:00.000Z");
 const APPLY = process.argv.includes("--apply");
 const ACTOR_LOGIN = argAfter("--vegrehajto");
-if (!LOGIN_ID || LOGIN_ID.startsWith("--")) {
+if (!LOGIN_ID || REFERENCE === null || ACTOR_LOGIN === null) {
   console.error("hasznalat: node prisma/zims-name-backfill.mjs --login <loginId> [--apply] [--vegrehajto <admin-loginId>] [--hivatkozas <szoveg>]");
   process.exit(2);
 }
