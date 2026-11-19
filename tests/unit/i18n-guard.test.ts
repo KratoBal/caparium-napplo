@@ -144,7 +144,10 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
     allowed: ["Érkezés", "Áthelyezés", "Csoportváltás", "Elhullás", "Kiadás", "hím", "nőstény"],
     why: "the event kinds and the sexes, translated where shown (tr(TYPE[t]), tr(SEX[s]))",
   },
-  "src/app/takarmanyok/page.tsx": { allowed: ["tömeg", "darab", "térfogat"], why: "the dimensions, translated where shown (tr(DIM[d]))" },
+  "src/app/takarmanyok/page.tsx": {
+    allowed: ["tömeg", "darab", "térfogat", "Kagylók", "Rákok", "Lábasfejűek", "Tengeri halak", "Apró és folyékony takarmány", "Egyéb"],
+    why: "the dimensions, translated where shown (tr(DIM[d])); the seeded feed types' names (src/lib/base-data.ts FEED_TYPES) are data, translated where shown (tr(t.name)), and listed here so the import reads them as keys",
+  },
   // round 3, the settings page (t-20261119-caparium-forditas-beallitasok)
   "src/components/SettingsForms.tsx": {
     allowed: ["Zöld", "Kék", "Sárga", "Narancs", "Rózsaszín", "Lila", "Világosszürke", "Teal", "Okker", "Kőszürke", "Olívabézs", "Gomba", "Agyagrózsa"],

@@ -1,7 +1,7 @@
 // t-20261117-caparium-angol-alap (Lili 2026-11-17): the device's language wins over the user's default, a text with no
 // English stays Hungarian, a translation keeps the text's data places
 import { describe, expect, it } from "vitest";
-import { PARAMETERS } from "@/lib/base-data";
+import { FEED_TYPES, PARAMETERS } from "@/lib/base-data";
 import { EN } from "@/lib/i18n/en";
 import { langCookie, parseLang, resolveLang } from "@/lib/i18n/lang";
 import { placeholdersOf, translate } from "@/lib/i18n/translate";
@@ -54,6 +54,16 @@ describe("the seeded measurements' names", () => {
   const SAME_IN_ENGLISH = ["pH", "ORP", "KH", "Mg", "Ca", "NO3", "PO4"];
   it("each has its English in the dictionary, or is a symbol that reads the same in English", () => {
     const missing = PARAMETERS.map((p) => p.name).filter((name) => !SAME_IN_ENGLISH.includes(name) && !Object.hasOwn(EN, name));
+    expect(missing).toEqual([]);
+  });
+});
+
+// the same for the seeded feed types (t-20261119-caparium-forditas-takarmanytipus): a type's name is data, translated where shown
+// (tr(t.name) on the feed list, the feeding sheet, the lists, the freezer and the withdrawal tables); its English comes in only
+// if the import reads the name as a key (the guard's takarmanyok list)
+describe("the seeded feed types' names", () => {
+  it("each has its English in the dictionary", () => {
+    const missing = FEED_TYPES.map(([, name]) => name).filter((name) => !Object.hasOwn(EN, name));
     expect(missing).toEqual([]);
   });
 });
