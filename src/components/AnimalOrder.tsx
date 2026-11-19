@@ -10,6 +10,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { moveBy, moveTo, parsePlace, rowAt } from "@/lib/animal-order";
+import { useTr } from "./LangProvider";
 
 /** A row of an order: its name (the testids carry it) and a faint detail after it. */
 export type OrderRow = { id: string; name: string; detail: string };
@@ -23,6 +24,7 @@ function requestId(): string {
 /** The place number of a row: type the place it should have, Enter or leaving the field moves it there. */
 function PlaceField({ name, place, count, disabled, onPlace }: { name: string; place: number; count: number; disabled: boolean; onPlace: (index: number) => void }) {
   const [text, setText] = useState(String(place));
+  const tr = useTr();
   useEffect(() => setText(String(place)), [place]);
   function commit() {
     const to = parsePlace(text, count);
@@ -33,7 +35,7 @@ function PlaceField({ name, place, count, disabled, onPlace }: { name: string; p
     <input
       className="input order-place"
       inputMode="numeric"
-      aria-label={`${name} helye (sorszám)`}
+      aria-label={tr("{name} helye (sorszám)", { name })}
       value={text}
       disabled={disabled}
       onChange={(e) => setText(e.target.value)}
@@ -67,6 +69,7 @@ export function OrderList({
 }) {
   const animals = rows;
   const router = useRouter();
+  const tr = useTr();
   const initial = animals.map((a) => a.id);
   const [order, setOrder] = useState(initial);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -109,13 +112,13 @@ export function OrderList({
       });
       const b = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
       if (!res.ok) {
-        setMsg({ ok: false, text: b.error?.message ?? "Nem sikerült." });
+        setMsg({ ok: false, text: b.error?.message ?? tr("Nem sikerült.") });
         return;
       }
-      setMsg({ ok: true, text: "Mentve." });
+      setMsg({ ok: true, text: tr("Mentve.") });
       router.refresh();
     } catch {
-      setMsg({ ok: false, text: "Nincs kapcsolat a szerverrel." });
+      setMsg({ ok: false, text: tr("Nincs kapcsolat a szerverrel.") });
     } finally {
       setBusy(false);
     }
@@ -134,7 +137,7 @@ export function OrderList({
                 className="order-handle"
                 data-testid={`order-handle-${a.name}`}
                 aria-hidden="true"
-                title="Húzd a helyére"
+                title={tr("Húzd a helyére")}
                 onPointerDown={(e) => {
                   if (busy) return;
                   e.currentTarget.setPointerCapture(e.pointerId);
@@ -159,11 +162,11 @@ export function OrderList({
               <span className="hint" style={{ flex: 1 }}>
                 {a.detail}
               </span>
-              <button className="btn btn-soft btn-mini" type="button" aria-label={`${a.name} feljebb`} disabled={i === 0 || busy} onClick={() => { setOrder((cur) => moveBy(cur, id, -1)); setActive(id); }}>
-                Fel
+              <button className="btn btn-soft btn-mini" type="button" aria-label={tr("{name} feljebb", { name: a.name })} disabled={i === 0 || busy} onClick={() => { setOrder((cur) => moveBy(cur, id, -1)); setActive(id); }}>
+                {tr("Fel")}
               </button>
-              <button className="btn btn-soft btn-mini" type="button" aria-label={`${a.name} lejjebb`} disabled={i === order.length - 1 || busy} onClick={() => { setOrder((cur) => moveBy(cur, id, 1)); setActive(id); }}>
-                Le
+              <button className="btn btn-soft btn-mini" type="button" aria-label={tr("{name} lejjebb", { name: a.name })} disabled={i === order.length - 1 || busy} onClick={() => { setOrder((cur) => moveBy(cur, id, 1)); setActive(id); }}>
+                {tr("Le")}
               </button>
             </li>
           );
@@ -171,11 +174,11 @@ export function OrderList({
       </ol>
       <div className="toolbar">
         <button className="btn" type="button" data-testid={saveTestId} disabled={busy || !dirty} onClick={() => void save()}>
-          Sorrend mentése
+          {tr("Sorrend mentése")}
         </button>
         {dirty && !busy && (
           <button className="btn btn-soft" type="button" onClick={() => setOrder(initial)}>
-            Elvetés
+            {tr("Elvetés")}
           </button>
         )}
         {msg && (

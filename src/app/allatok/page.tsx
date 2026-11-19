@@ -5,6 +5,7 @@ import { AnimalActions, AnimalEditForm, GroupActive, GroupMembers, InvalidateEve
 import { GroupPlacementFix } from "@/components/GroupPlacementFix";
 import { InactiveListFilter, InactiveRowShell } from "@/components/InactiveListFilter";
 import { Shell } from "@/components/Shell";
+import { pageTr } from "@/lib/i18n/server";
 import { withIcon } from "@/lib/icons";
 import { animalEvents, groupMemberships, listAnimals, listGroupsAdmin, listGroupsWithNames } from "@/lib/animals";
 import { prisma } from "@/lib/db";
@@ -14,6 +15,7 @@ import { businessDayOf, formatDateTime, formatDay, localDateTimeOf, localTimeOf 
 
 export const dynamic = "force-dynamic";
 
+// the event kinds and the sexes, translated where shown (tr(TYPE[t]), tr(SEX[s])); on the i18n guard's list
 const TYPE = { ARRIVAL: "Érkezés", TRANSFER: "Áthelyezés", GROUP_CHANGE: "Csoportváltás", DEATH: "Elhullás", RELEASE: "Kiadás" } as const;
 const SEX = { MALE: "hím", FEMALE: "nőstény", UNKNOWN: "?" } as const;
 
@@ -24,6 +26,7 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
   // Lili 2026-10-26 (msg 1564214896453750805): the animal list is seen and managed by admins only for now;
   // death, transfer and release are recorded by them too. The menu hides the entry, this is the guard.
   if (user.role !== "ADMIN") redirect("/nincs-jogosultsag");
+  const { tr } = await pageTr(user);
   const sp = await searchParams;
   const now = new Date();
   const [animals, groups, allGroups, pools, species] = await Promise.all([
@@ -42,32 +45,32 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
   const canRecord = level === "RECORD" || level === "ADMIN";
   // the arrival's own group stays a choice of the edit form even if the group was switched off since (it is not newly chosen then)
   const arrivalGroup = arrival?.toGroupId ? allGroups.find((g) => g.id === arrival.toGroupId) : undefined;
-  const editGroups = arrivalGroup && !arrivalGroup.active ? [...groups, { id: arrivalGroup.id, name: `${arrivalGroup.name} (inaktív)`, sheetColor: null }] : groups;
+  const editGroups = arrivalGroup && !arrivalGroup.active ? [...groups, { id: arrivalGroup.id, name: tr("{name} (inaktív)", { name: arrivalGroup.name }), sheetColor: null }] : groups;
   const isAdmin = user.role === "ADMIN";
   // the group card's from-to list (card b98016a1): every membership, with the events at its ends; the admin's only
   const memberships = isAdmin ? await groupMemberships(now) : {};
   // Lili 2026-10-27 20:44 UTC (acrobot 37043): the list, the open animal, a new animal, the starting list, the order last.
   return (
-    <Shell title="Állatok" active="animals" user={user}>
+    <Shell title={tr("Állatok")} active="animals" user={user}>
       <div className="card">
-        <h2>Állatok ({animals.filter((a) => a.alive).length} élő)</h2>
-        <p className="hint">A csoportban tartott állat is egyed. A medence és a csoport az események szerint változik, az előzmény megmarad.</p>
+        <h2>{tr("Állatok ({n} élő)", { n: animals.filter((a) => a.alive).length })}</h2>
+        <p className="hint">{tr("A csoportban tartott állat is egyed. A medence és a csoport az események szerint változik, az előzmény megmarad.")}</p>
         <div className="table-scroll">
           <table className="log-table" data-testid="animals-table">
             <thead>
-              <tr><th>Név</th><th>Faj</th><th>Nem</th><th>Medence</th><th>Csoport</th><th>Érkezett</th><th>Állapot</th></tr>
+              <tr><th>{tr("Név")}</th><th>{tr("Faj")}</th><th>{tr("Nem")}</th><th>{tr("Medence")}</th><th>{tr("Csoport")}</th><th>{tr("Érkezett")}</th><th>{tr("Állapot")}</th></tr>
             </thead>
             <tbody>
               {animals.map((a) => (
                 <tr key={a.id} className={a.alive ? undefined : "invalid"}>
                   <td className="keep"><Link href={`/allatok?allat=${a.id}`}>{a.name}</Link></td>
                   <td>{a.species}</td>
-                  <td>{SEX[a.sex]}</td>
+                  <td>{tr(SEX[a.sex])}</td>
                   <td>{a.poolName ? withIcon(a.poolEmoji, a.poolName) : "–"}</td>
                   <td>{a.groupName ?? "–"}</td>
                   <td>{a.arrived ? formatDay(a.arrived) : "–"}</td>
                   <td className="keep">
-                    {a.alive ? <span className="badge badge-valid">él</span> : <span className="badge badge-invalid">{a.ended ? `${TYPE[a.ended.type]} ${formatDay(a.ended.day)}` : "–"}</span>}
+                    {a.alive ? <span className="badge badge-valid">{tr("él")}</span> : <span className="badge badge-invalid">{a.ended ? `${tr(TYPE[a.ended.type])} ${formatDay(a.ended.day)}` : "–"}</span>}
                   </td>
                 </tr>
               ))}
@@ -79,20 +82,20 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
       {selected && (
         <div className="card" data-testid="animal-detail">
           <h2>{selected.name}</h2>
-          <p className="hint">{selected.species} · {selected.poolName ?? "nincs medencében"} · {selected.groupName ?? "nincs csoportban"}</p>
+          <p className="hint">{selected.species} · {selected.poolName ?? tr("nincs medencében")} · {selected.groupName ?? tr("nincs csoportban")}</p>
           <table className="log-table">
-            <thead><tr><th>Időpont</th><th>Esemény</th><th>Hova</th><th>Megjegyzés</th><th>Állapot</th><th></th></tr></thead>
+            <thead><tr><th>{tr("Időpont")}</th><th>{tr("Esemény")}</th><th>{tr("Hova")}</th><th>{tr("Megjegyzés")}</th><th>{tr("Állapot")}</th><th></th></tr></thead>
             <tbody>
               {events.map((e) => (
                 <tr key={e.id} className={e.status === "VALID" ? undefined : "invalid"}>
                   <td>{formatDay(businessDayOf(e.occurredAt))} {localTimeOf(e.occurredAt)}</td>
-                  <td>{TYPE[e.type]}</td>
+                  <td>{tr(TYPE[e.type])}</td>
                   <td>
                     {e.toPool ? pickValid(e.toPool.names, e.occurredAt)?.displayName ?? e.toPool.code : ""}
-                    {e.toGroup ? ` ${pickValid(e.toGroup.names, e.occurredAt)?.name ?? ""}` : e.type === "GROUP_CHANGE" ? "nincs csoport" : ""}
+                    {e.toGroup ? ` ${pickValid(e.toGroup.names, e.occurredAt)?.name ?? ""}` : e.type === "GROUP_CHANGE" ? tr("nincs csoport") : ""}
                   </td>
                   <td>{e.note ?? ""}</td>
-                  <td className="keep">{e.status === "VALID" ? "érvényes" : `érvénytelenítve${e.invalidationReason ? `: ${e.invalidationReason}` : ""}`}</td>
+                  <td className="keep">{e.status === "VALID" ? tr("érvényes") : e.invalidationReason ? tr("érvénytelenítve: {reason}", { reason: e.invalidationReason }) : tr("érvénytelenítve")}</td>
                   <td className="keep">{canRecord && e.status === "VALID" && <InvalidateEvent eventId={e.id} version={e.version} />}</td>
                 </tr>
               ))}
@@ -122,17 +125,19 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
 
       {isAdmin && (
         <div className="card">
-          <h2>Új állat, faj</h2>
-          <p className="hint">Az érkezés hozza létre az állatot. A tesztkörnyezetben csak kitalált adat szerepel.</p>
+          <h2>{tr("Új állat, faj")}</h2>
+          <p className="hint">{tr("Az érkezés hozza létre az állatot. A tesztkörnyezetben csak kitalált adat szerepel.")}</p>
           <NewArrival species={species.map((s) => ({ id: s.id, name: s.hungarianName ? `${s.scientificName} (${s.hungarianName})` : s.scientificName }))} pools={poolOpts} groups={groups} />
-          <SimpleCreate url="/api/admin/species" label="Új faj tudományos neve" field="scientificName" testId="new-species" />
+          <SimpleCreate url="/api/admin/species" label={tr("Új faj tudományos neve")} field="scientificName" testId="new-species" />
         </div>
       )}
 
       <div className="card">
-        <h2>Sorrend</h2>
+        <h2>{tr("Sorrend")}</h2>
         <p className="hint">
-          Húzd a sort a helyére (érintőképernyőn a Fel és Le gombokkal), majd mentsd. A takarmánynapló „Ki eszik ma” listája medencén belül, az evési minta és az Excel-exportok ezt a sorrendet követik. Akit nem raktál sorba (új érkező), az utolsó helyre kerül, név szerint.
+          {tr(
+            "Húzd a sort a helyére (érintőképernyőn a Fel és Le gombokkal), majd mentsd. A takarmánynapló „Ki eszik ma” listája medencén belül, az evési minta és az Excel-exportok ezt a sorrendet követik. Akit nem raktál sorba (új érkező), az utolsó helyre kerül, név szerint.",
+          )}
         </p>
         <AnimalOrder
           key={animals.filter((a) => a.alive).map((a) => a.id).join()}
@@ -142,17 +147,18 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
 
       {isAdmin && (
         <div className="card" data-testid="groups-card">
-          <h2>Csoportok</h2>
-          <SimpleCreate url="/api/admin/animal-groups" label="Új csoport neve" field="name" testId="new-group" />
+          <h2>{tr("Csoportok")}</h2>
+          <SimpleCreate url="/api/admin/animal-groups" label={tr("Új csoport neve")} field="name" testId="new-group" />
           <p className="hint">
-            Egy csoport akkor inaktiválható, ha már nincs tagja (a tagokat a Csoportváltás veszi ki). Az inaktív csoport nem jelenik meg a választókban és a mai
-            takarmánylapon; a régi napok tételei, naplói és exportjai változatlanok, a neve megmarad. Az inaktívak az „Inaktívak mutatása” kapcsolóval jönnek elő.
+            {tr(
+              "Egy csoport akkor inaktiválható, ha már nincs tagja (a tagokat a Csoportváltás veszi ki). Az inaktív csoport nem jelenik meg a választókban és a mai takarmánylapon; a régi napok tételei, naplói és exportjai változatlanok, a neve megmarad. Az inaktívak az „Inaktívak mutatása” kapcsolóval jönnek elő.",
+            )}
           </p>
           <InactiveListFilter inactive={allGroups.filter((g) => !g.active).length}>
             <div className="table-scroll">
               <table className="log-table" data-testid="groups-table">
                 <thead>
-                  <tr><th>Csoport</th><th>Tagok most</th><th></th><th>Tagok kezelése</th></tr>
+                  <tr><th>{tr("Csoport")}</th><th>{tr("Tagok most")}</th><th></th><th>{tr("Tagok kezelése")}</th></tr>
                 </thead>
                 <tbody>
                   {allGroups.map((g) => (
