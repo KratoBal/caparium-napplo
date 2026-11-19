@@ -1471,7 +1471,8 @@ test("dosing: an admin changes and inactivates a chemical; it is not offered whi
   // "Inaktívak mutatása"; with the switch on it is there, marked, to be activated again
   await page.reload();
   await expect(renamed).toHaveCount(0);
-  await page.getByTestId("stock").locator("..").getByRole("switch", { name: /^Inaktívak mutatása/ }).check();
+  // the stock table sits in its own scrolling box (the 390 px fix), so the switch is two levels up, in the card
+  await page.getByTestId("stock").locator("../..").getByRole("switch", { name: /^Inaktívak mutatása/ }).check();
   await expect(renamed).toHaveClass(/invalid/);
   // active again, and back to the first name: a second run starts where this one did
   await renamed.getByRole("button", { name: `${name} uj: aktiválás` }).click();
