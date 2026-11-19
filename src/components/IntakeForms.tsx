@@ -157,7 +157,7 @@ export function IntakeItems({ day, feeds, otherNames, items, editable }: { day: 
                 const name = i.otherName ? `${i.feed}: ${i.otherName}` : i.feed;
                 return (
                   <tr key={i.id} className={editing?.id === i.id ? "active-row" : undefined} data-returned={i.returned ? "yes" : "no"}>
-                    <td>{i.type}</td>
+                    <td>{tr(i.type)}</td>
                     <td>{name}</td>
                     <td>{i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")}</td>
                     <td>{i.note ?? ""}</td>

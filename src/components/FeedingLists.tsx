@@ -143,7 +143,7 @@ function ListForm(p: { list?: ListView; animals: EditAnimal[]; types: FeedTypeOp
         <div key={t.code} className="pick-block">
           <div className="section-title">
             {t.emoji && <span aria-hidden="true">{t.emoji}</span>}
-            {t.name}
+            {tr(t.name)}
           </div>
           <div className="pick-items">
             {t.feeds.map((f) => (

@@ -29,7 +29,7 @@ export default async function FeedsPage() {
       <InactiveListFilter inactive={types.reduce((n, t) => n + t.feeds.filter((x) => !x.active).length, 0)}>
       {types.map((t) => (
         <div className="card" key={t.id}>
-          <h2>{withIcon(t.emoji, t.name)}</h2>
+          <h2>{withIcon(t.emoji, tr(t.name))}</h2>
           {t.feeds.length === 0 ? (
             <p className="hint">{tr("Nincs takarmány ebben a típusban.")}</p>
           ) : (
@@ -87,7 +87,7 @@ export default async function FeedsPage() {
         <div className="card">
           <h2>{isAdmin ? tr("Új takarmány") : tr("Új Egyéb takarmány")}</h2>
           <p className="hint">{tr("A darab és a tömeg külön összesítődik, sosem adódik össze (DN-16).")}</p>
-          <NewFeed types={addable.map((t) => ({ id: t.id, name: t.name }))} units={unitOpts} />
+          <NewFeed types={addable.map((t) => ({ id: t.id, name: tr(t.name) }))} units={unitOpts} />
         </div>
       )}
       </InactiveListFilter>

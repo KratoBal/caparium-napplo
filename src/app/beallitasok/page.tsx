@@ -157,7 +157,7 @@ export default async function SettingsPage() {
             ))}
             {feedTypes.map((t) => (
               <tr key={t.id}>
-                <td>{tr("{name} (takarmánytípus)", { name: t.name })}</td>
+                <td>{tr("{name} (takarmánytípus)", { name: tr(t.name) })}</td>
                 <td className="keep"><IconForm target="feedType" id={t.id} name={t.name} emoji={t.emoji} /></td>
               </tr>
             ))}

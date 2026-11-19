@@ -187,7 +187,7 @@ export function DayFeeds({
         <div key={t.code} className="pick-block" data-testid={`feed-type-${t.name}`}>
           <div className="section-title">
             {t.emoji && <span aria-hidden="true">{t.emoji}</span>}
-            {t.name}
+            {tr(t.name)}
           </div>
           <div className="pick-items">
           {t.feeds.map((f) => (
@@ -746,7 +746,7 @@ export function WithdrawalItems({ day, useDay, feeds, otherNames, stock, items, 
                 const name = i.otherName ? `${i.feed}: ${i.otherName}` : i.feed;
                 return (
                   <tr key={i.id} className={editing?.id === i.id ? "active-row" : undefined}>
-                    <td>{i.type}</td>
+                    <td>{tr(i.type)}</td>
                     <td>{name}</td>
                     <td>{i.quantities.map((q) => `${q.value.replace(".", ",")} ${q.unit}`).join(" + ")}</td>
                     <td>{formatDay(i.useDay)}</td>
