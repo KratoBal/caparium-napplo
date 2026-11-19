@@ -120,6 +120,7 @@ export function Calculator({
           </select>
         </label>
       </div>
+      <div className="table-scroll">
       <table className="log-table" data-testid="calc-result">
         <tbody>
           <tr><th>{tr("FR napi")}</th><td>{result ? `${num(result.frDayPct)} %` : "–"}</td></tr>
@@ -127,6 +128,7 @@ export function Calculator({
           <tr><th>{tr("Fw hetente")}</th><td>{result ? `${num(result.fwG)} g` : "–"}</td></tr>
         </tbody>
       </table>
+      </div>
       <div className="toolbar">
         <label className="field">
           {tr("Állat")}

@@ -85,6 +85,7 @@ export function DayRestore({ day }: { day: string }) {
         {tr("A nap műveletei")}
       </button>
       {ops && (
+        <div className="table-scroll">
         <table className="log-table" data-testid="day-restore-ops">
           <tbody>
             {ops.map((o) => (
@@ -113,6 +114,7 @@ export function DayRestore({ day }: { day: string }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
       {plan && op && (
         <div data-testid="day-restore-plan">
