@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { askReason, useReasonsOn } from "./ReasonSwitch";
+import { useTr } from "./LangProvider";
 
 function requestId(): string {
   const b = new Uint8Array(16);
@@ -15,12 +16,13 @@ export function PendingActions({ id }: { id: string }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const reasonsOn = useReasonsOn();
+  const tr = useTr();
 
   async function decide(decision: "approve" | "reject") {
     setError(null);
     let reason: string | undefined;
     if (decision === "reject") {
-      const asked = askReason(reasonsOn, "Az elutasítás oka:", "Elutasítod ezt a mentést?");
+      const asked = askReason(reasonsOn, tr("Az elutasítás oka:"), tr("Elutasítod ezt a mentést?"));
       if (!asked) return;
       reason = asked.reason;
     }
@@ -31,7 +33,7 @@ export function PendingActions({ id }: { id: string }) {
     });
     if (!res.ok) {
       const b = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-      setError(b.error?.message ?? "A döntés nem mentődött.");
+      setError(b.error?.message ?? tr("A döntés nem mentődött."));
       return;
     }
     router.refresh();
@@ -40,10 +42,10 @@ export function PendingActions({ id }: { id: string }) {
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
       <button className="btn" type="button" onClick={() => void decide("approve")}>
-        Jóváhagyás
+        {tr("Jóváhagyás")}
       </button>
       <button className="btn btn-dark" type="button" onClick={() => void decide("reject")}>
-        Elutasítás
+        {tr("Elutasítás")}
       </button>
       {error && <span className="err">{error}</span>}
     </div>
