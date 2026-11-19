@@ -145,6 +145,12 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
     why: "the event kinds and the sexes, translated where shown (tr(TYPE[t]), tr(SEX[s]))",
   },
   "src/app/takarmanyok/page.tsx": { allowed: ["tömeg", "darab", "térfogat"], why: "the dimensions, translated where shown (tr(DIM[d]))" },
+  // round 3, the settings page (t-20261119-caparium-forditas-beallitasok)
+  "src/components/SettingsForms.tsx": {
+    allowed: ["Zöld", "Kék", "Sárga", "Narancs", "Rózsaszín", "Lila", "Világosszürke", "Teal", "Okker", "Kőszürke", "Olívabézs", "Gomba", "Agyagrózsa"],
+    why: "the sheet colours' names (src/lib/sheet-color-palette.ts SHEET_COLORS) are data, translated where shown (tr(c.label)), and listed here so the import reads them as keys",
+  },
+  "src/app/beallitasok/page.tsx": { allowed: [], why: "" },
 };
 
 const ACCENT = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;

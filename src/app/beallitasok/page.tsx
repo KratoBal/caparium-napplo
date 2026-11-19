@@ -8,6 +8,7 @@ import { Shell } from "@/components/Shell";
 import { listAnimals, listGroupsWithNames } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { canonicalDecimal } from "@/lib/decimal";
+import { pageTr } from "@/lib/i18n/server";
 import { getSetting, moduleLevel, pickValid, validAt } from "@/lib/master";
 import { listFridges } from "@/lib/fridges";
 import { listMeasurementTypes } from "@/lib/measurement-types";
@@ -23,6 +24,7 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage() {
   const user = await requireUser();
   if ((await moduleLevel(prisma, user.id, user.role, "SETTINGS")) !== "ADMIN") redirect("/nincs-jogosultsag");
+  const { tr } = await pageTr(user);
   const now = new Date();
   const reasons = await reasonsRequired(prisma);
   // the pools card lists the inactive ones too (a renovation), to bring them back; the other cards the active ones
@@ -58,47 +60,36 @@ export default async function SettingsPage() {
     }),
   ]);
   return (
-    <Shell title="Beállítások" active="settings" user={user}>
+    <Shell title={tr("Beállítások")} active="settings" user={user}>
       {/* Lili 2026-11-02 09:36-09:40 UTC (acrobot 39956, 39960): the water measurements on one card, as the pools, the feeds and
           the animals; the per-pool and the common references, the tester conversion and the new measurement moved in here */}
-      <SettingsCard id="vizmeresek" title="Vízmérések" testId="water-measurements-card">
-        <p className="hint">
-          Mérésenként egy sor; a Szerkesztés alatt a név (attól a naptól), a tizedesjegy és a hihető tartomány, a referenciák (közös és
-          medencénkénti), a mérőeszköz-átváltás, a lezárás és a mértékegység váltása. Törlés nincs: a lezárt mérés régi értékei megmaradnak.
-        </p>
+      <SettingsCard id="vizmeresek" title={tr("Vízmérések")} testId="water-measurements-card">
+        <p className="hint">{tr("Mérésenként egy sor; a Szerkesztés alatt a név (attól a naptól), a tizedesjegy és a hihető tartomány, a referenciák (közös és medencénkénti), a mérőeszköz-átváltás, a lezárás és a mértékegység váltása. Törlés nincs: a lezárt mérés régi értékei megmaradnak.")}</p>
         <WaterMeasurements rows={measurementTypes} units={measureUnits.map((u) => ({ id: u.id, symbol: u.symbol }))} today={businessDayOf(now)} reasons={reasons} />
         <div data-testid="new-measurement-card">
-          <h3 style={{ marginTop: 20 }}>Új mérés</h3>
-          <p className="hint">
-            Új vízérték mérésének kezdete (például nitrit vagy oldott oxigén): a kiválasztott napi vagy heti táblába új oszlop kerül, amely
-            csak a bejelölt medencékben tölthető ki, a megadott naptól; a többi medencében kötőjel áll. A hihető tartományon kívüli
-            értéknél a tábla rákérdez, a referencián kívülit pirossal jelzi. A ZIMS-név és -mértékegység betűre úgy kell, ahogy a ZIMS várja.
-          </p>
+          <h3 style={{ marginTop: 20 }}>{tr("Új mérés")}</h3>
+          <p className="hint">{tr("Új vízérték mérésének kezdete (például nitrit vagy oldott oxigén): a kiválasztott napi vagy heti táblába új oszlop kerül, amely csak a bejelölt medencékben tölthető ki, a megadott naptól; a többi medencében kötőjel áll. A hihető tartományon kívüli értéknél a tábla rákérdez, a referencián kívülit pirossal jelzi. A ZIMS-név és -mértékegység betűre úgy kell, ahogy a ZIMS várja.")}</p>
           <NewMeasurementForm
             today={businessDayOf(now)}
             units={measureUnits.map((u) => ({ id: u.id, symbol: u.symbol }))}
             groups={groupPools.map((g) => ({
               id: g.id,
-              name: `${g.name} (${g.frequency === "DAILY" ? "napi" : "heti"})`,
+              name: g.frequency === "DAILY" ? tr("{name} (napi)", { name: g.name }) : tr("{name} (heti)", { name: g.name }),
               pools: g.memberships.map((m) => ({ id: m.pool.id, name: pickValid(m.pool.names, now)?.displayName ?? m.pool.code })),
             }))}
           />
         </div>
-        <p className="banner banner-warn" style={{ marginTop: 16 }}>A tesztkörnyezet referenciaértékei bemutató adatok.</p>
+        <p className="banner banner-warn" style={{ marginTop: 16 }}>{tr("A tesztkörnyezet referenciaértékei bemutató adatok.")}</p>
       </SettingsCard>
 
       {/* Lili 2026-11-02 (task caparium-hutok): the fridges of the daily temperature book; their own card, not a water measurement */}
-      <SettingsCard id="hutok" title="Hűtők" testId="fridges-card">
-        <p className="hint">
-          Hűtőnként és fagyasztónként egy sor: név, fajta és a megengedett tartomány (°C). A napi vízmérés oldalán, a Nagy medencék tábla alatt
-          rögzíthető a hőmérséklet; a tartományon kívüli érték piros. Törlés nincs: a lezárt hűtőre nem rögzíthető új leolvasás, a régiek
-          megmaradnak, és újranyitható. Az új tartomány mostantól érvényes, a korábbi leolvasások a sajátjukat tartják.
-        </p>
+      <SettingsCard id="hutok" title={tr("Hűtők")} testId="fridges-card">
+        <p className="hint">{tr("Hűtőnként és fagyasztónként egy sor: név, fajta és a megengedett tartomány (°C). A napi vízmérés oldalán, a Nagy medencék tábla alatt rögzíthető a hőmérséklet; a tartományon kívüli érték piros. Törlés nincs: a lezárt hűtőre nem rögzíthető új leolvasás, a régiek megmaradnak, és újranyitható. Az új tartomány mostantól érvényes, a korábbi leolvasások a sajátjukat tartják.")}</p>
         <FridgeSettings fridges={await listFridges({ closedToo: true })} />
       </SettingsCard>
 
-      <SettingsCard id="medencek" title="Medencék">
-        <p className="hint">Minden medencének állandó azonosítója van; a név változása a korábbi mérések hozzárendelését nem érinti. Az inaktív (felújítás alatti) medence csak itt látszik, az „Inaktívak mutatása” kapcsolóval, és innen aktiválható; a korábbi mérései a korábbi napokon és az exportban megmaradnak.</p>
+      <SettingsCard id="medencek" title={tr("Medencék")}>
+        <p className="hint">{tr("Minden medencének állandó azonosítója van; a név változása a korábbi mérések hozzárendelését nem érinti. Az inaktív (felújítás alatti) medence csak itt látszik, az „Inaktívak mutatása” kapcsolóval, és innen aktiválható; a korábbi mérései a korábbi napokon és az exportban megmaradnak.")}</p>
         <PoolList
           reasons={reasons}
           pools={allPools.map((p) => ({
@@ -111,20 +102,13 @@ export default async function SettingsPage() {
         />
         {user.role === "ADMIN" && (
           <div data-testid="new-pool-box">
-            <h3 style={{ marginTop: 20 }}>Új medence</h3>
-            <p className="hint">
-              Név, kód, űrtartalom (liter) és legalább egy mérési csoport kell, az ikon nem kötelező. A „Nincs vízmérés” jelölővel a medence csoport nélkül is felvehető: nyilvántartott, de nem kerül mérési táblába (mint a sózók). Csak új medencét vesz fel: a meglévő
-              medencéket, méréseket, neveket és csoporttagságokat nem érinti. A kiválasztott csoport(ok) mérési táblájában a medence a lista
-              végére kerül.
-            </p>
+            <h3 style={{ marginTop: 20 }}>{tr("Új medence")}</h3>
+            <p className="hint">{tr("Név, kód, űrtartalom (liter) és legalább egy mérési csoport kell, az ikon nem kötelező. A „Nincs vízmérés” jelölővel a medence csoport nélkül is felvehető: nyilvántartott, de nem kerül mérési táblába (mint a sózók). Csak új medencét vesz fel: a meglévő medencéket, méréseket, neveket és csoporttagságokat nem érinti. A kiválasztott csoport(ok) mérési táblájában a medence a lista végére kerül.")}</p>
             <NewPoolForm groups={groups} />
           </div>
         )}
-        <h3 style={{ marginTop: 20 }}>Űrtartalom és rendszer</h3>
-        <p className="hint">
-          Literben. A vegyszer-kalkulátor ezzel számol, amikor a medencét kiválasztod. A rendszer (korallos vagy halas) a napi emelési
-          határt adja: korallos rendszerben kisebb lépésben emeli.
-        </p>
+        <h3 style={{ marginTop: 20 }}>{tr("Űrtartalom és rendszer")}</h3>
+        <p className="hint">{tr("Literben. A vegyszer-kalkulátor ezzel számol, amikor a medencét kiválasztod. A rendszer (korallos vagy halas) a napi emelési határt adja: korallos rendszerben kisebb lépésben emeli.")}</p>
         <table className="log-table" data-testid="pool-volumes">
           <tbody>
             {pools.map((p) => {
@@ -145,27 +129,24 @@ export default async function SettingsPage() {
         </table>
       </SettingsCard>
 
-      <SettingsCard id="vizmeres-kikuldes" title="Vízmérés kiküldése">
-        <p className="hint">Erre a címre küldi az Export oldal „Vízmérés kiküldése” gombja a mai és az e heti eredményeket, PDF-ben.</p>
+      <SettingsCard id="vizmeres-kikuldes" title={tr("Vízmérés kiküldése")}>
+        <p className="hint">{tr("Erre a címre küldi az Export oldal „Vízmérés kiküldése” gombja a mai és az e heti eredményeket, PDF-ben.")}</p>
         <WaterReportRecipient email={await getSetting(prisma, "water_report_recipient", now)} />
       </SettingsCard>
 
-      <SettingsCard id="havi-zims-level" title="Havi ZIMS-csomag levélben">
-        <p className="hint">Erre a címre megy az előző hónap ZIMS-csomagja az új hónap első órájában, medencénként egy CSV-vel. Ha a hónapra nem készül csomag, figyelmeztető levél megy. Üresen hagyva nem megy levél. Ha a címet hónap közben adod meg, az előző hónap csomagja is egyszer kimegy.</p>
+      <SettingsCard id="havi-zims-level" title={tr("Havi ZIMS-csomag levélben")}>
+        <p className="hint">{tr("Erre a címre megy az előző hónap ZIMS-csomagja az új hónap első órájában, medencénként egy CSV-vel. Ha a hónapra nem készül csomag, figyelmeztető levél megy. Üresen hagyva nem megy levél. Ha a címet hónap közben adod meg, az előző hónap csomagja is egyszer kimegy.")}</p>
         <MonthlyZimsRecipient email={await getSetting(prisma, "monthly_zims_recipient", now)} />
       </SettingsCard>
 
-      <SettingsCard id="mentes-emlekezteto" title="Mentés-emlékeztető">
-        <p className="hint">
-          Ha a napi vagy a heti vízmérésen minden mező ki van töltve, de még nincs mentve, a segítő szól: egy perc csend után,
-          vagy amikor az oldalt elhagynád. Ha már rutin a mentés, itt kikapcsolható mindenkinek.
-        </p>
+      <SettingsCard id="mentes-emlekezteto" title={tr("Mentés-emlékeztető")}>
+        <p className="hint">{tr("Ha a napi vagy a heti vízmérésen minden mező ki van töltve, de még nincs mentve, a segítő szól: egy perc csend után, vagy amikor az oldalt elhagynád. Ha már rutin a mentés, itt kikapcsolható mindenkinek.")}</p>
         <SaveReminderSwitch on={await saveReminderOn(prisma, now)} />
       </SettingsCard>
 
       {/* the page is for a SETTINGS admin already; the icon is master data of the same kind */}
-      <SettingsCard id="ikonok" title="Ikonok" testId="icons">
-        <p className="hint">Medencék és takarmánytípusok ikonja (DAT-03): csak megjelenítés, exportba nem kerül. Üresen hagyva nincs ikon.</p>
+      <SettingsCard id="ikonok" title={tr("Ikonok")} testId="icons">
+        <p className="hint">{tr("Medencék és takarmánytípusok ikonja (DAT-03): csak megjelenítés, exportba nem kerül. Üresen hagyva nincs ikon.")}</p>
         <table className="log-table">
           <tbody>
             {pools.map((p) => (
@@ -176,7 +157,7 @@ export default async function SettingsPage() {
             ))}
             {feedTypes.map((t) => (
               <tr key={t.id}>
-                <td>{t.name} (takarmánytípus)</td>
+                <td>{tr("{name} (takarmánytípus)", { name: t.name })}</td>
                 <td className="keep"><IconForm target="feedType" id={t.id} name={t.name} emoji={t.emoji} /></td>
               </tr>
             ))}
@@ -185,8 +166,8 @@ export default async function SettingsPage() {
       </SettingsCard>
 
       {/* Lili 2026-10-28 13:49 UTC: a row colour per animal and group, shown on the feeding sheet only */}
-      <SettingsCard id="sorszinek" title="Sorszínek a takarmánylapon" testId="sheet-colors">
-        <p className="hint">Az állat vagy a csoport sora ezzel a háttérszínnel jelenik meg a takarmánylapon, máshol nem. Csak megjelenítés, exportba nem kerül. Alapból nincs szín.</p>
+      <SettingsCard id="sorszinek" title={tr("Sorszínek a takarmánylapon")} testId="sheet-colors">
+        <p className="hint">{tr("Az állat vagy a csoport sora ezzel a háttérszínnel jelenik meg a takarmánylapon, máshol nem. Csak megjelenítés, exportba nem kerül. Alapból nincs szín.")}</p>
         <table className="log-table">
           <tbody>
             {animals
@@ -199,8 +180,8 @@ export default async function SettingsPage() {
               ))}
             {animalGroups.map((g) => (
               <tr key={g.id}>
-                <td>{g.name} (csoport)</td>
-                <td className="keep"><SheetColorForm target="group" id={g.id} name={`${g.name} (csoport)`} color={g.sheetColor} /></td>
+                <td>{tr("{name} (csoport)", { name: g.name })}</td>
+                <td className="keep"><SheetColorForm target="group" id={g.id} name={tr("{name} (csoport)", { name: g.name })} color={g.sheetColor} /></td>
               </tr>
             ))}
           </tbody>
@@ -208,11 +189,11 @@ export default async function SettingsPage() {
       </SettingsCard>
 
       {user.role === "ADMIN" && (
-      <SettingsCard id="felhasznalok" title="Felhasználók" htmlId="felhasznalok">
-        <p className="hint">Törlés nincs, csak inaktiválás: a régi naplók és az auditnapló a felhasználóra hivatkoznak.</p>
+      <SettingsCard id="felhasznalok" title={tr("Felhasználók")} htmlId="felhasznalok">
+        <p className="hint">{tr("Törlés nincs, csak inaktiválás: a régi naplók és az auditnapló a felhasználóra hivatkoznak.")}</p>
         <div className="table-scroll">
           <table className="log-table" data-testid="users-table">
-            <thead><tr><th>Név</th><th>Szerep</th><th>Monogram</th><th>ZIMS-név</th><th>E-mail</th><th>Jelszó</th><th></th></tr></thead>
+            <thead><tr><th>{tr("Név")}</th><th>{tr("Szerep")}</th><th>{tr("Monogram")}</th><th>{tr("ZIMS-név")}</th><th>{tr("E-mail")}</th><th>{tr("Jelszó")}</th><th></th></tr></thead>
             <tbody>
               {users.map((u) => (
                 <UserRow
@@ -231,7 +212,7 @@ export default async function SettingsPage() {
             </tbody>
           </table>
         </div>
-        <h3 style={{ marginTop: 20 }}>Új felhasználó</h3>
+        <h3 style={{ marginTop: 20 }}>{tr("Új felhasználó")}</h3>
         <NewUserForm />
       </SettingsCard>
       )}
