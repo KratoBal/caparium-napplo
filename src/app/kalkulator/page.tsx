@@ -55,6 +55,7 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
           <p className="hint">{tr("Számolni és menteni rögzítési joggal lehet.")}</p>
         )}
         {saved.length > 0 && (
+          <div className="table-scroll">
           <table className="log-table" data-testid="saved-references">
             <thead><tr><th>{tr("Mikor")}</th><th>{tr("Állat")}</th><th>{tr("BW")}</th><th>{tr("FR hét")}</th><th>{tr("N")}</th><th>{tr("Referencia (F)")}</th></tr></thead>
             <tbody>
@@ -70,6 +71,7 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
       {weighed && (
@@ -86,6 +88,7 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
             {tr("{name}: utoljára mérve {value}.", { name: weighed.name, value: last ? `${num(last.weightKg)} kg, ${formatDay(last.day)}` : tr("még nincs") })}
           </p>
           {canRecord && <BodyWeightForm animalId={weighed.id} />}
+          <div className="table-scroll">
           <table className="log-table" data-testid="body-weights">
             <thead><tr><th>{tr("Nap")}</th><th>{tr("Tömeg")}</th><th>{tr("Állapot")}</th><th></th></tr></thead>
             <tbody>
@@ -99,6 +102,7 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </Shell>

@@ -109,6 +109,7 @@ export default async function SettingsPage() {
         )}
         <h3 style={{ marginTop: 20 }}>{tr("Űrtartalom és rendszer")}</h3>
         <p className="hint">{tr("Literben. A vegyszer-kalkulátor ezzel számol, amikor a medencét kiválasztod. A rendszer (korallos vagy halas) a napi emelési határt adja: korallos rendszerben kisebb lépésben emeli.")}</p>
+        <div className="table-scroll">
         <table className="log-table" data-testid="pool-volumes">
           <tbody>
             {pools.map((p) => {
@@ -127,6 +128,7 @@ export default async function SettingsPage() {
             })}
           </tbody>
         </table>
+        </div>
       </SettingsCard>
 
       <SettingsCard id="vizmeres-kikuldes" title={tr("Vízmérés kiküldése")}>
@@ -147,6 +149,7 @@ export default async function SettingsPage() {
       {/* the page is for a SETTINGS admin already; the icon is master data of the same kind */}
       <SettingsCard id="ikonok" title={tr("Ikonok")} testId="icons">
         <p className="hint">{tr("Medencék és takarmánytípusok ikonja (DAT-03): csak megjelenítés, exportba nem kerül. Üresen hagyva nincs ikon.")}</p>
+        <div className="table-scroll">
         <table className="log-table">
           <tbody>
             {pools.map((p) => (
@@ -163,11 +166,13 @@ export default async function SettingsPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </SettingsCard>
 
       {/* Lili 2026-10-28 13:49 UTC: a row colour per animal and group, shown on the feeding sheet only */}
       <SettingsCard id="sorszinek" title={tr("Sorszínek a takarmánylapon")} testId="sheet-colors">
         <p className="hint">{tr("Az állat vagy a csoport sora ezzel a háttérszínnel jelenik meg a takarmánylapon, máshol nem. Csak megjelenítés, exportba nem kerül. Alapból nincs szín.")}</p>
+        <div className="table-scroll">
         <table className="log-table">
           <tbody>
             {animals
@@ -186,6 +191,7 @@ export default async function SettingsPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </SettingsCard>
 
       {user.role === "ADMIN" && (
