@@ -86,7 +86,7 @@ function TypeRow({ t, units, today, reasons, predecessor }: { t: MeasurementType
           {predecessor && <span className="hint"> {tr("(az előző, {unit} folytatása)", { unit: predecessor.unit.symbol })}</span>}
         </td>
         <td className="keep">
-          <button className="btn btn-row" type="button" aria-expanded={open} aria-label={tr("{name} ({unit}): szerkesztés", { name: t.name, unit: t.unit.symbol })} onClick={() => setOpen(!open)}>
+          <button className="btn btn-row" type="button" aria-expanded={open} aria-label={tr("{name} ({unit}): szerkesztés", { name: tr(t.name), unit: t.unit.symbol })} onClick={() => setOpen(!open)}>
             {open ? tr("Bezárás") : tr("Szerkesztés")}
           </button>
         </td>
@@ -166,11 +166,11 @@ function NameForm({ t, today }: { t: MeasurementTypeView; today: string }) {
     <div className="toolbar toolbar-end" data-testid="wm-name">
       <label className="field">
         {tr("Név")}
-        <input className="input" aria-label={tr("{name} új neve", { name: t.name })} value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
+        <input className="input" aria-label={tr("{name} új neve", { name: tr(t.name) })} value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
       </label>
       <label className="field">
         {tr("Mettől")}
-        <input className="input" type="date" aria-label={tr("{name} új nevének kezdete", { name: t.name })} value={from} onChange={(e) => setFrom(e.target.value)} />
+        <input className="input" type="date" aria-label={tr("{name} új nevének kezdete", { name: tr(t.name) })} value={from} onChange={(e) => setFrom(e.target.value)} />
       </label>
       <button
         className="btn"
@@ -195,7 +195,7 @@ function LimitsForm({ t }: { t: MeasurementTypeView }) {
     <div className="toolbar toolbar-end" data-testid="wm-limits">
       <label className="field">
         {tr("Tizedesjegyek")}
-        <select className="input" aria-label={tr("{name} tizedesjegyei", { name: t.name })} value={f.decimals} onChange={(e) => setF({ ...f, decimals: e.target.value })}>
+        <select className="input" aria-label={tr("{name} tizedesjegyei", { name: tr(t.name) })} value={f.decimals} onChange={(e) => setF({ ...f, decimals: e.target.value })}>
           {[0, 1, 2, 3, 4].map((d) => (
             <option key={d} value={d}>{d}</option>
           ))}
@@ -203,11 +203,11 @@ function LimitsForm({ t }: { t: MeasurementTypeView }) {
       </label>
       <label className="field">
         {tr("Hihető tartomány alja")}
-        <input className="input small" inputMode="decimal" aria-label={tr("{name} hihető tartomány alja", { name: t.name })} value={f.min} onChange={(e) => setF({ ...f, min: e.target.value })} />
+        <input className="input small" inputMode="decimal" aria-label={tr("{name} hihető tartomány alja", { name: tr(t.name) })} value={f.min} onChange={(e) => setF({ ...f, min: e.target.value })} />
       </label>
       <label className="field">
         {tr("teteje")}
-        <input className="input small" inputMode="decimal" aria-label={tr("{name} hihető tartomány teteje", { name: t.name })} value={f.max} onChange={(e) => setF({ ...f, max: e.target.value })} />
+        <input className="input small" inputMode="decimal" aria-label={tr("{name} hihető tartomány teteje", { name: tr(t.name) })} value={f.max} onChange={(e) => setF({ ...f, max: e.target.value })} />
       </label>
       <button
         className="btn"
@@ -233,7 +233,7 @@ function CloseForm({ t, today }: { t: MeasurementTypeView; today: string }) {
       <div className="toolbar toolbar-end" data-testid="wm-close">
         <label className="field">
           {tr("Meddig (utolsó nap)")}
-          <input className="input" type="date" aria-label={tr("{name} utolsó napja", { name: t.name })} value={to} min={t.from ?? undefined} onChange={(e) => setTo(e.target.value)} />
+          <input className="input" type="date" aria-label={tr("{name} utolsó napja", { name: tr(t.name) })} value={to} min={t.from ?? undefined} onChange={(e) => setTo(e.target.value)} />
         </label>
         <button
           className="btn btn-soft"

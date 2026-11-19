@@ -154,6 +154,13 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
   // round 3, the settings page's water measurements and fridges (t-20261119-caparium-forditas-vizmeres-hutok)
   "src/components/WaterMeasurements.tsx": { allowed: ["napi", "heti"], why: "the frequencies, translated where shown (tr(FREQ[f]))" },
   "src/components/FridgeSettings.tsx": { allowed: [], why: "" },
+  // round 3, the profile and the password pages (t-20261119-caparium-forditas-profil-jelszo)
+  "src/components/OwnProfileForms.tsx": { allowed: ["magyar"], why: "the language choice names each language in its own tongue, in both views" },
+  "src/app/profil/page.tsx": { allowed: [], why: "" },
+  "src/components/ResetPasswordForm.tsx": { allowed: [], why: "" },
+  "src/app/elfelejtett-jelszo/page.tsx": { allowed: [], why: "" },
+  "src/app/jelszo-visszaallitas/[token]/page.tsx": { allowed: [], why: "" },
+  "src/app/nincs-jogosultsag/page.tsx": { allowed: [], why: "" },
 };
 
 const ACCENT = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;
