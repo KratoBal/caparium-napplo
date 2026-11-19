@@ -8,6 +8,7 @@ import { PROFIL_PROPOSALS } from "./javaslat-profil";
 import { TAKARMANYTIPUS_PROPOSALS } from "./javaslat-takarmanytipus";
 import { VIZMERES_HUTOK_PROPOSALS } from "./javaslat-vizmeres-hutok";
 import { EXPORT_PROPOSALS } from "./javaslat-export";
+import { HIBAKOR_PROPOSALS } from "./javaslat-hibakor";
 import { LILI_PROPOSALS } from "./javaslat-lili";
 import { NAPLO_PROPOSALS } from "./javaslat-naplo";
 import { SERVER_PROPOSALS } from "./javaslat-szerver";
@@ -29,6 +30,7 @@ export const PROPOSAL_FILES: Readonly<Record<string, Proposals>> = {
   "javaslat-profil.ts": PROFIL_PROPOSALS,
   "javaslat-aktivitas.ts": AKTIVITAS_PROPOSALS,
   "javaslat-takarmanytipus.ts": TAKARMANYTIPUS_PROPOSALS,
+  "javaslat-hibakor.ts": HIBAKOR_PROPOSALS,
 };
 
 export const PROPOSALS: Proposals = Object.assign({}, ...Object.values(PROPOSAL_FILES));
