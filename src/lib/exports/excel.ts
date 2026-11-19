@@ -72,7 +72,7 @@ export async function buildWaterWorkbook(f: ExcelFilter): Promise<{ buffer: Buff
   });
   const people = await prisma.userMonogram.findMany({ where: { userId: { in: [...new Set(rows.map((r) => r.responsibleUserId))] } } });
   // a measurement recorded back in time, before the worker's first monogram began (point 1: the "?" rows were the old
-  // measurements Lili loaded, dated before her account; prisma/zims-name-lili-fix.mjs measured the same gap for the ZIMS
+  // measurements a worker loaded, dated before their account; prisma/zims-name-backfill.mjs fixed the same gap for the ZIMS
   // name): the first monogram is the one the worker is known by; a later change still leaves the older ones their own
   const monoOf = (userId: string, at: Date) => nameAt(people.filter((p) => p.userId === userId), at)?.monogram ?? "?";
   const endOfPeriod = resolveLocalDateTime(`${f.to}T23:59`)!.instant;

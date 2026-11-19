@@ -1,37 +1,45 @@
-// ONE-TIME DATA FIX: lili's current ZIMS name is valid for all her earlier measurements (Balázs 2026-10-21 10:05 UTC,
-// Cápárium thread, msg 1562406441279553577: "a lili új zimes nevét kellene beírni a régi mérésekhez is"; acrobot 34460).
+// ONE-TIME DATA FIX: one worker's current ZIMS name is made valid for all their earlier measurements (an admin's
+// decision, the reason goes into the audit entry). Written 2026-10-21 for one worker whose measurements were recorded
+// back-dated, before their account and its first name row existed, so the ZIMS export refused them. A name row only
+// covers [validFrom, validTo).
 //
-// The measurement (zims-name-gap.mjs, 2026-10-21): one staff member, "lili", 136 measurements the ZIMS export refuses.
-// Her first name row started when she was created (10-19 12:04), her measurements were recorded back-dated to 10-01..10-18,
-// and today's rename added two more rows (08:03:00 and 08:03:05). A name row only covers [validFrom, validTo).
-//
-// What it does, in one transaction, for loginId "lili" only:
-//   - her open row (validTo NULL, today's name) gets validFrom = 1970-01-01, so it covers every measurement;
+// What it does, in one transaction, for the one worker named by --login:
+//   - their open row (validTo NULL, today's name) gets validFrom = 1970-01-01, so it covers every measurement;
 //   - every earlier row is closed onto itself (validTo = validFrom): kept as history, but it covers no moment, so no two
 //     rows overlap (pickValid takes the row whose interval covers the measurement);
-//   - one audit entry (MASTER_CORRECTION, User, her id) with each row's old and new period and the name's length.
-// After the change it counts her refused measurements again; anything but 0 rolls the whole transaction back.
+//   - one audit entry (MASTER_CORRECTION, User, their id) with each row's old and new period and the name's length.
+// After the change it counts their refused measurements again; anything but 0 rolls the whole transaction back.
 //
 // Dry by default: prints the rows and the plan, writes nothing. `--apply` writes. Run from /app in the app container:
 //
-//   node prisma/zims-name-lili-fix.mjs                                  # dry
-//   node prisma/zims-name-lili-fix.mjs --apply                          # recorded under the system user
-//   node prisma/zims-name-lili-fix.mjs --apply --vegrehajto <admin-loginId>
+//   node prisma/zims-name-backfill.mjs --login <loginId>                                      # dry
+//   node prisma/zims-name-backfill.mjs --login <loginId> --apply                              # recorded under the system user
+//   node prisma/zims-name-backfill.mjs --login <loginId> --apply --vegrehajto <admin-loginId>
+//   ... --hivatkozas "<who decided, when>"     optional, appended to the audit reason
 //
 // The audit entry's userId is the ACTOR (admin.ts writes actor.id there; barracuda #39). By default it is the system
-// user (role SYSTEM, the non-login actor of automatic operations, R-12): a script ran it, on Balázs's decision, which the
-// reason names. `--vegrehajto` records it under an active ADMIN account instead. lili stands only in entityId.
+// user (role SYSTEM, the non-login actor of automatic operations, R-12). `--vegrehajto` records it under an active ADMIN
+// account instead. The worker stands only in entityId.
 //
 // Idempotent: a second run finds the open row already at the beginning and every other row empty, and changes nothing.
-// It refuses (exit 3) unless exactly one active-or-not user has the login id and exactly one of her rows is open.
-// Output names nobody: a ZIMS name only by its length (the output lands in the deploy log).
+// It refuses (exit 3) unless exactly one active-or-not user has the login id and exactly one of their rows is open;
+// without --login it refuses with exit 2.
+// Output names nobody: a ZIMS name only by its length (the output lands in the deploy log), the login id not at all.
 import { PrismaClient } from "@prisma/client";
 
-const LOGIN_ID = "lili";
+const argAfter = (flag) => {
+  const at = process.argv.indexOf(flag);
+  return at >= 0 ? process.argv[at + 1] : undefined;
+};
+const LOGIN_ID = argAfter("--login");
+const REFERENCE = argAfter("--hivatkozas");
 const BEGINNING = new Date("1970-01-01T00:00:00.000Z");
 const APPLY = process.argv.includes("--apply");
-const ACTOR_AT = process.argv.indexOf("--vegrehajto");
-const ACTOR_LOGIN = ACTOR_AT >= 0 ? process.argv[ACTOR_AT + 1] : undefined;
+const ACTOR_LOGIN = argAfter("--vegrehajto");
+if (!LOGIN_ID || LOGIN_ID.startsWith("--")) {
+  console.error("hasznalat: node prisma/zims-name-backfill.mjs --login <loginId> [--apply] [--vegrehajto <admin-loginId>] [--hivatkozas <szoveg>]");
+  process.exit(2);
+}
 
 const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001"; // src/lib/db.ts
 const prisma = new PrismaClient();
@@ -55,9 +63,9 @@ const REFUSED = `
 class Refused extends Error {}
 
 try {
-  out({ adatjavitas: "caparium-zims-nev-lili", mod: APPLY ? "ELES" : "SZARAZ", ido: new Date().toISOString() });
+  out({ adatjavitas: "caparium-zims-nev-visszamenoleg", mod: APPLY ? "ELES" : "SZARAZ", ido: new Date().toISOString() });
   const users = await prisma.user.findMany({ where: { loginId: LOGIN_ID }, select: { id: true } });
-  if (users.length !== 1) throw new Refused(`${users.length} felhasználó a(z) ${LOGIN_ID} azonosítóval, nem 1`);
+  if (users.length !== 1) throw new Refused(`${users.length} felhasználó a megadott azonosítóval, nem 1`);
   const userId = users[0].id;
   let actorId = null;
   if (APPLY) {
@@ -110,8 +118,8 @@ try {
           zimsNameRows: changes.map(({ row, data }) => ({ before: period(row), after: period({ ...row, ...data }) })),
         },
         reason:
-          "Egyszeri adatjavítás: a mai ZIMS-név az összes korábbi mérésre (Balázs 2026-10-21 10:05 UTC, msg 1562406441279553577)",
-        client: "data-fix:zims-name-lili-fix.mjs",
+          "Egyszeri adatjavítás: a mai ZIMS-név az összes korábbi mérésre" + (REFERENCE ? ` (${REFERENCE.slice(0, 200)})` : ""),
+        client: "data-fix:zims-name-backfill.mjs",
       },
     });
     const refusedAfter = (await tx.$queryRawUnsafe(REFUSED, userId))[0].n;
