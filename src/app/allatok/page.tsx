@@ -83,6 +83,8 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
         <div className="card" data-testid="animal-detail">
           <h2>{selected.name}</h2>
           <p className="hint">{selected.species} · {selected.poolName ?? tr("nincs medencében")} · {selected.groupName ?? tr("nincs csoportban")}</p>
+          {/* the animal's events, in their own scrolling box like the animals table above (bug round 2026-11-19) */}
+          <div className="table-scroll">
           <table className="log-table">
             <thead><tr><th>{tr("Időpont")}</th><th>{tr("Esemény")}</th><th>{tr("Hova")}</th><th>{tr("Megjegyzés")}</th><th>{tr("Állapot")}</th><th></th></tr></thead>
             <tbody>
@@ -101,6 +103,7 @@ export default async function AnimalsPage({ searchParams }: { searchParams: Prom
               ))}
             </tbody>
           </table>
+          </div>
           {canRecord && selected.alive && <AnimalActions animalId={selected.id} pools={poolOpts} groups={groups} />}
           {editable && (
             <AnimalEditForm

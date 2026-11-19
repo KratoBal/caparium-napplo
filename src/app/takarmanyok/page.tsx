@@ -33,6 +33,8 @@ export default async function FeedsPage() {
           {t.feeds.length === 0 ? (
             <p className="hint">{tr("Nincs takarmány ebben a típusban.")}</p>
           ) : (
+            // in its own scrolling box like the other tables: at 390 px it widened the whole page by 107 px (bug round 2026-11-19)
+            <div className="table-scroll">
             <table
               // Lili 2026-10-29 (package item 15): banded rows, paler than the reports' bands, under the coloured marks
               className="log-table feeds-table"
@@ -61,6 +63,7 @@ export default async function FeedsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
           {/* Lili 2026-10-28 (acrobot 37529): the feeds' order inside the type, as the animals'; every list follows it */}
           {isAdmin && t.feeds.length > 1 && (
