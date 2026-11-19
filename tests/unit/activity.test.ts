@@ -259,6 +259,14 @@ describe("labels", () => {
     ]);
     expect(text).toBe("érvénytelenítés: evési állapot; rögzítés: 2 etetett állat");
   });
+
+  // the Aktivitás page passes its translator (tr), the CSV export does not: both tables' labels go through it, the counts stay
+  it("translates both tables' labels through the page's translator, and stays Hungarian without one", () => {
+    const rows = [row({ action: "INVALIDATE", entityType: "EatingStatus" }), row({ entityType: "FeedingSelection" }), row({ entityType: "FeedingSelection" })];
+    const english: Record<string, string> = { "érvénytelenítés": "invalidation", "evési állapot": "eating status", "rögzítés": "recording", "etetett állat": "fed animal" };
+    expect(describeSave(rows, (t) => english[t] ?? t)).toBe("invalidation: eating status; recording: 2 fed animal");
+    expect(describeSave(rows)).toBe("érvénytelenítés: evési állapot; rögzítés: 2 etetett állat");
+  });
 });
 
 describe("the page's links (barracuda, #136: the second click lost the detail)", () => {

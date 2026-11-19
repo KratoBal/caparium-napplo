@@ -1,5 +1,6 @@
 import { plainNumber as num, summaryCell } from "@/lib/mass-display";
 import { headerGroups, type Column, type ReportLine } from "@/lib/reports";
+import type { TrVars } from "@/lib/i18n/translate";
 
 /**
  * EGY-13: lines × (feed, base unit), with the line's total per unit and a total line. Lili 2026-10-29 (package item 12):
@@ -8,7 +9,22 @@ import { headerGroups, type Column, type ReportLine } from "@/lib/reports";
  */
 const sumClass = (first: boolean) => (first ? "report-sum report-sum-first" : "report-sum");
 
-export function ReportTable({ title, columns, lines, total, testId }: { title: string; columns: Column[]; lines: ReportLine[]; total: ReportLine; testId: string }) {
+// `tr` comes from the page (a server component, no hook here); the total line's label ("Összesen") is translated where shown
+export function ReportTable({
+  title,
+  columns,
+  lines,
+  total,
+  testId,
+  tr,
+}: {
+  title: string;
+  columns: Column[];
+  lines: ReportLine[];
+  total: ReportLine;
+  testId: string;
+  tr: (text: string, vars?: TrVars) => string;
+}) {
   const units = [...new Set(columns.filter((c) => !c.group).map((c) => c.unit))];
   const groupUnits = [...new Set(columns.filter((c) => c.group).map((c) => c.unit))];
   const groups = headerGroups(columns);
@@ -24,7 +40,7 @@ export function ReportTable({ title, columns, lines, total, testId }: { title: s
   // reads in kg from 1000 g (Lili 2026-10-29, item 12 follow-up). `isTotal`: the bottom line, whose feed cells are sums too.
   const cells = (l: ReportLine, isTotal = false) => (
     <>
-      <td>{l.label}</td>
+      <td>{isTotal ? tr(l.label) : l.label}</td>
       {columns.map((c) => (
         <td key={c.key} className={startClass(c)}>{l.cells[c.key] === undefined ? "" : isTotal ? summaryCell(c.unit, l.cells[c.key]) : num(l.cells[c.key])}</td>
       ))}
@@ -49,7 +65,7 @@ export function ReportTable({ title, columns, lines, total, testId }: { title: s
             ))}
             {units.length + groupUnits.length > 0 && (
               <th colSpan={units.length + groupUnits.length} scope="colgroup" data-testid="report-group">
-                Összesítés
+                {tr("Összesítés")}
               </th>
             )}
           </tr>
@@ -60,10 +76,10 @@ export function ReportTable({ title, columns, lines, total, testId }: { title: s
               </th>
             ))}
             {units.map((u, i) => (
-              <th key={u} className={sumClass(i === 0)}>{groupUnits.length ? "Egyedi összesen" : "Összesen"} ({u})</th>
+              <th key={u} className={sumClass(i === 0)}>{groupUnits.length ? tr("Egyedi összesen") : tr("Összesen")} ({u})</th>
             ))}
             {groupUnits.map((u, i) => (
-              <th key={`g-${u}`} className={sumClass(units.length === 0 && i === 0)}>Csoportos tételekben, a csoport teljes mennyisége ({u})</th>
+              <th key={`g-${u}`} className={sumClass(units.length === 0 && i === 0)}>{tr("Csoportos tételekben, a csoport teljes mennyisége")} ({u})</th>
             ))}
           </tr>
         </thead>

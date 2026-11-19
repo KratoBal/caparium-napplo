@@ -4,6 +4,7 @@ import { listAnimals } from "@/lib/animals";
 import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { feedingLog } from "@/lib/feeding-log";
+import { pageTr } from "@/lib/i18n/server";
 import { moduleLevel, pickValid } from "@/lib/master";
 import { breakdown } from "@/lib/reports";
 import { requireModuleRead } from "@/lib/session";
@@ -16,6 +17,7 @@ export const dynamic = "force-dynamic";
 // per feed and base unit; the same as Excel.
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ tol?: string; ig?: string; medence?: string; allat?: string }> }) {
   const { user } = await requireModuleRead("FEEDING");
+  const { tr } = await pageTr(user);
   const sp = await searchParams;
   const today = businessDayOf(new Date());
   const to = sp.ig && isValidDay(sp.ig) ? sp.ig : today;
@@ -39,20 +41,20 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     error = e.message;
   }
   return (
-    <Shell title="Kimutatások" active="reports" user={user}>
+    <Shell title={tr("Kimutatások")} active="reports" user={user}>
       <form method="get" action="/kimutatasok" className="filters no-print">
         <label className="field">
-          Naptól
+          {tr("Naptól")}
           <input className="input" type="date" name="tol" defaultValue={from} />
         </label>
         <label className="field">
-          Napig
+          {tr("Napig")}
           <input className="input" type="date" name="ig" defaultValue={to} />
         </label>
         <label className="field">
-          Medence
-          <select className="input" name="medence" defaultValue={poolId ?? ""} aria-label="Medence">
-            <option value="">mind</option>
+          {tr("Medence")}
+          <select className="input" name="medence" defaultValue={poolId ?? ""} aria-label={tr("Medence")}>
+            <option value="">{tr("mind")}</option>
             {pools.map((p) => (
               <option key={p.id} value={p.id}>
                 {pickValid(p.names, now)?.displayName ?? p.code}
@@ -61,9 +63,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           </select>
         </label>
         <label className="field">
-          Állat
-          <select className="input" name="allat" defaultValue={animalId ?? ""} aria-label="Állat">
-            <option value="">mind</option>
+          {tr("Állat")}
+          <select className="input" name="allat" defaultValue={animalId ?? ""} aria-label={tr("Állat")}>
+            <option value="">{tr("mind")}</option>
             {animals.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -71,19 +73,19 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             ))}
           </select>
         </label>
-        <button className="btn btn-soft" type="submit">Lekérés</button>
+        <button className="btn btn-soft" type="submit">{tr("Lekérés")}</button>
       </form>
       {error && <div className="banner banner-error">{error}</div>}
       {report && (
         <>
           <div className="card">
-            <h2>Napokra bontva</h2>
-            <p className="hint">Takarmányonként és alapegységben; a darab és a tömeg külön oszlop. A csoportos tétel a csoporté, felosztás nélkül.</p>
-            <ReportTable title="Nap" columns={report.columns} lines={report.byDay} total={report.total} testId="report-by-day" />
+            <h2>{tr("Napokra bontva")}</h2>
+            <p className="hint">{tr("Takarmányonként és alapegységben; a darab és a tömeg külön oszlop. A csoportos tétel a csoporté, felosztás nélkül.")}</p>
+            <ReportTable title={tr("Nap")} columns={report.columns} lines={report.byDay} total={report.total} testId="report-by-day" tr={tr} />
           </div>
           <div className="card">
-            <h2>Kinek</h2>
-            <ReportTable title="Állat vagy csoport" columns={report.columns} lines={report.byRecipient} total={report.total} testId="report-by-recipient" />
+            <h2>{tr("Kinek")}</h2>
+            <ReportTable title={tr("Állat vagy csoport")} columns={report.columns} lines={report.byRecipient} total={report.total} testId="report-by-recipient" tr={tr} />
           </div>
           {exportLevel !== "NONE" && (
             <form method="post" action="/api/exports/feeding" className="toolbar no-print">
@@ -92,10 +94,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               <input type="hidden" name="to" value={to} />
               {poolId && <input type="hidden" name="pool" value={poolId} />}
               {animalId && <input type="hidden" name="animal" value={animalId} />}
-              <button className="btn" type="submit" data-testid="excel-kimutatas">Kimutatás (Excel, {formatPeriod(from, to)})</button>
+              <button className="btn" type="submit" data-testid="excel-kimutatas">{tr("Kimutatás (Excel, {period})", { period: formatPeriod(from, to) })}</button>
               {/* Lili 2026-11-01 (point 8): the PDF made on the server, landscape, a table per feed group (the browser's print is gone) */}
               <button className="btn btn-soft" type="submit" name="format" value="pdf" data-testid="pdf-kimutatas">
-                Kimutatás (PDF, {formatPeriod(from, to)})
+                {tr("Kimutatás (PDF, {period})", { period: formatPeriod(from, to) })}
               </button>
             </form>
           )}

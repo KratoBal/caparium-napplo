@@ -263,8 +263,11 @@ export const ACTION_LABEL: Readonly<Record<AuditAction, string>> = {
   ANONYMIZE: "anonimizálás",
 };
 
-/** "rögzítés: 2 vízmérés, mérési kör": a save's rows in one line, the action first. */
-export function describeSave(rows: readonly ActivityRow[]): string {
+/**
+ * "rögzítés: 2 vízmérés, mérési kör": a save's rows in one line, the action first. `t` translates the two tables' labels where the
+ * page shows them (tr on the Aktivitás page); the CSV export keeps Hungarian (no `t`), as every export does.
+ */
+export function describeSave(rows: readonly ActivityRow[], t: (text: string) => string = (text) => text): string {
   const byAction = new Map<AuditAction, Map<string, number>>();
   for (const r of rows) {
     const m = byAction.get(r.action) ?? new Map<string, number>();
@@ -273,8 +276,8 @@ export function describeSave(rows: readonly ActivityRow[]): string {
   }
   return [...byAction]
     .map(([action, types]) => {
-      const what = [...types].map(([t, n]) => `${n > 1 ? `${n} ` : ""}${ENTITY_LABEL[t] ?? t}`).join(", ");
-      return `${ACTION_LABEL[action]}: ${what}`;
+      const what = [...types].map(([type, n]) => `${n > 1 ? `${n} ` : ""}${ENTITY_LABEL[type] ? t(ENTITY_LABEL[type]) : type}`).join(", ");
+      return `${t(ACTION_LABEL[action])}: ${what}`;
     })
     .join("; ");
 }

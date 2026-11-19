@@ -161,6 +161,15 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
   "src/app/elfelejtett-jelszo/page.tsx": { allowed: [], why: "" },
   "src/app/jelszo-visszaallitas/[token]/page.tsx": { allowed: [], why: "" },
   "src/app/nincs-jogosultsag/page.tsx": { allowed: [], why: "" },
+  // round 3, the activity, the pending saves and the reports (t-20261119-caparium-forditas-aktivitas)
+  "src/app/aktivitas/page.tsx": {
+    allowed: ["Vízmérés", "Hűtők", "Napi etetés", "Fagyasztó és kivétel", "Vegyszeradagolás", "Állatok", "Beállítások", "Export, levél, napzárás", "Evési napló", "vízmérés", "mérési kör", "medence-pipa", "hűtő-leolvasás", "hűtő", "etetési nap", "takarmánytétel", "etetési lista", "etetett állat", "etetési terv", "etetési referencia", "kalkuláció", "takarmány-beérkezés", "takarmánykivétel", "adagolás", "vegyszerkészlet", "állat", "állatcsoport", "állat-sorrend", "életciklus-esemény", "kezdő állatlista", "faj", "takarmány", "takarmány-sorrend", "mérés-sorrend", "vegyszer", "medence", "mérésfajta", "referenciaérték", "mérőeszköz-átváltás", "beállítás", "felhasználó", "export", "havi ZIMS-levél", "vízmérés-kiküldés", "napzárás", "evési állapot", "testtömeg", "rögzítés", "módosítás", "érvénytelenítés", "lezárás", "újranyitás", "törzsadat-változás", "törzsadat-helyesbítés", "belépés", "sikertelen belépés", "kilépés", "ütközés miatt elutasítva", "függő mentés", "függő mentés elfogadva", "függő mentés elutasítva", "anonimizálás"],
+    why: "the activity kinds, the entities and the actions are data of src/lib/activity.ts (ACTIVITY_KINDS, ENTITY_LABEL, ACTION_LABEL), translated where shown (tr(k.label), describeSave(rows, tr)), and listed here so the import reads them as keys",
+  },
+  "src/app/fuggo/page.tsx": { allowed: [], why: "" },
+  "src/components/PendingActions.tsx": { allowed: [], why: "" },
+  "src/app/kimutatasok/page.tsx": { allowed: [], why: "" },
+  "src/components/ReportTable.tsx": { allowed: [], why: "" },
 };
 
 const ACCENT = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;

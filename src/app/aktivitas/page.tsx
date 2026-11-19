@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Shell } from "@/components/Shell";
 import {
+  ACTIVE_GAP_MINUTES,
   ACTIVITY_KINDS,
-  ACTIVE_LABEL,
   activityCsvHref,
   activityHref,
   type ActivityKindKey,
@@ -17,6 +17,7 @@ import {
   summarize,
 } from "@/lib/activity";
 import { prisma } from "@/lib/db";
+import { pageTr } from "@/lib/i18n/server";
 import { requireUser } from "@/lib/session";
 import { addDays, businessDayOf, formatDay, isValidDay, localTimeOf, weekdayLetter } from "@/lib/time";
 
@@ -34,6 +35,7 @@ export default async function ActivityPage({
 }) {
   const user = await requireUser();
   if (user.role !== "ADMIN") redirect("/nincs-jogosultsag");
+  const { tr } = await pageTr(user);
   const sp = readActivityParams(await searchParams);
   const today = businessDayOf(new Date());
   const to = sp.ig && isValidDay(sp.ig) ? sp.ig : today;
@@ -43,15 +45,16 @@ export default async function ActivityPage({
   // `ember` filters the summary, `ki` is the person of the opened cell: two keys, each written once by every link
   const person = users.some((u) => u.id === sp.ember) ? sp.ember : undefined;
   const detailPerson = users.some((u) => u.id === sp.ki) ? sp.ki : undefined;
-  const name = (id: string) => users.find((u) => u.id === id)?.fullName ?? "ismeretlen felhasználó";
+  const name = (id: string) => users.find((u) => u.id === id)?.fullName ?? tr("ismeretlen felhasználó");
   const loginOf = (id: string) => users.find((u) => u.id === id)?.loginId ?? id;
 
   const saves = groupSaves(await loadActivityRows(period, person));
   const rows = summarize(saves);
   const showOther = rows.some((r) => r.counts.other);
   const columns: { key: KindParam; label: string }[] = [
-    ...ACTIVITY_KINDS.map((k) => ({ key: k.key as KindParam, label: k.label })),
-    ...(showOther ? [{ key: "other" as const, label: "Egyéb" }] : []),
+    // the kinds' labels are data of lib/activity.ts, translated here (on the i18n guard's list)
+    ...ACTIVITY_KINDS.map((k) => ({ key: k.key as KindParam, label: tr(k.label) })),
+    ...(showOther ? [{ key: "other" as const, label: tr("Egyéb") }] : []),
   ];
 
   const view = { from: period.from, to: period.to, filter: person };
@@ -70,68 +73,67 @@ export default async function ActivityPage({
   const detailHref = (p: number) => activityHref(view, { day: detailDay!, person: detailPerson!, kind: kind!.key, page: p });
 
   return (
-    <Shell title="Aktivitás" active="activity" user={user}>
+    <Shell title={tr("Aktivitás")} active="activity" user={user}>
       <form method="get" action="/aktivitas" className="filters">
         <label className="field">
-          Naptól
+          {tr("Naptól")}
           <input className="input" type="date" name="tol" defaultValue={period.from} />
         </label>
         <label className="field">
-          Napig
+          {tr("Napig")}
           <input className="input" type="date" name="ig" defaultValue={period.to} />
         </label>
         <label className="field">
-          Felhasználó
+          {tr("Felhasználó")}
           <select className="input" name="ember" defaultValue={person ?? ""}>
-            <option value="">Mindenki</option>
+            <option value="">{tr("Mindenki")}</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.fullName}
-                {u.active ? "" : " (inaktív)"}
+                {u.active ? "" : ` ${tr("(inaktív)")}`}
               </option>
             ))}
           </select>
         </label>
         <button className="btn" type="submit">
-          Szűrés
+          {tr("Szűrés")}
         </button>
       </form>
 
       <div className="card">
-        <h2>Ki mit rögzített</h2>
+        <h2>{tr("Ki mit rögzített")}</h2>
         <p className="hint">
-          Egy szám egy mentés: ha egy mentés több sort ír (például egy etetés a koplalási napokat is), az egyszer számít, abban
-          a fajtában, amire a mentés szólt. A rendszer automatikus lépései és a belépések nem számítanak. Egyszerre legfeljebb{" "}
-          {MAX_ACTIVITY_DAYS} nap látszik. Egy számra kattintva a mentések listája nyílik meg. Az első és az utolsó mentés a
-          nap első és utolsó rögzítésének ideje; az aktív idő a mentések ideje, a köztük lévő szünetekkel együtt, de a hosszabb szünetek
-          nélkül; a sorok a mentések mögötti naplósorok száma.
+          {tr(
+            "Egy szám egy mentés: ha egy mentés több sort ír (például egy etetés a koplalási napokat is), az egyszer számít, abban a fajtában, amire a mentés szólt. A rendszer automatikus lépései és a belépések nem számítanak. Egyszerre legfeljebb {days} nap látszik. Egy számra kattintva a mentések listája nyílik meg. Az első és az utolsó mentés a nap első és utolsó rögzítésének ideje; az aktív idő a mentések ideje, a köztük lévő szünetekkel együtt, de a hosszabb szünetek nélkül; a sorok a mentések mögötti naplósorok száma.",
+            { days: MAX_ACTIVITY_DAYS },
+          )}
         </p>
         {rows.length > 0 ? (
           <p>
             <a className="btn btn-soft" href={activityCsvHref(view)} data-testid="activity-csv" download>
-              Letöltés CSV-ben
+              {tr("Letöltés CSV-ben")}
             </a>
           </p>
         ) : null}
         {rows.length === 0 ? (
           <p className="hint" data-testid="activity-empty">
-            Ebben az időszakban nincs rögzítés.
+            {tr("Ebben az időszakban nincs rögzítés.")}
           </p>
         ) : (
           <div className="table-scroll">
             <table className="log-table" data-testid="activity-table">
               <thead>
                 <tr>
-                  <th>Nap</th>
-                  <th>Felhasználó</th>
-                  <th>Első mentés</th>
-                  <th>Utolsó mentés</th>
-                  <th>{ACTIVE_LABEL}</th>
+                  <th>{tr("Nap")}</th>
+                  <th>{tr("Felhasználó")}</th>
+                  <th>{tr("Első mentés")}</th>
+                  <th>{tr("Utolsó mentés")}</th>
+                  <th>{tr("Aktív idő ({minutes} percnél hosszabb szünet nélkül)", { minutes: ACTIVE_GAP_MINUTES })}</th>
                   {columns.map((c) => (
                     <th key={c.key}>{c.label}</th>
                   ))}
-                  <th>Összesen</th>
-                  <th>Sorok</th>
+                  <th>{tr("Összesen")}</th>
+                  <th>{tr("Sorok")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -170,15 +172,15 @@ export default async function ActivityPage({
             {name(detailPerson)}, {formatDay(detailDay)} ({weekdayLetter(detailDay)}): {kind.label}
           </h2>
           {detail.length === 0 ? (
-            <p className="hint">Ezen a napon ebben a fajtában nincs mentés.</p>
+            <p className="hint">{tr("Ezen a napon ebben a fajtában nincs mentés.")}</p>
           ) : (
             <div className="table-scroll">
               <table className="log-table">
                 <thead>
                   <tr>
-                    <th>Időpont</th>
-                    <th>Mi történt</th>
-                    <th>Indoklás</th>
+                    <th>{tr("Időpont")}</th>
+                    <th>{tr("Mi történt")}</th>
+                    <th>{tr("Indoklás")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -189,11 +191,11 @@ export default async function ActivityPage({
                       <tr key={s.key}>
                         <td>{localTimeOf(s.at)}</td>
                         <td>
-                          {describeSave(s.rows)}
+                          {describeSave(s.rows, tr)}
                           {measurement && (
                             <>
                               {" "}
-                              <Link href={`/naplo/${measurement.entityId}`}>(megnyitás)</Link>
+                              <Link href={`/naplo/${measurement.entityId}`}>{tr("(megnyitás)")}</Link>
                             </>
                           )}
                         </td>
@@ -207,11 +209,11 @@ export default async function ActivityPage({
           )}
           {pages > 1 && (
             <div className="toolbar">
-              {page > 1 && <Link className="btn btn-soft" href={detailHref(page - 1)}>Előző oldal</Link>}
+              {page > 1 && <Link className="btn btn-soft" href={detailHref(page - 1)}>{tr("Előző oldal")}</Link>}
               <span className="hint">
-                {page}. oldal / {pages} ({detail.length} mentés)
+                {tr("{page}. oldal / {pages} ({n} mentés)", { page, pages, n: detail.length })}
               </span>
-              {page < pages && <Link className="btn btn-soft" href={detailHref(page + 1)}>Következő oldal</Link>}
+              {page < pages && <Link className="btn btn-soft" href={detailHref(page + 1)}>{tr("Következő oldal")}</Link>}
             </div>
           )}
         </div>
