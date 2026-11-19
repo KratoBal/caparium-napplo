@@ -7,6 +7,7 @@ import { useState } from "react";
 import { hasDigit, signedTemperature, startsNegative } from "@/lib/fridge-sign";
 import { Msg, useSave } from "./SettingsForms";
 import { SignButton } from "./SignButton";
+import { useTr } from "./LangProvider";
 
 export type FridgeSetting = { id: string; name: string; kind: "FRIDGE" | "FREEZER"; min: string; max: string; active: boolean };
 
@@ -14,15 +15,17 @@ const hu = (v: string) => v.replace(".", ",");
 const dot = (v: string) => v.trim().replace(",", ".");
 
 function KindSelect({ value, onChange, label }: { value: string; onChange: (v: "FRIDGE" | "FREEZER") => void; label: string }) {
+  const tr = useTr();
   return (
     <select className="input" aria-label={label} value={value} onChange={(e) => onChange(e.target.value as "FRIDGE" | "FREEZER")}>
-      <option value="FRIDGE">hűtő</option>
-      <option value="FREEZER">fagyasztó</option>
+      <option value="FRIDGE">{tr("hűtő")}</option>
+      <option value="FREEZER">{tr("fagyasztó")}</option>
     </select>
   );
 }
 
 function FridgeSettingRow({ f }: { f: FridgeSetting }) {
+  const tr = useTr();
   const [name, setName] = useState(f.name);
   const [kind, setKind] = useState(f.kind);
   const [min, setMin] = useState(hu(f.min));
@@ -36,25 +39,25 @@ function FridgeSettingRow({ f }: { f: FridgeSetting }) {
   const unchanged = name.trim() === f.name && kind === f.kind && minSigned === f.min && maxSigned === f.max;
   return (
     <tr data-testid={`fridge-setting-${f.name}`} className={f.active ? undefined : "invalid"}>
-      <td className="keep"><input className="input" aria-label={`${f.name} neve`} value={name} onChange={(e) => setName(e.target.value)} /></td>
-      <td className="keep"><KindSelect label={`${f.name} fajtája`} value={kind} onChange={setKind} /></td>
-      <td className="keep"><span className="temp-field"><SignButton name={`${f.name} minimuma`} text={min} negative={minNeg} onToggle={(n) => { setMin(n.text); setMinNeg(n.negative); }} /><input className="input small" inputMode="decimal" aria-label={`${f.name} minimuma (°C)`} value={min} onChange={(e) => setMin(e.target.value)} /></span></td>
-      <td className="keep"><span className="temp-field"><SignButton name={`${f.name} maximuma`} text={max} negative={maxNeg} onToggle={(n) => { setMax(n.text); setMaxNeg(n.negative); }} /><input className="input small" inputMode="decimal" aria-label={`${f.name} maximuma (°C)`} value={max} onChange={(e) => setMax(e.target.value)} /></span></td>
+      <td className="keep"><input className="input" aria-label={tr("{name} neve", { name: f.name })} value={name} onChange={(e) => setName(e.target.value)} /></td>
+      <td className="keep"><KindSelect label={tr("{name} fajtája", { name: f.name })} value={kind} onChange={setKind} /></td>
+      <td className="keep"><span className="temp-field"><SignButton name={tr("{name} minimuma", { name: f.name })} text={min} negative={minNeg} onToggle={(n) => { setMin(n.text); setMinNeg(n.negative); }} /><input className="input small" inputMode="decimal" aria-label={tr("{name} minimuma (°C)", { name: f.name })} value={min} onChange={(e) => setMin(e.target.value)} /></span></td>
+      <td className="keep"><span className="temp-field"><SignButton name={tr("{name} maximuma", { name: f.name })} text={max} negative={maxNeg} onToggle={(n) => { setMax(n.text); setMaxNeg(n.negative); }} /><input className="input small" inputMode="decimal" aria-label={tr("{name} maximuma (°C)", { name: f.name })} value={max} onChange={(e) => setMax(e.target.value)} /></span></td>
       <td className="keep">
         <button className="btn" type="button" disabled={busy || unchanged} onClick={() => void save(`/api/admin/fridges/${f.id}`, "PATCH", { name: name.trim(), kind, min: minSigned, max: maxSigned })}>
-          Mentés
+          {tr("Mentés")}
         </button>{" "}
         <button
           className="btn btn-row"
           type="button"
           disabled={busy}
-          aria-label={`${f.name}: ${f.active ? "lezárás" : "újranyitás"}`}
+          aria-label={f.active ? tr("{name}: lezárás", { name: f.name }) : tr("{name}: újranyitás", { name: f.name })}
           onClick={() => {
-            if (f.active && !window.confirm(`Lezárod: ${f.name}? Új leolvasás nem rögzíthető rá, és lekerül a napi oldalról; a korábbi leolvasásai megmaradnak, és újranyitható.`)) return;
-            void save(`/api/admin/fridges/${f.id}`, "PATCH", { active: !f.active }, f.active ? "Lezárva." : "Újra használatban.");
+            if (f.active && !window.confirm(tr("Lezárod: {name}? Új leolvasás nem rögzíthető rá, és lekerül a napi oldalról; a korábbi leolvasásai megmaradnak, és újranyitható.", { name: f.name }))) return;
+            void save(`/api/admin/fridges/${f.id}`, "PATCH", { active: !f.active }, f.active ? tr("Lezárva.") : tr("Újra használatban."));
           }}
         >
-          {f.active ? "Lezárás" : "Újranyitás"}
+          {f.active ? tr("Lezárás") : tr("Újranyitás")}
         </button>{" "}
         <Msg msg={msg} />
       </td>
@@ -63,6 +66,7 @@ function FridgeSettingRow({ f }: { f: FridgeSetting }) {
 }
 
 function NewFridgeForm() {
+  const tr = useTr();
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"FRIDGE" | "FREEZER">("FRIDGE");
   const [min, setMin] = useState("");
@@ -76,13 +80,13 @@ function NewFridgeForm() {
   return (
     <div className="toolbar" data-testid="new-fridge">
       <label className="field">
-        Név
+        {tr("Név")}
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
       <label className="field">
-        Fajta
+        {tr("Fajta")}
         <KindSelect
-          label="Új hűtő fajtája"
+          label={tr("Új hűtő fajtája")}
           value={kind}
           onChange={(next) => {
             setKind(next);
@@ -92,19 +96,19 @@ function NewFridgeForm() {
         />
       </label>
       <label className="field">
-        Minimum (°C)
+        {tr("Minimum (°C)")}
         {/* the INPUT comes first in the DOM: a wrapping <label> belongs to its first labelable descendant, and a button before the
             input took the label (the e2e's getByLabel("Minimum (°C)") then found the button); the button is shown on the left by CSS */}
         <span className="temp-field">
           <input className="input small" inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} />
-          <SignButton name="Új hűtő minimuma" text={min} negative={minNeg} onToggle={(n) => { setMin(n.text); setMinNeg(n.negative); }} />
+          <SignButton name={tr("Új hűtő minimuma")} text={min} negative={minNeg} onToggle={(n) => { setMin(n.text); setMinNeg(n.negative); }} />
         </span>
       </label>
       <label className="field">
-        Maximum (°C)
+        {tr("Maximum (°C)")}
         <span className="temp-field">
           <input className="input small" inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} />
-          <SignButton name="Új hűtő maximuma" text={max} negative={maxNeg} onToggle={(n) => { setMax(n.text); setMaxNeg(n.negative); }} />
+          <SignButton name={tr("Új hűtő maximuma")} text={max} negative={maxNeg} onToggle={(n) => { setMax(n.text); setMaxNeg(n.negative); }} />
         </span>
       </label>
       <button
@@ -112,7 +116,7 @@ function NewFridgeForm() {
         type="button"
         disabled={busy || !name.trim() || !hasDigit(minSigned) || !hasDigit(maxSigned)}
         onClick={async () => {
-          if (await save("/api/admin/fridges", "POST", { name: name.trim(), kind, min: dot(minSigned), max: dot(maxSigned) }, "Felvéve.")) {
+          if (await save("/api/admin/fridges", "POST", { name: name.trim(), kind, min: dot(minSigned), max: dot(maxSigned) }, tr("Felvéve."))) {
             setName("");
             setMin("");
             setMax("");
@@ -121,7 +125,7 @@ function NewFridgeForm() {
           }
         }}
       >
-        Hűtő felvétele
+        {tr("Hűtő felvétele")}
       </button>
       <Msg msg={msg} />
     </div>
@@ -129,6 +133,7 @@ function NewFridgeForm() {
 }
 
 export function FridgeSettings({ fridges }: { fridges: FridgeSetting[] }) {
+  const tr = useTr();
   return (
     <>
       {fridges.length > 0 && (
@@ -136,10 +141,10 @@ export function FridgeSettings({ fridges }: { fridges: FridgeSetting[] }) {
           <table className="log-table" data-testid="fridges-table">
             <thead>
               <tr>
-                <th>Név</th>
-                <th>Fajta</th>
-                <th>Minimum (°C)</th>
-                <th>Maximum (°C)</th>
+                <th>{tr("Név")}</th>
+                <th>{tr("Fajta")}</th>
+                <th>{tr("Minimum (°C)")}</th>
+                <th>{tr("Maximum (°C)")}</th>
                 <th></th>
               </tr>
             </thead>
@@ -151,7 +156,7 @@ export function FridgeSettings({ fridges }: { fridges: FridgeSetting[] }) {
           </table>
         </div>
       )}
-      <h3 style={{ marginTop: 20 }}>Új hűtő</h3>
+      <h3 style={{ marginTop: 20 }}>{tr("Új hűtő")}</h3>
       <NewFridgeForm />
     </>
   );
