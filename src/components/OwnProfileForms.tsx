@@ -4,6 +4,10 @@
 // edited: the admin changes them (they are on the measurements and in the ZIMS export).
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTr } from "./LangProvider";
+import type { TrVars } from "@/lib/i18n/translate";
+
+type Tr = (text: string, vars?: TrVars) => string;
 
 function requestId(): string {
   const b = new Uint8Array(16);
@@ -11,7 +15,7 @@ function requestId(): string {
   return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
 
-async function patch(body: Record<string, unknown>): Promise<string | null> {
+async function patch(body: Record<string, unknown>, tr: Tr): Promise<string | null> {
   try {
     const res = await fetch("/api/profile", {
       method: "PATCH",
@@ -20,9 +24,9 @@ async function patch(body: Record<string, unknown>): Promise<string | null> {
     });
     if (res.ok) return null;
     const b = (await res.json().catch(() => ({}))) as { error?: { message?: string; issues?: { message: string }[] } };
-    return b.error?.issues?.[0]?.message ?? b.error?.message ?? "A mentés nem sikerült.";
+    return b.error?.issues?.[0]?.message ?? b.error?.message ?? tr("A mentés nem sikerült.");
   } catch {
-    return "Nincs kapcsolat a szerverrel.";
+    return tr("Nincs kapcsolat a szerverrel.");
   }
 }
 
@@ -34,6 +38,7 @@ function Status({ msg }: { msg: Msg }) {
 }
 
 export function OwnNameForm({ fullName }: { fullName: string }) {
+  const tr = useTr();
   const router = useRouter();
   const [name, setName] = useState(fullName);
   const [msg, setMsg] = useState<Msg>(null);
@@ -42,7 +47,7 @@ export function OwnNameForm({ fullName }: { fullName: string }) {
   return (
     <div className="toolbar" data-testid="own-name">
       <label className="field">
-        <span>Megjelenő név</span>
+        <span>{tr("Megjelenő név")}</span>
         <input className="input" value={name} maxLength={100} onChange={(e) => setName(e.target.value)} />
       </label>
       <button
@@ -51,13 +56,13 @@ export function OwnNameForm({ fullName }: { fullName: string }) {
         disabled={busy || !changed}
         onClick={async () => {
           setBusy(true);
-          const err = await patch({ fullName: name.trim() });
+          const err = await patch({ fullName: name.trim() }, tr);
           setBusy(false);
-          setMsg(err ? { ok: false, text: err } : { ok: true, text: "Név mentve." });
+          setMsg(err ? { ok: false, text: err } : { ok: true, text: tr("Név mentve.") });
           if (!err) router.refresh();
         }}
       >
-        Név mentése
+        {tr("Név mentése")}
       </button>
       <Status msg={msg} />
     </div>
@@ -65,6 +70,7 @@ export function OwnNameForm({ fullName }: { fullName: string }) {
 }
 
 export function OwnPasswordForm() {
+  const tr = useTr();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [again, setAgain] = useState("");
@@ -76,20 +82,20 @@ export function OwnPasswordForm() {
     <div data-testid="own-password">
       <div className="form-grid">
         <label className="field">
-          <span>Jelenlegi jelszó</span>
+          <span>{tr("Jelenlegi jelszó")}</span>
           <input className="input" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
         </label>
         <label className="field">
-          <span>Új jelszó</span>
+          <span>{tr("Új jelszó")}</span>
           <input className="input" type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
         </label>
         <label className="field">
-          <span>Új jelszó még egyszer</span>
+          <span>{tr("Új jelszó még egyszer")}</span>
           <input className="input" type="password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} />
         </label>
       </div>
-      <p className="hint">Legalább 10 karakter. A többi eszközön újra be kell lépni, ezen nem.</p>
-      {mismatch && <p className="err">A két új jelszó nem egyezik.</p>}
+      <p className="hint">{tr("Legalább 10 karakter. A többi eszközön újra be kell lépni, ezen nem.")}</p>
+      {mismatch && <p className="err">{tr("A két új jelszó nem egyezik.")}</p>}
       <div className="toolbar">
         <button
           className="btn"
@@ -97,9 +103,9 @@ export function OwnPasswordForm() {
           disabled={busy || !ready}
           onClick={async () => {
             setBusy(true);
-            const err = await patch({ currentPassword: current, newPassword: next });
+            const err = await patch({ currentPassword: current, newPassword: next }, tr);
             setBusy(false);
-            setMsg(err ? { ok: false, text: err } : { ok: true, text: "Jelszó megváltoztatva." });
+            setMsg(err ? { ok: false, text: err } : { ok: true, text: tr("Jelszó megváltoztatva.") });
             if (!err) {
               setCurrent("");
               setNext("");
@@ -107,7 +113,7 @@ export function OwnPasswordForm() {
             }
           }}
         >
-          Jelszó módosítása
+          {tr("Jelszó módosítása")}
         </button>
         <Status msg={msg} />
       </div>
@@ -117,6 +123,7 @@ export function OwnPasswordForm() {
 
 /** Lili 2026-11-01 (point 17): the nickname the helper greets with; empty goes back to the given name. */
 export function OwnNicknameForm({ nickname }: { nickname: string }) {
+  const tr = useTr();
   const router = useRouter();
   const [nick, setNick] = useState(nickname);
   const [msg, setMsg] = useState<Msg>(null);
@@ -125,7 +132,7 @@ export function OwnNicknameForm({ nickname }: { nickname: string }) {
   return (
     <div className="toolbar" data-testid="own-nickname">
       <label className="field">
-        <span>Becenév</span>
+        <span>{tr("Becenév")}</span>
         <input className="input" value={nick} maxLength={40} onChange={(e) => setNick(e.target.value)} />
       </label>
       <button
@@ -134,13 +141,13 @@ export function OwnNicknameForm({ nickname }: { nickname: string }) {
         disabled={busy || !changed}
         onClick={async () => {
           setBusy(true);
-          const err = await patch({ nickname: nick.trim() });
+          const err = await patch({ nickname: nick.trim() }, tr);
           setBusy(false);
-          setMsg(err ? { ok: false, text: err } : { ok: true, text: "Becenév mentve." });
+          setMsg(err ? { ok: false, text: err } : { ok: true, text: tr("Becenév mentve.") });
           if (!err) router.refresh();
         }}
       >
-        Becenév mentése
+        {tr("Becenév mentése")}
       </button>
       <Status msg={msg} />
     </div>
@@ -151,6 +158,7 @@ export function OwnNicknameForm({ nickname }: { nickname: string }) {
  * The user's own e-mail address (task e7f9e84d): where the link of a forgotten password goes. Optional; empty removes it.
  */
 export function OwnEmailForm({ email }: { email: string }) {
+  const tr = useTr();
   const router = useRouter();
   const [value, setValue] = useState(email);
   const [current, setCurrent] = useState("");
@@ -160,12 +168,12 @@ export function OwnEmailForm({ email }: { email: string }) {
   return (
     <div className="toolbar" data-testid="own-email">
       <label className="field">
-        <span>E-mail cím</span>
+        <span>{tr("E-mail cím")}</span>
         <input className="input" type="email" autoComplete="email" value={value} maxLength={254} onChange={(e) => setValue(e.target.value)} />
       </label>
       {/* the address is where a reset link goes, so it is guarded like the password (barracuda on #217) */}
       <label className="field">
-        <span>Jelenlegi jelszó</span>
+        <span>{tr("Jelenlegi jelszó")}</span>
         <input className="input" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
       </label>
       <button
@@ -174,16 +182,16 @@ export function OwnEmailForm({ email }: { email: string }) {
         disabled={busy || !changed || !current}
         onClick={async () => {
           setBusy(true);
-          const err = await patch({ email: value.trim(), currentPassword: current });
+          const err = await patch({ email: value.trim(), currentPassword: current }, tr);
           setBusy(false);
-          setMsg(err ? { ok: false, text: err } : { ok: true, text: value.trim() ? "E-mail cím mentve." : "E-mail cím törölve." });
+          setMsg(err ? { ok: false, text: err } : { ok: true, text: value.trim() ? tr("E-mail cím mentve.") : tr("E-mail cím törölve.") });
           if (!err) {
             setCurrent("");
             router.refresh();
           }
         }}
       >
-        E-mail cím mentése
+        {tr("E-mail cím mentése")}
       </button>
       <Status msg={msg} />
     </div>
@@ -195,6 +203,7 @@ export function OwnEmailForm({ email }: { email: string }) {
  * the header's HU/EN switch keeps its own; a device with no choice yet gets this one at the next login.
  */
 export function OwnLanguageForm({ language }: { language: "HU" | "EN" }) {
+  const tr = useTr();
   const router = useRouter();
   const [value, setValue] = useState(language);
   const [msg, setMsg] = useState<Msg>(null);
@@ -202,8 +211,9 @@ export function OwnLanguageForm({ language }: { language: "HU" | "EN" }) {
   return (
     <div className="toolbar" data-testid="own-language">
       <label className="field">
-        <span>Alapértelmezett nyelv</span>
+        <span>{tr("Alapértelmezett nyelv")}</span>
         <select className="input" value={value} onChange={(e) => setValue(e.target.value as "HU" | "EN")}>
+          {/* each language by its own name, in both views */}
           <option value="HU">magyar</option>
           <option value="EN">English</option>
         </select>
@@ -214,13 +224,13 @@ export function OwnLanguageForm({ language }: { language: "HU" | "EN" }) {
         disabled={busy || value === language}
         onClick={async () => {
           setBusy(true);
-          const err = await patch({ language: value });
+          const err = await patch({ language: value }, tr);
           setBusy(false);
-          setMsg(err ? { ok: false, text: err } : { ok: true, text: "Nyelv mentve." });
+          setMsg(err ? { ok: false, text: err } : { ok: true, text: tr("Nyelv mentve.") });
           if (!err) router.refresh();
         }}
       >
-        Nyelv mentése
+        {tr("Nyelv mentése")}
       </button>
       <Status msg={msg} />
     </div>

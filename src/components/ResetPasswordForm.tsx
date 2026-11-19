@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useTr } from "./LangProvider";
 
 /** The new password twice; the link's token goes with it (task e7f9e84d). */
 export function ResetPasswordForm({ token }: { token: string }) {
+  const tr = useTr();
   const [next, setNext] = useState("");
   const [again, setAgain] = useState("");
   const [busy, setBusy] = useState(false);
@@ -13,15 +15,15 @@ export function ResetPasswordForm({ token }: { token: string }) {
   if (done)
     return (
       <p role="status" data-testid="reset-done">
-        Az új jelszó beállítva. <Link href="/belepes">Belépés</Link>
+        {tr("Az új jelszó beállítva.")} <Link href="/belepes">{tr("Belépés")}</Link>
       </p>
     );
   return (
     <form
       onSubmit={async (e) => {
         e.preventDefault();
-        if (next.length < 10) return setError("Az új jelszó legalább 10 karakter legyen.");
-        if (next !== again) return setError("A két új jelszó nem egyezik.");
+        if (next.length < 10) return setError(tr("Az új jelszó legalább 10 karakter legyen."));
+        if (next !== again) return setError(tr("A két új jelszó nem egyezik."));
         setBusy(true);
         setError(null);
         try {
@@ -31,24 +33,24 @@ export function ResetPasswordForm({ token }: { token: string }) {
             body: JSON.stringify({ token, newPassword: next }),
           });
           if (res.ok) setDone(true);
-          else setError(((await res.json().catch(() => null)) as { error?: { message?: string } } | null)?.error?.message ?? "A jelszó nem menthető.");
+          else setError(((await res.json().catch(() => null)) as { error?: { message?: string } } | null)?.error?.message ?? tr("A jelszó nem menthető."));
         } catch {
-          setError("Nincs kapcsolat a szerverrel.");
+          setError(tr("Nincs kapcsolat a szerverrel."));
         } finally {
           setBusy(false);
         }
       }}
     >
       <label className="field">
-        <span>Új jelszó</span>
+        <span>{tr("Új jelszó")}</span>
         <input className="input" type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} required />
       </label>
       <label className="field">
-        <span>Új jelszó még egyszer</span>
+        <span>{tr("Új jelszó még egyszer")}</span>
         <input className="input" type="password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} required />
       </label>
       <button className="btn" type="submit" disabled={busy}>
-        Jelszó beállítása
+        {tr("Jelszó beállítása")}
       </button>
       {error && (
         <div className="banner banner-error" role="alert">
@@ -61,6 +63,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
 
 /** The login id or the address; the answer is the same whatever happened (task e7f9e84d, slice 2). */
 export function ForgotPasswordForm() {
+  const tr = useTr();
   const [identifier, setIdentifier] = useState("");
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
@@ -85,20 +88,20 @@ export function ForgotPasswordForm() {
           });
           const body = (await res.json().catch(() => null)) as { message?: string; error?: { message?: string } } | null;
           if (res.ok && body?.message) setAnswer(body.message);
-          else setError(body?.error?.message ?? "A kérés nem ment el.");
+          else setError(body?.error?.message ?? tr("A kérés nem ment el."));
         } catch {
-          setError("Nincs kapcsolat a szerverrel.");
+          setError(tr("Nincs kapcsolat a szerverrel."));
         } finally {
           setBusy(false);
         }
       }}
     >
       <label className="field">
-        <span>Felhasználónév vagy e-mail cím</span>
+        <span>{tr("Felhasználónév vagy e-mail cím")}</span>
         <input className="input" autoComplete="username" autoCapitalize="none" value={identifier} onChange={(e) => setIdentifier(e.target.value)} required />
       </label>
       <button className="btn" type="submit" disabled={busy || !identifier.trim()}>
-        Link kérése
+        {tr("Link kérése")}
       </button>
       {error && (
         <div className="banner banner-error" role="alert">
