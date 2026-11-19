@@ -3,6 +3,7 @@
 // A decision of Lili's that must win over a sheet is no proposal: it goes in overrides.ts.
 import { ALLATOK_PROPOSALS } from "./javaslat-allatok";
 import { BEALLITASOK_PROPOSALS } from "./javaslat-beallitasok";
+import { VIZMERES_HUTOK_PROPOSALS } from "./javaslat-vizmeres-hutok";
 import { EXPORT_PROPOSALS } from "./javaslat-export";
 import { LILI_PROPOSALS } from "./javaslat-lili";
 import { NAPLO_PROPOSALS } from "./javaslat-naplo";
@@ -21,6 +22,7 @@ export const PROPOSAL_FILES: Readonly<Record<string, Proposals>> = {
   "javaslat-lili.ts": LILI_PROPOSALS,
   "javaslat-allatok.ts": ALLATOK_PROPOSALS,
   "javaslat-beallitasok.ts": BEALLITASOK_PROPOSALS,
+  "javaslat-vizmeres-hutok.ts": VIZMERES_HUTOK_PROPOSALS,
 };
 
 export const PROPOSALS: Proposals = Object.assign({}, ...Object.values(PROPOSAL_FILES));

@@ -151,13 +151,17 @@ const TRANSLATED: Record<string, { allowed: string[]; why: string }> = {
     why: "the sheet colours' names (src/lib/sheet-color-palette.ts SHEET_COLORS) are data, translated where shown (tr(c.label)), and listed here so the import reads them as keys",
   },
   "src/app/beallitasok/page.tsx": { allowed: [], why: "" },
+  // round 3, the settings page's water measurements and fridges (t-20261119-caparium-forditas-vizmeres-hutok)
+  "src/components/WaterMeasurements.tsx": { allowed: ["napi", "heti"], why: "the frequencies, translated where shown (tr(FREQ[f]))" },
+  "src/components/FridgeSettings.tsx": { allowed: [], why: "" },
 };
 
 const ACCENT = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;
 // Hungarian words without an accent that the screens use: a text holding one is Hungarian too
 // (murena, 2026-11-17: "Szer", "mind", "Napig" slipped through; the list grows as the modules come in; the animals' round added
-// "Fel", "Le", "Hova", "Faj", "Eddig" and the rest after them: a planted "Le" passed the guard before)
-const WORDS = new Set(["sor", "mentve", "evett", "mindenki", "nap", "napi", "heti", "medence", "csoport", "igen", "nem", "vissza", "rendben", "hiba", "nincs", "van", "kell", "csak", "egy", "lista", "kilepes", "szer", "mind", "napig", "korallos", "halas", "adag", "napra", "napon", "minden", "egyik", "kesz", "uj", "mentes", "mentese", "fel", "le", "hova", "faj", "ismeretlen", "darabban", "eddig", "tagok", "tagja", "most", "pipa", "sorrend", "indoklas"]);
+// "Fel", "Le", "Hova", "Faj", "Eddig" and the rest after them: a planted "Le" passed the guard before; the water measurements' round
+// "teteje", "alja", "Referencia", "Tizedes": a planted "teteje" passed before)
+const WORDS = new Set(["sor", "mentve", "evett", "mindenki", "nap", "napi", "heti", "medence", "csoport", "igen", "nem", "vissza", "rendben", "hiba", "nincs", "van", "kell", "csak", "egy", "lista", "kilepes", "szer", "mind", "napig", "korallos", "halas", "adag", "napra", "napon", "minden", "egyik", "kesz", "uj", "mentes", "mentese", "fel", "le", "hova", "faj", "ismeretlen", "darabban", "eddig", "tagok", "tagja", "most", "pipa", "sorrend", "indoklas", "teteje", "alja", "referencia", "tizedes"]);
 // a path, a link or an identifier ("/heti", "{x}?csoport={x}&nap={x}", "napplo-queue-v1-{x}") is code, not a text a person
 // reads. A bare lowercase word is NOT code (murena, 2026-11-17: "igen" passed as one): it needs a character only code has.
 const codeLike = (text: string) => /^[`/]/.test(text.trim()) || /^(?=.*[_.:=?&{}/0-9-])[a-z0-9_.:=?&{}/-]+$/.test(text.trim());
