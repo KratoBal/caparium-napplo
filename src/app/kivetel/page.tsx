@@ -8,7 +8,7 @@ import { AppError } from "@/lib/errors";
 import { feedStock } from "@/lib/feed-intake";
 import { knownOtherNames, listFeeds } from "@/lib/feeds";
 import { dayStatus } from "@/lib/journal";
-import { plainNumber as num, rowForDisplay } from "@/lib/mass-display";
+import { differencePercent, plainNumber as num, rowForDisplay } from "@/lib/mass-display";
 import { moduleLevel } from "@/lib/master";
 import { requireModuleRead } from "@/lib/session";
 import { addDays, businessDayOf, formatPeriod, isValidDay } from "@/lib/time";
@@ -110,11 +110,13 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
         <div className="table-scroll">
           <table className="log-table" data-testid="taken-given">
             <thead>
-              <tr><th>{tr("Takarmány")}</th><th>{tr("Egység")}</th><th>{tr("Kivett")}</th><th>{tr("Kiosztott")}</th><th>{tr("Különbség")}</th></tr>
+              <tr><th>{tr("Takarmány")}</th><th>{tr("Egység")}</th><th>{tr("Kivett")}</th><th>{tr("Kiosztott")}</th><th>{tr("Különbség")}</th><th>{tr("Különbség %")}</th></tr>
             </thead>
             <tbody>
               {compare.map((r) => {
                 const shown = rowForDisplay(r.unit, [r.taken, r.given, r.taken - r.given]);
+                // Lili (acrobot 58211): the difference as a share of the taken; nothing taken, nothing to divide (the tooltip says why)
+                const percent = differencePercent(r.taken, r.given);
                 return (
                   <tr key={r.key}>
                     <td>{r.feed}{r.paired ? "" : ` (${tr("nem párosított")})`}</td>
@@ -122,6 +124,13 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
                     {shown.values.map((v, i) => (
                       <td key={i}>{v}</td>
                     ))}
+                    {percent !== null ? (
+                      <td data-testid="difference-percent">{percent}</td>
+                    ) : (
+                      <td data-testid="difference-percent" title={tr("Nincs kivett mennyiség, ezért a százalék nem számolható.")}>
+                        {tr("nincs kivett")}
+                      </td>
+                    )}
                   </tr>
                 );
               })}

@@ -1358,6 +1358,8 @@ test("taken against given: a row reaching 1000 g is shown in kg, two decimals", 
   const row = page.getByTestId("taken-given").getByRole("row").filter({ hasText: feedName });
   await expect(row.getByRole("cell").nth(1)).toHaveText("kg");
   await expect(row.getByRole("cell").nth(2)).toHaveText("1,50");
+  // Lili (acrobot 58211): the last column is the difference as a share of the taken, one decimal with a percent sign
+  await expect(row.getByTestId("difference-percent")).toHaveText(/^-?\d+,\d%$/);
 });
 
 test("calculator: general, no animal on top, saved as the reference of the animal picked next to the button", async ({ page }, info) => {
