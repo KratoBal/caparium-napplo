@@ -15,7 +15,7 @@
 
 import { ClearX } from "./ClearX";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { announceReminder, formComplete, reminderTimer, reminderWanted } from "@/lib/save-reminder";
 import type { CellView, RangeView } from "@/lib/queries";
 import { convertReading, type ReadingConversion } from "@/lib/reading";
@@ -618,9 +618,12 @@ export function MeasurementGrid({
   return (
     <>
       <div className="toolbar toolbar-end water-head-row" data-testid="water-head-row">
-        {tables}
+        {/* each slot in its own keyed Fragment: the page builds these elements on the server, and in next dev React warned
+            "Each child in a list should have a unique key" for each of them here (card b2cc369c; measured: either slot alone
+            triggered it, both empty gave none); inside the Fragment the slot is a single child, not a list member */}
+        <Fragment key="tables">{tables}</Fragment>
         <div className="water-head-actions">
-          {dayPicker}
+          <Fragment key="day-picker">{dayPicker}</Fragment>
           {!readOnly && (
             <button className="btn" type="button" onClick={saveAll} data-testid="save-all">
               {tr("Mentés")}
