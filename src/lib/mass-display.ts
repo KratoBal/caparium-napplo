@@ -21,6 +21,19 @@ export function rowForDisplay(unit: string, values: readonly number[]): { unit: 
 }
 
 /**
+ * Lili via acrobot 58211 (2026-11-20), the "Kivett és kiosztott" table: the difference as a share of what was taken,
+ * (taken - given) / taken * 100, one decimal, a Hungarian comma and a percent sign ("12,5%"). A negative value (more given than taken)
+ * stays negative. Where nothing was taken (taken is 0) there is nothing to divide by: `null`, the page shows "nincs kivett"
+ * with the reason in the tooltip. A value rounding to zero has no sign ("0,0%", never "-0,0%"), as in `kilograms`.
+ * Display only: the export and the stored data are untouched.
+ */
+export function differencePercent(taken: number, given: number): string | null {
+  if (!(taken > 0)) return null;
+  const text = (((taken - given) / taken) * 100).toFixed(1);
+  return `${(Number(text) === 0 ? "0.0" : text).replace(".", ",")}%`;
+}
+
+/**
  * A summary cell of the reports (Lili, package item 12 follow-up, msg 1565472118970257490: "az összesítő sorokban az értékek
  * kg-ba váltva, ahogy máshol"): a gram value from 1000 g up reads in kg, two decimals, with its unit ("7,67 kg"); anything
  * else stays as the column's header says ("850" under "(g)"). Display only: the Excel stays in grams.

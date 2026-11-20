@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { plainNumber, rowForDisplay, summaryCell } from "@/lib/mass-display";
+import { differencePercent, plainNumber, rowForDisplay, summaryCell } from "@/lib/mass-display";
 
 describe("the taken-given row in g or kg (Lili 2026-10-27)", () => {
   it("a gram row with any value at 1000 g or more is shown in kg as a whole, two decimals", () => {
@@ -31,5 +31,32 @@ describe("summaryCell (Lili's package, item 12 follow-up)", () => {
     expect(summaryCell("g", 12.5)).toBe("12,5");
     expect(summaryCell("db", 2500)).toBe("2500");
     expect(summaryCell("ml", 1500)).toBe("1500");
+  });
+});
+
+describe("differencePercent: (taken - given) / taken * 100 for the taken-given table (Lili via acrobot 58211)", () => {
+  it("one decimal, a Hungarian comma and a percent sign", () => {
+    expect(differencePercent(200, 150)).toBe("25,0%");
+    expect(differencePercent(8, 7)).toBe("12,5%");
+    expect(differencePercent(3, 2)).toBe("33,3%");
+    // taken and given equal: no difference
+    expect(differencePercent(40, 40)).toBe("0,0%");
+  });
+  it("more given than taken stays negative", () => {
+    expect(differencePercent(100, 125)).toBe("-25,0%");
+    expect(differencePercent(3, 4)).toBe("-33,3%");
+  });
+  it("nothing given is a hundred percent, whatever the unit's size", () => {
+    expect(differencePercent(7670, 0)).toBe("100,0%");
+    expect(differencePercent(12, 0)).toBe("100,0%");
+  });
+  it("nothing taken has no percentage (no division by zero), not even with something given", () => {
+    expect(differencePercent(0, 0)).toBeNull();
+    expect(differencePercent(0, 12)).toBeNull();
+    expect(differencePercent(Number.NaN, 5)).toBeNull();
+  });
+  it("a value rounding to zero has no sign", () => {
+    expect(differencePercent(10000, 10004)).toBe("0,0%");
+    expect(differencePercent(10000, 9996)).toBe("0,0%");
   });
 });
