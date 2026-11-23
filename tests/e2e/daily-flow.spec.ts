@@ -1411,6 +1411,8 @@ test("body weight log: hidden, not deleted; a setting row brings it back on the 
     await expect(page.getByTestId("body-weights")).toContainText("50 kg");
     // the picked animal's last weight is the calculator's starting BW, and the animal is preselected
     await page.reload();
+    // the last-weighed line ends with ONE full stop: the date's own is the sentence's (it read "2026.11.23.." on 2026-11-23)
+    await expect(page.locator("p.hint").filter({ hasText: "utoljára mérve" })).toHaveText(/utoljára mérve 50 kg, \d{4}\.\d{2}\.\d{2}\.$/);
     await expect(page.getByTestId("calculator").getByLabel("Testtömeg (kg)")).toHaveValue("50");
     await expect(page.getByTestId("calculator").getByLabel("Állat", { exact: true })).toHaveValue(/.+/);
   } finally {
