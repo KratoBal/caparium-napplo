@@ -33,34 +33,37 @@ test.beforeAll(() => {
   if (!PASSWORD) throw new Error("SEED_TEST_PASSWORD must be set for the e2e run");
 });
 
-test("English view: a form row's button stands on its fields' line, a head chip on the day badge's, no header-only list above a form", async ({ page }) => {
-  await page.goto("/belepes");
-  await page.getByLabel("Felhasználónév").fill("teszt.admin");
-  await page.getByLabel("Jelszó").fill(PASSWORD);
-  await page.getByRole("button", { name: "Bejelentkezés" }).click();
-  await expect(page.getByRole("heading", { name: /^(Jó munkát!|Keep up the good work!)$/ })).toBeVisible();
-  await page.getByTestId("lang-en").click();
-  await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  const own = page.viewportSize() ?? { width: 1024, height: 768 };
-  const all: string[] = [];
-  const missing: string[] = [];
-  // TWO WIDTHS. Wide (1900 px): the rows do not wrap, every button stands level with its fields, and the minimums below must have been measured (a green
-  // run that measured nothing proves nothing). The project's OWN width (the tablet's 1024, the desktop's 1440), where a row wraps and Lili's iPad sees it:
-  // a button level with the fields on its line, or alone on a line of its own, under the fields at the row's left edge (wrappedButtons), never slid.
-  for (const [mode, size] of [["wide", { width: 1900, height: 1000 }], ["own", own]] as const) {
-    await page.setViewportSize(size);
-    for (const path of PAGES) {
+// ONE TEST PER PAGE (t-20261123-caparium-elrendezes-minden-oldal): twenty pages at two widths in one test overran the 30 s test timeout on the tablet's
+// WebKit (the desktop run of the same test took 27.4 s) and the failure did not say which page it stood on. A page has its own timeout, its own
+// verdict, and a hang names it. Each test logs in and switches to English itself: a test has a fresh browser context.
+for (const path of PAGES) {
+  test(`English view ${path}: a form row's button stands on its fields' line, a head chip on the day badge's, no header-only list above a form`, async ({ page }) => {
+    await page.goto("/belepes");
+    await page.getByLabel("Felhasználónév").fill("teszt.admin");
+    await page.getByLabel("Jelszó").fill(PASSWORD);
+    await page.getByRole("button", { name: "Bejelentkezés" }).click();
+    await expect(page.getByRole("heading", { name: /^(Jó munkát!|Keep up the good work!)$/ })).toBeVisible();
+    await page.getByTestId("lang-en").click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    const own = page.viewportSize() ?? { width: 1024, height: 768 };
+    const found: string[] = [];
+    const missing: string[] = [];
+    // TWO WIDTHS. Wide (1900 px): the rows do not wrap, every button stands level with its fields, and the minimums below must have been measured (a green
+    // run that measured nothing proves nothing). The project's OWN width (the tablet's 1024, the desktop's 1440), where a row wraps and Lili's iPad sees it:
+    // a button level with the fields on its line, or alone on a line of its own, under the fields at the row's left edge (wrappedButtons), never slid.
+    for (const [mode, size] of [["wide", { width: 1900, height: 1000 }], ["own", own]] as const) {
+      await page.setViewportSize(size);
       await page.goto(path);
       await page.waitForLoadState("networkidle");
       const report = await page.evaluate(measureLayout, [`${path} (${mode} ${size.width}px)`, TOLERANCE] as const);
-      all.push(...report.found);
+      found.push(...report.found);
       if (mode !== "wide") continue;
       for (const [what, atLeast] of Object.entries(MUST_MEASURE[path] ?? {}))
         if (report.measured[what as keyof LayoutReport["measured"]] < (atLeast ?? 0))
           missing.push(`${path}: measured ${report.measured[what as keyof LayoutReport["measured"]]} ${what}, expected at least ${atLeast} (is the form or the day control not shown?)`);
     }
-  }
-  // every page is measured before the verdict, so one run lists every offender and every gap
-  expect(missing, missing.join("\n")).toEqual([]);
-  expect(all, all.join("\n")).toEqual([]);
-});
+    // both widths are measured before the verdict, so one run lists every offender and every gap of the page
+    expect(missing, missing.join("\n")).toEqual([]);
+    expect(found, found.join("\n")).toEqual([]);
+  });
+}
