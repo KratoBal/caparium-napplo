@@ -72,7 +72,7 @@ export function GroupPlacementFix() {
               n: changed.days.length,
               added: changed.fastingAdded,
               removed: changed.fastingRemoved,
-              days: changed.days.map(formatDay).join(", "),
+              days: changed.days.map(formatDay).join(", ").replace(/\.$/, ""), // the date's stop is the sentence's
             })
           : tr("A lezárt napok koplalása nem változott.")),
     });
