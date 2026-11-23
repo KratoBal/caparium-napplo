@@ -85,7 +85,11 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
             ))}
           </div>
           <p className="hint">
-            {tr("{name}: utoljára mérve {value}.", { name: weighed.name, value: last ? `${num(last.weightKg)} kg, ${formatDay(last.day)}` : tr("még nincs") })}
+            {tr("{name}: utoljára mérve {value}.", {
+              name: weighed.name,
+              // formatDay ends with a full stop and the sentence's own full stop follows: one of the two goes ("2026.11.23.." on Lili's guide pictures)
+              value: last ? `${num(last.weightKg)} kg, ${formatDay(last.day).replace(/\.$/, "")}` : tr("még nincs"),
+            })}
           </p>
           {canRecord && <BodyWeightForm animalId={weighed.id} />}
           <div className="table-scroll">

@@ -11,9 +11,12 @@ import { expect, test } from "@playwright/test";
 import { measureLayout, type LayoutReport } from "../support/layout-measure";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
-// every page with a view for the admin (login, password reset and "no access" have no toolbar): the English texts of the round 3 translation
-// (#267-#272) are longer than the Hungarian ones on the pages that were added below the first six
+// every page with a view for the admin: the English texts of the round 3 translation (#267-#272) are longer than the Hungarian ones on the pages that
+// were added below the first six. LEFT OUT, on purpose: /naplo/[id] (it takes an entry's id), /belepes, /elfelejtett-jelszo,
+// /jelszo-visszaallitas/[token] and /nincs-jogosultsag (pages of a visitor who is not signed in, or has no right to a page; they have no form row
+// or head row for the admin to see)
 const PAGES = [
+  "/",
   "/kivetel", "/takarmanyhuto", "/adagolas", "/evesi-naplo", "/etetes", "/takarmany-naplo",
   "/etetes/rend", "/vizmeres", "/vizmeres/hutok", "/heti", "/naplo", "/allatok", "/takarmanyok", "/beallitasok", "/aktivitas", "/fuggo",
   "/kimutatasok", "/export", "/kalkulator", "/profil",
@@ -54,8 +57,12 @@ for (const path of PAGES) {
     for (const [mode, size] of [["wide", { width: 1900, height: 1000 }], ["own", own]] as const) {
       await page.setViewportSize(size);
       await page.goto(path);
+      // the page the check measures is the page it asked for: an admin sent on to /belepes or /nincs-jogosultsag would otherwise be measured there, green (barracuda, #279)
+      await expect(page, `${path} (${mode}): the page was redirected`).toHaveURL((url) => url.pathname === path);
       await page.waitForLoadState("networkidle");
       const report = await page.evaluate(measureLayout, [`${path} (${mode} ${size.width}px)`, TOLERANCE] as const);
+      // what was measured is in the report, so a zero shows instead of being absent (barracuda, #279)
+      test.info().annotations.push({ type: `measured ${path} (${mode})`, description: JSON.stringify(report.measured) });
       found.push(...report.found);
       if (mode !== "wide") continue;
       for (const [what, atLeast] of Object.entries(MUST_MEASURE[path] ?? {}))
