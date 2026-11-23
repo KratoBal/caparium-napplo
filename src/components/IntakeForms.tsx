@@ -197,7 +197,7 @@ export function StockStart({ start, today, canSet }: { start: string | null; tod
     <div data-testid="stock-start">
       <p className="hint">
         {start
-          ? tr("A készlet kezdete: {formatDay}. Ami ennél korábbi, az archívum: a naplóban, a kimutatásokban és az exportban teljes értékű, a készletbe nem számít.", { formatDay: formatDay(start) })
+          ? tr("A készlet kezdete: {formatDay}. Ami ennél korábbi, az archívum: a naplóban, a kimutatásokban és az exportban teljes értékű, a készletbe nem számít.", { formatDay: formatDay(start).replace(/\.$/, "") })
           : tr("A készlet kezdete: takarmányonként az első be nem küldött bevételezés napja. Egy kifejezett kezdőnapot adminisztrátor állíthat.")}
       </p>
       {canSet && (
