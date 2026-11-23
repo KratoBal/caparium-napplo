@@ -11,7 +11,13 @@ import { expect, test } from "@playwright/test";
 import { measureLayout, type LayoutReport } from "../support/layout-measure";
 
 const PASSWORD = process.env.SEED_TEST_PASSWORD ?? "";
-const PAGES = ["/kivetel", "/takarmanyhuto", "/adagolas", "/evesi-naplo", "/etetes", "/takarmany-naplo"];
+// every page with a view for the admin (login, password reset and "no access" have no toolbar): the English texts of the round 3 translation
+// (#267-#272) are longer than the Hungarian ones on the pages that were added below the first six
+const PAGES = [
+  "/kivetel", "/takarmanyhuto", "/adagolas", "/evesi-naplo", "/etetes", "/takarmany-naplo",
+  "/etetes/rend", "/vizmeres", "/vizmeres/hutok", "/heti", "/naplo", "/allatok", "/takarmanyok", "/beallitasok", "/aktivitas", "/fuggo",
+  "/kimutatasok", "/export", "/kalkulator", "/profil",
+];
 const TOLERANCE = 1;
 
 // what each page must have given the check to measure: a green run that measured nothing on a page proves nothing there. The forms show on an
